@@ -9,6 +9,8 @@
  * - Real-time section queue calculation for live playback jumping
  */
 
+import { clamp } from "../utils.js";
+
 function deepClone(obj) {
   if (obj == null || typeof obj !== "object") return obj;
   if (Array.isArray(obj)) return obj.map(deepClone);
@@ -17,10 +19,6 @@ function deepClone(obj) {
     copy[key] = deepClone(obj[key]);
   }
   return copy;
-}
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
 }
 
 const ALL_TRACK_IDS = ["drums", "bass", "chords", "melody", "counterpoint", "pad"];

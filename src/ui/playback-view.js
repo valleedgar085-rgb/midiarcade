@@ -1,7 +1,4 @@
-function finite(value, fallback) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
+import { finite } from "../utils.js";
 
 export function createPlaybackView({
   sections = [],

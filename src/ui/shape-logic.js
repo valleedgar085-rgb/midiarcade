@@ -1,6 +1,4 @@
-function clamp(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
+import { clamp } from "../utils.js";
 
 function pitchClass(value) {
   return ((Math.round(Number(value) || 0) % 12) + 12) % 12;
