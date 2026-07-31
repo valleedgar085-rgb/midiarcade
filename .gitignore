@@ -1,0 +1,15 @@
+graphify-out/
+.DS_Store
+Thumbs.db
+node_modules/
+www/
+android/.gradle/
+android/build/
+android/app/build/
+android/capacitor-cordova-android-plugins/build/
+android/local.properties
+*.keystore
+*.jks
+keystore.properties
+*.apk
+*.aab

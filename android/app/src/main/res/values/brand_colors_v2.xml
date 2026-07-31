@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#D8FF53</color>
+    <color name="colorPrimaryDark">#08090D</color>
+    <color name="colorAccent">#FF755E</color>
+    <color name="midi_arcade_surface_v2">#08090D</color>
+    <color name="ic_launcher_background_v2">#08090D</color>
+</resources>

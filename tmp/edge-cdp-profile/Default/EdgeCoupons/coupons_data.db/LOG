@@ -1,0 +1,5 @@
+2026/07/22-04:28:41.658 5600 Creating DB C:\Users\Edgar Valle\Documents\antigravity\midiarcade\tmp\edge-cdp-profile\Default\EdgeCoupons/coupons_data.db since it was missing.
+2026/07/22-04:28:41.676 5600 Reusing MANIFEST C:\Users\Edgar Valle\Documents\antigravity\midiarcade\tmp\edge-cdp-profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/07/22-04:28:41.980 592c Level-0 table #5: started
+2026/07/22-04:28:41.984 592c Level-0 table #5: 683052 bytes OK
+2026/07/22-04:28:41.986 592c Delete type=0 #3

@@ -1,0 +1,25 @@
+{
+  "name": "MIDI Arcade — Live Piano Jam",
+  "short_name": "MIDI Arcade",
+  "description": "A harmony-aware piano improvisation studio with original backing tracks and multitrack MIDI export.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0a0a0d",
+  "theme_color": "#0a0a0d",
+  "orientation": "any",
+  "categories": ["music", "education", "entertainment"],
+  "icons": [
+    {
+      "src": "./assets/brand/icon-192-v2.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/brand/icon-512-v2.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

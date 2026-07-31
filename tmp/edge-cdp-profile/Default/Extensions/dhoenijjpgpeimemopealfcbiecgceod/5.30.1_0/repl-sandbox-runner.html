@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>REPL Sandbox Runner</title>
+  </head>
+  <body>
+    <!--
+      manifest.sandbox.pages 中登记的沙箱页,CSP 允许 unsafe-inline + unsafe-eval。
+      脚本必须【内联】:sandbox 页是 opaque origin,加载扩展自身的外部/module 脚本会被
+      sandbox CSP(script-src 不含 'self')与 ES module 的 CORS 双重拦截 —— 参照本仓库
+      唯一先例 claw-file-preview/sandbox.html(同样内联)。因此不走 TS/构建,直接手写内联。
+      下面的消息类型常量必须与 src/pages/repl-sandbox/protocol.ts 保持一致。
+    -->
+    <script>
+      ;(() => {
+        const MSG_RUNNER_READY = 'siderclaw-repl-sandbox:runner-ready'
+        const MSG_RUNNER_RUN = 'siderclaw-repl-sandbox:run'
+        const MSG_RUNNER_RESULT = 'siderclaw-repl-sandbox:run-result'
+        const MSG_RUNNER_BRIDGE_CALL = 'siderclaw-repl-sandbox:runner-bridge-call'
+        const MSG_RUNNER_BRIDGE_RESULT = 'siderclaw-repl-sandbox:runner-bridge-result'
+        // bridge 调用兜底超时:仅防单次桥接调用永不回包导致 resolver 泄漏。必须 >= 整段
+        // 执行预算,否则会误杀合法慢调用(如 siderRuntime.fetch 下载大文件,后台无内部
+        // 超时、tab 路径也无此上限)。运行时由 host 随 RUN 下发真实预算,此为回退默认。
+        let bridgeCallTimeoutMs = 130000
+
+        const pendingBridgeCalls = new Map()
+        let bridgeCallCounter = 0
+
+        const postToHost = (payload) => window.parent.postMessage(payload, '*')
+
+        // chrome.runtime shim:sendMessage 经两跳转回 background;onMessage 无事件源,no-op。
+        const sendMessageViaHost = (message) =>
+          new Promise((resolve) => {
+            bridgeCallCounter += 1
+            const callId = 'bridge-' + bridgeCallCounter
+            const timer = setTimeout(() => {
+              if (!pendingBridgeCalls.has(callId)) return
+              pendingBridgeCalls.delete(callId)
+              resolve({
+                ok: false,
+                error: {
+                  name: 'Error',
+                  message: 'sandbox bridge call timed out',
+                },
+              })
+            }, bridgeCallTimeoutMs)
+            pendingBridgeCalls.set(callId, { resolve, timer })
+            postToHost({ type: MSG_RUNNER_BRIDGE_CALL, callId, message })
+          })
+
+        globalThis.chrome = {
+          runtime: {
+            id: 'siderclaw-repl-sandbox',
+            sendMessage: sendMessageViaHost,
+            onMessage: {
+              addListener() {},
+              removeListener() {},
+              hasListener() {
+                return false
+              },
+            },
+          },
+        }
+
+        const runScripts = async (scripts) => {
+          let lastValue
+          for (const script of scripts) {
+            // 间接 eval:全局作用域求值,与 USER_SCRIPT world 注入语义一致
+            // (bridge 挂 window[BRIDGE_KEY],wrapper 读写 globalThis[var])。
+            lastValue = (0, eval)(script)
+            if (lastValue && typeof lastValue.then === 'function') {
+              lastValue = await lastValue
+            }
+          }
+          return lastValue
+        }
+
+        // postMessage 走结构化克隆:用户 return 的 lastValue 可能含函数/Symbol 等不可克隆值
+        // (tab 路径经 userScripts.execute 会静默丢弃)。直接回传,DataCloneError 才 JSON 归一化
+        // 兜底,避免对每个结果(可含 MB 级截图/文件 base64)白做一趟纯探测用的深拷贝。
+        const postResult = (runId, result) => {
+          try {
+            postToHost({ type: MSG_RUNNER_RESULT, runId, result })
+          } catch (e) {
+            try {
+              postToHost({ type: MSG_RUNNER_RESULT, runId, result: JSON.parse(JSON.stringify(result)) })
+            } catch (e2) {
+              postToHost({
+                type: MSG_RUNNER_RESULT,
+                runId,
+                result: {
+                  success: false,
+                  error: 'sandbox result is not serializable',
+                  console: (result && result.console) || [],
+                },
+              })
+            }
+          }
+        }
+
+        window.addEventListener('message', (event) => {
+          // 只接受来自宿主 host 页(父窗口)的消息。runner 与不受信的 repl 代码共享同一
+          // window,校验 source 可挡住 repl 代码伪造 RUN/BRIDGE_RESULT。
+          if (event.source !== window.parent) return
+          const data = event.data
+          if (!data || typeof data !== 'object') return
+
+          if (data.type === MSG_RUNNER_BRIDGE_RESULT) {
+            const pending = pendingBridgeCalls.get(data.callId)
+            if (pending) {
+              clearTimeout(pending.timer)
+              pendingBridgeCalls.delete(data.callId)
+              pending.resolve(data.response)
+            }
+            return
+          }
+
+          if (data.type === MSG_RUNNER_RUN) {
+            const runId = data.runId
+            if (typeof data.timeoutMs === 'number' && data.timeoutMs > 0) {
+              bridgeCallTimeoutMs = data.timeoutMs
+            }
+            runScripts(data.scripts || [])
+              .then((result) => postResult(runId, result))
+              .catch((error) => {
+                postToHost({
+                  type: MSG_RUNNER_RESULT,
+                  runId,
+                  error: {
+                    message: error instanceof Error ? error.message : String(error),
+                    stack: error instanceof Error ? error.stack : undefined,
+                  },
+                })
+              })
+          }
+        })
+
+        postToHost({ type: MSG_RUNNER_READY })
+      })()
+    </script>
+  </body>
+</html>

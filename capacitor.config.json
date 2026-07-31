@@ -1,0 +1,12 @@
+{
+  "appId": "com.midiarcade.app",
+  "appName": "MIDI Arcade",
+  "webDir": "www",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK",
+      "hidden": false
+    }
+  }
+}

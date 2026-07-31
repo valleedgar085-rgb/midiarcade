@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" style="height: 100%">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HTML Preview Sandbox</title>
+    <style>
+      html,
+      body,
+      iframe {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        border: 0;
+      }
+
+      iframe {
+        display: block;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <iframe
+      id="preview"
+      title="HTML preview"
+      sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-popups-to-escape-sandbox allow-presentation"
+      referrerpolicy="no-referrer"
+    ></iframe>
+    <script>
+      ;(() => {
+        const preview = document.getElementById('preview')
+
+        window.addEventListener('message', (event) => {
+          const data = event.data
+          if (!data || data.type !== 'claw-file-preview:render-html') return
+
+          preview.srcdoc = typeof data.content === 'string' ? data.content : ''
+        })
+      })()
+    </script>
+  </body>
+</html>
