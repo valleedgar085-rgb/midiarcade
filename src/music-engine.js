@@ -1332,12 +1332,12 @@ function createStructure(config, rng) {
     const alternate = rng.bool(form === "half-time" ? 0.58 : 0.35);
     layout = electronic
       ? [
-          { name: "intro", weight: 1 }, { name: "build", weight: 1 }, { name: "drop", weight: 3 },
-          { name: "breakdown", weight: 2 }, { name: "build", weight: 1 }, { name: "drop", weight: 3 },
-          { name: "outro", weight: 1 },
-        ]
+        { name: "intro", weight: 1 }, { name: "build", weight: 1 }, { name: "drop", weight: 3 },
+        { name: "breakdown", weight: 2 }, { name: "build", weight: 1 }, { name: "drop", weight: 3 },
+        { name: "outro", weight: 1 },
+      ]
       : alternate
-      ? [
+        ? [
           { name: "intro", weight: 1 },
           { name: "verse", weight: 3 },
           { name: "chorus", weight: 3 },
@@ -1346,7 +1346,7 @@ function createStructure(config, rng) {
           { name: "chorus", weight: 3 },
           { name: "outro", weight: 1 },
         ]
-      : [
+        : [
           { name: "intro", weight: 1 },
           { name: "verse", weight: 3 },
           { name: "prechorus", weight: 1 },
@@ -1873,10 +1873,10 @@ function plannedTensionAtBeat(blueprint, section, beat, barBeats = 4) {
   const smooth = (value) => value * value * (3 - 2 * value);
   const base = progress <= peakAt
     ? finite(envelope.start, plan.tension)
-      + (finite(envelope.peak, plan.tension) - finite(envelope.start, plan.tension)) * smooth(progress / peakAt)
+    + (finite(envelope.peak, plan.tension) - finite(envelope.start, plan.tension)) * smooth(progress / peakAt)
     : finite(envelope.peak, plan.tension)
-      + (finite(envelope.end, plan.tension) - finite(envelope.peak, plan.tension))
-        * smooth((progress - peakAt) / (1 - peakAt));
+    + (finite(envelope.end, plan.tension) - finite(envelope.peak, plan.tension))
+    * smooth((progress - peakAt) / (1 - peakAt));
   const phraseBeats = Math.max(barBeats * 2, barBeats * Math.round(finite(envelope.phraseBars, 2)));
   const phraseProgress = mod(Math.max(0, beat - section.startBeat), phraseBeats) / phraseBeats;
   const phraseLift = smooth(phraseProgress) * finite(envelope.phraseLift, 0);
@@ -2415,10 +2415,10 @@ function hookDistinctivenessMetrics(motif) {
   const syncopated = events.filter((event) => Math.abs(event.offset - Math.round(event.offset)) > 0.05).length;
   const score = clamp(
     0.2
-      + Math.min(0.28, uniqueDegrees * 0.07)
-      + Math.min(0.22, uniqueGaps * 0.055)
-      + Math.min(0.16, contourTurns * 0.08)
-      + Math.min(0.14, syncopated * 0.035),
+    + Math.min(0.28, uniqueDegrees * 0.07)
+    + Math.min(0.22, uniqueGaps * 0.055)
+    + Math.min(0.16, contourTurns * 0.08)
+    + Math.min(0.14, syncopated * 0.035),
     0,
     1,
   );
@@ -3056,10 +3056,10 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       route?.id === "harmony-first"
         ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
         : style.chordMotion === "offbeat"
-        ? answers
-        : style.chordMotion === "sustained"
-          ? [0]
-          : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
+          ? answers
+          : style.chordMotion === "sustained"
+            ? [0]
+            : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
     const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
@@ -3769,6 +3769,10 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
   );
   const drums = tracks.drums ?? [];
   const bass = tracks.bass ?? [];
+  const kickOnsets = drums
+    .filter((note) => note.pitch === 36)
+    .map((note) => note.start)
+    .sort((left, right) => left - right);
   const barBeats = beatsPerBar(config);
   const totalBeats = config.bars * barBeats;
   const fills = new Map();
@@ -3800,7 +3804,23 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
       .sort((left, right) => right.start - left.start);
     let answer = candidates[0];
     if (!answer) {
-      const pickupStart = round(Math.max(fillStart, boundary - 0.75), 2);
+      const delayByGenre = {
+        house: [0.5],
+        techno: [0, 0.5],
+        trap: [0, 0.25],
+        hipHop: [0, 0.25],
+        rap: [0, 0.25],
+        drumBass: [0, 0.5],
+        neoSoul: [0.25, 0.5, 0.75],
+      };
+      const delays = delayByGenre[config.genre] ?? [0];
+      const anchoredStarts = kickOnsets
+        .filter((kick) => kick >= boundary - 1.0 && kick < boundary + 0.01)
+        .flatMap((kick) => delays.map((delay) => round(kick + delay, 2)))
+        .filter((start) => start >= fillStart - 0.001 && start < boundary - 0.04);
+      const pickupStart = anchoredStarts.length
+        ? anchoredStarts[anchoredStarts.length - 1]
+        : round(Math.max(fillStart, boundary - 0.75), 2);
       answer = {
         pitch: destination,
         start: pickupStart,
@@ -4387,16 +4407,16 @@ function generatePad(
     }[barPlan?.role] ?? 1;
     const intensity = clamp(
       section.intensity
-        * (0.5 + config.energy * 0.35)
-        * (0.9 + plannedTension * 0.16),
+      * (0.5 + config.energy * 0.35)
+      * (0.9 + plannedTension * 0.16),
       0.25,
       1.08,
     );
     const anchor = chord.bar === section.startBar;
     const presence = clamp(
       settings.density
-        * (0.72 + finite(sectionPlan?.density, 0.6) * 0.34)
-        * phrasePresence,
+      * (0.72 + finite(sectionPlan?.density, 0.6) * 0.34)
+      * phrasePresence,
       0.05,
       0.99,
     );
@@ -4935,14 +4955,14 @@ function articulatePerformance(notes, id, config, rng) {
       && Math.abs(next.pitch - note.pitch) <= 5;
     note.articulation = note.articulationIntent
       ?? (note.velocity >= 110
-      ? "accent"
-      : melodic && connected
-        ? "legato"
-        : note.duration <= 0.22
-          ? "staccato"
-          : ["chords", "pad"].includes(id)
-            ? "sustain"
-            : "tenuto");
+        ? "accent"
+        : melodic && connected
+          ? "legato"
+          : note.duration <= 0.22
+            ? "staccato"
+            : ["chords", "pad"].includes(id)
+              ? "sustain"
+              : "tenuto");
     const breathAfter = melodic && (!next || next.start - (note.start + note.duration) >= 0.38);
     note.performanceRole = breathAfter
       ? "phrase-ending"
@@ -6903,7 +6923,7 @@ function compose(config, options = {}) {
   const rootRng = createSeededRandom(config.seed);
   const route = compositionRoute(
     validCompositionRouteId(options.compositionRoute?.id ?? options.compositionRoute)
-      ?? candidateCompositionRoute(config.seed, 0),
+    ?? candidateCompositionRoute(config.seed, 0),
   );
   const oneShotKit = chooseOneShotKit(config, options.oneShotKit);
   const baseStructure = options.structure
