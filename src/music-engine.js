@@ -2814,9 +2814,28 @@ function addNote(notes, pitch, start, duration, velocity, totalBeats, metadata =
   });
 }
 
+function generationEmotionProfile(config) {
+  const energy = clamp(finite(config.energy, 0.5), 0, 1);
+  const complexity = clamp(finite(config.complexity, 0.5), 0, 1);
+  const variation = clamp(finite(config.variation, 0.5), 0, 1);
+  const evolution = clamp(finite(config.evolution, 0.5), 0, 1);
+  const surprise = clamp(finite(config.surprise, 0.5), 0, 1);
+  const hype = clamp(energy * 0.62 + surprise * 0.23 + evolution * 0.15, 0, 1);
+  const calm = clamp((1 - energy) * 0.56 + (1 - surprise) * 0.24 + (1 - evolution) * 0.2, 0, 1);
+  const chill = clamp((1 - energy) * 0.45 + variation * 0.2 + (1 - complexity) * 0.35, 0, 1);
+  const dynamicPush = clamp(hype - calm * 0.45, 0, 1);
+  const relaxation = clamp(calm * 0.7 + chill * 0.45, 0, 1);
+  const sectionContrast = clamp(0.42 + evolution * 0.28 + Math.abs(hype - calm) * 0.2, 0.35, 1);
+  return { hype, calm, chill, dynamicPush, relaxation, sectionContrast };
+}
+
 function eventVelocity(config, settings, intensity, rng, accent = 1) {
-  const base = 46 + config.energy * 43 + intensity * 12;
-  return clamp(Math.round((base + (rng.float() - 0.5) * 12) * settings.velocity * accent), 1, 127);
+  const emotion = generationEmotionProfile(config);
+  const base = 44 + config.energy * 45 + intensity * (13 + emotion.sectionContrast * 7) + emotion.dynamicPush * 6 - emotion.relaxation * 4;
+  const jitter = (rng.float() - 0.5) * (10 + emotion.sectionContrast * 9 + emotion.dynamicPush * 6);
+  const sectionPush = 1 + (intensity - 0.72) * (0.14 + emotion.sectionContrast * 0.08);
+  const accentLift = 1 + (accent - 1) * (0.92 + emotion.dynamicPush * 0.3 - emotion.relaxation * 0.2);
+  return clamp(Math.round((base + jitter) * settings.velocity * sectionPush * accentLift), 1, 127);
 }
 
 function phraseEvolutionForBar(config, structure, bar, trackId, rng, rhythmIdentity = null) {
@@ -2847,16 +2866,26 @@ function phraseEvolutionForBar(config, structure, bar, trackId, rng, rhythmIdent
 
 function buildEvolutionSegments(config, structure, trackId, rng) {
   const phraseBars = Math.max(2, GENRE_PROFILES[config.genre].arrangement.phraseBars);
+  const emotion = generationEmotionProfile(config);
   const segments = [];
-  let previousTarget = trackId === "pad" ? 0.94 : 0.97;
+  const minTarget = trackId === "pad"
+    ? 0.8 + emotion.relaxation * 0.04
+    : 0.82 - emotion.dynamicPush * 0.02;
+  const maxTarget = trackId === "pad"
+    ? 1.08 + emotion.dynamicPush * 0.04
+    : 1.18 + emotion.dynamicPush * 0.05;
+  let previousTarget = trackId === "pad"
+    ? 0.9 + emotion.dynamicPush * 0.04 - emotion.relaxation * 0.03
+    : 0.96 + emotion.dynamicPush * 0.04 - emotion.relaxation * 0.02;
   for (const section of structure) {
     for (let localBar = 0, phraseIndex = 0; localBar < section.bars; localBar += phraseBars, phraseIndex += 1) {
       const bars = Math.min(phraseBars, section.bars - localBar);
       const local = rng.fork(`${trackId}-${section.id}-${phraseIndex}`);
-      const movement = 0.35 + config.evolution * 0.9;
-      const sectionDirection = ["prechorus", "build", "chorus", "drop"].includes(section.name) ? 0.025 * movement
-        : ["breakdown", "outro"].includes(section.name) ? -0.025 * movement : 0;
-      const target = clamp(previousTarget + sectionDirection + (local.float() - 0.5) * (0.025 + config.evolution * 0.06), 0.86, 1.12);
+      const movement = 0.34 + config.evolution * 0.86 + emotion.dynamicPush * 0.4;
+      const sectionDirection = ["prechorus", "build", "chorus", "drop", "climax", "hook"].includes(section.name) ? 0.032 * movement
+        : ["breakdown", "outro", "bridge"].includes(section.name) ? -0.03 * movement : 0;
+      const drift = (local.float() - 0.5) * (0.03 + config.evolution * 0.07 + emotion.sectionContrast * 0.03);
+      const target = clamp(previousTarget + sectionDirection + drift, minTarget, maxTarget);
       segments.push({
         start: section.startBeat + localBar * beatsPerBar(config),
         end: section.startBeat + (localBar + bars) * beatsPerBar(config),
@@ -4796,10 +4825,32 @@ function appendExpressionRamp(events, startBeat, endBeat, startValue, endValue, 
 function createExpressionAutomation(id, config, structure, settings, rng, songBlueprint = null) {
   const barBeats = beatsPerBar(config);
   const totalBeats = config.bars * barBeats;
-  const base = clamp(Math.round(108 + settings.volume * 18), 96, 126);
+  const emotion = generationEmotionProfile(config);
+  const base = clamp(
+    Math.round(104 + settings.volume * 20 + emotion.dynamicPush * 9 - emotion.relaxation * 7),
+    92,
+    126,
+  );
   const events = [{ type: "cc", controller: 11, beat: 0, value: base }];
   const expressive = ["chords", "melody", "counterpoint", "pad"].includes(id);
   if (!expressive || totalBeats < barBeats * 2) return events;
+
+  if (emotion.dynamicPush > 0.22) {
+    for (const section of structure) {
+      if (!["prechorus", "build", "chorus", "drop", "climax", "hook"].includes(section.name)) continue;
+      const sectionLength = section.endBeat - section.startBeat;
+      if (sectionLength <= barBeats * 0.7) continue;
+      const attackBeat = Math.min(section.endBeat - 0.04, section.startBeat + Math.min(barBeats, sectionLength * 0.34));
+      const settleBeat = Math.min(section.endBeat, Math.max(attackBeat + 0.08, section.endBeat - Math.min(barBeats * 0.6, sectionLength * 0.28)));
+      const lift = clamp(
+        Math.round(base + 4 + emotion.dynamicPush * 12 - (id === "pad" ? 4 : 0) + (id === "melody" ? 2 : 0)),
+        base + 2,
+        127,
+      );
+      appendExpressionRamp(events, section.startBeat, attackBeat, base, lift, barBeats);
+      appendExpressionRamp(events, attackBeat, settleBeat, lift, base, barBeats);
+    }
+  }
 
   const emotional = structure.filter((section) => ["bridge", "breakdown"].includes(section.name) && section.endBeat < totalBeats - 0.01);
   const dipSection = emotional.find((section) => (

@@ -2016,30 +2016,55 @@ input,
   border:0;border-left:3px solid currentColor;border-right:3px solid currentColor;
 }
 .showcase-arrange span{font-size:1.1rem;transform:rotate(90deg)}
-.showcase-arc-wrap{margin-top:24px}
+.showcase-arc-wrap{
+  margin-top:24px;
+  padding:10px 12px 12px;
+  border:1px solid rgba(157,111,255,.22);
+  border-radius:14px;
+  background:
+    radial-gradient(circle at 85% -30%,rgba(45,212,191,.14),transparent 58%),
+    linear-gradient(135deg,rgba(157,111,255,.14),rgba(255,255,255,.015));
+  -webkit-backdrop-filter:blur(10px);
+  backdrop-filter:blur(10px);
+}
 .showcase-arc-heading{
   display:flex;align-items:center;justify-content:space-between;gap:16px;
-  margin-bottom:8px;
+  margin-bottom:10px;
   color:var(--text-3);
   letter-spacing:.08em;
 }
-.showcase-arc-heading b{color:var(--text-2);font-size:.62rem}
+.showcase-arc-heading small{color:rgba(226,224,252,.84)}
+.showcase-arc-heading b{
+  display:inline-flex;
+  align-items:center;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(157,111,255,.34);
+  background:rgba(157,111,255,.16);
+  color:#eceaff;
+  font-size:.62rem;
+  line-height:1;
+}
 .showcase-arc{
   position:relative;
-  display:flex;gap:3px;
-  height:38px;
+  display:flex;gap:4px;
+  height:40px;
   overflow:hidden;
-  border-radius:10px;
-  background:rgba(0,0,0,.24);
+  padding:4px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.08);
+  background:
+    linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.18)),
+    rgba(8,8,14,.52);
 }
 .showcase-arc::after{
   content:"";
   position:absolute;z-index:3;top:0;bottom:0;left:var(--showcase-progress);
-  width:2px;
-  background:#fff;
-  box-shadow:0 0 12px rgba(255,255,255,.8);
+  width:3px;
+  background:linear-gradient(180deg,#fff,#d6f9ff);
+  box-shadow:0 0 14px rgba(207,246,255,.9);
   transform:translateX(-1px);
-  opacity:.8;
+  opacity:.88;
   pointer-events:none;
 }
 .showcase-segment{
@@ -2048,20 +2073,24 @@ input,
   display:flex;align-items:flex-end;
   padding:6px 7px;
   overflow:hidden;
-  border:1px solid rgba(255,255,255,.055);
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
   background:
-    linear-gradient(180deg,rgba(255,255,255,calc(.02 + var(--section-energy) * .06)),transparent),
-    rgba(157,111,255,.06);
+    linear-gradient(180deg,rgba(255,255,255,calc(.04 + var(--section-energy) * .09)),transparent),
+    linear-gradient(135deg,rgba(157,111,255,.14),rgba(45,212,191,.04));
   color:var(--text-3);
-  transition:background .2s ease,color .2s ease;
+  transition:background .2s ease,color .2s ease,border-color .2s ease;
 }
 .showcase-segment small{
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-  font-size:.56rem;letter-spacing:.06em;
+  font-size:.56rem;letter-spacing:.07em;
+  color:rgba(242,240,255,.82);
 }
 .showcase-segment.is-playing-section{
   color:#fff;
-  background:linear-gradient(135deg,rgba(157,111,255,.46),rgba(45,212,191,.18));
+  border-color:rgba(206,249,255,.68);
+  background:linear-gradient(135deg,rgba(157,111,255,.6),rgba(45,212,191,.28));
+  box-shadow:0 0 0 1px rgba(206,249,255,.15) inset;
 }
 .song-showcase .dna-integrated-card{
   width:auto;
@@ -2070,6 +2099,15 @@ input,
   -webkit-backdrop-filter:blur(14px);
   backdrop-filter:blur(14px);
 }
+.song-showcase > .generation-actions-bar{
+  grid-column:1/-1;
+  margin-top:2px;
+  grid-template-columns:1fr 1fr;
+}
+.song-showcase > .generation-actions-bar .generation-button{
+  min-height:74px;
+}
+#genrePocket{display:none!important}
 .song-showcase.is-playing .showcase-art{animation:showcaseSpin 14s linear infinite}
 .song-showcase.is-playing .showcase-art-core{animation:showcaseCounterSpin 14s linear infinite}
 .song-showcase.is-playing .showcase-track-meter{animation:showcaseCounterSpin 14s linear infinite}
@@ -3854,6 +3892,12 @@ input[type=range]::-webkit-slider-thumb {
 .finish-cover img{width:100%;aspect-ratio:1;border-radius:28px;border:1px solid rgba(255,255,255,.18);background:#08080b}
 .finish-cover figcaption{display:flex;justify-content:space-between;gap:16px;margin-top:12px;color:var(--text-2);font-size:10px;letter-spacing:.14em}
 .finish-cover figcaption strong{min-width:0;color:var(--text);letter-spacing:0;text-align:right;overflow-wrap:anywhere}
+.finish-panel .dna-integrated-card{
+  grid-column:1/-1;
+  width:100%;
+  max-width:980px;
+  justify-self:center;
+}
 
 @media (max-width:760px){
   .tab-btn{font-size:9px;letter-spacing:.08em}

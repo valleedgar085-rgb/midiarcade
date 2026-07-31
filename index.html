@@ -142,38 +142,18 @@
                 <div class="showcase-arc" id="showcaseArc" aria-label="Song section arc"></div>
               </div>
             </div>
-            <details class="dna-integrated-card" aria-labelledby="dnaCardTitle">
-              <summary class="dna-disclosure">
-                <span><small>SONG INSIGHT</small><strong>Musical DNA &amp; harmony analysis</strong></span>
-                <span>Open analysis</span>
-              </summary>
-              <div class="dna-details">
-                <div class="dna-heading">
-                <div>
-                  <p class="eyebrow">GENERATED DNA</p>
-                  <h3 id="dnaCardTitle">Generative harmony &amp; structural arc</h3>
-                </div>
-                <div class="dna-badges">
-                  <span class="dna-score-badge" id="dnaScoreBadge">SCORE --/100</span>
-                  <span class="dna-fingerprint" id="dnaFingerprint">00·00·00</span>
-                </div>
-              </div>
-              <div class="dna-style-card">
-                <span class="dna-style-mark" aria-hidden="true">&#10022;</span>
-                <span><small>STYLE</small><strong id="dnaGenre">Neo Soul</strong><em id="dnaTempoDetail">84 BPM · genre pocket</em></span>
-              </div>
-              <div class="dna-grid">
-                <div class="dna-cell dna-harmony"><small>HARMONY</small><strong id="dnaHarmony">Generated from the selected mode</strong><span id="dnaArc">Intro → verse → chorus → outro</span></div>
-                <div class="dna-cell"><small>PHRASE POCKET</small><strong id="dnaGroove">Genre-aware pocket</strong><span id="dnaHalfTime">Full-time pulse</span></div>
-                <div class="dna-cell"><small>RHYTHM</small><strong id="dnaRhythmCounts">0 triplet hits · 0 snare-roll hits</strong><span id="dnaRhythmFeatures">Musical pocket</span></div>
-              </div>
-              <div class="dna-palette">
-                <span><small>SOUND PALETTE</small><strong id="dnaPalette">Six editable General MIDI tracks</strong></span>
-                <span aria-hidden="true"><i></i><i></i><i></i><i></i></span>
-                </div>
-                <span class="dna-value" aria-label="Song DNA strength"><b id="dnaValue">--</b><small>DNA</small></span>
-              </div>
-            </details>
+            <div class="generation-actions-bar" aria-label="Generation">
+              <button class="generation-button generation-new" id="generateNew" type="button">
+                <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 3.5 21.2 14l10.3 4-10.3 4L18 32.5 14.8 22 4.5 18l10.3-4L18 3.5Z"/></svg></span>
+                <span class="action-copy"><small>USE THE SETTINGS ABOVE</small><strong>New song idea</strong><em>Replaces the full song; your choices stay selected</em></span>
+                <kbd>N</kbd>
+              </button>
+              <button class="generation-button generation-similar" id="generateSimilar" type="button">
+                <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M10 5v18.5a5 5 0 1 1-3-4.6V9l19-4v14.5a5 5 0 1 1-3-4.6V5"/></svg></span>
+                <span class="action-copy"><small>KEEP THE CURRENT DNA</small><strong>More like this</strong><em>Applies staged direction while preserving its identity</em></span>
+                <kbd>S</kbd>
+              </button>
+            </div>
           </section>
 
           <details class="workflow-panel panel" id="workflowPanel" aria-labelledby="workflowPanelTitle">
@@ -468,18 +448,6 @@
                 <p id="generationIntentCopy">Change a setting to stage a new direction. Your current song stays untouched.</p>
               </div>
             </div>
-            <div class="generation-actions-bar" aria-label="Generation">
-              <button class="generation-button generation-new" id="generateNew" type="button">
-                <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 3.5 21.2 14l10.3 4-10.3 4L18 32.5 14.8 22 4.5 18l10.3-4L18 3.5Z"/></svg></span>
-                <span class="action-copy"><small>USE THE SETTINGS ABOVE</small><strong>New song idea</strong><em>Replaces the full song; your choices stay selected</em></span>
-                <kbd>N</kbd>
-              </button>
-              <button class="generation-button generation-similar" id="generateSimilar" type="button">
-                <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M10 5v18.5a5 5 0 1 1-3-4.6V9l19-4v14.5a5 5 0 1 1-3-4.6V5"/></svg></span>
-                <span class="action-copy"><small>KEEP THE CURRENT DNA</small><strong>More like this</strong><em>Applies staged direction while preserving its identity</em></span>
-                <kbd>S</kbd>
-              </button>
-            </div>
           </section>
         </div>
 
@@ -745,6 +713,38 @@
               <img id="finishCoverImage" alt="Generated cover artwork for this song" />
               <figcaption><span id="finishCoverLabel">ORIGINAL FINISH</span><strong id="finishCoverTitle">Current idea</strong></figcaption>
             </figure>
+            <details class="dna-integrated-card" aria-labelledby="dnaCardTitle">
+              <summary class="dna-disclosure">
+                <span><small>SONG INSIGHT</small><strong>Musical DNA &amp; harmony analysis</strong></span>
+                <span>Open analysis</span>
+              </summary>
+              <div class="dna-details">
+                <div class="dna-heading">
+                <div>
+                  <p class="eyebrow">GENERATED DNA</p>
+                  <h3 id="dnaCardTitle">Generative harmony &amp; structural arc</h3>
+                </div>
+                <div class="dna-badges">
+                  <span class="dna-score-badge" id="dnaScoreBadge">SCORE --/100</span>
+                  <span class="dna-fingerprint" id="dnaFingerprint">00·00·00</span>
+                </div>
+              </div>
+              <div class="dna-style-card">
+                <span class="dna-style-mark" aria-hidden="true">&#10022;</span>
+                <span><small>STYLE</small><strong id="dnaGenre">Neo Soul</strong><em id="dnaTempoDetail">84 BPM · genre pocket</em></span>
+              </div>
+              <div class="dna-grid">
+                <div class="dna-cell dna-harmony"><small>HARMONY</small><strong id="dnaHarmony">Generated from the selected mode</strong><span id="dnaArc">Intro → verse → chorus → outro</span></div>
+                <div class="dna-cell"><small>PHRASE POCKET</small><strong id="dnaGroove">Genre-aware pocket</strong><span id="dnaHalfTime">Full-time pulse</span></div>
+                <div class="dna-cell"><small>RHYTHM</small><strong id="dnaRhythmCounts">0 triplet hits · 0 snare-roll hits</strong><span id="dnaRhythmFeatures">Musical pocket</span></div>
+              </div>
+              <div class="dna-palette">
+                <span><small>SOUND PALETTE</small><strong id="dnaPalette">Six editable General MIDI tracks</strong></span>
+                <span aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+                </div>
+                <span class="dna-value" aria-label="Song DNA strength"><b id="dnaValue">--</b><small>DNA</small></span>
+              </div>
+            </details>
           </section>
         </div>
 
