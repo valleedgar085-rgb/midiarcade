@@ -43,3 +43,8 @@ test("finite uses 0 as default fallback", () => {
   assert.equal(finite(NaN), 0);
   assert.equal(finite(undefined), 0);
 });
+
+test("finite coerces null to 0 (Number(null) === 0 is finite)", () => {
+  assert.equal(finite(null), 0);
+  assert.equal(finite(null, 99), 0);
+});
