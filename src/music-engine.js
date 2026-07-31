@@ -457,6 +457,7 @@ export const GENRE_PROFILES = deepFreeze({
 export const DEFAULT_CONFIG = deepFreeze({
   seed: "midi-arcade",
   genre: "pop",
+  chordPath: "pop",
   key: "C",
   scale: "minor",
   tempo: 112,
@@ -602,6 +603,20 @@ const SCALE_ALIASES = {
   enigmatic: "enigmatic",
 };
 
+const CHORD_PATH_ALIASES = {
+  soul: "soul",
+  soulful: "soul",
+  pop: "pop",
+  anthem: "pop",
+  jazz: "jazz",
+  turnaround: "jazz",
+  trap: "trap",
+  darktrap: "trap",
+  house: "house",
+  club: "house",
+  stabs: "house",
+};
+
 const STYLE_CHOICES = {
   drumGroove: ["backbeat", "fourFloor", "breakbeat", "halfTime", "electro"],
   bassGroove: ["rootFifth", "pulse", "syncopated", "walking"],
@@ -718,6 +733,39 @@ export const GENRE_PROGRESSION_GRAMMARS = deepFreeze({
   rock: { verse: [[0, 5, 6, 3], [0, 3, 6, 4]], chorus: [[0, 3, 4, 0], [5, 3, 0, 4]], bridge: [[2, 5, 3, 4]], cadence: [3, 4] },
   popRadio: { verse: [[0, 5, 3, 4], [5, 3, 0, 4]], chorus: [[0, 4, 5, 3], [0, 3, 5, 4]], bridge: [[1, 5, 3, 4]], cadence: [1, 4] },
   synthPopRadio: { verse: [[0, 5, 3, 6], [0, 6, 5, 3]], chorus: [[0, 3, 5, 4], [5, 2, 0, 6]], bridge: [[3, 6, 2, 5]], cadence: [6, 4] },
+});
+
+export const CHORD_PATH_PROGRESSION_GRAMMARS = deepFreeze({
+  soul: {
+    verse: [[0, 3, 1, 4], [1, 4, 0, 5], [5, 1, 0, 4]],
+    chorus: [[3, 4, 0, 5], [0, 2, 1, 4]],
+    bridge: [[5, 1, 3, 4], [2, 5, 1, 4]],
+    cadence: [1, 4],
+  },
+  pop: {
+    verse: [[0, 5, 3, 4], [5, 3, 0, 4], [0, 3, 5, 4]],
+    chorus: [[0, 4, 5, 3], [0, 3, 4, 0]],
+    bridge: [[1, 5, 3, 4], [5, 1, 3, 0]],
+    cadence: [3, 4],
+  },
+  jazz: {
+    verse: [[1, 4, 0, 5], [2, 5, 1, 4], [3, 6, 1, 4]],
+    chorus: [[3, 6, 1, 4], [1, 4, 0, 5]],
+    bridge: [[5, 1, 3, 4], [2, 5, 3, 6]],
+    cadence: [1, 4],
+  },
+  trap: {
+    verse: [[0, 6, 5, 6], [0, 2, 5, 6], [0, 5, 6, 5]],
+    chorus: [[0, 5, 2, 6], [0, 6, 3, 5]],
+    bridge: [[6, 5, 3, 2], [3, 6, 2, 5]],
+    cadence: [6, 4],
+  },
+  house: {
+    verse: [[0, 5, 3, 4], [0, 3, 5, 4], [0, 4, 5, 3]],
+    chorus: [[0, 4, 5, 3], [5, 3, 0, 4]],
+    bridge: [[1, 5, 3, 4], [3, 4, 0, 5]],
+    cadence: [3, 4],
+  },
 });
 
 /**
@@ -934,6 +982,19 @@ function normalizeScale(value) {
   return SCALE_ALIASES[token] ?? "minor";
 }
 
+function defaultChordPathForGenre(genre) {
+  if (["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
+  if (["jazz", "ambient"].includes(genre)) return "jazz";
+  if (["rap", "trap", "drill"].includes(genre)) return "trap";
+  if (["house", "techno", "drumBass", "synthwave", "reggaeton"].includes(genre)) return "house";
+  return "pop";
+}
+
+function normalizeChordPath(value, fallback = DEFAULT_CONFIG.chordPath) {
+  const token = String(value ?? fallback).replace(/[\s_-]/g, "").toLowerCase();
+  return CHORD_PATH_ALIASES[token] ?? fallback;
+}
+
 function normalizeGenre(value) {
   const token = String(value ?? DEFAULT_CONFIG.genre).replace(/[\s_&/+-]/g, "").toLowerCase();
   return GENRE_ALIASES[token] ?? DEFAULT_CONFIG.genre;
@@ -1068,6 +1129,7 @@ export function normalizeConfig(input = {}) {
   const suppliedScale = input.scale ?? input.mode;
   const scaleDefault = profile.preferredScales[hashSeed(`${seed}::${genre}::scale`) % profile.preferredScales.length];
   const scale = normalizeScale(suppliedScale ?? scaleDefault);
+  const chordPath = normalizeChordPath(input.chordPath, defaultChordPathForGenre(primaryGenre));
   const timeSignature = normalizeTimeSignature(input.timeSignature ?? DEFAULT_CONFIG.timeSignature);
   const providedTracks = input.tracks ?? input.trackSettings ?? input.instruments ?? {};
   const tracks = {};
@@ -1081,6 +1143,7 @@ export function normalizeConfig(input = {}) {
     fusionBlend,
     isFusion: Boolean(profile.isFusion),
     genreLabel: profile.label,
+    chordPath,
     key: key.name,
     keyPc: key.pc,
     scale,
@@ -1984,20 +2047,22 @@ function progressionFamily(scale) {
 
 function genreProgressionChoices(config, harmonicSection, familyChoices) {
   const grammar = GENRE_PROGRESSION_GRAMMARS[config.genre];
-  if (!grammar) return familyChoices;
+  const chordPathGrammar = CHORD_PATH_PROGRESSION_GRAMMARS[config.chordPath];
   const grammarSection = ["chorus", "drop", "prechorus", "build"].includes(harmonicSection)
     ? "chorus"
     : ["bridge", "breakdown"].includes(harmonicSection)
       ? "bridge"
       : "verse";
-  const genreChoices = grammar[grammarSection] ?? grammar.verse ?? [];
-  if (!genreChoices.length) return familyChoices;
-  // Weight the genre vocabulary 2:1 while retaining a wider tonal fallback.
-  return [...genreChoices, ...genreChoices, ...familyChoices];
+  const genreChoices = grammar?.[grammarSection] ?? grammar?.verse ?? [];
+  const pathChoices = chordPathGrammar?.[grammarSection] ?? [];
+  if (!genreChoices.length && !pathChoices.length) return familyChoices;
+  // Weight genre and requested harmonic-path vocabulary ahead of the broader tonal fallback.
+  return [...genreChoices, ...genreChoices, ...pathChoices, ...pathChoices, ...familyChoices];
 }
 
 function genreCadenceApproach(config, rng) {
-  const choices = GENRE_PROGRESSION_GRAMMARS[config.genre]?.cadence;
+  const pathChoices = CHORD_PATH_PROGRESSION_GRAMMARS[config.chordPath]?.cadence;
+  const choices = pathChoices?.length ? pathChoices : GENRE_PROGRESSION_GRAMMARS[config.genre]?.cadence;
   return Array.isArray(choices) && choices.length ? rng.pick(choices) : 4;
 }
 
@@ -2106,12 +2171,15 @@ function harmonicStoryMetadata(plan, section, position = "motion", plannedTensio
 function harmonicExtensionForTension(config, plan, tension, atResolution = false) {
   if (atResolution && plan?.cadence === "resolve") return false;
   if (tension < 0.5) return false;
+  if (config.chordPath === "trap") return tension >= 0.72 ? "7" : false;
+  if (config.chordPath === "house" && tension < 0.7) return false;
   if (tension < 0.68) {
     return plan?.harmonicRole === "tension" || tension >= 0.6 && config.chordExtensions >= 0.55
       ? "7"
       : false;
   }
-  const colorful = ["neoSoul", "rnbSoul", "jazz", "hipHop", "rap", "loFiHipHop"].includes(config.genre);
+  const colorful = ["neoSoul", "rnbSoul", "jazz", "hipHop", "rap", "loFiHipHop"].includes(config.genre)
+    || ["soul", "jazz"].includes(config.chordPath);
   if (tension >= 0.88 && colorful && config.complexity >= 0.72) return config.genre === "neoSoul" ? "11" : "9";
   if (tension >= 0.76 && colorful) return "9";
   return "7";
