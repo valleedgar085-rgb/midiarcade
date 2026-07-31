@@ -1,7 +1,4 @@
-function finite(value, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
+import { finite } from "../utils.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));

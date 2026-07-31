@@ -1,4 +1,5 @@
 import { encodeMidi, generateNew, generateSectionVariations, generateSimilar, GENRE_PROFILES, ONE_SHOT_KITS, TRACK_DEFINITIONS } from "./music-engine.js";
+import { clamp } from "./utils.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
@@ -448,10 +449,6 @@ for (const [index, id] of TRACK_ORDER.entries()) {
 }
 
 const DEFAULT_TRACK_SETTINGS = deepClone(state.trackSettings);
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
 
 function hashNumber(value) {
   let hash = 2166136261;
