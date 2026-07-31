@@ -135,6 +135,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /createGenerationExecutor[\s\S]*?new Worker\(new URL\("\.\/generation-worker\.js"/, "candidate search must run outside the UI thread when workers are available");
   assert.match(appSource, /resolveControlHelp[\s\S]*?from "\.\/ui\/control-catalog\.js"/, "Phase 21 must keep the control catalog outside the application shell");
   assert.doesNotMatch(appSource, /const CONTROL_HELP\s*=/, "Phase 21 must not duplicate the extracted help catalog in app.js");
+  assert.match(appSource, /CHORD_PATH_DEFAULTS_BY_GENRE[\s\S]*?CHORD_PATH_IDS/, "app chord-path choices must come from the shared engine mapping");
   assert.match(appSource, /aria-description/);
   assert.match(appSource, /setWorkflowStep\(2\)/, "generation should advance the guided workflow to listening");
   assert.match(appSource, /setWorkflowStep\(3\)/, "playback should advance the guided workflow to instrument shaping");

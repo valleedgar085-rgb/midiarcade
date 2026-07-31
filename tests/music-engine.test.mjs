@@ -192,6 +192,15 @@ test("genre fusion engine blends two distinct genres into a valid hybrid profile
   assertAllGeneratedPitchesInScale(song);
 });
 
+test("shared chord-path defaults stay aligned with the supported path list", () => {
+  assert.deepEqual(engine.CHORD_PATH_IDS, ["soul", "pop", "jazz", "trap", "house"]);
+  for (const [genre, chordPath] of Object.entries(engine.CHORD_PATH_DEFAULTS_BY_GENRE)) {
+    assert.ok(engine.CHORD_PATH_IDS.includes(chordPath), `${genre} must map to a supported chord path`);
+    assert.equal(engine.defaultChordPathForGenre(genre), chordPath);
+  }
+  assert.equal(engine.defaultChordPathForGenre("unmapped-genre"), "pop");
+});
+
 test("exotic and regional 30+ scales remain scale-safe in generation", () => {
   const exoticScales = ["doubleHarmonic", "hirajoshi", "hungarianMinor", "bebopDominant", "wholeTone"];
   for (const scale of exoticScales) {
@@ -2718,4 +2727,3 @@ test("multi-seed generation produces dynamic arrangement variety without note-le
   const titles = new Set(songs.map((s) => s.title));
   assert.equal(titles.size, 5, "each random seed must produce a unique title");
 });
-

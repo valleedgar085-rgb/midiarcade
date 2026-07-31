@@ -768,6 +768,31 @@ export const CHORD_PATH_PROGRESSION_GRAMMARS = deepFreeze({
   },
 });
 
+export const CHORD_PATH_IDS = deepFreeze(Object.keys(CHORD_PATH_PROGRESSION_GRAMMARS));
+
+export const CHORD_PATH_DEFAULTS_BY_GENRE = deepFreeze({
+  neoSoul: "soul",
+  hipHop: "soul",
+  loFiHipHop: "soul",
+  rnbSoul: "soul",
+  afrobeats: "soul",
+  pop: "pop",
+  popRadio: "pop",
+  synthPopRadio: "pop",
+  country: "pop",
+  rock: "pop",
+  jazz: "jazz",
+  ambient: "jazz",
+  rap: "trap",
+  trap: "trap",
+  drill: "trap",
+  house: "house",
+  techno: "house",
+  drumBass: "house",
+  synthwave: "house",
+  reggaeton: "house",
+});
+
 /**
  * Listening targets for Critic 6.0. These values let sparse Ambient writing,
  * dense Jazz motion, straight Rock backbeats, and syncopated Funk be judged by
@@ -982,12 +1007,8 @@ function normalizeScale(value) {
   return SCALE_ALIASES[token] ?? "minor";
 }
 
-function defaultChordPathForGenre(genre) {
-  if (["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
-  if (["jazz", "ambient"].includes(genre)) return "jazz";
-  if (["rap", "trap", "drill"].includes(genre)) return "trap";
-  if (["house", "techno", "drumBass", "synthwave", "reggaeton"].includes(genre)) return "house";
-  return "pop";
+export function defaultChordPathForGenre(genre) {
+  return CHORD_PATH_DEFAULTS_BY_GENRE[genre] || "pop";
 }
 
 function normalizeChordPath(value, fallback = DEFAULT_CONFIG.chordPath) {
