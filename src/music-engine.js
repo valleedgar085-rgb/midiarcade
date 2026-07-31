@@ -982,7 +982,7 @@ function normalizeScale(value) {
   return SCALE_ALIASES[token] ?? "minor";
 }
 
-function defaultChordPathForGenre(genre) {
+export function defaultChordPathForGenre(genre) {
   if (["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
   if (["jazz", "ambient"].includes(genre)) return "jazz";
   if (["rap", "trap", "drill"].includes(genre)) return "trap";

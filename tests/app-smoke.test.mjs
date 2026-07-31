@@ -648,10 +648,12 @@ test("browser app initializes against the engine contract", async () => {
   elementFor("#resetControlsButton").dispatch("click");
   assert.equal(Number(elementFor("#tripletControl").value), Math.round(neoSoul.tripletChance * 100));
   assert.equal(Number(elementFor("#rollControl").value), Math.round(neoSoul.snareRollChance * 100));
+  assert.equal(elementFor("#chordPathControl").value, "auto", "Reset must keep chord path in AUTO mode");
 
   assert.equal(app.saveSessionNow(), true, "a valid song session must save locally on demand");
   const savedSession = JSON.parse(storedValues.get("midi-arcade/session-v2"));
   assert.equal(savedSession.schema, 2);
+  assert.ok(savedSession.autoControls.includes("chordPathControl"), "Reset must persist chord path auto selection");
   assert.deepEqual(savedSession.song, app.getAppStateSnapshot().song);
   const restoredApp = await import(`../src/app.js?restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));

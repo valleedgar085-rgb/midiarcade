@@ -1358,6 +1358,15 @@ test("tripletAmount and rollAmount normalize, persist, and zero disables every t
   assertValidNotes(similar);
 });
 
+test("defaultChordPathForGenre keeps genre-to-path defaults stable", () => {
+  assert.equal(engine.defaultChordPathForGenre("neoSoul"), "soul");
+  assert.equal(engine.defaultChordPathForGenre("jazz"), "jazz");
+  assert.equal(engine.defaultChordPathForGenre("trap"), "trap");
+  assert.equal(engine.defaultChordPathForGenre("house"), "house");
+  assert.equal(engine.defaultChordPathForGenre("pop"), "pop");
+  assert.equal(engine.defaultChordPathForGenre("country"), "pop");
+});
+
 test("bass phrases respond to the kick notes that actually survived drum generation", () => {
   const interactionRules = {
     house: [0.5],
@@ -2718,4 +2727,3 @@ test("multi-seed generation produces dynamic arrangement variety without note-le
   const titles = new Set(songs.map((s) => s.title));
   assert.equal(titles.size, 5, "each random seed must produce a unique title");
 });
-
