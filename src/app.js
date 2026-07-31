@@ -802,7 +802,7 @@ const AUTO_GENERATION_RANGE_IDS = new Set([
 const AUTO_TRACK_RANGE_KEYS = new Set([
   "volume", "density", "variation", "octave", "velocity", "gate", "pan", "reverb", "cutoff", "resonance",
 ]);
-const AUTO_SELECT_IDS = new Set(["keyControl", "modeControl", "barsControl", "grooveControl"]);
+const AUTO_SELECT_IDS = new Set(["keyControl", "modeControl", "barsControl", "grooveControl", "chordPathControl"]);
 
 function autoKeyForRange(input) {
   if (input.id && AUTO_GENERATION_RANGE_IDS.has(input.id)) return input.id;
@@ -915,6 +915,21 @@ function autoTrackValue(id, key, seed, fallback) {
   return range ? autoNumber(seed, `${id}:${key}`, ...range) : fallback;
 }
 
+function chordPathChoicesForGenre(genreId = selectedGenreId()) {
+  const groups = {
+    soul: ["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"],
+    pop: ["pop", "popRadio", "synthPopRadio", "country", "rock"],
+    jazz: ["jazz", "ambient"],
+    trap: ["rap", "trap", "drill"],
+    house: ["house", "techno", "drumBass", "synthwave", "reggaeton"],
+  };
+  const preferred = Object.entries(groups)
+    .filter(([, genres]) => genres.includes(genreId))
+    .map(([path]) => path);
+  const ordered = preferred.length ? preferred : ["soul", "pop", "jazz", "trap", "house"];
+  return [...new Set([...ordered, "soul", "pop", "jazz", "trap", "house"])];
+}
+
 function selectedSecondaryGenreId() {
   const value = String($("#secondaryGenreControl")?.value || "none");
   return value !== "none" && GENRE_PROFILES[value] ? value : null;
@@ -922,6 +937,7 @@ function selectedSecondaryGenreId() {
 
 export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const profile = genreProfile();
+  const genreId = selectedGenreId();
   const secondaryGenre = selectedSecondaryGenreId();
   const rhythm = profileRhythmDefaults(profile);
   const selectedGroove = $("#grooveControl").value;
@@ -929,7 +945,6 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const groove = selectedGroove === "auto"
     ? grooveChoices[hashNumber(`${seed}:auto:groove`) % grooveChoices.length]
     : selectedGroove;
-  const chordPath = $("#chordPathControl")?.value || "auto";
   const grooveSettings = {
     straight: { syncopation: 0.2, drumFills: 0.42 },
     laidback: { syncopation: 0.34, drumFills: 0.36 },
@@ -954,6 +969,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const selectedKey = $("#keyControl").value;
   const selectedMode = $("#modeControl").value;
   const selectedBars = $("#barsControl").value;
+  const selectedChordPath = $("#chordPathControl")?.value || "auto";
   const resolvedKey = selectedKey === "auto"
     ? NOTE_NAMES[hashNumber(`${seed}:auto:key`) % NOTE_NAMES.length]
     : selectedKey;
@@ -965,6 +981,10 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const resolvedBars = selectedBars === "auto"
     ? barChoices[hashNumber(`${seed}:auto:bars`) % barChoices.length]
     : readNumber("#barsControl", 32);
+  const chordPathChoices = chordPathChoicesForGenre(genreId);
+  const resolvedChordPath = selectedChordPath === "auto"
+    ? chordPathChoices[hashNumber(`${seed}:auto:chord-path:${genreId}`) % chordPathChoices.length]
+    : selectedChordPath;
   const trackControls = {};
   for (const id of TRACK_ORDER) {
     const settings = state.trackSettings[id];
@@ -992,11 +1012,11 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
 
   return {
     seed,
-    genre: selectedGenreId(),
+    genre: genreId,
     key: resolvedKey,
     root: resolvedKey,
     mode: resolvedMode,
-    chordPath,
+    chordPath: resolvedChordPath,
     tempo: generationValue("tempoControl", 112),
     bpm: generationValue("tempoControl", 112),
     bars: resolvedBars,
@@ -4983,6 +5003,7 @@ function toggleFullscreen() {
   });
   $("#chordPathControl")?.addEventListener("change", () => {
     const sel = $("#chordPathControl");
+    $("#chordPathControl").value === "auto" ? state.autoControls.add("chordPathControl") : state.autoControls.delete("chordPathControl");
     showToast(`Harmonic path: ${sel.options[sel.selectedIndex]?.text || sel.value}. Tap New song idea to generate.`);
     renderGenerationIntent();
   });
@@ -5109,6 +5130,7 @@ function toggleFullscreen() {
     state.autoControls.clear();
     $("#genreControl").value = "neoSoul";
     applyGenreDefaultsToControls("neoSoul");
+    $("#chordPathControl").value = "auto";
     $("#energyControl").value = 68;
     $("#complexityControl").value = 54;
     $("#variationControl").value = 42;
