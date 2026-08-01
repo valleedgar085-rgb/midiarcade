@@ -1548,6 +1548,10 @@ function createPerformanceProfile(config, style, rng, source = null) {
   const phraseOffset = timingPocket === "laidBack" ? pocket
     : timingPocket === "pushed" ? -pocket
       : timingPocket === "elastic" ? round(pocket * 0.55) : 0;
+  // For "tight" feel, add a small constant stagger so chords/melody/pad always
+  // arrive slightly after the bass anchor rather than phase-locking with it.
+  // This eliminates the "competing for the spot" mid-frequency pile-up.
+  const tightStagger = !laidBack && !live ? round(0.006 + humanAmount * 0.004) : 0;
   return {
     version: 1,
     feel: { id: selected.id, label: selected.label },
@@ -1559,10 +1563,10 @@ function createPerformanceProfile(config, style, rng, source = null) {
       // Bass attacks stay phase-locked to the kick; the surrounding instruments
       // carry the timing pocket so low-frequency transients remain clean.
       bass: 0,
-      chords: round((laidBack ? pocket : live ? pocket * 0.45 : 0) + phraseOffset * 0.45),
-      melody: round((laidBack ? pocket * 0.72 : live ? pocket * 0.3 : 0) + phraseOffset),
-      counterpoint: round((laidBack ? pocket * 0.52 : live ? -pocket * 0.2 : 0) - phraseOffset * 0.55),
-      pad: round((laidBack ? pocket * 0.8 : 0) + Math.max(0, phraseOffset) * 0.7),
+      chords: round((laidBack ? pocket : live ? pocket * 0.45 : tightStagger) + phraseOffset * 0.45),
+      melody: round((laidBack ? pocket * 0.72 : live ? pocket * 0.3 : tightStagger * 0.58) + phraseOffset),
+      counterpoint: round((laidBack ? pocket * 0.52 : live ? -pocket * 0.2 : -tightStagger * 0.44) - phraseOffset * 0.55),
+      pad: round((laidBack ? pocket * 0.8 : tightStagger * 0.72) + Math.max(0, phraseOffset) * 0.7),
     },
     articulation: selected.id === "tight" ? "defined" : selected.id === "laid-back" ? "relaxed" : "expressive",
   };
@@ -3059,7 +3063,11 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           ? answers
           : style.chordMotion === "sustained"
             ? [0]
-            : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
+            // Default: place chords on response beats only (even-indexed answers),
+            // NOT on anchors[0] (beat 0). This prevents bass and chords from
+            // simultaneously attacking beat 0 and competing for the same space.
+            // answers always contains at least one element (anchors[0]+responseDelay).
+            : answers.filter((_, index) => index % 2 === 0),
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
     const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
@@ -3708,7 +3716,9 @@ function generateBass(
         const choices = [0, 2, 4, 5];
         pitch = midiForDegree(config, chord.degree + choices[index % choices.length], bassOctave);
       } else if (index > 0 && rng.bool(settings.variation * 0.45)) {
-        pitch += rng.pick([7, 12, -5]);
+        // Avoid full-octave leaps in bass movement — use a fourth down or a fifth
+        // up instead. Octave hops create register collisions with the chord layer.
+        pitch += rng.pick([5, 7, -5]);
       }
       const last = index === offsets.length - 1;
       if (last && nextChord && rng.bool(settings.variation * config.complexity * 0.5)) {
@@ -4041,8 +4051,12 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
+      // Beat-0 chord attacks compete directly with the bass anchor: soften them
+      // so the bass stays dominant on the downbeat. Off-beat positions can punch
+      // harder since the bass has already established its presence.
+      const chordAccent = offsets[index] < 0.01 ? 0.60 : 0.80;
       for (const pitch of voicing) {
-        addNote(notes, pitch, chord.start + offsets[index], duration, eventVelocity(config, settings, intensity, rng, 0.74), totalBeats);
+        addNote(notes, pitch, chord.start + offsets[index], duration, eventVelocity(config, settings, intensity, rng, chordAccent), totalBeats);
       }
     }
   }

@@ -18,7 +18,7 @@ class MockElement {
     this.open = false;
     this.options = [];
     this.dataset = {};
-    this.style = { setProperty() {} };
+    this.style = { setProperty() { } };
     this.listeners = new Map();
     this.attributes = new Map();
     const classes = new Set();
@@ -46,9 +46,9 @@ class MockElement {
   removeAttribute(name) { this.attributes.delete(name); }
   querySelector() { return new MockElement(); }
   querySelectorAll() { return []; }
-  append() {}
-  remove() {}
-  click() {}
+  append() { }
+  remove() { }
+  click() { }
   close() { this.open = false; }
   showModal() { this.open = true; }
 }
@@ -158,7 +158,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /filter\.frequency\.exponentialRampToValueAtTime/, "preview voices must use animated filters");
   assert.match(appSource, /periodicWaveForVoice[\s\S]*?createPeriodicWave/, "instrument timbres must reuse cached harmonic waves");
   assert.match(appSource, /resetContextReferences[\s\S]*?periodicWaves\.clear\(\)/, "context recovery must discard audio objects owned by the closed context");
-  assert.match(appSource, /maxScheduledVoices:\s*96/, "preview playback must enforce a bounded polyphony ceiling");
+  assert.match(appSource, /maxScheduledVoices:\s*52/, "preview playback must enforce a bounded polyphony ceiling");
   assert.match(appSource, /cleanupScheduledVoice[\s\S]*?node\.disconnect\(\)/, "finished preview voices must disconnect their complete audio graph");
   assert.match(appSource, /createdContext\.onstatechange[\s\S]*?recoverAudioContext/, "preview playback must recover an interrupted Android audio context");
   assert.match(appSource, /lookAheadSeconds:\s*0\.85/, "the scheduler must look far enough ahead to survive ordinary WebView stalls");
@@ -271,7 +271,7 @@ test("browser app initializes against the engine contract", async () => {
     body: new MockElement(),
     querySelector: elementFor,
     querySelectorAll() { return []; },
-    addEventListener() {},
+    addEventListener() { },
     createElement() { return new MockElement(); },
   };
 
@@ -671,7 +671,7 @@ test("browser app initializes against the engine contract", async () => {
     const recoveredSave = JSON.parse(postRecoverySession);
     assert.ok(
       Array.isArray(recoveredSave.song?.sections)
-        && recoveredSave.song.sections.every((section) => section && typeof section === "object"),
+      && recoveredSave.song.sections.every((section) => section && typeof section === "object"),
       "a concurrent autosave may persist only a healthy replacement, never the rejected session",
     );
   }
@@ -716,7 +716,7 @@ test("browser app initializes against the engine contract", async () => {
       },
     },
   };
-  console.error = () => {};
+  console.error = () => { };
   try {
     elementFor("#exportButton").dispatch("click");
     await new Promise((resolve) => setTimeout(resolve, 25));

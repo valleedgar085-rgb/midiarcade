@@ -1508,7 +1508,7 @@ function renderSectionEditor(message = "") {
   $("#editorZoomControl").value = state.editorZoom;
   $("#editorStatus").textContent = message || (entries.length
     ? `${meta.name} in ${section.name}. Click a note, Shift-click for several, or double-click empty space to draw.`
-      : `No ${meta.name.toLowerCase()} notes are in ${section.name}. Double-click the grid to draw one.`);
+    : `No ${meta.name.toLowerCase()} notes are in ${section.name}. Double-click the grid to draw one.`);
   renderSectionVariationLab(section);
   $$('[data-editor-action]', container).forEach((button) => {
     const tonalAction = ["octave-down", "pitch-down", "pitch-up", "octave-up"].includes(button.dataset.editorAction);
@@ -1540,12 +1540,12 @@ function renderSectionVariationLab(section = editorSection()) {
       <div class="variation-actions variation-comparison" role="radiogroup" aria-label="Section variation choices">
         <button type="button" data-section-variation="0" class="${active === 0 ? "is-active" : ""}" role="radio" aria-checked="${active === 0}"><b>ORIGINAL</b><small>Current arrangement</small></button>
         ${variations.map((option, index) => {
-          const count = songTracks(option).reduce((sum, track) => sum + trackNotes(track).filter((note) => {
-            return noteStart(note) >= sectionRange.start && noteStart(note) < sectionRange.end;
-          }).length, 0);
-          const delta = count - baseNoteCount;
-          return `<button type="button" data-section-variation="${index + 1}" class="${active === index + 1 ? "is-active" : ""}" role="radio" aria-checked="${active === index + 1}"><b>${String.fromCharCode(65 + index)} · ${directionNames[index]}</b><small>${delta === 0 ? "Balanced note count" : `${delta > 0 ? "+" : ""}${delta} section notes`}</small></button>`;
-        }).join("")}
+      const count = songTracks(option).reduce((sum, track) => sum + trackNotes(track).filter((note) => {
+        return noteStart(note) >= sectionRange.start && noteStart(note) < sectionRange.end;
+      }).length, 0);
+      const delta = count - baseNoteCount;
+      return `<button type="button" data-section-variation="${index + 1}" class="${active === index + 1 ? "is-active" : ""}" role="radio" aria-checked="${active === index + 1}"><b>${String.fromCharCode(65 + index)} · ${directionNames[index]}</b><small>${delta === 0 ? "Balanced note count" : `${delta > 0 ? "+" : ""}${delta} section notes`}</small></button>`;
+    }).join("")}
       </div>
       <div class="variation-commit-actions">
         <button type="button" data-section-variation-cancel>Restore original</button>
@@ -2036,9 +2036,9 @@ function renderIdeaInspector() {
       .map(([name, value]) => `${scoreNames[name] ?? name}: ${value}`)
       .concat(scoreDetails?.balance
         ? [
-            `Balanced floor: ${scoreDetails.balance.creativeFloor}`,
-            `Lower-band balance: ${scoreDetails.balance.balanceScore}`,
-          ]
+          `Balanced floor: ${scoreDetails.balance.creativeFloor}`,
+          `Lower-band balance: ${scoreDetails.balance.balanceScore}`,
+        ]
         : [])
       .join(" · ");
   }
@@ -2269,16 +2269,15 @@ function renderArrangementInsights(sections, bars) {
 
   const harmony = Array.isArray(state.song?.harmony) ? state.song.harmony : [];
   const totalBeats = Math.max(1, bars * Number(state.song?.meta?.beatsPerBar ?? 4));
-  harmonyLane.innerHTML = `<span class="insight-lane-label">HARMONY</span><div class="harmony-map-track">${
-    harmony.map((event) => {
-      const start = Number(event.startBeat ?? event.start ?? 0);
-      const duration = Number(event.duration ?? event.durationBeats ?? 4);
-      const symbol = event.symbol || event.roman || event.chord?.symbol || event.chord?.roman || "I";
-      const roman = event.roman || event.chord?.roman || "";
-      const notes = Array.isArray(event.notes) ? event.notes.join(" · ") : (Array.isArray(event.chord?.notes) ? event.chord.notes.join(" · ") : symbol);
-      return `<span style="--harmony-left:${(start / totalBeats * 100).toFixed(3)}%;--harmony-width:${(duration / totalBeats * 100).toFixed(3)}%" title="${notes}"><b>${symbol}</b><small>${roman}</small></span>`;
-    }).join("")
-  }</div>`;
+  harmonyLane.innerHTML = `<span class="insight-lane-label">HARMONY</span><div class="harmony-map-track">${harmony.map((event) => {
+    const start = Number(event.startBeat ?? event.start ?? 0);
+    const duration = Number(event.duration ?? event.durationBeats ?? 4);
+    const symbol = event.symbol || event.roman || event.chord?.symbol || event.chord?.roman || "I";
+    const roman = event.roman || event.chord?.roman || "";
+    const notes = Array.isArray(event.notes) ? event.notes.join(" · ") : (Array.isArray(event.chord?.notes) ? event.chord.notes.join(" · ") : symbol);
+    return `<span style="--harmony-left:${(start / totalBeats * 100).toFixed(3)}%;--harmony-width:${(duration / totalBeats * 100).toFixed(3)}%" title="${notes}"><b>${symbol}</b><small>${roman}</small></span>`;
+  }).join("")
+    }</div>`;
 }
 
 function renderTimeline() {
@@ -3320,8 +3319,8 @@ function handleTrackControl(id, control) {
         : key === "cutoff"
           ? `${Math.round(value)}Hz`
           : ["volume", "velocity", "reverb", "resonance", "gate"].includes(key)
-          ? `${Math.round(value * 100)}%`
-          : `${control.value}%`;
+            ? `${Math.round(value * 100)}%`
+            : `${control.value}%`;
   }
   if (control.type === "range") updateRangeFill(control);
 }
@@ -3546,7 +3545,7 @@ export async function exportSongNative(payload, filename) {
     url: result.uri,
     dialogTitle: "Save MIDI Song Idea",
   });
-  pruneMidiExportsCache().catch(() => {});
+  pruneMidiExportsCache().catch(() => { });
 }
 
 /**
@@ -3593,7 +3592,7 @@ async function pruneMidiExportsCache(maxBytes = 5_000_000) {
       await Filesystem.deleteFile({
         path: `midi-exports/${entry.name}`,
         directory: "CACHE",
-      }).catch(() => {});
+      }).catch(() => { });
       totalSize -= entry.size;
       pruned += 1;
     }
@@ -3948,12 +3947,18 @@ export function previewVoice(id, program, customSynth = null) {
 }
 
 export const PREVIEW_AUDIO_LIMITS = Object.freeze({
-  scheduleIntervalMs: 75,
+  // 95 ms interval with 0.85 s look-ahead gives 9x scheduling headroom and
+  // reduces main-thread wakeups vs the old 75 ms interval.
+  scheduleIntervalMs: 95,
   visualIntervalMs: 33,
   detailRefreshMs: 250,
   lookAheadSeconds: 0.85,
-  lateEventGraceSeconds: 0.12,
-  maxScheduledVoices: 96,
+  // Tighter grace window — very stale events (>60 ms late) cause gain-ramp
+  // squash that produces audible clicks, so drop them instead of playing them.
+  lateEventGraceSeconds: 0.06,
+  // 52 concurrent voices is ample for 6 tracks. Lowering from 96 reduces
+  // node-pool pressure and GC pauses on mobile.
+  maxScheduledVoices: 52,
 });
 
 let screenWakeLock = null;
@@ -4085,16 +4090,18 @@ export class PreviewPlayer {
           curve[index] = Math.tanh(x * 1.08) / Math.tanh(1.08);
         }
         saturation.curve = curve;
+        // 4x oversample keeps the soft-clip clean across the audio spectrum.
         saturation.oversample = "4x";
         this.master.connect(highpass).connect(warmth).connect(saturation).connect(compressor).connect(limiter).connect(this.context.destination);
       } else {
         this.master.connect(highpass).connect(warmth).connect(compressor).connect(limiter).connect(this.context.destination);
       }
 
-      // Reverb bus — extended to 2.2 s with smoother exponential decay (2.2 exponent).
+      // Reverb bus — 1.6 s IR (was 2.2 s) with same smooth exponential decay.
+      // Shorter IR saves ~30% convolver CPU on mobile without audible loss.
       if (typeof this.context.createConvolver === "function") {
         this.reverbBus = this.context.createConvolver();
-        const length = Math.floor(this.context.sampleRate * 2.2);
+        const length = Math.floor(this.context.sampleRate * 1.6);
         const impulse = this.context.createBuffer(2, length, this.context.sampleRate);
         for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
           const data = impulse.getChannelData(channel);
@@ -4199,7 +4206,7 @@ export class PreviewPlayer {
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null;
       if (this.playing || this.liveVoices.size || this.context?.state !== "running") return;
-      this.context.suspend().catch(() => {});
+      this.context.suspend().catch(() => { });
     }, Math.max(0, delay));
   }
 
@@ -4275,7 +4282,9 @@ export class PreviewPlayer {
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
       const event = this.events[this.eventIndex++];
       if (event.time >= currentSongTime - PREVIEW_AUDIO_LIMITS.lateEventGraceSeconds) {
-        const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
+        // Always schedule at least 6 ms into the future. Scheduling at exactly
+        // currentTime collapses gain-ramps to instant and produces a click.
+        const when = this.context.currentTime + Math.max(0.006, event.time - currentSongTime);
         this.scheduleEvent(event, when);
       }
     }
@@ -4317,9 +4326,16 @@ export class PreviewPlayer {
       for (const node of voice.nodes) {
         if (node.gain?.cancelScheduledValues) {
           try {
-            node.gain.cancelScheduledValues(now);
-            node.gain.setValueAtTime(Math.max(0.0001, node.gain.value || 0.01), now);
-            node.gain.exponentialRampToValueAtTime(0.0001, now + 0.008);
+            // cancelAndHoldAtTime holds the currently-computed value and avoids
+            // the gain snap that cancelScheduledValues can produce.
+            if (typeof node.gain.cancelAndHoldAtTime === "function") {
+              node.gain.cancelAndHoldAtTime(now);
+            } else {
+              node.gain.cancelScheduledValues(now);
+              node.gain.setValueAtTime(Math.max(0.0001, node.gain.value || 0.01), now);
+            }
+            // 18 ms fade-out (was 8 ms) prevents zipper noise on abrupt cuts.
+            node.gain.exponentialRampToValueAtTime(0.0001, now + 0.018);
           } catch { /* ignore */ }
         }
       }
@@ -4943,19 +4959,19 @@ function bindGlobalControls() {
     toggleAutoControl(button.dataset.autoKey);
   });
 
-function toggleFullscreen() {
-  if (!document.fullscreenElement) {
-    if (document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(() => {});
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => { });
+      }
+      showToast("Immersive Fullscreen active.");
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => { });
+      }
+      showToast("Standard view active.");
     }
-    showToast("Immersive Fullscreen active.");
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen().catch(() => {});
-    }
-    showToast("Standard view active.");
   }
-}
 
   const liveRangeIds = ["tempoControl", "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl", "variationControl", "evolutionControl", "surpriseControl"];
   for (const id of liveRangeIds) {
@@ -5377,7 +5393,7 @@ async function init() {
     else if (restored) showToast("Your last song and live take were restored.");
     discoverMidiDevices({ requestAccess: false });
     // Prune old MIDI exports at startup (fire-and-forget).
-    pruneMidiExportsCache().catch(() => {});
+    pruneMidiExportsCache().catch(() => { });
   } catch (error) {
     console.error(error);
     showToast("The composition engine could not start. Refresh to try again.");
