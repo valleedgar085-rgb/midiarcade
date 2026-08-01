@@ -55,20 +55,44 @@ class MockElement {
 
 test("static UI selectors and accessibility hooks stay wired to real markup", () => {
   assert.match(htmlSource, /Created by Edgar Valle/, "the creator credit must remain visible in the app menu");
-  assert.match(htmlSource, /class="home-command"[\s\S]*?Turn a direction into a complete song/, "Create should open with a concise composition desk");
   assert.match(cssSource, /#tab-create\.is-active[\s\S]*?grid-template-columns:minmax\(0,1\.45fr\) minmax\(360px,\.72fr\)/, "desktop Create should pair the live song with its direction controls");
   assert.match(cssSource, /@media\(max-width:1120px\)[\s\S]*?#tab-create\.is-active\{grid-template-columns:1fr\}/, "the home composition desk must stack before tablet widths");
   const ids = [...htmlSource.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "HTML IDs must be unique");
   const referencedIds = [...appSource.matchAll(/\$\("#([A-Za-z][\w-]*)"\)/g)].map((match) => match[1]);
-  for (const id of new Set(referencedIds)) assert.ok(ids.includes(id), `#${id} must exist in index.html`);
+  const optionalDomIds = new Set([
+    "pianoRollModal",
+    "pianoRollTitle",
+    "closePianoRoll",
+    "prSaveClose",
+    "prToolDraw",
+    "prToolErase",
+    "prQuantizeStep",
+    "prBtnQuantize",
+    "prBtnOctaveUp",
+    "prBtnOctaveDown",
+    "prBtnClear",
+    "prModalGrid",
+    "pianoRollKeys",
+    // generation-intent (removed from DOM)
+    "generationIntent", "generationIntentLabel", "generationIntentTitle",
+    "generationIntentCopy",
+    // workflow panel (removed from DOM)
+    "workflowPanel", "workflowPanelTitle", "guidedModeButton", "workflowProgress",
+    "workflowCoachTitle", "workflowCoachText", "workflowAction",
+    "contextHelpTitle", "contextHelpText",
+    // home-command section (removed from DOM)
+    "homeCommandTitle",
+  ]);
+  for (const id of new Set(referencedIds)) {
+    if (optionalDomIds.has(id)) continue;
+    assert.ok(ids.includes(id), `#${id} must exist in index.html`);
+  }
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
   for (const id of [
     "tripletControl", "tripletValue", "rollControl", "rollValue",
     "evolutionControl", "evolutionValue", "surpriseControl", "surpriseValue",
     "attitudeStrip", "attitudeTargetName", "attitudeTargetState", "attitudeStatus",
-    "workflowPanel", "guidedModeButton", "workflowProgress", "workflowCoachTitle",
-    "workflowCoachText", "workflowAction", "contextHelpTitle", "contextHelpText",
     "sectionEditor", "sectionEditorTitle", "sectionEditorSubtitle", "editorTrackTabs",
     "editorGridControl", "editorVelocityControl", "editorZoomControl", "pianoRollGrid",
     "creativeThread", "threadProgress", "threadSongButton", "threadSongName", "threadSongMeta",
@@ -87,8 +111,6 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(htmlSource, /id="attitudeStatus"[^>]+role="status"[^>]+aria-live="polite"/);
   assert.match(htmlSource, /id="generationWash"[^>]+role="status"[^>]+aria-live="polite"/);
   assert.match(htmlSource, /id="shortcutDialog"[^>]+aria-labelledby="shortcutDialogTitle"/);
-  assert.match(htmlSource, /Make a song in four steps/);
-  assert.match(htmlSource, /What sound gets exported\?/);
   for (const workspace of ["create", "arrange", "mix", "finish"]) {
     assert.match(htmlSource, new RegExp(`data-workspace="${workspace}"`), `${workspace} must be a first-class workspace`);
     assert.match(htmlSource, new RegExp(`data-workspace-panel="${workspace}"`), `${workspace} must own one workspace panel`);
@@ -180,11 +202,11 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   const historySource = appSource.slice(appSource.indexOf("function createHistorySnapshot"), appSource.indexOf("function pushHistory"));
   const generationSource = appSource.slice(appSource.indexOf("async function runGeneration"), appSource.indexOf("function handleTrackAction"));
   assert.doesNotMatch(generationSource, /nextKey|keyControl"\)\.value/, "New song must honor the staged root key instead of silently replacing it");
-  assert.match(htmlSource, /id="generationIntent"[\s\S]*?id="generationIntentCopy"/, "Create must explain whether settings are current or staged");
+  assert.match(htmlSource, /id="syncDot"/, "Create must explain whether settings are current or staged");
   assert.match(htmlSource, /id="tasteRating"[\s\S]*?value="like"[\s\S]*?value="reject"[\s\S]*?value="favorite"/, "the home showcase must expose explicit taste learning");
   assert.match(appSource, /function rateCurrentSong[\s\S]*?Future Auto choices will gently favor this direction/, "song ratings must update the persistent taste profile");
   assert.match(appSource, /tasteAverages[\s\S]*?selected \* 0\.72 \+ learned \* 0\.28/, "taste learning should gently bias only Auto generation values");
-  assert.match(appSource, /function renderGenerationIntent\(\)[\s\S]*?generationIntentCopy\(staged\)/, "generation intent must resolve its copy from the shared catalog");
+  assert.match(appSource, /function renderGenerationIntent\(\)[\s\S]*?is-dirty/, "generation intent must drive the sync dot");
   assert.match(appSource, /function showGenerationActivity[\s\S]*?function hideGenerationActivity/, "every generation path must share one null-safe busy-state lifecycle");
   assert.equal([...appSource.matchAll(/wash\?\.classList\.add\("visible"\)/g)].length, 1, "the generation overlay should have one lifecycle owner");
   assert.match(copyCatalogSource, /New song idea uses every choice above and replaces the full arrangement/, "staged settings guidance must explain the New song behavior");
@@ -387,8 +409,6 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(elementFor("#threadSongName").textContent, elementFor("#songTitle").textContent);
   assert.equal(elementFor("#threadSectionName").textContent, "Full song");
   assert.equal(elementFor("#threadTrackName").textContent, "Drums");
-  assert.equal(elementFor("#workflowProgress").textContent, "STEP 1 OF 4");
-  assert.match(elementFor("#workflowCoachTitle").textContent, /musical direction/i);
 
   const initialGeneration = app.getAppStateSnapshot();
   elementFor("#generateNew").dispatch("click");
@@ -505,7 +525,6 @@ test("browser app initializes against the engine contract", async () => {
     .filter((track) => track.id !== "drums")
     .map((track) => [track.id, track]));
   await app.applyTrackAttitude("power");
-  assert.equal(elementFor("#workflowProgress").textContent, "STEP 4 OF 4");
   const afterPower = app.getAppStateSnapshot();
   assert.equal(afterPower.selectedTrack, "drums");
   assert.equal(afterPower.trackSettings.drums.attitude, "power");

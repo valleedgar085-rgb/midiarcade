@@ -224,6 +224,17 @@ details>summary::-webkit-details-marker{display:none}
   animation:blink 3s ease-in-out infinite;
 }
 @keyframes blink{50%{opacity:.4}}
+.sync-dot{
+  width:9px;height:9px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 0 2px rgba(74,222,128,.15),0 0 10px var(--green);
+  transition:background .3s ease,box-shadow .3s ease;
+  flex-shrink:0;
+}
+.sync-dot.is-dirty{
+  background:var(--gold);
+  box-shadow:0 0 0 2px rgba(251,191,36,.15),0 0 10px var(--gold);
+}
 .topbar-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .icon-button{
   display:flex;align-items:center;gap:5px;
@@ -763,33 +774,6 @@ input[type=range].is-auto{
 .guide-privacy-link{margin:18px 0 0;text-align:center}
 .guide-privacy-link a{color:var(--text-2);font-size:.78rem;text-underline-offset:3px}
 .guide-privacy-link a:hover{color:var(--accent)}
-.generation-intent{
-  display:flex;align-items:center;gap:12px;
-  margin-bottom:12px;padding:12px 14px;
-  border:1px solid rgba(45,212,191,.18);border-radius:var(--radius);
-  background:linear-gradient(105deg,rgba(45,212,191,.07),rgba(157,111,255,.035));
-  transition:border-color .2s ease,background .2s ease,box-shadow .2s ease;
-}
-.generation-intent-icon{
-  width:10px;height:10px;flex:0 0 10px;border-radius:50%;
-  background:var(--teal);box-shadow:0 0 0 5px rgba(45,212,191,.1),0 0 18px rgba(45,212,191,.35);
-}
-.generation-intent div{min-width:0}
-.generation-intent small{
-  display:block;margin-bottom:2px;
-  color:var(--teal);font:700 .58rem/1 var(--font-data);letter-spacing:.16em;
-}
-.generation-intent strong{display:block;color:var(--text-1);font-size:.84rem}
-.generation-intent p{margin:2px 0 0;color:var(--text-2);font-size:.72rem;line-height:1.45}
-.generation-intent.is-staged{
-  border-color:rgba(251,191,36,.34);
-  background:linear-gradient(105deg,rgba(251,191,36,.1),rgba(157,111,255,.06));
-  box-shadow:inset 3px 0 var(--gold);
-}
-.generation-intent.is-staged .generation-intent-icon{
-  background:var(--gold);box-shadow:0 0 0 5px rgba(251,191,36,.1),0 0 18px rgba(251,191,36,.32);
-}
-.generation-intent.is-staged small{color:var(--gold)}
 .generation-button{
   display:flex;align-items:center;gap:12px;
   padding:16px 18px;border-radius:var(--radius);
@@ -1686,7 +1670,6 @@ details>summary:focus-visible{
   grid-template-columns:minmax(0,1fr);
   margin-bottom:16px;
 }
-.generation-intent{order:2}
 .generation-actions-bar{order:3}
 .creator-main-controls{display:flex;flex-direction:column;gap:14px}
 .genre-direction{order:1}
@@ -2034,6 +2017,12 @@ input,
   letter-spacing:.08em;
 }
 .showcase-arc-heading small{color:rgba(226,224,252,.84)}
+.arc-meter-chip{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:1px 5px;border-radius:4px;
+  background:rgba(168,85,247,.12);border:1px solid rgba(168,85,247,.22);
+  color:var(--accent);font:700 .62rem/1 var(--font-data);letter-spacing:.08em;
+}
 .showcase-arc-heading b{
   display:inline-flex;
   align-items:center;
@@ -3314,7 +3303,6 @@ input,
 }
 .genre-guidance,
 .recipe-card>p{font-size:.8125rem;line-height:1.6}
-.generation-intent p{max-width:66ch;line-height:1.55}
 .song-showcase #songSummary{max-width:72ch;line-height:1.55}
 
 /* Decorative motion sleeps at idle. Musical playback and generation wake it. */

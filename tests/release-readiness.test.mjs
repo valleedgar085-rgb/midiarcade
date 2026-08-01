@@ -24,8 +24,6 @@ test("shipped text assets are UTF-8 clean and preserve protected product copy", 
 
   const html = await read("index.html");
   assert.match(html, /<meta charset="UTF-8"/);
-  assert.match(html, /Make a song in four steps/);
-  assert.match(html, /What sound gets exported\?/);
   assert.match(html, /6 SOUND-READY MIDI TRACKS/);
 });
 

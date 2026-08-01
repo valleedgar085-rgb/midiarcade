@@ -25,6 +25,7 @@
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
           <span><strong>MIDI ARCADE</strong><small>SONG STUDIO</small></span>
         </a>
+        <span id="syncDot" class="sync-dot" aria-label="Settings sync status" title="Settings in sync"></span>
         <div class="session-status" aria-label="Session status">
           <span class="status-light"></span><span>COMPOSITION ENGINE</span><b id="seedLabel">SEED --</b>
         </div>
@@ -77,18 +78,7 @@
 
         <!-- STUDIO TAB -->
         <div class="tab-panel is-active" id="tab-create" data-workspace-panel="create" role="tabpanel" aria-labelledby="tab-btn-create">
-          <section class="home-command" aria-labelledby="homeCommandTitle">
-            <div>
-              <p class="eyebrow"><span></span> YOUR COMPOSITION DESK</p>
-              <h2 id="homeCommandTitle">Turn a direction into a complete song.</h2>
-              <p>Start simple. Choose a genre, leave anything uncertain on Auto, and shape the result after it plays.</p>
-            </div>
-            <ol class="home-path" aria-label="Creation path">
-              <li><b>01</b><span><strong>Direct</strong><small>Set the musical intent</small></span></li>
-              <li><b>02</b><span><strong>Generate</strong><small>Compose the full band</small></span></li>
-              <li><b>03</b><span><strong>Shape</strong><small>Edit only what matters</small></span></li>
-            </ol>
-          </section>
+
           <section class="hero-panel song-showcase panel" id="heroPanel" aria-labelledby="songTitle">
             <div class="showcase-art" id="showcaseArt" data-cover-style="eclipse" aria-hidden="true">
               <div class="showcase-cover-shape showcase-cover-shape-a"></div>
@@ -138,7 +128,7 @@
                 </select>
               </label>
               <div class="showcase-arc-wrap">
-                <span class="showcase-arc-heading"><small>SONG ARC</small><b id="showcaseArcStatus">READY TO PLAY</b></span>
+                <span class="showcase-arc-heading"><small>SONG ARC</small><span id="arcMeterChip" class="arc-meter-chip">4/4</span><b id="showcaseArcStatus">READY TO PLAY</b></span>
                 <div class="showcase-arc" id="showcaseArc" aria-label="Song section arc"></div>
               </div>
             </div>
@@ -156,35 +146,6 @@
             </div>
           </section>
 
-          <details class="workflow-panel panel" id="workflowPanel" aria-labelledby="workflowPanelTitle">
-            <summary class="workflow-disclosure">
-              <span><small>OPTIONAL GUIDE</small><strong>Make a song in four steps</strong></span>
-              <span>Open guide</span>
-            </summary>
-            <div class="workflow-heading">
-              <div>
-                <p class="eyebrow">Make a song in four steps</p>
-                <h2 id="workflowPanelTitle">A clear path from inspiration to sound-ready MIDI</h2>
-              </div>
-              <button class="guided-mode-button" id="guidedModeButton" type="button" aria-pressed="true">Guided mode <b>ON</b></button>
-            </div>
-            <div class="workflow-steps" aria-label="Song workflow">
-              <button type="button" data-workflow-step="1" class="is-active"><b>1</b><span>Direct</span></button>
-              <button type="button" data-workflow-step="2"><b>2</b><span>Listen</span></button>
-              <button type="button" data-workflow-step="3"><b>3</b><span>Shape</span></button>
-              <button type="button" data-workflow-step="4"><b>4</b><span>Export</span></button>
-            </div>
-            <div class="workflow-coach">
-              <span class="workflow-progress" id="workflowProgress">STEP 1 OF 4</span>
-              <div><strong id="workflowCoachTitle">Choose a musical direction</strong><p id="workflowCoachText">Set the controls—or leave them on Auto—then generate a complete arrangement.</p></div>
-              <button id="workflowAction" type="button">Shape the song <span>→</span></button>
-            </div>
-            <aside class="context-help" aria-live="polite">
-              <small>WHAT THIS CONTROL CHANGES</small>
-              <strong id="contextHelpTitle">What sound gets exported?</strong>
-              <p id="contextHelpText">Every instrument exports as a named track with its GM2 sound, performance and mix setup.</p>
-            </aside>
-          </details>
 
           <section class="song-creator-panel panel" id="preGenSection" aria-labelledby="directionTitle">
             <div class="creator-heading">
@@ -439,14 +400,6 @@
                   </div>
                 </details>
               </details>
-            </div>
-            <div class="generation-intent" id="generationIntent" role="status" aria-live="polite">
-              <span class="generation-intent-icon" aria-hidden="true"></span>
-              <div>
-                <small id="generationIntentLabel">CURRENT SONG</small>
-                <strong id="generationIntentTitle">Direction locked to active song</strong>
-                <p id="generationIntentCopy">Change a setting to stage a new direction. Your current song stays untouched.</p>
-              </div>
             </div>
           </section>
         </div>
@@ -797,39 +750,6 @@
       <div class="generation-message"><i></i><span id="generationMessage">COMPOSING HARMONIC ARCHITECTURE</span></div>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-    <dialog class="shortcut-dialog piano-roll-dialog" id="pianoRollModal" aria-labelledby="pianoRollTitle">
-      <button class="dialog-close" id="closePianoRoll" type="button" aria-label="Close Note Editor">x</button>
-      <div class="piano-roll-header">
-        <div>
-          <p class="eyebrow"><span></span> VISUAL NOTE &amp; STEP EDITOR</p>
-          <h2 id="pianoRollTitle">Piano Roll — Melody</h2>
-        </div>
-        <div class="piano-roll-tools" aria-label="Editor Tools">
-          <button class="icon-button tool-btn is-active" id="prToolDraw" type="button" aria-pressed="true" title="Draw or add notes">✎ Draw</button>
-          <button class="icon-button tool-btn" id="prToolErase" type="button" aria-pressed="false" title="Erase notes">⌫ Erase</button>
-          <select id="prQuantizeStep" aria-label="Quantize Step">
-            <option value="0.25">1/16 Note</option>
-            <option value="0.5" selected>1/8 Note</option>
-            <option value="1">1/4 Note</option>
-          </select>
-          <button class="icon-button" id="prBtnQuantize" type="button" title="Quantize notes to the grid">⚡ Quantize</button>
-          <button class="icon-button" id="prBtnOctaveUp" type="button" title="Transpose Octave Up">+12 st</button>
-          <button class="icon-button" id="prBtnOctaveDown" type="button" title="Transpose Octave Down">-12 st</button>
-          <button class="icon-button danger-btn" id="prBtnClear" type="button" title="Clear this part">🗑 Clear</button>
-        </div>
-      </div>
-      <div class="piano-roll-workspace">
-        <div class="piano-roll-keys" id="pianoRollKeys" aria-hidden="true"></div>
-        <div class="piano-roll-viewport" id="prModalViewport">
-          <div class="piano-roll-grid" id="prModalGrid" role="grid" aria-label="Note grid"></div>
-        </div>
-      </div>
-      <div class="piano-roll-footer">
-        <span class="pr-info" id="pianoRollInfo">Click or tap grid cells to add/remove notes. Audio changes sync live.</span>
-        <button class="export-button" id="prSaveClose" type="button"><span><strong>Done Editing</strong></span></button>
-      </div>
-    </dialog>
 
     <dialog class="shortcut-dialog guide-dialog" id="shortcutDialog" aria-labelledby="shortcutDialogTitle">
       <button class="dialog-close" id="closeDialog" type="button" aria-label="Close">x</button>

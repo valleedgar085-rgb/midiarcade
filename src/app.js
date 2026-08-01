@@ -1058,18 +1058,16 @@ function generationSettingsSnapshot() {
 }
 
 function renderGenerationIntent() {
-  const panel = $("#generationIntent");
-  if (!panel) return;
   const current = generationSettingsSnapshot();
   const staged = Boolean(appliedGenerationSettings && (
     GENERATION_SETTING_IDS.some((id) => current[id] !== appliedGenerationSettings[id])
     || current.autoControls !== appliedGenerationSettings.autoControls
   ));
-  const copy = generationIntentCopy(staged);
-  panel.classList.toggle("is-staged", staged);
-  $("#generationIntentLabel").textContent = copy.label;
-  $("#generationIntentTitle").textContent = copy.title;
-  $("#generationIntentCopy").textContent = copy.body;
+  const dot = $("#syncDot");
+  if (dot) {
+    dot.classList.toggle("is-dirty", staged);
+    dot.title = staged ? "Settings changed — regenerate to sync" : "Settings in sync";
+  }
 }
 
 function captureAppliedGenerationSettings() {
@@ -4905,6 +4903,11 @@ function updatePlaybackUi(position, duration, { view = playbackViewForSong(), re
       arcStatus.textContent = player.playing && activeSection
         ? `PLAYING ${activeSection.name.toUpperCase()}`
         : ratio > 0 ? `${Math.round(ratio * 100)}% THROUGH SONG` : "READY TO PLAY";
+    }
+    const meterChip = $("#arcMeterChip");
+    if (meterChip) {
+      const ts = state.song?.timeSignature ?? state.song?.meta?.timeSignature ?? "4/4";
+      meterChip.textContent = String(ts);
     }
   }
   const editorPlayhead = $(".piano-roll-editor-playhead");

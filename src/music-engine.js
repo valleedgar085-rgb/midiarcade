@@ -1497,7 +1497,7 @@ function developmentPathForTransform(transform) {
 }
 
 function narrativeEnergy(narrativeId, base, progress, index) {
-  if (narrativeId === "slow-burn") return clamp(base * 0.78 + progress * 0.28, 0.24, 1);
+  if (narrativeId === "slow-burn")    return clamp(base * 0.78 + progress * 0.28, 0.24, 1);
   if (narrativeId === "call-response") return clamp(base * 0.88 + (index % 2 ? 0.08 : -0.03), 0.24, 1);
   if (narrativeId === "pulse-bloom") return clamp(base * 0.82 + Math.sin(progress * Math.PI) * 0.2, 0.24, 1);
   return clamp(base * 0.9 + (progress < 0.7 ? progress * 0.13 : (1 - progress) * 0.08), 0.24, 1);
@@ -2886,8 +2886,18 @@ function buildEvolutionSegments(config, structure, trackId, rng) {
       const bars = Math.min(phraseBars, section.bars - localBar);
       const local = rng.fork(`${trackId}-${section.id}-${phraseIndex}`);
       const movement = 0.34 + config.evolution * 0.86 + emotion.dynamicPush * 0.4;
-      const sectionDirection = ["prechorus", "build", "chorus", "drop", "climax", "hook"].includes(section.name) ? 0.032 * movement
-        : ["breakdown", "outro", "bridge"].includes(section.name) ? -0.03 * movement : 0;
+      const chorusLift = finite(GENRE_PROFILES[config.genre]?.arrangement?.chorusLift, 0.18);
+      const isEnergize = ["chorus", "drop", "climax", "hook"].includes(section.name);
+      const isBuild    = ["prechorus", "build"].includes(section.name);
+      const isDrain    = ["breakdown", "outro", "bridge", "intro"].includes(section.name);
+      const sectionDirection = isEnergize ? chorusLift * movement
+        : isBuild    ? chorusLift * 0.4 * movement
+        : isDrain    ? -0.038 * movement : 0;
+      // Reset energy boundary at first phrase of each section for sharper arc contrast
+      if (localBar === 0) {
+        if (isEnergize) previousTarget = clamp(previousTarget, maxTarget * 0.68, maxTarget);
+        if (isDrain)    previousTarget = clamp(previousTarget, minTarget, minTarget + (maxTarget - minTarget) * 0.42);
+      }
       const drift = (local.float() - 0.5) * (0.03 + config.evolution * 0.07 + emotion.sectionContrast * 0.03);
       const target = clamp(previousTarget + sectionDirection + drift, minTarget, maxTarget);
       segments.push({
@@ -2944,6 +2954,8 @@ function genreKickOffsets(config, style, barBeats, bar = 0) {
     funk: [[0, 0.75, 2.25, 3.5], [0, 1.5, 2.5, 3.25], [0, 0.5, 2, 2.75], [0, 1.25, 2.25, 3.75]],
     country: [[0, 2.5], [0, 1.5, 2.75], [0, 2, 3.5], [0, 1.75, 2.5], [0, 0.75, 2.75], [0, 2.25, 3.25]],
     rock: [[0, 2, 2.75], [0, 1.5, 2, 3.5], [0, 0.75, 2.5], [0, 2, 3.25], [0, 1.25, 2.75, 3.5], [0, 1.75, 2.5]],
+    popRadio: [[0, 2, 2.75], [0, 1.5, 2.5, 3.25], [0, 0.75, 2, 3.5], [0, 1.25, 2.75]],
+    synthPopRadio: [[0, 1, 2, 3], [0, 1.5, 2.5, 3.25], [0, 0.75, 2, 2.75, 3.5], [0, 1.25, 2, 3.5]],
   };
   const family = patterns[config.genre] ?? patterns.pop;
   const rotation = Math.max(0, Math.round(finite(style.rhythmIdentity?.kickRotation, 0)));
