@@ -497,10 +497,10 @@ function bindControlHelp() {
 function renderWorkflow() {
   const step = clamp(Math.round(Number(state.workflowStep) || 1), 1, 4);
   const copy = WORKFLOW_COPY[step];
-  $("#workflowProgress").textContent = `STEP ${step} OF 4`;
-  $("#workflowCoachTitle").textContent = copy.title;
-  $("#workflowCoachText").textContent = copy.text;
-  $("#workflowAction").innerHTML = `${copy.action} <span>→</span>`;
+  if ($("#workflowProgress")) $("#workflowProgress").textContent = `STEP ${step} OF 4`;
+  if ($("#workflowCoachTitle")) $("#workflowCoachTitle").textContent = copy.title;
+  if ($("#workflowCoachText")) $("#workflowCoachText").textContent = copy.text;
+  if ($("#workflowAction")) $("#workflowAction").innerHTML = `${copy.action} <span>→</span>`;
   $$('[data-workflow-step]').forEach((button) => {
     const buttonStep = Number(button.dataset.workflowStep);
     button.classList.toggle("is-active", buttonStep === step);
@@ -509,8 +509,10 @@ function renderWorkflow() {
     else button.removeAttribute("aria-current");
   });
   document.body.classList.toggle("guided-off", !state.guidedMode);
-  $("#guidedModeButton").setAttribute("aria-pressed", String(state.guidedMode));
-  $("#guidedModeButton").innerHTML = `Guided mode <b>${state.guidedMode ? "ON" : "OFF"}</b>`;
+  if ($("#guidedModeButton")) {
+    $("#guidedModeButton").setAttribute("aria-pressed", String(state.guidedMode));
+    $("#guidedModeButton").innerHTML = `Guided mode <b>${state.guidedMode ? "ON" : "OFF"}</b>`;
+  }
 }
 
 function focusRelationship(trackId, section) {
