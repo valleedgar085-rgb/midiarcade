@@ -621,6 +621,23 @@ h1{
 .pocket-status.outside-pocket{background:rgba(251,191,36,.1);color:var(--gold);border:1px solid rgba(251,191,36,.2)}
 .genre-guidance{font-size:12px;color:var(--text-2);font-style:italic}
 
+/* Primary genre — hero control */
+.genre-select-control:not(.secondary-genre-control)>span{
+  font-size:11px;letter-spacing:.2em;color:var(--accent);font-weight:800;
+}
+.genre-select-control:not(.secondary-genre-control) select{
+  font-size:14px;font-weight:700;padding:11px 34px 11px 12px;
+  border-color:rgba(157,111,255,.35);
+  background-color:rgba(157,111,255,.06);
+}
+.genre-select-control:not(.secondary-genre-control) select:hover{
+  border-color:rgba(157,111,255,.6);
+}
+/* Secondary / fusion genre — subordinate */
+.secondary-genre-control{opacity:.8}
+.secondary-genre-control>span{font-size:9px;letter-spacing:.15em}
+.secondary-genre-control select{font-size:11px;padding:6px 28px 6px 9px}
+
 /* CONTROLS */
 .control-group.five-up{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(min-width:900px){.control-group.five-up{grid-template-columns:1fr 1fr 1fr 1fr 1fr}}
@@ -1650,6 +1667,41 @@ details>summary:focus-visible{
   font-weight:800;
   white-space:nowrap;
 }
+/* Shape summary right side — holds Auto All pill + open hint */
+.shape-summary-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.shape-open-hint{color:var(--accent);font-size:11px;font-weight:800;white-space:nowrap}
+/* Auto All pill toggle */
+.auto-all-pill{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px 4px 4px;
+  border-radius:999px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  color:var(--text-2);
+  font-size:9px;font-weight:800;letter-spacing:.12em;
+}
+.auto-all-pill:hover{border-color:rgba(157,111,255,.45);color:var(--accent)}
+.auto-all-pill[aria-pressed="true"]{
+  color:#fff;
+  border-color:rgba(157,111,255,.72);
+  background:linear-gradient(135deg,var(--accent),#6f59e8);
+  box-shadow:0 2px 10px rgba(111,89,232,.28);
+}
+/* Toggle track inside the pill */
+.aap-track{
+  position:relative;display:inline-block;
+  width:22px;height:13px;
+  background:rgba(255,255,255,.18);
+  border-radius:999px;flex-shrink:0;
+}
+.auto-all-pill:not([aria-pressed="true"]) .aap-track{background:var(--border)}
+.aap-dot{
+  position:absolute;top:2px;left:2px;
+  width:9px;height:9px;
+  background:#fff;border-radius:50%;
+  transition:transform .16s cubic-bezier(0.16,1,0.3,1);
+}
+.auto-all-pill[aria-pressed="true"] .aap-dot{transform:translateX(9px)}
 .dna-integrated-card[open] .dna-disclosure,
 .workflow-panel[open] .workflow-disclosure,
 .shape-controls[open]>summary,

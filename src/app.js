@@ -1070,6 +1070,15 @@ function renderGenerationIntent() {
     dot.classList.toggle("is-dirty", staged);
     dot.title = staged ? "Settings changed — regenerate to sync" : "Settings in sync";
   }
+  updateAutoAllButton();
+}
+
+function updateAutoAllButton() {
+  const btn = $("#autoAllButton");
+  if (!btn) return;
+  const shapeIds = ["keyControl", "modeControl", "barsControl", "grooveControl", "chordPathControl", "tempoControl"];
+  const allActive = shapeIds.every((id) => state.autoControls.has(id));
+  btn.setAttribute("aria-pressed", String(allActive));
 }
 
 function captureAppliedGenerationSettings() {
