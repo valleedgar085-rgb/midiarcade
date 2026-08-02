@@ -1,4 +1,13 @@
-import { encodeMidi, generateNew, generateSectionVariations, generateSimilar, GENRE_PROFILES, ONE_SHOT_KITS, TRACK_DEFINITIONS } from "./music-engine.js";
+import {
+  defaultChordPathForGenre,
+  encodeMidi,
+  generateNew,
+  generateSectionVariations,
+  generateSimilar,
+  GENRE_PROFILES,
+  ONE_SHOT_KITS,
+  TRACK_DEFINITIONS,
+} from "./music-engine.js";
 import { clamp } from "./utils.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
@@ -916,17 +925,7 @@ function autoTrackValue(id, key, seed, fallback) {
 }
 
 function chordPathChoicesForGenre(genreId = selectedGenreId()) {
-  const groups = {
-    soul: ["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"],
-    pop: ["pop", "popRadio", "synthPopRadio", "country", "rock"],
-    jazz: ["jazz", "ambient"],
-    trap: ["rap", "trap", "drill"],
-    house: ["house", "techno", "drumBass", "synthwave", "reggaeton"],
-  };
-  const preferred = Object.entries(groups)
-    .filter(([, genres]) => genres.includes(genreId))
-    .map(([path]) => path);
-  const ordered = preferred.length ? preferred : ["soul", "pop", "jazz", "trap", "house"];
+  const ordered = [defaultChordPathForGenre(genreId)];
   return [...new Set([...ordered, "soul", "pop", "jazz", "trap", "house"])];
 }
 
@@ -5131,6 +5130,7 @@ function toggleFullscreen() {
     $("#genreControl").value = "neoSoul";
     applyGenreDefaultsToControls("neoSoul");
     $("#chordPathControl").value = "auto";
+    state.autoControls.add("chordPathControl");
     $("#energyControl").value = 68;
     $("#complexityControl").value = 54;
     $("#variationControl").value = 42;
