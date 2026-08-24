@@ -1880,6 +1880,32 @@ test("ensemble groove conductor gives every bar shared rhythmic anchors and brea
   assertAllGeneratedPitchesInScale(song);
 });
 
+test("bass phrases use groove roles while one characteristic instrument stays in front", () => {
+  for (const genre of ["funk", "neoSoul", "house"]) {
+    const input = {
+      ...CONFIG,
+      genre,
+      bars: 18,
+      seed: `characteristic-groove-${genre}`,
+      candidateCount: 1,
+      tracks: { bass: { density: 0.95, variation: 0.84 }, drums: { density: 0.95, variation: 0.72 } },
+    };
+    const song = engine.generateNew(input);
+    const spotlight = song.tracks.find((track) => track.id === song.characteristicVoice.trackId);
+    const bass = song.tracks.find((track) => track.id === "bass");
+    const roles = new Set(bass.notes.map((note) => note.bassGrooveRole).filter(Boolean));
+    assert.equal(song.characteristicVoice.status, "complete");
+    assert.ok(song.characteristicVoice.sectionCoverage > 0.5);
+    assert.equal(spotlight.characteristicVoice, true);
+    assert.ok(spotlight.notes.some((note) => note.characteristicVoiceRole === "signature-accent"));
+    assert.ok(roles.has("anchor"), `${genre} needs grounded bass anchors`);
+    assert.ok([...roles].some((role) => role !== "anchor"), `${genre} needs bass responses or pickups`);
+    assert.deepEqual(song, engine.generateNew(input));
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
 test("recurring song sections retain one groove identity while instruments develop by phrase role", () => {
   const song = engine.generateNew({
     genre: "rock",

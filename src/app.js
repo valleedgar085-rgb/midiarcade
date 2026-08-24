@@ -17,6 +17,11 @@ import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import {
+  clickSafeStopTime,
+  PREVIEW_TRANSITION,
+  previewSpotlight,
+} from "./core/preview-audio.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
@@ -3893,12 +3898,13 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     const defaults = TRACK_DEFINITIONS[id] || {};
     const uiSettings = settingsById?.[id] || {};
     const settings = { ...defaults, ...(track.settings || track.controls || {}), ...uiSettings };
+    const spotlight = previewSpotlight(song, id);
     const velocityScale = Math.sqrt(clamp(Number(settings.velocity ?? defaults.velocity ?? 1), 0.1, 1.5)
       / Math.max(0.1, Number(defaults.velocity ?? 1)));
     const gateScale = Math.sqrt(clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5)
       / Math.max(0.08, Number(defaults.gate ?? 0.9)));
     const mixGain = clamp(
-      Number(settings.volume ?? defaults.volume ?? 0.8) * Number(mixProfile.trackGain[id] ?? 1),
+      Number(settings.volume ?? defaults.volume ?? 0.8) * Number(mixProfile.trackGain[id] ?? 1) * spotlight.gain,
       0,
       1,
     );
@@ -3930,10 +3936,11 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         expressionEnd,
         expressionCurve,
         mixGain,
+        spotlight: spotlight.active,
         pan: clamp(Number(settings.pan ?? defaults.pan ?? 0) * mixProfile.panWidth, -1, 1),
-        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2) * Number(mixProfile.reverbScale[id] ?? 1), 0, 1),
-        delaySend: clamp(Number(mixProfile.delaySend[id] ?? 0), 0, 0.24),
-        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000), 1000, 14000),
+        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2) * Number(mixProfile.reverbScale[id] ?? 1) * spotlight.reverb, 0, 1),
+        delaySend: clamp(Number(mixProfile.delaySend[id] ?? 0) * spotlight.delay, 0, 0.24),
+        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
         articulation: String(note.articulation || "natural"),
@@ -4451,7 +4458,8 @@ export class PreviewPlayer {
   }
 
   voicePriority(event) {
-    return ({ melody: 6, bass: 5, counterpoint: 4, chords: 3, pad: 3, drums: 2 }[event?.id] || 1);
+    return ({ melody: 6, bass: 5, counterpoint: 4, chords: 3, pad: 3, drums: 2 }[event?.id] || 1)
+      + (event?.spotlight ? 2 : 0);
   }
 
   registerScheduledVoice(sources, nodes, event, startedAt) {
@@ -4481,30 +4489,55 @@ export class PreviewPlayer {
     if (!voice || voice.cleaned) return;
     voice.cleaned = true;
     this.scheduledVoices.delete(voice);
+    const finalize = () => {
+      for (const node of voice.nodes) {
+        try { node.disconnect(); } catch { /* node already disconnected */ }
+      }
+      voice.sources.clear();
+      voice.nodes.clear();
+      voice.endedSources.clear();
+    };
+    if (stopSources && !this.context) {
+      for (const source of voice.sources) {
+        source.onended = null;
+        try { source.stop(); } catch { /* source already stopped */ }
+      }
+      finalize();
+      return;
+    }
     if (this.context && stopSources) {
       const now = this.context.currentTime;
       for (const node of voice.nodes) {
         if (node.gain?.cancelScheduledValues) {
           try {
-            node.gain.cancelScheduledValues(now);
-            node.gain.setValueAtTime(Math.max(0.0001, node.gain.value || 0.01), now);
-            node.gain.exponentialRampToValueAtTime(0.0001, now + 0.008);
+            if (typeof node.gain.cancelAndHoldAtTime === "function") node.gain.cancelAndHoldAtTime(now);
+            else {
+              node.gain.cancelScheduledValues(now);
+              node.gain.setValueAtTime(Math.max(0.0001, node.gain.value || 0.01), now);
+            }
+            node.gain.exponentialRampToValueAtTime(0.0001, now + PREVIEW_TRANSITION.stopSeconds);
           } catch { /* ignore */ }
         }
       }
-    }
-    for (const source of voice.sources) {
-      source.onended = null;
-      if (stopSources) {
-        try { source.stop(); } catch { /* source already stopped */ }
+      let remainingSources = voice.sources.size;
+      if (!remainingSources) {
+        finalize();
+        return;
       }
+      const stopAt = clickSafeStopTime(now, voice.startedAt);
+      for (const source of voice.sources) {
+        source.onended = () => {
+          remainingSources -= 1;
+          if (remainingSources <= 0) finalize();
+        };
+        try { source.stop(stopAt); } catch {
+          remainingSources -= 1;
+          if (remainingSources <= 0) finalize();
+        }
+      }
+      return;
     }
-    for (const node of voice.nodes) {
-      try { node.disconnect(); } catch { /* node already disconnected */ }
-    }
-    voice.sources.clear();
-    voice.nodes.clear();
-    voice.endedSources.clear();
+    finalize();
   }
 
   enforceScheduledVoiceLimit() {
@@ -4800,7 +4833,11 @@ export class PreviewPlayer {
         targetFrequency * Math.max(1, voice.transientRatio * 0.72),
         when + voice.transientDecay,
       );
-      transientGain.gain.setValueAtTime(voice.transientLevel * (0.72 + velocityScale * 0.28), when);
+      transientGain.gain.setValueAtTime(0.0001, when);
+      transientGain.gain.exponentialRampToValueAtTime(
+        voice.transientLevel * (0.72 + velocityScale * 0.28),
+        when + PREVIEW_TRANSITION.startSeconds,
+      );
       transientGain.gain.exponentialRampToValueAtTime(0.0001, when + voice.transientDecay);
       transient.connect(transientGain).connect(filter);
       transient.start(when);
@@ -4814,7 +4851,8 @@ export class PreviewPlayer {
       nodes.add(subGain);
       sub.type = "sine";
       sub.frequency.setValueAtTime(targetFrequency * voice.subRatio, when);
-      subGain.gain.value = voice.subLevel;
+      subGain.gain.setValueAtTime(0.0001, when);
+      subGain.gain.exponentialRampToValueAtTime(voice.subLevel, when + PREVIEW_TRANSITION.startSeconds);
       sub.connect(subGain).connect(filter);
       sub.start(when);
       sub.stop(when + duration + release + 0.02);

@@ -3,6 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
+import {
+  characteristicTrackForPreview,
+  clickSafeStopTime,
+  PREVIEW_TRANSITION,
+  previewSpotlight,
+} from "../src/core/preview-audio.js";
 
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
@@ -34,6 +40,20 @@ test("preview drum characters respond musically to velocity without losing bound
     assert.equal(clapEnvelope.length, 7, `${kit.id} claps must preserve three smoothed bursts`);
     assert.ok(clapEnvelope.every((point, index) => index === 0 || point.offset > clapEnvelope[index - 1].offset));
   }
+});
+
+test("preview transitions and the persistent instrument spotlight stay deterministic", () => {
+  const song = { genre: "funk", characteristicVoice: { trackId: "bass" } };
+  assert.equal(characteristicTrackForPreview(song), "bass");
+  assert.equal(characteristicTrackForPreview({ genre: "ambient" }), "pad");
+  assert.equal(previewSpotlight(song, "bass").active, true);
+  assert.ok(previewSpotlight(song, "bass").gain > previewSpotlight(song, "chords").gain);
+  assert.equal(clickSafeStopTime(4, 6), 4, "future voices should cancel before they start");
+  assert.equal(
+    clickSafeStopTime(4, 3),
+    4 + PREVIEW_TRANSITION.stopSeconds + PREVIEW_TRANSITION.sourceTailSeconds,
+    "active voices need time to finish their click-safe release",
+  );
 });
 
 class MockElement {
@@ -405,6 +425,32 @@ test("browser app initializes against the engine contract", async () => {
   boundedPlayer.clearScheduledAudio();
   assert.equal(boundedPlayer.scheduledVoices.size, 0);
 
+  const gracefulPlayer = new app.PreviewPlayer();
+  gracefulPlayer.context = { currentTime: 3 };
+  const gracefulSource = makeAudioNode();
+  let stopAt = null;
+  gracefulSource.stop = (when) => { stopAt = when; gracefulSource.stopped += 1; };
+  const gainCalls = [];
+  const gracefulGain = makeAudioNode();
+  gracefulGain.gain = {
+    value: 0.5,
+    cancelScheduledValues: () => {},
+    cancelAndHoldAtTime: (when) => gainCalls.push(["hold", when]),
+    exponentialRampToValueAtTime: (value, when) => gainCalls.push(["ramp", value, when]),
+  };
+  const gracefulVoice = gracefulPlayer.registerScheduledVoice(
+    [gracefulSource],
+    [gracefulSource, gracefulGain],
+    { id: "bass", spotlight: true },
+    2,
+  );
+  gracefulPlayer.cleanupScheduledVoice(gracefulVoice, true);
+  assert.ok(stopAt > gracefulPlayer.context.currentTime, "active voices must not be cut off at the cleanup instant");
+  assert.equal(gracefulGain.disconnected, 0, "nodes stay connected until the fade finishes");
+  assert.deepEqual(gainCalls, [["hold", 3], ["ramp", 0.0001, 3 + PREVIEW_TRANSITION.stopSeconds]]);
+  gracefulSource.onended();
+  assert.equal(gracefulGain.disconnected, 1, "the completed release must disconnect its audio graph");
+
   const schedulerPlayer = new app.PreviewPlayer();
   schedulerPlayer.playing = true;
   schedulerPlayer.context = { state: "running", currentTime: 10 };
@@ -655,6 +701,20 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(fadeEvents[0].expressionEnd, 32 / 127);
   assert.ok(fadeEvents[1].expressionEnd < fadeEvents[1].expressionStart, "Sustained preview notes must carry their end-expression fade");
   assert.ok(fadeEvents[1].velocity < fadeEvents[0].velocity, "Later notes must audibly follow the expression fade");
+  const spotlightEvents = app.buildPreviewEvents({
+    bpm: 120,
+    characteristicVoice: { trackId: "bass" },
+    tracks: [
+      { id: "bass", settings: { volume: 0.5, cutoff: 4000, reverb: 0.2 }, notes: [{ pitch: 36, start: 0, duration: 1, velocity: 90 }] },
+      { id: "chords", settings: { volume: 0.5, cutoff: 4000, reverb: 0.2 }, notes: [{ pitch: 60, start: 0, duration: 1, velocity: 90 }] },
+    ],
+  }, { muted: [], solo: [], trackSettings: {} });
+  const spotlightBass = spotlightEvents.find((event) => event.id === "bass");
+  const supportingChords = spotlightEvents.find((event) => event.id === "chords");
+  assert.equal(spotlightBass.spotlight, true);
+  assert.equal(supportingChords.spotlight, false);
+  assert.ok(spotlightBass.mixGain > supportingChords.mixGain);
+  assert.ok(spotlightBass.cutoff > supportingChords.cutoff);
   const dipRestoreAutomation = [
     { type: "cc", controller: 11, beat: 0, value: 127 },
     { type: "cc", controller: 11, beat: 2, value: 30 },

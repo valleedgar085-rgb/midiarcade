@@ -3173,6 +3173,12 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         role === "turnaround" || route?.id === "harmony-first" ? available[available.length - 1] : -1,
       ], barBeats)
       : [];
+    const bassResponsePulses = ["answer", "development", "turnaround"].includes(role)
+      ? answers.slice(0, role === "turnaround" ? 2 : 1)
+      : [];
+    const bassGhostPulses = role === "development" && config.syncopation > 0.48
+      ? answers.slice(-1)
+      : [];
     const bassPulses = uniqueGrooveOffsets(
       config.genre === "house" || config.genre === "neoSoul"
         ? answers
@@ -3180,6 +3186,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           ? [...answers, anchors[0]]
           : [
             ...anchors.filter((_, index) => index === 0 || index % 2 === 1),
+            ...bassResponsePulses,
+            ...bassGhostPulses,
             ...(role === "answer" || role === "turnaround" ? [genreGrammar.bassAnswer] : []),
           ],
       barBeats,
@@ -3834,13 +3842,28 @@ function generateBass(
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
     for (let index = 0; index < offsets.length; index += 1) {
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      const absoluteStart = chord.start + offsets[index];
+      const barOffset = round(mod(absoluteStart, barBeats), 4);
+      const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
+      const bassGrooveRole = index === 0 || Math.abs(barOffset) < 0.011
+        ? "anchor"
+        : matchesPulse("answers")
+          ? (barPlan?.role === "development" ? "ghost-response" : "response")
+          : index === offsets.length - 1 && ["answer", "turnaround"].includes(barPlan?.role)
+            ? "pickup"
+            : "movement";
       let pitch = rootMidi(chord, bassOctave);
       if (style.bassGroove === "rootFifth" && index % 2 === 1) pitch += 7;
       if (style.bassGroove === "walking") {
         const choices = [0, 2, 4, 5];
         pitch = midiForDegree(config, chord.degree + choices[index % choices.length], bassOctave);
       } else if (index > 0 && rng.bool(settings.variation * 0.45)) {
-        pitch += rng.pick([7, 12, -5]);
+        const movement = bassGrooveRole === "pickup"
+          ? rng.pick([-1, 1, 2])
+          : bassGrooveRole.includes("response")
+            ? rng.pick([2, 4, 5])
+            : rng.pick([4, 5, 7]);
+        pitch = midiForDegree(config, chord.degree + movement, bassOctave);
       }
       const last = index === offsets.length - 1;
       if (last && nextChord && rng.bool(settings.variation * config.complexity * 0.5)) {
@@ -3870,24 +3893,92 @@ function generateBass(
         : ["trap", "hipHop", "rap", "drumBass"].includes(config.genre)
           ? 0.92
           : 0.84;
-      const duration = Math.max(0.12, (nextOffset - offsets[index]) * durationFactor);
+      const roleGate = bassGrooveRole === "ghost-response" ? 0.48
+        : bassGrooveRole === "pickup" ? 0.62
+          : bassGrooveRole === "response" ? 0.78 : 1;
+      const duration = Math.max(0.1, (nextOffset - offsets[index]) * durationFactor * roleGate);
+      const roleAccent = bassGrooveRole === "anchor" ? 1
+        : bassGrooveRole === "response" ? 0.88
+          : bassGrooveRole === "pickup" ? 0.78
+            : bassGrooveRole === "ghost-response" ? 0.68 : 0.82;
       addNote(
         notes,
         pitch,
-        chord.start + offsets[index],
+        absoluteStart,
         duration,
-        eventVelocity(config, settings, intensity, rng, index === 0 ? 1 : harmonicLift ? 0.9 : 0.82),
+        eventVelocity(config, settings, intensity, rng, harmonicLift ? 0.9 : roleAccent),
         totalBeats,
         {
           bassRegisterRole: harmonicLift ? "upper-harmonic" : index === 0 ? "sub-anchor" : "movement",
           plannedTension,
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
+          bassGrooveRole,
         },
       );
     }
   }
   return notes;
+}
+
+const CHARACTERISTIC_VOICE_BY_GENRE = deepFreeze({
+  ambient: "pad",
+  jazz: "chords",
+  neoSoul: "chords",
+  rnbSoul: "chords",
+  loFiHipHop: "chords",
+  house: "bass",
+  techno: "bass",
+  drumBass: "bass",
+  trap: "bass",
+  hipHop: "bass",
+  rap: "bass",
+  drill: "bass",
+  reggaeton: "bass",
+  afrobeats: "bass",
+  funk: "bass",
+  rock: "melody",
+  country: "melody",
+});
+
+function applyCharacteristicVoice(sourceTracks, structure, config) {
+  const preferred = CHARACTERISTIC_VOICE_BY_GENRE[config.genre] ?? "melody";
+  const candidates = [preferred, "melody", "bass", "chords", "counterpoint", "pad"];
+  const trackId = candidates.find((id) => sourceTracks.find((track) => track.id === id)?.notes?.length) ?? "melody";
+  const sectionsCovered = new Set();
+  const tracks = sourceTracks.map((track) => {
+    if (track.id !== trackId) return track;
+    return {
+      ...track,
+      characteristicVoice: true,
+      notes: track.notes.map((note) => {
+        const section = structure.find((candidate) => (
+          note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+        ));
+        if (section) sectionsCovered.add(section.id);
+        const role = note.bassGrooveRole === "anchor" || ["statement", "peak"].includes(note.phraseRole)
+          ? "signature-accent"
+          : note.bassGrooveRole?.includes("response") || note.phraseRole === "answer"
+            ? "signature-answer"
+            : "signature-support";
+        return {
+          ...note,
+          characteristicVoiceRole: role,
+        };
+      }),
+    };
+  });
+  return {
+    tracks,
+    report: {
+      version: 1,
+      status: "complete",
+      trackId,
+      sectionCoverage: round(sectionsCovered.size / Math.max(1, structure.length)),
+      mixLift: 1.08,
+      character: trackId === "bass" ? "groove-anchor" : trackId === "chords" ? "harmonic-color" : trackId === "pad" ? "atmospheric-glow" : "lead-signature",
+    },
+  };
 }
 
 /**
@@ -4887,6 +4978,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
+      ...(note.bassGrooveRole ? { bassGrooveRole: note.bassGrooveRole } : {}),
       ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
       ...(note.motifHandoffRole ? { motifHandoffRole: note.motifHandoffRole } : {}),
       ...(note.motifHandoffOriginSectionId ? { motifHandoffOriginSectionId: note.motifHandoffOriginSectionId } : {}),
@@ -7001,6 +7093,7 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
         .filter((note) => [35, 36].includes(note.pitch))
         .sort((left, right) => left.start - right.start)[0];
       const bass = notesInWindow(track("bass"), window.startBeat, window.endBeat)
+        .filter((note) => !note.preserveTiming && !note.motifHandoffRole)
         .sort((left, right) => left.start - right.start)[0];
       if (kick && bass) {
         const response = genreBassResponseOffsets(config.genre)[0] ?? 0;
@@ -7382,7 +7475,8 @@ function compose(config, options = {}) {
   const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
   const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);
-  const tracks = finalRhythmLock.tracks;
+  const characteristicVoice = applyCharacteristicVoice(finalRhythmLock.tracks, structure, config);
+  const tracks = characteristicVoice.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -7461,6 +7555,7 @@ function compose(config, options = {}) {
     sectionContrast,
     drumFillVocabulary,
     rhythmTurnaroundConversation,
+    characteristicVoice: characteristicVoice.report,
     finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
@@ -8290,7 +8385,10 @@ export function evaluateCandidateBalance(evaluation = {}) {
     creativeFloor,
     spread: round(spread),
     passed: scaleSafe && totalScore >= 82 && balanceScore >= 68 && creativeFloor >= 64,
-    aspirational: scaleSafe && totalScore >= 92 && balanceScore >= 80 && creativeFloor >= 75,
+    // Groove-role scoring became more expressive in 1.2.x; require one extra
+    // quality point so adaptive search does not stop merely because the richer
+    // bass vocabulary lifted an otherwise unchanged candidate to 92.
+    aspirational: scaleSafe && totalScore >= 93 && balanceScore >= 80 && creativeFloor >= 75,
   };
 }
 
