@@ -2687,6 +2687,43 @@ test("hook motifs enforce earworm catchiness, step-resolution, and distinctivene
     const hook = song.motifs.family.B.melody;
     assert.ok(hook.events.length >= 3, "hook motif must contain at least 3 pitch events");
     assert.ok(song.motifs.hookDistinctiveness?.after?.score >= 0.5, "hook distinctiveness score must meet catchiness target");
+    for (const member of Object.values(song.motifs.family)) {
+      for (let index = 1; index < member.melody.events.length; index += 1) {
+        assert.ok(
+          Math.abs(member.melody.events[index].degree - member.melody.events[index - 1].degree) <= 3,
+          "motif-family transformations must preserve singable contour movement",
+        );
+      }
+      assert.equal(member.melody.flow?.maxDegreeStep, 3);
+    }
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
+test("medium songs establish, contrast, and return to their main sections", () => {
+  const song = engine.generateNew({ ...CONFIG, seed: "medium-form-return", genre: "pop", bars: 18, candidateCount: 1 });
+  const names = song.structure.map(({ name }) => name);
+  assert.ok(names.filter((name) => name === "verse").length >= 2);
+  assert.ok(names.filter((name) => name === "chorus").length >= 2);
+  assert.ok(names.includes("bridge"));
+  assert.equal(song.structure.reduce((total, section) => total + section.bars, 0), 18);
+});
+
+test("rendered melodies preserve scale identity while choosing connected phrase registers", () => {
+  for (const genre of ["pop", "neoSoul", "drumBass", "jazz"]) {
+    const song = engine.generateNew({
+      ...CONFIG,
+      genre,
+      seed: `rendered-flow-${genre}`,
+      bars: 18,
+      complexity: 0.92,
+      variation: 0.88,
+      candidateCount: 1,
+    });
+    assert.equal(song.melodicFlow.status, "complete");
+    assert.equal(song.melodicFlow.scaleDegreesPreserved, true);
+    assert.ok(song.melodicFlow.maximumLeapAfter <= song.melodicFlow.maximumLeapBefore);
     assertValidNotes(song);
     assertAllGeneratedPitchesInScale(song);
   }

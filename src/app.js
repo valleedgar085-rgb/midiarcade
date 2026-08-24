@@ -16,6 +16,7 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
+import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
@@ -2331,6 +2332,50 @@ function renderTimeline() {
   bindTimelineInteractions(timeline);
   renderArrangementInsights(sections, bars);
   renderSectionShaper();
+  renderMobileSectionJump();
+}
+
+function syncMobileSectionJump(activeSectionId = state.playingSection) {
+  const container = $("#mobileSectionJump");
+  if (!container) return;
+  $$('[data-mobile-section]', container).forEach((button) => {
+    const active = button.dataset.mobileSection === activeSectionId;
+    const queued = button.dataset.mobileSection === state.queuedSection?.targetSectionId;
+    button.classList.toggle("is-playing", active);
+    button.classList.toggle("is-queued", queued);
+    button.setAttribute("aria-pressed", String(active || queued));
+  });
+  const status = $("#mobileSectionJumpStatus");
+  if (status) {
+    const active = normalizeSections().find((section) => section.id === activeSectionId);
+    status.textContent = state.queuedSection
+      ? `${state.queuedSection.targetSectionName} queued`
+      : active ? `${active.name} playing` : "Tap to queue";
+  }
+}
+
+function renderMobileSectionJump() {
+  const container = $("#mobileSectionJump");
+  const list = $("#mobileSectionJumpList");
+  if (!container || !list) return;
+  const sections = normalizeSections();
+  container.hidden = sections.length < 2;
+  list.innerHTML = sections.map((section, index) => (
+    `<button type="button" role="listitem" data-mobile-section="${section.id}" aria-pressed="false" aria-label="Queue ${section.name}"><i></i><span>${index + 1}</span><b>${section.name}</b></button>`
+  )).join("");
+  syncMobileSectionJump();
+}
+
+export function queueMobileSectionJump(sectionId) {
+  const section = normalizeSections().find((candidate) => candidate.id === sectionId);
+  if (!section || !state.song) return false;
+  const currentBeat = player.currentSongTime() * songBpm() / 60;
+  const jumpInfo = calculateNextQueuedSection(currentBeat, section.id, state.song);
+  if (!jumpInfo) return false;
+  state.queuedSection = jumpInfo;
+  syncMobileSectionJump(state.playingSection);
+  showToast(`Queued ${section.name} for the next musical boundary.`);
+  return true;
 }
 
 function sectionMacroValues(sectionId) {
@@ -2954,6 +2999,37 @@ function renderTrackRack() {
   renderMixOverview();
 }
 
+const MOBILE_WORKSPACE_BUTTONS = Object.freeze({
+  create: "#mobileCreate",
+  arrange: "#mobileArrange",
+  mix: "#mobileMix",
+  finish: "#mobileFinish",
+});
+
+function syncMobileWorkspaceNav(workspace) {
+  for (const [id, selector] of Object.entries(MOBILE_WORKSPACE_BUTTONS)) {
+    const button = $(selector);
+    const active = id === workspace;
+    button?.classList.toggle("is-active", active);
+    if (active) button?.setAttribute("aria-current", "page");
+    else button?.removeAttribute("aria-current");
+  }
+}
+
+export function setNavigationDockCollapsed(collapsed, { announce = false } = {}) {
+  const isCollapsed = Boolean(collapsed);
+  document.body?.classList.toggle("nav-dock-collapsed", isCollapsed);
+  for (const selector of ["#navDockToggle", "#mobileDockToggle"]) {
+    const button = $(selector);
+    if (!button) continue;
+    button.setAttribute("aria-expanded", String(!isCollapsed));
+    button.setAttribute("aria-label", isCollapsed ? "Show workspace navigation" : "Hide workspace navigation");
+    button.setAttribute("title", isCollapsed ? "Show navigation" : "Hide navigation");
+  }
+  if (announce) showToast(isCollapsed ? "Navigation tucked away. Use the corner handle to reopen it." : "Workspace navigation is visible.");
+  return isCollapsed;
+}
+
 const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
@@ -2961,11 +3037,13 @@ const workspaceController = createWorkspaceController({
     appStore.transaction("workspace:activate", (draft) => {
       draft.activeWorkspace = workspace;
     });
+    syncMobileWorkspaceNav(workspace);
   },
 });
 
 function initTabNav() {
   workspaceController.bind();
+  syncMobileWorkspaceNav(workspaceController.activeWorkspace);
 }
 
 export function switchWorkspace(workspace) {
@@ -3741,6 +3819,60 @@ export function expressionCurveBetween(automation, startBeat, endBeat) {
   return curve;
 }
 
+const PREVIEW_MIX_FAMILIES = Object.freeze({
+  neutral: {
+    trackGain: { drums: 1, bass: 1, chords: 1, melody: 1, counterpoint: 0.94, pad: 0.92 },
+    reverbScale: { drums: 0.72, bass: 0.62, chords: 1, melody: 1, counterpoint: 1.08, pad: 1.12 },
+    delaySend: { bass: 0.012, chords: 0.045, melody: 0.12, counterpoint: 0.15, pad: 0.07 },
+    panWidth: 0.9, delayBeats: 0.5, reverbReturn: 0.26, delayReturn: 0.12,
+  },
+  pocket: {
+    trackGain: { drums: 1.02, bass: 1.08, chords: 1.04, melody: 1, counterpoint: 0.9, pad: 0.84 },
+    reverbScale: { drums: 0.58, bass: 0.5, chords: 1.08, melody: 0.96, counterpoint: 1.04, pad: 1.08 },
+    delaySend: { bass: 0.008, chords: 0.055, melody: 0.11, counterpoint: 0.14, pad: 0.06 },
+    panWidth: 0.82, delayBeats: 0.75, reverbReturn: 0.24, delayReturn: 0.1,
+  },
+  club: {
+    trackGain: { drums: 1.08, bass: 1.04, chords: 0.92, melody: 0.98, counterpoint: 0.88, pad: 0.86 },
+    reverbScale: { drums: 0.54, bass: 0.38, chords: 0.86, melody: 0.9, counterpoint: 1, pad: 1.04 },
+    delaySend: { bass: 0.006, chords: 0.04, melody: 0.1, counterpoint: 0.13, pad: 0.055 },
+    panWidth: 1.04, delayBeats: 0.5, reverbReturn: 0.2, delayReturn: 0.095,
+  },
+  live: {
+    trackGain: { drums: 1.04, bass: 1.02, chords: 0.98, melody: 1.04, counterpoint: 0.92, pad: 0.82 },
+    reverbScale: { drums: 0.78, bass: 0.58, chords: 0.92, melody: 0.96, counterpoint: 1, pad: 1.05 },
+    delaySend: { bass: 0.006, chords: 0.03, melody: 0.07, counterpoint: 0.09, pad: 0.045 },
+    panWidth: 0.96, delayBeats: 0.75, reverbReturn: 0.22, delayReturn: 0.075,
+  },
+  atmospheric: {
+    trackGain: { drums: 0.84, bass: 0.9, chords: 0.96, melody: 0.98, counterpoint: 0.94, pad: 1.08 },
+    reverbScale: { drums: 0.9, bass: 0.72, chords: 1.12, melody: 1.16, counterpoint: 1.2, pad: 1.26 },
+    delaySend: { bass: 0.018, chords: 0.07, melody: 0.16, counterpoint: 0.19, pad: 0.12 },
+    panWidth: 1.12, delayBeats: 0.75, reverbReturn: 0.3, delayReturn: 0.14,
+  },
+});
+
+export function previewMixProfile(song = {}) {
+  const genre = String(song?.meta?.genre ?? song?.genre ?? "pop");
+  const family = ["house", "techno", "drumBass", "synthwave"].includes(genre) ? "club"
+    : ["neoSoul", "hipHop", "rap", "trap", "loFiHipHop", "rnbSoul", "drill", "reggaeton", "afrobeats", "funk"].includes(genre) ? "pocket"
+      : ["jazz", "country", "rock"].includes(genre) ? "live"
+        : genre === "ambient" ? "atmospheric" : "neutral";
+  const source = PREVIEW_MIX_FAMILIES[family];
+  const bpm = clamp(Number(song?.meta?.tempo ?? song?.bpm ?? 120), 48, 220);
+  return {
+    family,
+    bpm,
+    delaySeconds: clamp((60 / bpm) * source.delayBeats, 0.12, 0.72),
+    trackGain: { ...source.trackGain },
+    reverbScale: { ...source.reverbScale },
+    delaySend: { ...source.delaySend },
+    panWidth: source.panWidth,
+    reverbReturn: source.reverbReturn,
+    delayReturn: source.delayReturn,
+  };
+}
+
 function membershipSet(value) {
   return value instanceof Set ? value : new Set(Array.isArray(value) ? value : []);
 }
@@ -3754,6 +3886,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
   const activeSolo = solo.size > 0;
   const backingOnly = Boolean(options.backingOnly);
   const oneShotKitId = oneShotKitForSong(song).id;
+  const mixProfile = previewMixProfile(song);
   return songTracks(song).flatMap((track, index) => {
     const id = trackId(track, index);
     if (muted.has(id) || (activeSolo && !solo.has(id)) || (backingOnly && ["melody", "counterpoint"].includes(id))) return [];
@@ -3764,7 +3897,11 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       / Math.max(0.1, Number(defaults.velocity ?? 1)));
     const gateScale = Math.sqrt(clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5)
       / Math.max(0.08, Number(defaults.gate ?? 0.9)));
-    const mixGain = clamp(Number(settings.volume ?? defaults.volume ?? 0.8), 0, 1);
+    const mixGain = clamp(
+      Number(settings.volume ?? defaults.volume ?? 0.8) * Number(mixProfile.trackGain[id] ?? 1),
+      0,
+      1,
+    );
     const automation = Array.isArray(track.automation) ? track.automation : [];
     return trackNotes(track).map((note) => {
       const startBeat = Math.max(0, noteStart(note));
@@ -3793,8 +3930,9 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         expressionEnd,
         expressionCurve,
         mixGain,
-        pan: clamp(Number(settings.pan ?? defaults.pan ?? 0), -1, 1),
-        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1),
+        pan: clamp(Number(settings.pan ?? defaults.pan ?? 0) * mixProfile.panWidth, -1, 1),
+        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2) * Number(mixProfile.reverbScale[id] ?? 1), 0, 1),
+        delaySend: clamp(Number(mixProfile.delaySend[id] ?? 0), 0, 0.24),
         cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000), 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
@@ -3943,6 +4081,19 @@ export function previewVoice(id, program, customSynth = null) {
       voice.detune = clamp(Number(customSynth.detune), -35, 35);
     }
   }
+  const character = String(voice.character || "");
+  const plucked = /(piano|guitar|marimba|clavinet|harpsichord|vibes|vibraphone|music-box|bell)/.test(character);
+  const struckWood = /(marimba|clavinet|guitar|harpsichord)/.test(character);
+  const sustained = /(pad|strings|choir|atmosphere|halo|sweep|bowed|rain)/.test(character) || normalizedId === "pad";
+  voice.transientLevel = plucked ? (struckWood ? 0.16 : 0.11) : 0;
+  voice.transientRatio = /(bell|vibes|vibraphone|music-box)/.test(character) ? 3 : 2;
+  voice.transientDecay = plucked ? (struckWood ? 0.045 : 0.075) : 0;
+  voice.subLevel = normalizedId === "bass"
+    ? (/(sub|808|new-age)/.test(character) ? 0.2 : 0.12)
+    : 0;
+  voice.subRatio = 0.5;
+  voice.filterMotionDepth = sustained ? (normalizedId === "pad" ? 190 : 90) : 0;
+  voice.filterMotionRate = sustained ? (normalizedId === "pad" ? 0.11 : 0.18) : 0;
   return voice;
 }
 
@@ -3995,7 +4146,9 @@ export class PreviewPlayer {
     this.context = null;
     this.master = null;
     this.reverbBus = null;
+    this.reverbReturn = null;
     this.delayBus = null;
+    this.delayReturn = null;
     this.noiseBuffers = new Map();
     this.periodicWaves = new Map();
     this.timer = null;
@@ -4107,9 +4260,9 @@ export class PreviewPlayer {
         const reverbFilter = this.context.createBiquadFilter();
         reverbFilter.type = "lowpass";
         reverbFilter.frequency.value = 4600;
-        const reverbReturn = this.context.createGain();
-        reverbReturn.gain.value = 0.26;
-        this.reverbBus.connect(reverbFilter).connect(reverbReturn).connect(this.master);
+        this.reverbReturn = this.context.createGain();
+        this.reverbReturn.gain.value = 0.26;
+        this.reverbBus.connect(reverbFilter).connect(this.reverbReturn).connect(this.master);
       }
 
       // Delay bus — reduced feedback (0.18) and return (0.12) to avoid mud on mobile.
@@ -4121,11 +4274,11 @@ export class PreviewPlayer {
         delayFilter.frequency.value = 4100;
         const feedback = this.context.createGain();
         feedback.gain.value = 0.18;
-        const delayReturn = this.context.createGain();
-        delayReturn.gain.value = 0.12;
+        this.delayReturn = this.context.createGain();
+        this.delayReturn.gain.value = 0.12;
         this.delayBus.connect(delayFilter);
         delayFilter.connect(feedback).connect(this.delayBus);
-        delayFilter.connect(delayReturn).connect(this.master);
+        delayFilter.connect(this.delayReturn).connect(this.master);
       }
     }
     if (["suspended", "interrupted"].includes(this.context.state)) await this.context.resume();
@@ -4137,7 +4290,9 @@ export class PreviewPlayer {
     if (context === this.context) this.context = null;
     this.master = null;
     this.reverbBus = null;
+    this.reverbReturn = null;
     this.delayBus = null;
+    this.delayReturn = null;
     this.noiseBuffers.clear();
     this.periodicWaves.clear();
   }
@@ -4204,8 +4359,23 @@ export class PreviewPlayer {
 
   buildEvents() {
     this.events = buildPreviewEvents();
+    this.configureSongFx();
     this.playbackView = playbackViewForSong();
     this.lastDetailRefreshAt = -Infinity;
+  }
+
+  configureSongFx(song = state.song) {
+    const profile = previewMixProfile(song ?? {});
+    const now = this.context?.currentTime ?? 0;
+    const settle = (parameter, value) => {
+      if (!parameter) return;
+      if (typeof parameter.setTargetAtTime === "function") parameter.setTargetAtTime(value, now, 0.025);
+      else parameter.value = value;
+    };
+    settle(this.delayBus?.delayTime, profile.delaySeconds);
+    settle(this.reverbReturn?.gain, profile.reverbReturn);
+    settle(this.delayReturn?.gain, profile.delayReturn);
+    return profile;
   }
 
   async toggle() {
@@ -4454,7 +4624,9 @@ export class PreviewPlayer {
       output.connect(send).connect(this.reverbBus);
       trackedNodes?.add(send);
     }
-    const delayAmount = ({ bass: 0.018, chords: 0.055, melody: 0.16, counterpoint: 0.2, pad: 0.09 }[event.id] || 0);
+    const delayAmount = Number.isFinite(Number(event.delaySend))
+      ? clamp(Number(event.delaySend), 0, 0.24)
+      : ({ bass: 0.018, chords: 0.055, melody: 0.16, counterpoint: 0.2, pad: 0.09 }[event.id] || 0);
     if (this.delayBus && delayAmount > 0) {
       const delaySend = this.context.createGain();
       delaySend.gain.value = delayAmount * clamp(0.35 + Number(event.reverb || 0), 0.35, 1.15);
@@ -4616,7 +4788,67 @@ export class PreviewPlayer {
         lfo.stop(when + duration + release + 0.02);
       }
     }
+    if (voice.transientLevel > 0) {
+      const transient = context.createOscillator();
+      const transientGain = context.createGain();
+      sources.push(transient);
+      nodes.add(transient);
+      nodes.add(transientGain);
+      transient.type = "triangle";
+      transient.frequency.setValueAtTime(targetFrequency * voice.transientRatio, when);
+      transient.frequency.exponentialRampToValueAtTime(
+        targetFrequency * Math.max(1, voice.transientRatio * 0.72),
+        when + voice.transientDecay,
+      );
+      transientGain.gain.setValueAtTime(voice.transientLevel * (0.72 + velocityScale * 0.28), when);
+      transientGain.gain.exponentialRampToValueAtTime(0.0001, when + voice.transientDecay);
+      transient.connect(transientGain).connect(filter);
+      transient.start(when);
+      transient.stop(when + voice.transientDecay + 0.012);
+    }
+    if (voice.subLevel > 0 && targetFrequency >= 48) {
+      const sub = context.createOscillator();
+      const subGain = context.createGain();
+      sources.push(sub);
+      nodes.add(sub);
+      nodes.add(subGain);
+      sub.type = "sine";
+      sub.frequency.setValueAtTime(targetFrequency * voice.subRatio, when);
+      subGain.gain.value = voice.subLevel;
+      sub.connect(subGain).connect(filter);
+      sub.start(when);
+      sub.stop(when + duration + release + 0.02);
+    }
+    if (voice.filterMotionDepth > 0 && duration >= 0.35) {
+      const motion = context.createOscillator();
+      const motionDepth = context.createGain();
+      sources.push(motion);
+      nodes.add(motion);
+      nodes.add(motionDepth);
+      motion.type = "sine";
+      motion.frequency.value = voice.filterMotionRate;
+      motionDepth.gain.value = voice.filterMotionDepth;
+      motion.connect(motionDepth).connect(filter.detune);
+      motion.start(when);
+      motion.stop(when + duration + release + 0.02);
+    }
     this.registerScheduledVoice(sources, nodes, event, when);
+  }
+
+  createDrumOutput(event, character, nodes, reverbScale) {
+    const output = this.context.createGain();
+    const spatialEvent = { ...event, pan: clamp(Number(event.pan ?? 0) + character.panOffset, -1, 1) };
+    nodes.add(output);
+    this.connectPreviewOutput(output, spatialEvent, 0, reverbScale, nodes);
+    return output;
+  }
+
+  shapeDrumGain(parameter, character, peak, duration, when, preserveClapBursts = true) {
+    const envelope = previewDrumEnvelope(character, peak, duration, preserveClapBursts);
+    parameter.setValueAtTime(envelope[0].value, when);
+    for (const point of envelope.slice(1)) {
+      parameter.exponentialRampToValueAtTime(Math.max(0.0001, point.value), when + point.offset);
+    }
   }
 
   scheduleDrum(event, when) {
@@ -4624,20 +4856,20 @@ export class PreviewPlayer {
     const mixGain = clamp(Number(event.mixGain ?? 1), 0, 1);
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const voice = kit.preview;
+    const character = previewDrumCharacter(voice, event.pitch, event.velocity, event.start ?? when);
     if ([35, 36].includes(event.pitch)) {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const sources = [oscillator];
       const nodes = new Set([oscillator, gain]);
+      const output = this.createDrumOutput(event, character, nodes, 0.08);
       oscillator.type = voice.kickWave;
-      oscillator.frequency.setValueAtTime(voice.kickStart, when);
-      oscillator.frequency.exponentialRampToValueAtTime(voice.kickEnd, when + Math.min(0.14, voice.kickDecay * 0.55));
-      gain.gain.setValueAtTime((event.velocity / 127) * 0.5 * mixGain, when);
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + voice.kickDecay);
-      oscillator.connect(gain);
-      this.connectPreviewOutput(gain, event, 0, 0.08, nodes);
+      oscillator.frequency.setValueAtTime(character.kickStart, when);
+      oscillator.frequency.exponentialRampToValueAtTime(character.kickEnd, when + Math.min(0.14, character.kickDecay * 0.55));
+      this.shapeDrumGain(gain.gain, character, character.amplitude * 0.5 * mixGain, character.kickDecay, when);
+      oscillator.connect(gain).connect(output);
       oscillator.start(when);
-      oscillator.stop(when + voice.kickDecay + 0.015);
+      oscillator.stop(when + character.kickDecay + 0.015);
 
       const click = context.createOscillator();
       const clickFilter = context.createBiquadFilter();
@@ -4647,16 +4879,27 @@ export class PreviewPlayer {
       nodes.add(clickFilter);
       nodes.add(clickGain);
       click.type = "triangle";
-      click.frequency.setValueAtTime(voice.clickPitch, when);
-      click.frequency.exponentialRampToValueAtTime(Math.max(520, voice.clickPitch * 0.28), when + 0.018);
+      click.frequency.setValueAtTime(character.clickPitch, when);
+      click.frequency.exponentialRampToValueAtTime(Math.max(520, character.clickPitch * 0.28), when + 0.018);
       clickFilter.type = "highpass";
-      clickFilter.frequency.value = Math.max(700, voice.clickPitch * 0.28);
-      clickGain.gain.setValueAtTime((event.velocity / 127) * voice.clickLevel * mixGain, when);
-      clickGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.026);
-      click.connect(clickFilter).connect(clickGain);
-      this.connectPreviewOutput(clickGain, event, 0, 0, nodes);
+      clickFilter.frequency.value = Math.max(700, character.clickPitch * 0.28);
+      this.shapeDrumGain(clickGain.gain, character, character.clickLevel * mixGain, 0.026, when);
+      click.connect(clickFilter).connect(clickGain).connect(output);
       click.start(when);
       click.stop(when + 0.03);
+
+      const body = context.createOscillator();
+      const bodyGain = context.createGain();
+      sources.push(body);
+      nodes.add(body);
+      nodes.add(bodyGain);
+      body.type = "triangle";
+      body.frequency.setValueAtTime(character.kickEnd * 1.45, when);
+      body.frequency.exponentialRampToValueAtTime(character.kickEnd, when + 0.085);
+      this.shapeDrumGain(bodyGain.gain, character, character.bodyLevel * mixGain, 0.095, when);
+      body.connect(bodyGain).connect(output);
+      body.start(when);
+      body.stop(when + 0.1);
       this.registerScheduledVoice(sources, nodes, event, when);
       return;
     }
@@ -4665,15 +4908,14 @@ export class PreviewPlayer {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const nodes = new Set([oscillator, gain]);
+      const output = this.createDrumOutput(event, character, nodes, 0.14);
       const tomFrequencies = { 41: 82, 43: 96, 45: 112, 47: 132, 48: 148, 50: 174 };
       const tomStart = tomFrequencies[event.pitch] * voice.tomTune;
       oscillator.type = voice.kickWave === "triangle" ? "triangle" : "sine";
       oscillator.frequency.setValueAtTime(tomStart, when);
       oscillator.frequency.exponentialRampToValueAtTime(tomStart * 0.72, when + 0.16);
-      gain.gain.setValueAtTime((event.velocity / 127) * 0.24 * mixGain, when);
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.24);
-      oscillator.connect(gain);
-      this.connectPreviewOutput(gain, event, 0, 0.14, nodes);
+      this.shapeDrumGain(gain.gain, character, character.amplitude * 0.24 * mixGain, 0.24, when);
+      oscillator.connect(gain).connect(output);
       oscillator.start(when);
       oscillator.stop(when + 0.25);
       this.registerScheduledVoice([oscillator], nodes, event, when);
@@ -4687,38 +4929,15 @@ export class PreviewPlayer {
     const nodes = new Set([source, filter, gain]);
     source.buffer = this.noiseBufferForKit(kit);
     const isHat = [42, 44, 46].includes(event.pitch);
-    const isOpenHat = event.pitch === 46;
     const isCymbal = [49, 51, 52, 55, 57, 59].includes(event.pitch);
+    const output = this.createDrumOutput(event, character, nodes, isCymbal ? 0.5 : isHat ? 0.18 : 0.38);
     filter.type = isHat || isCymbal ? "highpass" : "bandpass";
-    filter.frequency.value = isCymbal
-      ? voice.cymbalFilter
-      : isHat
-        ? voice.hatFilter
-        : event.pitch === 37
-          ? voice.snareFilter * 1.35
-          : voice.snareFilter;
+    filter.frequency.value = character.filterFrequency;
     filter.Q.value = isHat || isCymbal ? 0.8 : 1.3;
-    const duration = isCymbal
-      ? voice.cymbalDecay
-      : isOpenHat
-        ? voice.openHatDecay
-        : isHat
-          ? voice.hatDecay
-          : event.pitch === 37
-            ? Math.min(0.09, voice.snareDecay * 0.48)
-            : voice.snareDecay;
-    const peak = isCymbal ? 0.16 : isHat ? 0.12 : event.pitch === 37 ? 0.14 : 0.22;
-    const drumPeak = (event.velocity / 127) * peak * mixGain;
-    gain.gain.setValueAtTime(Math.max(0.0001, drumPeak), when);
-    if (event.pitch === 39) {
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.012);
-      gain.gain.setValueAtTime(Math.max(0.0001, drumPeak * 0.72), when + 0.019);
-      gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.031);
-      gain.gain.setValueAtTime(Math.max(0.0001, drumPeak * 0.48), when + 0.039);
-    }
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
-    source.connect(filter).connect(gain);
-    this.connectPreviewOutput(gain, event, 0, isCymbal ? 0.5 : isHat ? 0.18 : 0.38, nodes);
+    const duration = character.duration;
+    const drumPeak = character.peak * mixGain;
+    this.shapeDrumGain(gain.gain, character, drumPeak, duration, when);
+    source.connect(filter).connect(gain).connect(output);
     source.start(when);
     source.stop(when + duration + 0.01);
     if (!isHat && !isCymbal) {
@@ -4730,12 +4949,28 @@ export class PreviewPlayer {
       tone.type = "triangle";
       tone.frequency.setValueAtTime(voice.snareTone, when);
       tone.frequency.exponentialRampToValueAtTime(Math.max(90, voice.snareTone * 0.57), when + Math.min(0.1, voice.snareDecay * 0.7));
-      toneGain.gain.setValueAtTime((event.velocity / 127) * 0.11 * mixGain, when);
-      toneGain.gain.exponentialRampToValueAtTime(0.0001, when + 0.13);
-      tone.connect(toneGain);
-      this.connectPreviewOutput(toneGain, event, 0, 0.2, nodes);
+      this.shapeDrumGain(toneGain.gain, character, character.toneLevel * mixGain, 0.13, when, false);
+      tone.connect(toneGain).connect(output);
       tone.start(when);
       tone.stop(when + 0.14);
+
+      if (character.kind === "snare" || character.kind === "clap") {
+        const snap = context.createBufferSource();
+        const snapFilter = context.createBiquadFilter();
+        const snapGain = context.createGain();
+        sources.push(snap);
+        nodes.add(snap);
+        nodes.add(snapFilter);
+        nodes.add(snapGain);
+        snap.buffer = this.noiseBufferForKit(kit);
+        snapFilter.type = "bandpass";
+        snapFilter.frequency.value = character.snapFrequency;
+        snapFilter.Q.value = 0.72;
+        this.shapeDrumGain(snapGain.gain, character, character.snapLevel * mixGain, character.snapDecay, when, false);
+        snap.connect(snapFilter).connect(snapGain).connect(output);
+        snap.start(when);
+        snap.stop(when + character.snapDecay + 0.01);
+      }
     }
     this.registerScheduledVoice(sources, nodes, event, when);
   }
@@ -4747,6 +4982,7 @@ export class PreviewPlayer {
     if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm())) {
       const targetSec = state.queuedSection;
       state.queuedSection = null;
+      syncMobileSectionJump(targetSec.targetSectionId);
       this.seek(targetSec.targetStartBeat * 60 / songBpm());
       showToast(`Jumped to ${targetSec.targetSectionName}`);
       return;
@@ -4900,6 +5136,7 @@ function updatePlaybackUi(position, duration, { view = playbackViewForSong(), re
     editorPlayhead.style.setProperty("--editor-playhead-x", `${clamp(beat - range.start, 0, range.end - range.start) * state.editorZoom}px`);
   }
   updateCreativeThreadPlayback(position, duration, { view, refreshDetails });
+  if (refreshDetails) syncMobileSectionJump(view.sectionAtSeconds(position)?.id ?? null);
 }
 
 function commitTempoToSong(tempo) {
@@ -5046,12 +5283,19 @@ function toggleFullscreen() {
 
   $("#generateNew").addEventListener("click", () => runGeneration("new"));
   $("#generateSimilar").addEventListener("click", () => runGeneration("similar"));
-  $("#mobileNewIdea")?.addEventListener("click", () => {
-    switchWorkspace("create");
-    scrollToControl("#preGenSection");
-  });
+  for (const [workspace, selector] of Object.entries(MOBILE_WORKSPACE_BUTTONS)) {
+    $(selector)?.addEventListener("click", () => switchWorkspace(workspace));
+  }
+  for (const selector of ["#navDockToggle", "#mobileDockToggle"]) {
+    $(selector)?.addEventListener("click", () => {
+      setNavigationDockCollapsed(!document.body?.classList.contains("nav-dock-collapsed"), { announce: true });
+    });
+  }
   $("#mobilePlayPause")?.addEventListener("click", () => player.toggle());
-  $("#mobileExport")?.addEventListener("click", exportSong);
+  $("#mobileSectionJumpList")?.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-mobile-section]");
+    if (button) queueMobileSectionJump(button.dataset.mobileSection);
+  });
   $("#undoButton").addEventListener("click", restoreHistory);
   $("#redoButton").addEventListener("click", redoHistory);
   $("#renameButton").addEventListener("click", renameSong);
@@ -5065,7 +5309,7 @@ function toggleFullscreen() {
       const targetBars = Number(barsControl.value);
       state.song = updateSectionBars(state.song, section.id, targetBars);
       pushHistory(`Resized section ${section.name} to ${targetBars} bars`);
-      renderArrangement();
+      renderTimeline();
       return;
     }
     const control = event.target.closest?.("[data-section-macro]");
@@ -5084,15 +5328,7 @@ function toggleFullscreen() {
     if (!action) return;
     if (action === "queue-jump") {
       const section = editorSection();
-      if (!section || !state.song) return;
-      const beatsPerBar = Number(state.song.meta?.beatsPerBar ?? state.song.beatsPerBar ?? 4);
-      const currentBeat = (player.position / totalSeconds()) * totalBeats();
-      const jumpInfo = calculateNextQueuedSection(currentBeat, section.id, state.song);
-      if (jumpInfo) {
-        state.queuedSection = jumpInfo;
-        const targetBarNum = Math.floor(jumpInfo.triggerBeat / beatsPerBar) + 1;
-        showToast(`Queued jump to ${section.name} on bar ${targetBarNum}`);
-      }
+      if (section) queueMobileSectionJump(section.id);
       return;
     }
     if (action === "simplify") simplifyFocusedSection();
@@ -5289,6 +5525,7 @@ function toggleFullscreen() {
     const key = event.key.toLowerCase();
     if (event.code === "Space") { event.preventDefault(); player.toggle(); }
     if (key === "n") runGeneration("new");
+    if (key === "a") switchWorkspace("arrange");
     if (key === "s") runGeneration("similar");
     if (key === "e") exportSong();
     if (key === "f") toggleFullscreen();

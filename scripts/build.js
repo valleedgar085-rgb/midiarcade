@@ -12,6 +12,7 @@ if (fs.existsSync(wwwDir)) {
   fs.rmSync(wwwDir, { recursive: true, force: true });
 }
 fs.mkdirSync(wwwDir, { recursive: true });
+fs.writeFileSync(path.join(wwwDir, '.nojekyll'), '');
 
 function copyRecursiveSync(src, dest) {
   const stats = fs.statSync(src);

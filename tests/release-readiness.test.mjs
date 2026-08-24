@@ -45,8 +45,8 @@ test("Android release configuration targets the current Play baseline without br
   assert.match(variables, /minSdkVersion\s*=\s*24/);
   assert.match(variables, /compileSdkVersion\s*=\s*36/);
   assert.match(variables, /targetSdkVersion\s*=\s*36/);
-  assert.match(appGradle, /versionCode\s+2/);
-  assert.match(appGradle, /versionName\s+"1\.1\.0"/);
+  assert.match(appGradle, /versionCode\s+3/);
+  assert.match(appGradle, /versionName\s+"1\.2\.0"/);
   assert.doesNotMatch(androidManifest, /INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_AUDIO/);
   assert.match(androidManifest, /android:allowBackup="false"/);
   assert.match(androidManifest, /android\.software\.midi/);
@@ -74,11 +74,12 @@ test("PWA and Play artwork is versioned, present, and wired into the studio prod
   const pkg = JSON.parse(packageJson);
   const manifest = JSON.parse(webManifest);
 
-  assert.equal(pkg.version, "1.1.0");
+  assert.equal(pkg.version, "1.2.0");
   assert.equal(pkg.engines.node, ">=22.0.0");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(manifest.icons.map((icon) => icon.sizes), ["192x192", "512x512"]);
   assert.match(html, /id="heroPanel"/);
+  assert.match(html, /class="version-chip">V1\.2\.0</, "the visible release badge must match the package version");
   assert.match(appSource, /createMidiInputManager/);
 
   for (const path of [
@@ -125,6 +126,8 @@ test("privacy policy is publishable, locally bundled, and accessible inside the 
 test("production build has explicit size, UI-density, and CSS performance budgets", async () => {
   const packageSource = await readFile(new URL("../package.json", import.meta.url), "utf8");
   const qualitySource = await readFile(new URL("../scripts/check-build-quality.js", import.meta.url), "utf8");
+  const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
+  const pagesWorkflow = await readFile(new URL("../.github/workflows/deploy-pages.yml", import.meta.url), "utf8");
   assert.match(packageSource, /"quality":\s*"npm test && npm run build && node scripts\/check-build-quality\.js"/);
   assert.match(packageSource, /"test:coverage":\s*"node --test --experimental-test-coverage"/);
   assert.match(qualitySource, /"www\/src\/app\.js":\s*360 \* 1024/);
@@ -132,4 +135,6 @@ test("production build has explicit size, UI-density, and CSS performance budget
   assert.match(qualitySource, /buttonCount > 94/);
   assert.match(qualitySource, /transitionAllCount > 30/);
   assert.match(qualitySource, /content-visibility:auto/);
+  assert.match(buildSource, /\.nojekyll/, "the static build must remain compatible with GitHub Pages");
+  assert.match(pagesWorkflow, /npm run quality[\s\S]*?actions\/deploy-pages@v4/, "the public website must pass the complete gate before deployment");
 });

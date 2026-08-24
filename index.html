@@ -54,24 +54,29 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10h2"/></svg>
           </button>
           <button class="icon-button guide-button" id="helpButton" type="button" aria-label="Guide"><span>?</span><b>GUIDE</b></button>
-          <span class="version-chip">V2.4</span>
+          <span class="version-chip">V1.2.0</span>
         </div>
       </header>
 
-      <nav class="tab-nav" aria-label="Studio sections" role="tablist">
-        <button class="tab-btn is-active" data-workspace="create" type="button" role="tab" aria-selected="true" aria-controls="tab-create" id="tab-btn-create">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 9h9l-7.4 5.4 2.8 8.6L12 20l-7.4 5L7.4 16.4 0 11h9z"/></svg><span>CREATE</span>
+      <div class="tab-nav-shell" id="tabNavShell">
+        <nav class="tab-nav" aria-label="Studio sections" role="tablist">
+          <button class="tab-btn is-active" data-workspace="create" type="button" role="tab" aria-selected="true" aria-controls="tab-create" id="tab-btn-create">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l3 9h9l-7.4 5.4 2.8 8.6L12 20l-7.4 5L7.4 16.4 0 11h9z"/></svg><span>CREATE</span>
+          </button>
+          <button class="tab-btn" data-workspace="arrange" type="button" role="tab" aria-selected="false" aria-controls="tab-arrange" id="tab-btn-arrange" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg><span>SHAPE</span>
+          </button>
+          <button class="tab-btn" data-workspace="mix" type="button" role="tab" aria-selected="false" aria-controls="tab-mix" id="tab-btn-mix" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M4 6v12M20 6v12M8 4v16M16 4v16"/></svg><span>MIX</span>
+          </button>
+          <button class="tab-btn" data-workspace="finish" type="button" role="tab" aria-selected="false" aria-controls="tab-finish" id="tab-btn-finish" tabindex="-1">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></svg><span>FINISH</span>
+          </button>
+        </nav>
+        <button class="nav-dock-toggle" id="navDockToggle" type="button" aria-expanded="true" aria-controls="tabNavShell" aria-label="Hide workspace navigation" title="Hide navigation">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>
         </button>
-        <button class="tab-btn" data-workspace="arrange" type="button" role="tab" aria-selected="false" aria-controls="tab-arrange" id="tab-btn-arrange" tabindex="-1">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h18v4H3zM3 10h18v4H3zM3 17h18v4H3z"/></svg><span>SHAPE</span>
-        </button>
-        <button class="tab-btn" data-workspace="mix" type="button" role="tab" aria-selected="false" aria-controls="tab-mix" id="tab-btn-mix" tabindex="-1">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v20M4 6v12M20 6v12M8 4v16M16 4v16"/></svg><span>MIX</span>
-        </button>
-        <button class="tab-btn" data-workspace="finish" type="button" role="tab" aria-selected="false" aria-controls="tab-finish" id="tab-btn-finish" tabindex="-1">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/></svg><span>FINISH</span>
-        </button>
-      </nav>
+      </div>
 
       <main id="top">
 
@@ -782,14 +787,20 @@
           </button>
         </div>
       </footer>
-      <nav class="mobile-dock" aria-label="Mobile controls">
-        <button id="mobileNewIdea" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
-        <button id="mobileJam" type="button"><span aria-hidden="true">♪</span><small>Jam</small></button>
+      <div class="mobile-section-jump" id="mobileSectionJump" aria-label="Live song sections" hidden>
+        <span class="mobile-section-jump-label"><small>LIVE SECTIONS</small><b id="mobileSectionJumpStatus">Tap to queue</b></span>
+        <div class="mobile-section-jump-list" id="mobileSectionJumpList" role="list"></div>
+      </div>
+      <nav class="mobile-dock" id="mobileDock" aria-label="Studio navigation">
+        <button class="mobile-dock-toggle" id="mobileDockToggle" type="button" aria-expanded="true" aria-controls="mobileDock" aria-label="Hide workspace navigation" title="Hide navigation"><span aria-hidden="true">⌄</span></button>
+        <button id="mobileCreate" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
+        <button id="mobileArrange" type="button"><span aria-hidden="true">≋</span><small>Shape</small></button>
         <button class="mobile-play" id="mobilePlayPause" type="button">
           <svg id="mobilePlayIcon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3" /></svg>
           <small id="mobilePlayText">Play</small>
         </button>
-        <button id="mobileExport" type="button"><span aria-hidden="true">⇩</span><small>Export</small></button>
+        <button id="mobileMix" type="button"><span aria-hidden="true">≡</span><small>Mix</small></button>
+        <button id="mobileFinish" type="button"><span aria-hidden="true">⇩</span><small>Finish</small></button>
       </nav>
     </div>
 
@@ -843,7 +854,7 @@
       </div>
         <div class="shortcut-list">
         <span><kbd>Space</kbd><b>Play / pause</b></span>
-        <span><kbd>J</kbd><b>Jam tab</b></span>
+        <span><kbd>A</kbd><b>Shape workspace</b></span>
         <span><kbd>N</kbd><b>New song idea</b></span>
         <span><kbd>S</kbd><b>More like this</b></span>
           <span><kbd>E</kbd><b>Export MIDI</b></span>

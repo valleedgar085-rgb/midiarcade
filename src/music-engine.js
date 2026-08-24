@@ -1327,7 +1327,14 @@ function createStructure(config, rng) {
   } else if (bars <= 20) {
     layout = electronic
       ? [{ name: "intro", weight: 1 }, { name: "build", weight: 1 }, { name: "drop", weight: 2.5 }, { name: "breakdown", weight: 1.5 }, { name: "drop", weight: 2.5 }, { name: "outro", weight: 1 }]
-      : [{ name: "intro", weight: 1 }, { name: "verse", weight: 2 }, { name: "prechorus", weight: 1 }, { name: "chorus", weight: 2 }, { name: "outro", weight: 1 }];
+      : bars >= 18
+        ? [
+            { name: "intro", weight: 0.75 }, { name: "verse", weight: 2 },
+            { name: "prechorus", weight: 0.75 }, { name: "chorus", weight: 1.65 },
+            { name: "verse", weight: 1.5 }, { name: "bridge", weight: 1 },
+            { name: "chorus", weight: 1.75 }, { name: "outro", weight: 0.6 },
+          ]
+        : [{ name: "intro", weight: 1 }, { name: "verse", weight: 2 }, { name: "prechorus", weight: 1 }, { name: "chorus", weight: 2 }, { name: "outro", weight: 1 }];
   } else {
     const alternate = rng.bool(form === "half-time" ? 0.58 : 0.35);
     layout = electronic
@@ -2674,6 +2681,153 @@ function repeatHookCell(motif) {
   return { ...motif, phraseShape: "hook", events: repeated.length >= 3 ? repeated : motif.events };
 }
 
+/**
+ * Preserve a recognizable contour after motif-family and composition-route
+ * transforms. Those transforms happen after the initial contour composer, so
+ * without this pass they can accidentally stack into an unmusical second leap.
+ */
+function smoothMotifFlow(motif, role = "statement") {
+  if (!validMotif(motif)) return motif;
+  const result = clone(motif);
+  result.events.sort((left, right) => left.offset - right.offset);
+  let previousMotion = 0;
+  let repairedLeaps = 0;
+  let repairedContinuations = 0;
+
+  for (let index = 1; index < result.events.length; index += 1) {
+    const previous = Math.round(finite(result.events[index - 1].degree, 0));
+    let current = Math.round(finite(result.events[index].degree, previous));
+    let motion = current - previous;
+    if (Math.abs(motion) > 3) {
+      current = previous + Math.sign(motion) * 3;
+      motion = current - previous;
+      repairedLeaps += 1;
+    }
+    if (Math.abs(previousMotion) >= 3 && Math.sign(motion) === Math.sign(previousMotion)) {
+      current = previous - Math.sign(previousMotion);
+      motion = current - previous;
+      repairedContinuations += 1;
+    }
+    result.events[index].degree = current;
+    previousMotion = motion;
+  }
+
+  // Give each phrase a clear landing while allowing hooks and contrast motifs
+  // to retain a small open-ended color around the tonal center.
+  const final = result.events.at(-1);
+  const cadenceRadius = role === "hook" || role === "contrast" ? 2 : 1;
+  const beforeCadence = Math.round(finite(final.degree, 0));
+  final.degree = clamp(beforeCadence, -cadenceRadius, cadenceRadius);
+  const cadenceRepaired = final.degree !== beforeCadence;
+  // Pull the approach into the landing from right to left. This keeps the
+  // cadence itself from creating the very leap the forward pass removed.
+  for (let index = result.events.length - 2; index >= 0; index -= 1) {
+    const current = result.events[index];
+    const next = result.events[index + 1];
+    const distance = current.degree - next.degree;
+    if (Math.abs(distance) > 3) {
+      current.degree = next.degree + Math.sign(distance) * 3;
+      repairedLeaps += 1;
+    }
+  }
+  result.flow = {
+    version: 1,
+    maxDegreeStep: 3,
+    repairedLeaps,
+    repairedContinuations,
+    cadenceRepaired,
+  };
+  return result;
+}
+
+function shapeRenderedMelodicFlow(sourceTracks, structure) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody?.notes.length) {
+    return { tracks, report: { status: "complete", adjustedNotes: 0, maximumLeapBefore: 0, maximumLeapAfter: 0 } };
+  }
+  melody.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  let adjustedNotes = 0;
+  let maximumLeapBefore = 0;
+  let maximumLeapAfter = 0;
+  let previous = null;
+  let previousMotion = 0;
+  let previousSectionId = null;
+
+  for (const note of melody.notes) {
+    const section = structure.find((candidate) => (
+      note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+    ));
+    const sameSection = section?.id && section.id === previousSectionId;
+    const phraseConnected = previous
+      && sameSection
+      && note.start > previous.start + 1e-6
+      && note.start - (previous.start + previous.duration) <= 2.01;
+    if (!phraseConnected) {
+      previous = note;
+      previousMotion = 0;
+      previousSectionId = section?.id ?? null;
+      continue;
+    }
+
+    const originalPitch = note.pitch;
+    const originalMotion = originalPitch - previous.pitch;
+    maximumLeapBefore = Math.max(maximumLeapBefore, Math.abs(originalMotion));
+    const protectedLanding = Boolean(note.ensembleCadenceRole || note.transitionHandoffRole);
+    const plannedRegisterShift = Math.round(finite(section?.intent?.registerLift, 0));
+    const intentionalRegisterArc = plannedRegisterShift !== 0
+      || ["peak", "release"].includes(section?.intent?.role);
+    if (Math.abs(originalMotion) <= 7 || protectedLanding || intentionalRegisterArc) {
+      maximumLeapAfter = Math.max(maximumLeapAfter, Math.abs(originalMotion));
+      previousMotion = originalMotion;
+      previous = note;
+      previousSectionId = section?.id ?? null;
+      continue;
+    }
+    const candidates = [-24, -12, 0, 12, 24]
+      .map((offset) => originalPitch + offset)
+      .filter((pitch) => pitch >= 48 && pitch <= 96);
+    candidates.sort((left, right) => {
+      const score = (pitch) => {
+        const motion = pitch - previous.pitch;
+        const leapPenalty = Math.max(0, Math.abs(motion) - 7) * 5;
+        const repeatedDirectionPenalty = Math.abs(previousMotion) >= 5
+          && Math.sign(motion) === Math.sign(previousMotion)
+          ? Math.abs(motion) * 1.8
+          : 0;
+        const originalRegisterPenalty = Math.abs(pitch - originalPitch) * (protectedLanding ? 0.34 : 0.12);
+        return Math.abs(motion) + leapPenalty + repeatedDirectionPenalty + originalRegisterPenalty;
+      };
+      return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
+    });
+    const selected = candidates[0] ?? originalPitch;
+    if (selected !== originalPitch) {
+      note.pitch = selected;
+      note.melodicFlowRepair = "octave-continuity";
+      adjustedNotes += 1;
+    }
+    const motion = note.pitch - previous.pitch;
+    maximumLeapAfter = Math.max(maximumLeapAfter, Math.abs(motion));
+    previousMotion = motion;
+    previous = note;
+    previousSectionId = section?.id ?? null;
+  }
+  return {
+    tracks,
+    report: {
+      status: "complete",
+      version: 1,
+      adjustedNotes,
+      maximumLeapBefore,
+      maximumLeapAfter,
+      scaleDegreesPreserved: true,
+    },
+  };
+}
+
 function shapeMotifsForCompositionRoute(motifs, route, harmony, config, style) {
   if (!motifs?.family) return motifs;
   const result = clone(motifs);
@@ -2693,6 +2847,13 @@ function shapeMotifsForCompositionRoute(motifs, route, harmony, config, style) {
   } else if (route.id === "hook-first") {
     result.family.B.melody = repeatHookCell(result.family.B.melody);
     result.family.B.counterpoint = counterMotifFromMelody(result.family.B.melody, style, beatsPerBar(config));
+  }
+  for (const [memberId, member] of Object.entries(result.family)) {
+    // Family B receives its distinctiveness repair after route shaping. Keep
+    // its raw contour here so that audit can measure and improve the hook.
+    if (memberId === "B") continue;
+    member.melody = smoothMotifFlow(member.melody, member.role);
+    member.counterpoint = smoothMotifFlow(member.counterpoint, "answer");
   }
   result.melody = clone(result.family.A.melody);
   result.counterpoint = clone(result.family.A.counterpoint);
@@ -6652,6 +6813,68 @@ function genreBassResponseOffsets(genre) {
   return [0, 0.25, 0.5, 0.75];
 }
 
+function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => ({ ...note })),
+  }));
+  const drums = tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const bass = tracks.find((track) => track.id === "bass");
+  const kicks = drums.filter((note) => note.pitch === 36).map((note) => note.start);
+  if (!bass?.notes.length || !kicks.length) return { tracks, repairs: 0 };
+  const contextualGenres = new Set(["house", "techno", "trap", "hipHop", "rap", "drill", "drumBass", "neoSoul"]);
+  if (!contextualGenres.has(genre)) return { tracks, repairs: 0 };
+  const candidates = kicks.flatMap((kick) => genreBassResponseOffsets(genre).map((delay) => round(kick + delay)))
+    .filter((start) => start >= 0 && start < totalBeats - 0.019);
+  let repairs = 0;
+  for (const note of bass.notes) {
+    if (candidates.some((start) => Math.abs(start - note.start) < 1e-6)) continue;
+    // Cadence and transition contracts deliberately own their exact boundary
+    // timing. They take precedence over ordinary rhythm-section correction.
+    if (note.ensembleCadenceRole || note.transitionHandoffRole) {
+      const delay = genre === "house" ? 0.5 : 0;
+      const kickStart = round(note.start - delay);
+      if (kickStart >= 0 && !drums.some((drum) => drum.pitch === 36 && Math.abs(drum.start - kickStart) < 1e-6)) {
+        drums.push({
+          pitch: 36,
+          start: kickStart,
+          duration: 0.08,
+          velocity: clamp(note.velocity + 4, 48, 112),
+          rhythmLockRepair: "protected-bass-foundation",
+          preserveTiming: true,
+          finalMasterRole: "section-body",
+        });
+        candidates.push(round(kickStart + delay));
+        repairs += 1;
+      }
+      continue;
+    }
+    const nearest = [...candidates].sort((left, right) => (
+      Math.abs(left - note.start) - Math.abs(right - note.start) || left - right
+    ))[0];
+    if (!Number.isFinite(nearest)) continue;
+    note.start = nearest;
+    note.duration = round(Math.min(note.duration, Math.max(0.02, totalBeats - nearest)));
+    note.rhythmLockRepair = "surviving-kick";
+    note.preserveTiming = true;
+    repairs += 1;
+  }
+  bass.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  drums.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  bass.notes = bass.notes.filter((note, index, notes) => !notes.slice(0, index).some((previous) => (
+    previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 1e-6
+  )));
+  const previousByPitch = new Map();
+  for (const note of bass.notes) {
+    const previous = previousByPitch.get(note.pitch);
+    if (previous && previous.start + previous.duration > note.start) {
+      previous.duration = round(Math.max(0.02, note.start - previous.start));
+    }
+    previousByPitch.set(note.pitch, note);
+  }
+  return { tracks, repairs };
+}
+
 /** Critic 7.0 exposes weak short phrases hidden by a strong song average. */
 export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, grooveConductor = null) {
   const tracks = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
@@ -6894,12 +7117,13 @@ function compose(config, options = {}) {
       config,
       rootRng.fork("post-route-hook-distinctiveness"),
     );
-    motifs.family.B.melody = finalHookRefinement.motif;
+    motifs.family.B.melody = smoothMotifFlow(finalHookRefinement.motif, "hook");
     motifs.family.B.counterpoint = counterMotifFromMelody(
-      finalHookRefinement.motif,
+      motifs.family.B.melody,
       style,
       beatsPerBar(config),
     );
+    motifs.family.B.counterpoint = smoothMotifFlow(motifs.family.B.counterpoint, "answer");
     motifs.hookDistinctiveness = finalHookRefinement.report;
   }
   const grooveConductor = createGrooveConductor(
@@ -7148,15 +7372,19 @@ function compose(config, options = {}) {
     songBlueprint,
     config,
   );
+  const melodicFlow = shapeRenderedMelodicFlow(creativePolish.tracks, structure);
   const finalAssemblyRepair = runFinalAssemblyPass(
-    creativePolish.tracks,
+    melodicFlow.tracks,
     scaleSafety.tracks,
     structure,
     songBlueprint,
   );
   const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
   const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
-  const tracks = finalScaleSafety.tracks;
+  const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);
+  const tracks = finalRhythmLock.tracks;
+  finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
+  finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
@@ -7224,6 +7452,7 @@ function compose(config, options = {}) {
     phraseCritic: phrasePolish.report,
     perceptualMix: perceptualMix.report,
     voiceLeading: creativePolish.voiceLeading,
+    melodicFlow: melodicFlow.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     vocalSpace: creativePolish.vocalSpace,
@@ -7232,6 +7461,7 @@ function compose(config, options = {}) {
     sectionContrast,
     drumFillVocabulary,
     rhythmTurnaroundConversation,
+    finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,

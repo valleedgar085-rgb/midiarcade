@@ -1,13 +1,40 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { GENRE_PROFILES } from "../src/music-engine.js";
+import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
+import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
+
+test("preview drum characters respond musically to velocity without losing bounds", () => {
+  for (const kit of ONE_SHOT_KITS) {
+    const quietSnare = previewDrumCharacter(kit.preview, 38, 32, 4.5);
+    const loudSnare = previewDrumCharacter(kit.preview, 38, 118, 4.5);
+    const closedHat = previewDrumCharacter(kit.preview, 42, 92, 7.25);
+    const openHat = previewDrumCharacter(kit.preview, 46, 92, 7.25);
+    const kick = previewDrumCharacter(kit.preview, 36, 110, 0);
+
+    assert.deepEqual(loudSnare, previewDrumCharacter(kit.preview, 38, 118, 4.5), `${kit.id} character must be deterministic`);
+    assert.equal(loudSnare.kind, "snare");
+    assert.ok(loudSnare.peak > quietSnare.peak, `${kit.id} velocity must raise drum energy`);
+    assert.ok(loudSnare.filterFrequency > quietSnare.filterFrequency, `${kit.id} velocity must brighten the snare`);
+    assert.ok(loudSnare.snapLevel > quietSnare.snapLevel, `${kit.id} strong snares need a stronger wire transient`);
+    assert.ok(openHat.duration > closedHat.duration, `${kit.id} open hats must sustain beyond closed hats`);
+    assert.ok(Math.abs(closedHat.panOffset) <= 0.18 && closedHat.duration >= 0.018);
+    assert.ok(kick.bodyLevel > 0 && kick.kickDecay <= 0.42, `${kit.id} kick body must stay present and bounded`);
+
+    const snareEnvelope = previewDrumEnvelope(loudSnare);
+    const clapEnvelope = previewDrumEnvelope(previewDrumCharacter(kit.preview, 39, 108, 2));
+    assert.equal(snareEnvelope[0].value, 0.0001, `${kit.id} drum voices must fade in from silence`);
+    assert.ok(snareEnvelope[1].offset > 0 && snareEnvelope.at(-1).offset === loudSnare.duration);
+    assert.equal(clapEnvelope.length, 7, `${kit.id} claps must preserve three smoothed bursts`);
+    assert.ok(clapEnvelope.every((point, index) => index === 0 || point.offset > clapEnvelope[index - 1].offset));
+  }
+});
 
 class MockElement {
   constructor(value = "") {
@@ -278,6 +305,21 @@ test("browser app initializes against the engine contract", async () => {
   const app = await import(`../src/app.js?smoke=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
 
+  assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
+  assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
+  assert.match(htmlSource, /id="mobileSectionJump"[\s\S]*?id="mobileSectionJumpList"/, "mobile playback needs a compact live-section surface");
+  assert.doesNotMatch(htmlSource, /id="mobileJam"/, "the retired Jam workspace must not remain as a dead mobile action");
+  assert.match(cssSource, /\.tab-nav-shell\{[\s\S]*?position:fixed;[\s\S]*?bottom:var\(--transport-h\)/, "desktop workspace navigation must stay docked above transport");
+  assert.match(cssSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)\{display:none\}/, "mobile navigation must collapse without losing its restore handle");
+  assert.match(appSource, /function renderMobileSectionJump\(\)[\s\S]*?data-mobile-section/, "live section controls must render from the generated arrangement");
+  assert.match(appSource, /export function queueMobileSectionJump[\s\S]*?calculateNextQueuedSection/, "mobile section jumps must use safe musical boundaries");
+  assert.equal(app.queueMobileSectionJump("missing-section"), false);
+  assert.equal(app.setNavigationDockCollapsed(true), true);
+  assert.equal(globalThis.document.body.classList.contains("nav-dock-collapsed"), true);
+  assert.equal(elementFor("#navDockToggle").getAttribute("aria-expanded"), "false");
+  assert.equal(app.setNavigationDockCollapsed(false), false);
+  assert.equal(globalThis.document.body.classList.contains("nav-dock-collapsed"), false);
+
   app.resetUiRenderMetrics();
   assert.deepEqual(app.renderUiRegions("summary", "summary", "workflow"), ["summary", "workflow"]);
   assert.deepEqual(app.getUiRenderMetrics(), {
@@ -289,6 +331,30 @@ test("browser app initializes against the engine contract", async () => {
   });
   assert.equal(app.PREVIEW_AUDIO_LIMITS.visualIntervalMs, 33);
   assert.equal(app.PREVIEW_AUDIO_LIMITS.detailRefreshMs, 250);
+
+  const clubMix = app.previewMixProfile({ genre: "house", bpm: 120 });
+  const pocketMix = app.previewMixProfile({ genre: "neoSoul", bpm: 80 });
+  const ambientMix = app.previewMixProfile({ genre: "ambient", bpm: 60 });
+  assert.equal(clubMix.family, "club");
+  assert.equal(pocketMix.family, "pocket");
+  assert.equal(ambientMix.family, "atmospheric");
+  assert.equal(clubMix.delaySeconds, 0.25, "club delay must follow an eighth-note subdivision");
+  assert.equal(pocketMix.delaySeconds, 0.5625, "pocket delay must follow a dotted subdivision");
+  assert.ok(ambientMix.reverbReturn > clubMix.reverbReturn);
+  assert.ok(clubMix.trackGain.drums > clubMix.trackGain.pad);
+  const fxCalls = [];
+  const audioParam = () => ({ setTargetAtTime(value, time, constant) { fxCalls.push([value, time, constant]); } });
+  const fxPlayer = new app.PreviewPlayer();
+  fxPlayer.context = { currentTime: 3 };
+  fxPlayer.delayBus = { delayTime: audioParam() };
+  fxPlayer.reverbReturn = { gain: audioParam() };
+  fxPlayer.delayReturn = { gain: audioParam() };
+  fxPlayer.configureSongFx({ genre: "house", bpm: 120 });
+  assert.deepEqual(fxCalls, [
+    [clubMix.delaySeconds, 3, 0.025],
+    [clubMix.reverbReturn, 3, 0.025],
+    [clubMix.delayReturn, 3, 0.025],
+  ]);
 
   const timbrePrograms = {
     bass: [32, 33, 34, 35, 36, 38, 39, 43, 87, 88],
@@ -302,6 +368,15 @@ test("browser app initializes against the engine contract", async () => {
     assert.equal(new Set(voices.map((voice) => voice.character)).size, programs.length, `${id} programs must keep distinct preview characters`);
     assert.ok(new Set(voices.map((voice) => `${voice.type}:${voice.layer}:${voice.filter}:${voice.attack}`)).size >= Math.ceil(programs.length * 0.75), `${id} programs must be audibly varied`);
   }
+  const pianoVoice = app.previewVoice("chords", 0);
+  const organVoice = app.previewVoice("chords", 16);
+  const subBassVoice = app.previewVoice("bass", 38);
+  const padVoice = app.previewVoice("pad", 89);
+  assert.ok(pianoVoice.transientLevel > 0 && pianoVoice.transientDecay <= 0.08, "piano preview needs a bounded hammer transient");
+  assert.equal(organVoice.transientLevel, 0, "organ preview must remain sustained rather than falsely plucked");
+  assert.equal(subBassVoice.subRatio, 0.5);
+  assert.ok(subBassVoice.subLevel >= 0.18, "sub programs need reinforced fundamentals");
+  assert.ok(padVoice.filterMotionDepth > 0 && padVoice.filterMotionRate < 0.2, "pads need slow timbral movement");
 
   const makeAudioNode = () => ({
     stopped: 0,

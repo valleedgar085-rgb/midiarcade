@@ -4456,3 +4456,190 @@ input[type=range] {
   color: var(--text);
   font-size: 0.75rem;
 }
+
+/* ─── V1.2: BOTTOM WORKSPACE DOCK + CONTROL CLARITY ───────────────────── */
+.tab-nav-shell{
+  position:fixed;
+  z-index:190;
+  left:0;
+  right:0;
+  bottom:var(--transport-h);
+  display:flex;
+  min-height:var(--tabnav-h);
+  background:rgba(8,8,11,.94);
+  border-top:1px solid var(--border-1);
+  box-shadow:0 -12px 34px rgba(0,0,0,.28);
+  -webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(20px);
+  transition:width .22s cubic-bezier(.16,1,.3,1),right .22s cubic-bezier(.16,1,.3,1),border-radius .22s cubic-bezier(.16,1,.3,1);
+}
+.tab-nav-shell .tab-nav{
+  position:static;
+  flex:1;
+  min-width:0;
+  border:0;
+  background:transparent;
+  -webkit-backdrop-filter:none;
+  backdrop-filter:none;
+}
+.tab-btn{transition:color .2s,background-color .2s,border-color .2s,transform .2s}
+.tab-btn:active{transform:translateY(1px)}
+.nav-dock-toggle{
+  width:48px;
+  min-height:var(--tabnav-h);
+  display:grid;
+  place-items:center;
+  flex:0 0 auto;
+  color:var(--text-2);
+  border-left:1px solid var(--border);
+  transition:color .2s,background-color .2s;
+}
+.nav-dock-toggle:hover{color:var(--accent);background:var(--surface-1)}
+.nav-dock-toggle svg{width:18px;height:18px;transition:transform .22s cubic-bezier(.16,1,.3,1)}
+body.nav-dock-collapsed .tab-nav-shell{
+  left:auto;
+  right:12px;
+  width:50px;
+  border:1px solid var(--border-1);
+  border-radius:16px 16px 0 0;
+  overflow:hidden;
+}
+body.nav-dock-collapsed .tab-nav-shell .tab-nav{display:none}
+body.nav-dock-collapsed .nav-dock-toggle{width:48px;border-left:0}
+body.nav-dock-collapsed .nav-dock-toggle svg{transform:rotate(180deg)}
+
+/* Leave content readable above both fixed studio controls. */
+.tab-panel{padding-bottom:calc(var(--transport-h) + var(--tabnav-h) + 28px)}
+
+/* Controls share one clear focus language and larger precise targets. */
+.select-control select,
+.track-patch select,
+.editor-select select,
+.editor-overlay-control select,
+.section-macro-grid select,
+.synth-designer-grid select{
+  min-height:44px;
+  border-color:rgba(255,255,255,.13);
+  transition:border-color .18s,background-color .18s,box-shadow .18s;
+}
+.select-control select:hover,
+.track-patch select:hover,
+.editor-select select:hover,
+.editor-overlay-control select:hover,
+.section-macro-grid select:hover,
+.synth-designer-grid select:hover{background-color:rgba(25,25,39,.98)}
+.select-control select:focus-visible,
+.track-patch select:focus-visible,
+.editor-select select:focus-visible,
+.editor-overlay-control select:focus-visible,
+.section-macro-grid select:focus-visible,
+.synth-designer-grid select:focus-visible{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(157,111,255,.16);
+}
+.macro-control{transition:border-color .18s,background-color .18s,box-shadow .18s}
+.macro-control:hover{background:rgba(21,21,34,.96);border-color:rgba(255,255,255,.15)}
+.macro-control:focus-within{border-color:rgba(157,111,255,.6);box-shadow:0 0 0 3px rgba(157,111,255,.1)}
+input[type=range]{min-height:22px}
+button:active{transform:translateY(1px)}
+
+.mobile-dock-toggle{display:none}
+@media(max-width:600px){
+  .tab-nav-shell{display:none}
+  .mobile-dock{
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    z-index:190;
+    transition:width .22s cubic-bezier(.16,1,.3,1),left .22s cubic-bezier(.16,1,.3,1),border-radius .22s cubic-bezier(.16,1,.3,1);
+  }
+  .mobile-dock-toggle{
+    display:grid!important;
+    place-items:center;
+    position:absolute;
+    right:10px;
+    top:-28px;
+    width:42px;
+    min-height:28px!important;
+    border:1px solid var(--border-1)!important;
+    border-bottom:0!important;
+    border-radius:12px 12px 0 0!important;
+    background:rgba(12,12,18,.96)!important;
+    color:var(--text-2)!important;
+  }
+  .mobile-dock button:not(.mobile-dock-toggle).is-active{
+    color:#fff;
+    background:rgba(157,111,255,.16);
+    box-shadow:inset 0 0 0 1px rgba(157,111,255,.28);
+  }
+  body.nav-dock-collapsed .mobile-dock{
+    left:auto;
+    width:52px;
+    min-height:42px;
+    padding:0;
+    border-radius:15px;
+  }
+  body.nav-dock-collapsed .mobile-dock button:not(.mobile-dock-toggle){display:none}
+  body.nav-dock-collapsed .mobile-dock-toggle{
+    position:static;
+    width:50px;
+    min-height:42px!important;
+    border:0!important;
+    border-radius:14px!important;
+  }
+  body.nav-dock-collapsed .mobile-dock-toggle span{transform:rotate(180deg)}
+  .mobile-dock-toggle span{transition:transform .22s cubic-bezier(.16,1,.3,1)}
+  .tab-panel{padding-bottom:calc(98px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom,0px)))}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .tab-nav-shell,.nav-dock-toggle svg,.mobile-dock,.mobile-dock-toggle span{transition-duration:.01ms!important}
+}
+
+/* Compact live arrangement control for phones. */
+.mobile-section-jump{display:none}
+@media(max-width:600px){
+  .mobile-section-jump{
+    position:fixed;
+    z-index:175;
+    left:10px;
+    right:10px;
+    bottom:calc(116px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom,0px)));
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:48px;
+    padding:6px 8px;
+    border:1px solid var(--border-1);
+    border-radius:14px;
+    background:rgba(12,12,18,.94);
+    box-shadow:0 10px 28px rgba(0,0,0,.36);
+    -webkit-backdrop-filter:blur(16px);
+    backdrop-filter:blur(16px);
+    transition:bottom .22s cubic-bezier(.16,1,.3,1);
+  }
+  .mobile-section-jump-label{flex:0 0 auto;display:flex;flex-direction:column;padding:0 4px}
+  .mobile-section-jump-label small{font:800 .5rem var(--font-data);letter-spacing:.12em;color:var(--accent)}
+  .mobile-section-jump-label b{max-width:86px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.62rem;color:var(--text-2)}
+  .mobile-section-jump-list{display:flex;gap:5px;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .mobile-section-jump-list::-webkit-scrollbar{display:none}
+  .mobile-section-jump-list button{
+    flex:0 0 auto;
+    display:grid;
+    grid-template-columns:auto auto;
+    align-items:center;
+    gap:1px 5px;
+    min-height:36px;
+    padding:5px 9px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:var(--surface);
+    color:var(--text-2);
+  }
+  .mobile-section-jump-list button i{grid-row:1/3;width:5px;height:5px;border-radius:50%;background:var(--text-3)}
+  .mobile-section-jump-list button span{font:800 .5rem var(--font-data);color:var(--text-3)}
+  .mobile-section-jump-list button b{font-size:.65rem;white-space:nowrap}
+  .mobile-section-jump-list button.is-queued{color:#fff;border-color:rgba(157,111,255,.55);background:rgba(157,111,255,.16)}
+  .mobile-section-jump-list button.is-queued i{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  .mobile-section-jump-list button.is-playing{color:#fff;border-color:rgba(74,222,128,.5);background:rgba(74,222,128,.12)}
+  .mobile-section-jump-list button.is-playing i{background:var(--green);box-shadow:0 0 8px var(--green)}
+  body.nav-dock-collapsed .mobile-section-jump{bottom:calc(60px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom,0px)))}
+}
