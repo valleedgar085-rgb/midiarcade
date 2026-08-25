@@ -24,10 +24,33 @@ export const PREVIEW_TRANSITION = Object.freeze({
   sourceTailSeconds: 0.006,
 });
 
+const NOTE_ENVELOPE_LIMITS = Object.freeze({
+  bass: Object.freeze({ maxDuration: 3.2, maxRelease: 0.55, reverbTail: 0.3 }),
+  chords: Object.freeze({ maxDuration: 5.5, maxRelease: 0.9, reverbTail: 0.38 }),
+  melody: Object.freeze({ maxDuration: 2.8, maxRelease: 0.55, reverbTail: 0.28 }),
+  counterpoint: Object.freeze({ maxDuration: 2.8, maxRelease: 0.62, reverbTail: 0.3 }),
+  pad: Object.freeze({ maxDuration: 8, maxRelease: 1.25, reverbTail: 0.42 }),
+});
+
 const SPOTLIGHT_TRACKS = Object.freeze(["bass", "chords", "melody", "counterpoint", "pad"]);
 
 function clamp01(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
+}
+
+export function previewNoteEnvelope({ trackId, duration, release, reverb, articulation } = {}) {
+  const limits = NOTE_ENVELOPE_LIMITS[String(trackId)] ?? NOTE_ENVELOPE_LIMITS.melody;
+  const noteDuration = Math.min(limits.maxDuration, Math.max(0.04, Number(duration) || 0.04));
+  const tailMultiplier = articulation === "staccato"
+    ? 0.45
+    : ["legato", "sustain", "glide"].includes(String(articulation))
+      ? (trackId === "pad" ? 1.06 : 1.1)
+      : 1;
+  const releaseTail = Math.min(
+    limits.maxRelease,
+    Math.max(0.04, ((Number(release) || 0.04) + clamp01(reverb) * limits.reverbTail) * tailMultiplier),
+  );
+  return Object.freeze({ duration: noteDuration, release: releaseTail });
 }
 
 export function normalizeMixAssistant(value = {}) {

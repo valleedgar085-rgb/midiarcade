@@ -48,6 +48,8 @@ test("Android release configuration targets the current Play baseline without br
   assert.match(variables, /targetSdkVersion\s*=\s*36/);
   assert.match(appGradle, /versionCode\s+3/);
   assert.match(appGradle, /versionName\s+"1\.2\.0"/);
+  assert.match(appGradle, /debug\s*\{[\s\S]*?applicationIdSuffix\s+"\.preview"/, "Preview APK must install beside differently signed production builds");
+  assert.match(appGradle, /versionNameSuffix\s+"-preview"/);
   assert.doesNotMatch(androidManifest, /INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_AUDIO/);
   assert.match(androidManifest, /android:allowBackup="false"/);
   assert.match(androidManifest, /android\.software\.midi/);
@@ -74,6 +76,7 @@ test("Android APK workflow verifies, syncs, builds, and preserves the installabl
   assert.match(workflow, /npx cap sync android/);
   assert.match(workflow, /\.\/gradlew assembleDebug --no-daemon/);
   assert.match(workflow, /android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
+  assert.match(workflow, /name: midi-arcade-1\.2\.0-preview-apk/);
   assert.match(workflow, /actions\/upload-artifact@v4/);
 });
 

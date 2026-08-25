@@ -24,10 +24,12 @@ import {
   clickSafeStopTime,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
+  previewNoteEnvelope,
   previewMixHealth,
   previewSidechain,
   previewSpotlight,
 } from "./core/preview-audio.js";
+import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "./ui/value-formatters.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
@@ -928,7 +930,7 @@ function autoTrackValue(id, key, seed, fallback) {
     variation: [24, 90, 1],
     octave: [-1, 1, 1],
     velocity: [0.72, 1.18, 0.01],
-    gate: [id === "drums" ? 0.55 : 0.62, id === "pad" ? 1.35 : 1.12, 0.01],
+    gate: [id === "drums" ? 0.55 : 0.62, id === "pad" ? 1.08 : ["melody", "counterpoint"].includes(id) ? 1.04 : 1.12, 0.01],
     pan: [-0.42, 0.42, 0.01],
     reverb: [id === "drums" ? 0.04 : 0.12, id === "pad" ? 0.72 : 0.58, 0.01],
     cutoff: [3600, 12800, 100],
@@ -1515,8 +1517,11 @@ function renderSectionEditor(message = "") {
   $("#pianoRollGrid").style.setProperty("--subdivision-width", `${Math.max(4, state.editorZoom * grid)}px`);
   $("#pianoRollGrid").innerHTML = `<div class="piano-roll-editor-playhead" aria-hidden="true"><i></i></div>${guideRows}${partnerMarkup}${notesMarkup}`;
   $("#editorSelectionCount").textContent = `${selected.length} NOTE${selected.length === 1 ? "" : "S"} SELECTED`;
-  $("#editorVelocityValue").textContent = selected.length ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length) : "—";
-  $("#editorVelocityControl").value = selected.length ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length) : 100;
+  const selectedVelocity = selected.length
+    ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length)
+    : 100;
+  $("#editorVelocityValue").textContent = selected.length ? formatMidiVelocity(selectedVelocity) : "—";
+  $("#editorVelocityControl").value = selectedVelocity;
   $("#editorGridControl").value = String(state.editorGrid);
   $("#editorZoomControl").value = state.editorZoom;
   $("#editorStatus").textContent = message || (entries.length
@@ -2971,6 +2976,7 @@ function renderTrackRack() {
     const targeted = state.selectedTrack === id;
     const panAmount = Math.round(Math.abs(settings.pan) * 100);
     const panLabel = Math.abs(settings.pan) < 0.01 ? "C" : `${settings.pan < 0 ? "L" : "R"}${panAmount}`;
+    const releaseMax = id === "pad" ? 1.25 : ["melody", "counterpoint"].includes(id) ? 0.65 : 2;
     return `<article class="track-card${muted ? " is-muted" : ""}${solo ? " is-solo" : ""}${targeted ? " is-attitude-target" : ""}" data-track="${id}" style="--track-color:${meta.color}" tabindex="0" aria-label="${meta.name} mixer channel; click to select" ${targeted ? 'aria-current="true"' : ""}>
       <div class="track-card-header">
         <div class="track-identity">
@@ -2982,7 +2988,7 @@ function renderTrackRack() {
         <button class="track-toggle" data-action="solo" type="button" aria-label="Solo ${meta.name}" aria-pressed="${solo}" title="Solo">S</button>
         </div>
       </div>
-      <label class="track-control track-level-control"><span>LEVEL <output>${Math.round(settings.volume * 100)}%</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /></label>
+      <label class="track-control track-level-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">Channel gain before the master output</small></label>
       <details class="track-expression track-shaping">
         <summary><span><b>SHAPE INSTRUMENT</b><small>Sound · performance · space</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
@@ -3005,8 +3011,8 @@ function renderTrackRack() {
             <section class="track-control-group performance-group" aria-label="${meta.name} performance controls">
               <header><b>PERFORMANCE</b><small>impact and placement</small></header>
               <div class="track-expression-grid">
-                <label class="track-control"><span>VELOCITY <output>${Math.round(settings.velocity * 100)}%</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /></label>
-                <label class="track-control"><span>GATE <output>${Math.round(settings.gate * 100)}%</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /></label>
+                <label class="track-control"><span>NOTE VELOCITY <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /><small class="parameter-note">Scales note impact; export stays within MIDI 1–127</small></label>
+                <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Held length without adding a long release tail</small></label>
                 <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /></label>
               </div>
             </section>
@@ -3033,8 +3039,8 @@ function renderTrackRack() {
               <label class="track-control"><span>ATTACK <output>${Math.round((settings.attack ?? 0.01) * 1000)}ms</output></span>
                 <input data-control="attack" type="range" min="0.002" max="0.5" step="0.005" value="${settings.attack ?? 0.01}" aria-label="${meta.name} attack" />
               </label>
-              <label class="track-control"><span>RELEASE <output>${Math.round((settings.release ?? 0.25) * 1000)}ms</output></span>
-                <input data-control="release" type="range" min="0.05" max="2.0" step="0.05" value="${settings.release ?? 0.25}" aria-label="${meta.name} release" />
+              <label class="track-control"><span>RELEASE TAIL <output>${Math.round(Math.min(settings.release ?? 0.25, releaseMax) * 1000)}ms</output></span>
+                <input data-control="release" type="range" min="0.05" max="${releaseMax}" step="0.05" value="${Math.min(settings.release ?? 0.25, releaseMax)}" aria-label="${meta.name} release tail" /><small class="parameter-note">Pad and lead tails are capped to prevent overlap</small>
               </label>
               <label class="track-control"><span>DETUNE <output>${settings.detune ?? 0}¢</output></span>
                 <input data-control="detune" type="range" min="-25" max="25" step="1" value="${settings.detune ?? 0}" aria-label="${meta.name} detune" />
@@ -3463,13 +3469,19 @@ function handleTrackControl(id, control) {
   const output = control.closest("label")?.querySelector("output");
   if (output) {
     const value = Number(control.value);
-    output.textContent = key === "octave"
+    output.textContent = key === "volume"
+      ? formatLevel(value)
+      : key === "velocity"
+        ? formatVelocityScale(value)
+        : key === "gate"
+          ? formatGate(value)
+          : key === "octave"
       ? `${value > 0 ? "+" : ""}${value}`
       : key === "pan"
         ? Math.abs(value) < 0.01 ? "C" : `${value < 0 ? "L" : "R"}${Math.round(Math.abs(value) * 100)}`
         : key === "cutoff"
           ? `${Math.round(value)}Hz`
-          : ["volume", "velocity", "reverb", "resonance", "gate"].includes(key)
+          : ["reverb", "resonance"].includes(key)
           ? `${Math.round(value * 100)}%`
           : `${control.value}%`;
   }
@@ -4826,9 +4838,13 @@ export class PreviewPlayer {
     filter.Q.value = clamp(voice.q * resonanceScale, 0.1, 18);
     const articulation = String(event.articulation || "natural");
     const attack = voice.attack * (articulation === "accent" ? 0.55 : articulation === "legato" || articulation === "glide" ? 1.35 : 1);
-    const release = (voice.release + Number(event.reverb || 0) * (event.id === "pad" ? 1.15 : 0.72))
-      * (articulation === "staccato" ? 0.45 : articulation === "legato" || articulation === "sustain" ? 1.28 : 1);
-    const duration = clamp(event.duration, 0.04, event.id === "pad" ? 14 : event.id === "chords" ? 8 : 3.5);
+    const { duration, release } = previewNoteEnvelope({
+      trackId: event.id,
+      duration: event.duration,
+      release: voice.release,
+      reverb: event.reverb,
+      articulation,
+    });
     const filterPeak = clamp(filterBase * voice.filterPeak, 180, 14000);
     const filterRest = clamp(filterBase * voice.filterRest, 140, 12000);
     filter.frequency.setValueAtTime(Math.max(120, filterBase * 0.62), when);
@@ -5580,7 +5596,7 @@ function toggleFullscreen() {
     renderSectionEditor(`${event.target.options?.[event.target.selectedIndex]?.text || "Relationship"} overlay selected.`);
   });
   $("#editorVelocityControl").addEventListener("input", (event) => {
-    $("#editorVelocityValue").textContent = event.target.value;
+    $("#editorVelocityValue").textContent = formatMidiVelocity(event.target.value);
   });
   $("#editorVelocityControl").addEventListener("change", (event) => setEditorVelocity(event.target.value));
   $("#sectionVariationLab")?.addEventListener("click", (event) => {

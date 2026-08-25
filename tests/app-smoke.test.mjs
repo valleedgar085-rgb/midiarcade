@@ -8,16 +8,35 @@ import {
   clickSafeStopTime,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
+  previewNoteEnvelope,
   previewMixHealth,
   previewSidechain,
   previewSpotlight,
 } from "../src/core/preview-audio.js";
+import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "../src/ui/value-formatters.js";
 
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
+
+test("lead and pad envelopes stay expressive without overlapping later phrases", () => {
+  const lead = previewNoteEnvelope({ trackId: "melody", duration: 8, release: 2.5, reverb: 1, articulation: "legato" });
+  const pad = previewNoteEnvelope({ trackId: "pad", duration: 16, release: 2.5, reverb: 1, articulation: "sustain" });
+  assert.deepEqual(lead, previewNoteEnvelope({ trackId: "melody", duration: 8, release: 2.5, reverb: 1, articulation: "legato" }));
+  assert.ok(lead.duration <= 2.8 && lead.release <= 0.55);
+  assert.ok(pad.duration <= 8 && pad.release <= 1.25);
+  assert.ok(pad.release > lead.release, "pads may breathe longer than leads without smearing indefinitely");
+});
+
+test("mixer values explain level, velocity, and note length in musical units", () => {
+  assert.equal(formatLevel(1), "0.0 dB · 100%");
+  assert.equal(formatLevel(0), "−∞ dB · muted");
+  assert.equal(formatVelocityScale(1), "×1.00 · MIDI 1–127");
+  assert.equal(formatGate(0.65), "65% · short");
+  assert.equal(formatMidiVelocity(100), "100 · strong");
+});
 
 test("preview drum characters respond musically to velocity without losing bounds", () => {
   for (const kit of ONE_SHOT_KITS) {

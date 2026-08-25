@@ -1192,6 +1192,14 @@ input[type=range].is-auto{
   font-size:9px;font-weight:700;letter-spacing:.18em;color:var(--text-2);
 }
 .track-control output{font-family:var(--mono);font-size:10px;color:var(--track-color)}
+.parameter-note{
+  display:block;
+  min-height:1.35em;
+  color:var(--text-3);
+  font-size:.67rem;
+  line-height:1.35;
+  letter-spacing:0;
+}
 .track-buttons{display:flex;gap:4px;margin-top:8px}
 .track-toggle{
   padding:5px 9px;border-radius:var(--radius-sm);
@@ -2506,6 +2514,8 @@ input,
 }
 .track-control-group>header small{color:var(--text-3);font-size:.61rem}
 .track-control-group .track-control{min-width:0;margin:0}
+.track-control-group .track-control>span{gap:8px}
+.track-control-group .track-control output{text-align:right;letter-spacing:0;white-space:nowrap}
 .track-control-group input[type=range]{min-height:28px;margin:0;touch-action:manipulation}
 
 @media(max-width:900px){
@@ -3365,6 +3375,16 @@ input,
 .track-control>span{
   font-size:.6875rem;
   letter-spacing:.105em;
+}
+.editor-velocity{min-width:210px}
+.editor-velocity small{display:block;color:var(--text-3);font-size:.65rem;line-height:1.35;letter-spacing:0}
+
+@media(max-width:700px){
+  .track-card .track-role,.track-card .track-voice{font-size:.78rem}
+  .track-control>span,.track-control-group>header b{font-size:.75rem}
+  .track-control output{font-size:.72rem}
+  .parameter-note,.track-control-group>header small{font-size:.7rem}
+  .editor-velocity{min-width:100%}
 }
 .brand small,
 .session-status,
