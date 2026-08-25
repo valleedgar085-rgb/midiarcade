@@ -758,6 +758,14 @@
               <h2 id="finishTitle">Package the idea</h2>
               <p>Review the musical identity, save its deterministic cover, and export the exact sound-ready performance data used by the preview.</p>
               <div class="finish-facts" id="finishFacts" aria-label="Export summary"></div>
+              <section class="export-setup" aria-labelledby="exportSetupTitle">
+                <div class="export-setup-heading"><small>DAW EXPORT SETUP</small><strong id="exportSetupTitle">Choose what lands in your project</strong></div>
+                <div class="export-setup-controls">
+                  <label><span>TRACK PACKAGE</span><select id="exportProfileControl" aria-label="MIDI export track package"><option value="full">Full song · 6 tracks</option><option value="rhythm">Rhythm · drums + bass</option><option value="harmony">Harmony · chords + pad</option><option value="leads">Leads · melody + counterline</option><option value="selected">Selected instrument only</option></select></label>
+                  <label><span>TIMING</span><select id="exportTimingControl" aria-label="MIDI export timing"><option value="performance">Performance · keep groove</option><option value="tight">Tight · clean 1/16 grid</option></select></label>
+                </div>
+                <p class="export-profile-summary" id="exportProfileSummary" role="status" aria-live="polite"><strong>Full song</strong><span>6 MIDI tracks · original groove and human feel</span></p>
+              </section>
               <div class="finish-actions">
                 <button class="small-button" id="saveCoverButton" type="button">Save cover artwork</button>
                 <button class="small-button" id="varyCoverButton" type="button">Change finish</button>

@@ -13,6 +13,7 @@ test("shipped text assets are UTF-8 clean and preserve protected product copy", 
     "manifest.webmanifest",
     "src/app.js",
     "src/music-engine.js",
+    "src/core/export-profile.js",
     "src/ui/copy-catalog.js",
   ];
   const mojibake = /(?:â€”|â€“|â€™|â€œ|â€|âœ|â†|â‡|â™|âš|â›|â—|â‰|âŒ|ðŸ|Â·|ï¿½|\uFFFD)/u;
@@ -60,8 +61,19 @@ test("Android release configuration targets the current Play baseline without br
   assert.match(framer, /class MidiStreamFramer/);
   const config = JSON.parse(capacitorConfig);
   assert.equal(config.plugins.SystemBars.insetsHandling, "css");
-  assert.equal(config.plugins.SystemBars.hidden, false);
+  assert.equal(config.plugins.SystemBars.hidden, true);
+  assert.match(mainActivity, /onPostResume\(\)[\s\S]*?enableImmersiveStickyMode\(\)/, "fullscreen must be restored after Android dialogs and app resume");
+  assert.match(mainActivity, /SYSTEM_UI_FLAG_IMMERSIVE_STICKY/);
   assert.match(webStyles, /var\(--safe-area-inset-bottom,\s*env\(safe-area-inset-bottom,\s*0px\)\)/);
+});
+
+test("Android APK workflow verifies, syncs, builds, and preserves the installable artifact", async () => {
+  const workflow = await read(".github/workflows/build-android-apk.yml");
+  assert.match(workflow, /npm run quality/);
+  assert.match(workflow, /npx cap sync android/);
+  assert.match(workflow, /\.\/gradlew assembleDebug --no-daemon/);
+  assert.match(workflow, /android\/app\/build\/outputs\/apk\/debug\/app-debug\.apk/);
+  assert.match(workflow, /actions\/upload-artifact@v4/);
 });
 
 test("PWA and Play artwork is versioned, present, and wired into the studio product", async () => {

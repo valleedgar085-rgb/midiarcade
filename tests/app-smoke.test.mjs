@@ -244,7 +244,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(cssSource, /--font-display:[^;]+;[\s\S]*?--font-data:[^;]+;/, "typography must separate expressive titles from precise musical data");
   assert.match(cssSource, /\.creative-thread[\s\S]*?--thread-color:\s*var\(--focus-color\)/, "shared focus must have one adaptive visual thread");
   assert.match(appSource, /function updateCreativeThreadPlayback[\s\S]*?is-playing-section/, "playback must illuminate its section across the shared timeline");
-  assert.match(appSource, /buildExportSongSnapshot\(\)[\s\S]*?encodeMidi\(clone/, "export must snapshot the live mix");
+  assert.match(appSource, /buildExportSongSnapshot\(\)[\s\S]*?prepareMidiExport\(clone[\s\S]*?encodeMidi\(prepared\.song/, "export must snapshot the live mix before applying a non-destructive export profile");
   assert.doesNotMatch(appSource, /encodeMidi\(clone, \{ includeMuted: true \}\)/, "export must not force muted or non-soloed notes back on");
   assert.match(appSource, /function buildExportSongSnapshot[\s\S]*?mute: state\.muted\.has\(id\)[\s\S]*?solo: state\.solo\.has\(id\)/, "the export snapshot must use the exact live mute and solo state");
   const historySource = appSource.slice(appSource.indexOf("function createHistorySnapshot"), appSource.indexOf("function pushHistory"));
@@ -285,9 +285,29 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.equal([...exportSongSource.matchAll(/triggerBrowserDownload\(/g)].length, 1, "native failures must never fall back to a WebView anchor download");
   assert.doesNotMatch(exportSongSource, /falling back to browser download/i);
   assert.match(exportSongSource, /Sound-ready MIDI prepared/, "native success copy must describe the prepared sound setup without claiming the share completed");
+  assert.match(exportSongSource, /prepareMidiExport\(clone, currentExportSetup\(\)\)/, "export must honor the selected track package and timing profile");
+  assert.doesNotMatch(appSource.slice(appSource.indexOf("export async function exportSongNative"), appSource.indexOf("function triggerBrowserDownload")), /requestPermissions|publicStorage/, "cache exports must remain permission-free on Android");
   assert.match(htmlSource, /6 SOUND-READY MIDI TRACKS/);
+  assert.match(htmlSource, /id="exportProfileControl"[\s\S]*?id="exportTimingControl"/, "Finish must expose track-package and timing choices");
   assert.match(appSource, /data-control="velocity"[\s\S]*?data-control="gate"[\s\S]*?data-control="pan"[\s\S]*?data-control="reverb"[\s\S]*?data-control="cutoff"[\s\S]*?data-control="resonance"/, "every generated track must expose performance and sound-ready export controls");
   assert.match(cssSource, /@media \(max-width: 840px\)[\s\S]*?\.attitude-strip\s*\{\s*grid-template-columns:\s*1fr;/, "attitude controls must stack before the tablet-width clipping range");
+});
+
+test("every static button is either directly wired or owns a delegated action", async () => {
+  const buttonTags = [...htmlSource.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
+  const delegated = /\bdata-(?:workspace|workflow-step|bus|attitude|section-action|editor-action)=/;
+  const orphaned = [];
+  for (const tag of buttonTags) {
+    const id = tag.match(/\bid="([^"]+)"/)?.[1];
+    if (!id) {
+      if (!delegated.test(tag)) orphaned.push(tag);
+      continue;
+    }
+    const directlyReferenced = appSource.includes(`#${id}`);
+    const workspaceTab = /\bdata-workspace=/.test(tag);
+    if (!directlyReferenced && !workspaceTab) orphaned.push(id);
+  }
+  assert.deepEqual(orphaned, [], `unused buttons: ${orphaned.join(", ")}`);
 });
 
 test("browser app initializes against the engine contract", async () => {

@@ -2477,10 +2477,36 @@ input,
 .track-secondary-actions .track-toggle{font-size:.68rem}
 .track-expression-grid{
   display:grid;
-  grid-template-columns:repeat(2,1fr);
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:10px;
   padding:0;
 }
+.track-control-groups{display:grid;gap:10px}
+.track-control-group{
+  display:grid;
+  gap:10px;
+  padding:11px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:12px;
+  background:rgba(255,255,255,.018);
+}
+.track-control-group>header{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:10px;
+  padding-bottom:7px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+.track-control-group>header b{
+  color:var(--track-color,var(--accent));
+  font-family:var(--font-data);
+  font-size:.61rem;
+  letter-spacing:.13em;
+}
+.track-control-group>header small{color:var(--text-3);font-size:.61rem}
+.track-control-group .track-control{min-width:0;margin:0}
+.track-control-group input[type=range]{min-height:28px;margin:0;touch-action:manipulation}
 
 @media(max-width:900px){
   #tab-arrange>.creative-thread{
@@ -2541,6 +2567,53 @@ input,
   }
   #tab-mix .attitude-button{flex:1 0 74px}
   .track-shaping-grid{grid-template-columns:1fr}
+  .track-expression-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+@media(max-width:430px){
+  .track-expression-grid{grid-template-columns:1fr}
+  .track-control-group{padding:10px}
+  .track-control-group>header small{display:none}
+}
+
+/* Focused DAW export controls */
+.export-setup{
+  display:grid;
+  gap:13px;
+  margin-top:18px;
+  padding:15px;
+  border:1px solid rgba(34,211,238,.22);
+  border-radius:14px;
+  background:linear-gradient(135deg,rgba(34,211,238,.07),rgba(157,111,255,.055));
+}
+.export-setup-heading small{
+  display:block;
+  color:var(--teal);
+  font-family:var(--font-data);
+  font-size:.59rem;
+  font-weight:800;
+  letter-spacing:.13em;
+}
+.export-setup-heading strong{display:block;margin-top:3px;font-size:.88rem}
+.export-setup-controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.export-setup-controls label{display:grid;gap:6px;min-width:0}
+.export-setup-controls label>span{color:var(--text-3);font-family:var(--font-data);font-size:.57rem;font-weight:800;letter-spacing:.1em}
+.export-setup-controls select{width:100%;min-height:44px}
+.export-profile-summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:0;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.export-profile-summary strong{color:#fff;font-size:.76rem}
+.export-profile-summary span{color:var(--text-3);font-size:.65rem;text-align:right}
+@media(max-width:560px){
+  .export-setup-controls{grid-template-columns:1fr}
+  .export-profile-summary{align-items:flex-start;flex-direction:column;gap:3px}
+  .export-profile-summary span{text-align:left}
 }
 
 /* ─── PHASES 53–55: ARRANGEMENT CANVAS + SECTION SHAPER ───────────────── */

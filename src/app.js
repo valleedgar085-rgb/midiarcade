@@ -14,6 +14,7 @@ import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSecti
 import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createSessionStorage } from "./core/session-storage.js";
+import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
@@ -2676,6 +2677,7 @@ export function selectAttitudeTrack(id, { announce = true } = {}) {
   state.editorTrack = id;
   renderAttitudeStrip(announce ? `${TRACK_META[id].name} selected. Its attitude controls are ready.` : "");
   renderMixOverview();
+  renderExportSetup();
   $$('[data-timeline-track]').forEach((row) => row.classList.toggle("is-focus-track", row.dataset.timelineTrack === id));
   renderCreativeThread();
   if (state.focusedSection) renderSectionEditor();
@@ -2985,24 +2987,37 @@ function renderTrackRack() {
         <summary><span><b>SHAPE INSTRUMENT</b><small>Sound · performance · space</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
           <label class="track-patch"><span><b>SOUND</b><em>${profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
-          <div class="track-shaping-grid">
-            <label class="track-control"><span>DENSITY <output>${settings.density}%</output></span><input data-control="density" type="range" min="10" max="100" value="${settings.density}" aria-label="${meta.name} density" /></label>
-            <label class="track-control variation-control"><span>MOVEMENT <output>${settings.variation}%</output></span><input data-control="variation" type="range" min="0" max="100" value="${settings.variation}" aria-label="${meta.name} variation" /></label>
-            <label class="track-control octave-control"><span>REGISTER <output>${settings.octave > 0 ? "+" : ""}${settings.octave}</output></span><input data-control="octave" type="range" min="-2" max="2" step="1" value="${settings.octave}" aria-label="${meta.name} octave" /></label>
-          </div>
           <div class="track-secondary-actions">
             <button class="track-toggle target-toggle" data-action="target" type="button" aria-label="Target ${meta.name} character" aria-pressed="${targeted}" title="Select for Character Shaper">◎ Character</button>
             <button class="track-toggle" data-action="lock" type="button" aria-label="Preserve ${meta.name} in similar ideas" aria-pressed="${locked}" title="Preserve in similar ideas">${locked ? "◆ Preserved" : "◇ Preserve"}</button>
             <button class="track-toggle" data-action="reroll" type="button" aria-label="Regenerate ${meta.name}" aria-pressed="false" title="Regenerate only this instrument">↻ Rewrite part</button>
             <button class="track-toggle" data-action="pianoroll" type="button" aria-label="Open Piano Roll for ${meta.name}" title="Open visual note editor">✎ Piano Roll</button>
           </div>
-          <div class="track-expression-grid">
-          <label class="track-control"><span>VELOCITY <output>${Math.round(settings.velocity * 100)}%</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /></label>
-          <label class="track-control"><span>GATE <output>${Math.round(settings.gate * 100)}%</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /></label>
-          <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /></label>
-          <label class="track-control"><span>SPACE <output>${Math.round(settings.reverb * 100)}%</output></span><input data-control="reverb" type="range" min="0" max="1" step="0.01" value="${settings.reverb}" aria-label="${meta.name} reverb" /></label>
-          <label class="track-control"><span>CUTOFF <output>${Math.round(settings.cutoff ?? 8000)}Hz</output></span><input data-control="cutoff" type="range" min="1000" max="14000" step="100" value="${settings.cutoff ?? 8000}" aria-label="${meta.name} filter cutoff" /></label>
-          <label class="track-control"><span>RESONANCE <output>${Math.round((settings.resonance ?? 0.2) * 100)}%</output></span><input data-control="resonance" type="range" min="0" max="1" step="0.01" value="${settings.resonance ?? 0.2}" aria-label="${meta.name} filter resonance" /></label>
+          <div class="track-control-groups">
+            <section class="track-control-group pattern-group" aria-label="${meta.name} pattern controls">
+              <header><b>PATTERN</b><small>notes and movement</small></header>
+              <div class="track-shaping-grid">
+                <label class="track-control"><span>DENSITY <output>${settings.density}%</output></span><input data-control="density" type="range" min="10" max="100" value="${settings.density}" aria-label="${meta.name} density" /></label>
+                <label class="track-control variation-control"><span>MOVEMENT <output>${settings.variation}%</output></span><input data-control="variation" type="range" min="0" max="100" value="${settings.variation}" aria-label="${meta.name} variation" /></label>
+                <label class="track-control octave-control"><span>REGISTER <output>${settings.octave > 0 ? "+" : ""}${settings.octave}</output></span><input data-control="octave" type="range" min="-2" max="2" step="1" value="${settings.octave}" aria-label="${meta.name} octave" /></label>
+              </div>
+            </section>
+            <section class="track-control-group performance-group" aria-label="${meta.name} performance controls">
+              <header><b>PERFORMANCE</b><small>impact and placement</small></header>
+              <div class="track-expression-grid">
+                <label class="track-control"><span>VELOCITY <output>${Math.round(settings.velocity * 100)}%</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /></label>
+                <label class="track-control"><span>GATE <output>${Math.round(settings.gate * 100)}%</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /></label>
+                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /></label>
+              </div>
+            </section>
+            <section class="track-control-group tone-group" aria-label="${meta.name} tone controls">
+              <header><b>TONE</b><small>space and color</small></header>
+              <div class="track-expression-grid">
+                <label class="track-control"><span>SPACE <output>${Math.round(settings.reverb * 100)}%</output></span><input data-control="reverb" type="range" min="0" max="1" step="0.01" value="${settings.reverb}" aria-label="${meta.name} reverb" /></label>
+                <label class="track-control"><span>CUTOFF <output>${Math.round(settings.cutoff ?? 8000)}Hz</output></span><input data-control="cutoff" type="range" min="1000" max="14000" step="100" value="${settings.cutoff ?? 8000}" aria-label="${meta.name} filter cutoff" /></label>
+                <label class="track-control"><span>RESONANCE <output>${Math.round((settings.resonance ?? 0.2) * 100)}%</output></span><input data-control="resonance" type="range" min="0" max="1" step="0.01" value="${settings.resonance ?? 0.2}" aria-label="${meta.name} filter resonance" /></label>
+              </div>
+            </section>
           </div>
           <details class="synth-designer-expander">
             <summary><span><b>ARCADE SYNTH DESIGNER</b><small>Live Web Audio Synthesis</small></span><i aria-hidden="true">+</i></summary>
@@ -3137,6 +3152,25 @@ function renderFinishWorkspace() {
     "Velocity + articulation",
     "CC expression + sustain + modulation",
   ].map((fact) => `<span>${fact}</span>`).join("");
+  renderExportSetup();
+}
+
+function currentExportSetup() {
+  return {
+    profile: $("#exportProfileControl")?.value ?? "full",
+    timing: $("#exportTimingControl")?.value ?? "performance",
+    selectedTrackId: state.selectedTrack,
+  };
+}
+
+function renderExportSetup() {
+  const summary = $("#exportProfileSummary");
+  if (!summary) return;
+  const setup = currentExportSetup();
+  const profile = resolveMidiExportProfile(setup.profile, setup.selectedTrackId);
+  const selectedName = TRACK_META[setup.selectedTrackId]?.name ?? "instrument";
+  const trackCount = profile.trackIds?.length ?? songTracks().length;
+  summary.innerHTML = `<strong>${profile.id === "selected" ? selectedName : profile.label}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel"}</span>`;
 }
 
 async function saveCoverArtwork() {
@@ -3637,19 +3671,6 @@ export async function exportSongNative(payload, filename) {
   const Share = window.Capacitor?.Plugins?.Share;
   if (!Filesystem?.writeFile || !Share?.share) throw new Error("Native save and share plugins are unavailable.");
 
-  if (typeof Filesystem.checkPermissions === "function") {
-    try {
-      const status = await Filesystem.checkPermissions();
-      if (status?.publicStorage === "prompt" || status?.publicStorage === "denied") {
-        if (typeof Filesystem.requestPermissions === "function") {
-          await Filesystem.requestPermissions({ permissions: ["publicStorage"] });
-        }
-      }
-    } catch {
-      // Permission check non-fatal, proceed with write
-    }
-  }
-
   const result = await Filesystem.writeFile({
     path: `midi-exports/${filename}`,
     data: base64Data,
@@ -3773,15 +3794,17 @@ async function exportSong() {
   let isNative = false;
   try {
     const clone = buildExportSongSnapshot();
-    const exportReport = createMidiExportReport(clone, { alwaysIncludeTrackIds: ["live-take"] });
-    const bytes = encodeMidi(clone, { alwaysIncludeTrackIds: ["live-take"] });
+    const prepared = prepareMidiExport(clone, currentExportSetup());
+    const exportReport = createMidiExportReport(prepared.song, prepared.options);
+    const bytes = encodeMidi(prepared.song, prepared.options);
     const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const keyStr = songKey().toLowerCase();
     const modeStr = songMode().toLowerCase();
     const bpmVal = Math.round(songBpm());
     const genreStr = songGenreId().toLowerCase();
     const titleSlug = deriveTitle().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "midi-arcade-idea";
-    const filename = `${titleSlug}_${keyStr}-${modeStr}_${bpmVal}bpm_${genreStr}.mid`;
+    const timingSuffix = prepared.timing === "tight" ? "-tight" : "";
+    const filename = `${titleSlug}_${keyStr}-${modeStr}_${bpmVal}bpm_${genreStr}${prepared.profile.filenameSuffix}${timingSuffix}.mid`;
 
     isNative = Boolean(typeof window !== "undefined"
       && window.Capacitor?.isNativePlatform?.());
@@ -3795,8 +3818,8 @@ async function exportSong() {
     $("#creativeThread")?.classList.add("is-exported");
     if ($("#threadLiveSection")) {
       $("#threadLiveSection").textContent = isNative
-        ? `${clone.tracks?.length || 0} connected tracks prepared for sharing`
-        : `${clone.tracks?.length || 0} connected tracks exported`;
+        ? `${exportReport.trackCount} connected tracks prepared for sharing`
+        : `${exportReport.trackCount} connected tracks exported`;
     }
     setTimeout(() => {
       $("#creativeThread")?.classList.remove("is-exported");
@@ -5516,6 +5539,9 @@ function toggleFullscreen() {
   });
   $("#songScrubber").addEventListener("input", (event) => player.seek(Number(event.target.value) / 1000 * totalSeconds()));
   $("#exportButton").addEventListener("click", exportSong);
+  for (const selector of ["#exportProfileControl", "#exportTimingControl"]) {
+    $(selector)?.addEventListener("change", renderExportSetup);
+  }
   $("#saveCoverButton")?.addEventListener("click", saveCoverArtwork);
   $("#varyCoverButton")?.addEventListener("click", () => {
     state.coverVariation = (Number(state.coverVariation) || 0) + 1;
