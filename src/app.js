@@ -18,8 +18,12 @@ import { createGenerationExecutor } from "./core/generation-executor.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import {
+  characteristicTrackForPreview,
   clickSafeStopTime,
+  normalizeMixAssistant,
   PREVIEW_TRANSITION,
+  previewMixHealth,
+  previewSidechain,
   previewSpotlight,
 } from "./core/preview-audio.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
@@ -255,6 +259,7 @@ function persistedSession() {
     selectedTrack: state.selectedTrack,
     guidedMode: state.guidedMode,
     recipeIndex: state.recipeIndex,
+    mixAssistant: normalizeMixAssistant(state.mixAssistant),
     tasteProfile: state.tasteProfile,
   };
 }
@@ -430,6 +435,7 @@ export function restorePersistedSession() {
     state.selectedTrack = TRACK_ORDER.includes(parsed.selectedTrack) ? parsed.selectedTrack : "drums";
     state.guidedMode = parsed.guidedMode !== false;
     state.recipeIndex = clamp(Math.round(Number(parsed.recipeIndex) || 0), 0, RECIPES.length - 1);
+    state.mixAssistant = { ...normalizeMixAssistant(parsed.mixAssistant) };
     state.tasteProfile = sanitizeTasteProfile(parsed.tasteProfile);
     return true;
   } catch (error) {
@@ -2634,6 +2640,33 @@ function renderMixOverview() {
   $("#mixFocusSound").textContent = `${programName(id, settings.program)} · ${ATTITUDE_LABELS[settings.attitude] || "Neutral"}`;
   $("#mixAudibleCount").textContent = `${audible} / ${TRACK_ORDER.length}`;
   $("#mixLockedCount").textContent = String(state.locked.size);
+  renderSmartMixConsole();
+}
+
+function renderSmartMixConsole(message = "") {
+  if (!$("#smartMixConsole")) return;
+  const assistant = normalizeMixAssistant(state.mixAssistant);
+  const health = previewMixHealth(state.song ?? {}, state.trackSettings, assistant);
+  const spotlight = characteristicTrackForPreview(state.song ?? {}, assistant.spotlightTrack);
+  const spotlightName = TRACK_META[spotlight]?.name ?? "Melody";
+  const toggle = $("#mixEnhanceToggle");
+  toggle?.setAttribute("aria-pressed", String(assistant.enabled));
+  toggle?.classList.toggle("is-original", !assistant.enabled);
+  const toggleLabel = $("span", toggle);
+  if (toggleLabel) toggleLabel.textContent = assistant.enabled ? "Enhanced" : "Original";
+  if ($("#spotlightTrackControl")) $("#spotlightTrackControl").value = assistant.spotlightTrack;
+  if ($("#spotlightIntensityControl")) $("#spotlightIntensityControl").value = String(assistant.spotlightIntensity);
+  if ($("#spotlightIntensityValue")) $("#spotlightIntensityValue").textContent = `${assistant.spotlightIntensity}%`;
+  const meter = $("#mixHealthMeter");
+  meter?.style.setProperty("--mix-load", `${health.load}%`);
+  meter?.setAttribute("aria-valuenow", String(health.load));
+  if ($("#mixHealthStatus")) $("#mixHealthStatus").textContent = health.status;
+  if ($("#mixHeadroomStatus")) $("#mixHeadroomStatus").textContent = `${health.headroom} dB room`;
+  if ($("#smartMixNote")) {
+    $("#smartMixNote").textContent = message || (assistant.enabled
+      ? `${spotlightName} is featured; kick-triggered space keeps the low end moving.`
+      : "Original preview is active. Switch back to Enhanced to compare the performance mix.");
+  }
 }
 
 export function selectAttitudeTrack(id, { announce = true } = {}) {
@@ -3892,13 +3925,14 @@ export function buildPreviewEvents(song = state.song, options = {}) {
   const backingOnly = Boolean(options.backingOnly);
   const oneShotKitId = oneShotKitForSong(song).id;
   const mixProfile = previewMixProfile(song);
+  const mixAssistant = normalizeMixAssistant(options.mixAssistant ?? state.mixAssistant);
   return songTracks(song).flatMap((track, index) => {
     const id = trackId(track, index);
     if (muted.has(id) || (activeSolo && !solo.has(id)) || (backingOnly && ["melody", "counterpoint"].includes(id))) return [];
     const defaults = TRACK_DEFINITIONS[id] || {};
     const uiSettings = settingsById?.[id] || {};
     const settings = { ...defaults, ...(track.settings || track.controls || {}), ...uiSettings };
-    const spotlight = previewSpotlight(song, id);
+    const spotlight = previewSpotlight(song, id, mixAssistant);
     const velocityScale = Math.sqrt(clamp(Number(settings.velocity ?? defaults.velocity ?? 1), 0.1, 1.5)
       / Math.max(0.1, Number(defaults.velocity ?? 1)));
     const gateScale = Math.sqrt(clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5)
@@ -4156,6 +4190,7 @@ export class PreviewPlayer {
     this.reverbReturn = null;
     this.delayBus = null;
     this.delayReturn = null;
+    this.trackBuses = new Map();
     this.noiseBuffers = new Map();
     this.periodicWaves = new Map();
     this.timer = null;
@@ -4300,6 +4335,7 @@ export class PreviewPlayer {
     this.reverbReturn = null;
     this.delayBus = null;
     this.delayReturn = null;
+    this.trackBuses.clear();
     this.noiseBuffers.clear();
     this.periodicWaves.clear();
   }
@@ -4376,13 +4412,40 @@ export class PreviewPlayer {
     const now = this.context?.currentTime ?? 0;
     const settle = (parameter, value) => {
       if (!parameter) return;
+      if (typeof parameter.cancelScheduledValues === "function") parameter.cancelScheduledValues(now);
       if (typeof parameter.setTargetAtTime === "function") parameter.setTargetAtTime(value, now, 0.025);
       else parameter.value = value;
     };
     settle(this.delayBus?.delayTime, profile.delaySeconds);
     settle(this.reverbReturn?.gain, profile.reverbReturn);
     settle(this.delayReturn?.gain, profile.delayReturn);
+    settle(this.trackBuses.get("bass")?.gain, 1);
     return profile;
+  }
+
+  trackBusFor(id) {
+    if (!this.context || !this.master) return this.master;
+    if (!this.trackBuses.has(id)) {
+      const bus = this.context.createGain();
+      bus.gain.value = 1;
+      bus.connect(this.master);
+      this.trackBuses.set(id, bus);
+    }
+    return this.trackBuses.get(id);
+  }
+
+  applyKickSidechain(when) {
+    const profile = previewSidechain(state.song ?? {}, state.mixAssistant);
+    if (!profile.enabled) return;
+    const gain = this.trackBusFor("bass")?.gain;
+    if (!gain) return;
+    const floor = Math.max(0.45, 1 - profile.depth);
+    if (typeof gain.setTargetAtTime === "function") {
+      gain.setTargetAtTime(floor, when, profile.attackSeconds);
+      gain.setTargetAtTime(1, when + profile.holdSeconds, profile.releaseSeconds / 3);
+    } else {
+      gain.value = floor;
+    }
   }
 
   async toggle() {
@@ -4650,7 +4713,7 @@ export class PreviewPlayer {
       output = panner;
       trackedNodes?.add(panner);
     }
-    output.connect(this.master);
+    output.connect(this.trackBusFor(event.id));
     if (this.reverbBus && Number(event.reverb) > 0) {
       const send = this.context.createGain();
       send.gain.value = clamp(Number(event.reverb) * 0.42 * reverbScale, 0, 0.48);
@@ -4896,6 +4959,7 @@ export class PreviewPlayer {
     const voice = kit.preview;
     const character = previewDrumCharacter(voice, event.pitch, event.velocity, event.start ?? when);
     if ([35, 36].includes(event.pitch)) {
+      this.applyKickSidechain(when);
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const sources = [oscillator];
@@ -5338,6 +5402,27 @@ function toggleFullscreen() {
   $("#redoButton").addEventListener("click", redoHistory);
   $("#renameButton").addEventListener("click", renameSong);
   $("#randomizeMixButton").addEventListener("click", randomizeTrackControls);
+  $("#mixEnhanceToggle")?.addEventListener("click", () => {
+    state.mixAssistant.enabled = !state.mixAssistant.enabled;
+    renderSmartMixConsole();
+    scheduleSessionSave();
+    if (player.playing) player.seek(player.currentSongTime());
+    showToast(state.mixAssistant.enabled ? "Enhanced performance mix active." : "Original preview active for comparison.");
+  });
+  $("#spotlightTrackControl")?.addEventListener("change", (event) => {
+    state.mixAssistant.spotlightTrack = event.target.value;
+    renderSmartMixConsole();
+    scheduleSessionSave();
+    if (player.playing) player.seek(player.currentSongTime());
+  });
+  $("#spotlightIntensityControl")?.addEventListener("input", (event) => {
+    state.mixAssistant.spotlightIntensity = clamp(Math.round(Number(event.target.value) || 0), 0, 100);
+    renderSmartMixConsole();
+  });
+  $("#spotlightIntensityControl")?.addEventListener("change", () => {
+    scheduleSessionSave();
+    if (player.playing) player.seek(player.currentSongTime());
+  });
   $("#reorderButton").addEventListener("click", reshapeArrangement);
   $("#sectionShaper")?.addEventListener("change", (event) => {
     const barsControl = event.target.closest?.("[data-section-bars]");

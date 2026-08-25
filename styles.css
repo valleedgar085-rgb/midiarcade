@@ -2329,6 +2329,60 @@ input,
   width:8px;height:11px;
   border:0;border-left:3px solid currentColor;border-right:3px solid currentColor;
 }
+.smart-mix-console{
+  --mix-load:68%;
+  margin-bottom:14px;
+  padding:15px 16px;
+  border:1px solid rgba(34,211,238,.2);
+  border-radius:var(--radius);
+  background:
+    radial-gradient(circle at 8% 0,rgba(34,211,238,.1),transparent 34%),
+    linear-gradient(135deg,rgba(157,111,255,.055),rgba(255,255,255,.012));
+}
+.smart-mix-heading,
+.smart-mix-controls{
+  display:grid;
+  align-items:center;
+  gap:14px;
+}
+.smart-mix-heading{grid-template-columns:auto 1fr auto;margin-bottom:13px}
+.smart-mix-heading small,
+.smart-mix-field>span,
+.mix-health small{
+  display:block;
+  color:var(--text-3);
+  font-family:var(--font-data);
+  font-size:.59rem;
+  font-weight:800;
+  letter-spacing:.1em;
+}
+.smart-mix-heading strong{display:block;font-size:.92rem}
+.smart-mix-signal{display:flex;align-items:flex-end;gap:3px;width:25px;height:24px}
+.smart-mix-signal i{width:5px;border-radius:4px;background:var(--teal);box-shadow:0 0 9px rgba(34,211,238,.45)}
+.smart-mix-signal i:nth-child(1){height:9px}.smart-mix-signal i:nth-child(2){height:20px}.smart-mix-signal i:nth-child(3){height:13px}
+.smart-mix-toggle{
+  display:flex;align-items:center;gap:8px;
+  min-height:40px;padding:0 13px;
+  border:1px solid rgba(34,211,238,.35);border-radius:999px;
+  color:#dffcff;background:rgba(34,211,238,.1);
+  font-size:.7rem;font-weight:800;
+  transition:border-color .18s,background .18s,color .18s;
+}
+.smart-mix-toggle i{width:8px;height:8px;border-radius:50%;background:var(--teal);box-shadow:0 0 10px var(--teal)}
+.smart-mix-toggle.is-original{border-color:var(--border);color:var(--text-2);background:rgba(255,255,255,.035)}
+.smart-mix-toggle.is-original i{background:var(--text-3);box-shadow:none}
+.smart-mix-controls{grid-template-columns:minmax(180px,.85fr) minmax(190px,1fr) minmax(170px,.9fr)}
+.smart-mix-field{display:flex;flex-direction:column;gap:7px;min-width:0}
+.smart-mix-field select{width:100%;min-height:42px}
+.smart-mix-field.strength>span{display:flex;justify-content:space-between}
+.smart-mix-field output{color:var(--teal)}
+.smart-mix-field input[type="range"]{min-height:32px;margin:0}
+.mix-health{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:end}
+.mix-health strong{display:block;font-family:var(--font-data);font-size:.76rem;color:var(--teal)}
+.mix-health em{grid-column:2;font-size:.64rem;font-style:normal;color:var(--text-3)}
+.mix-health-track{grid-column:1/-1;height:7px;overflow:hidden;border-radius:99px;background:rgba(255,255,255,.08)}
+.mix-health-track i{display:block;width:var(--mix-load);height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--teal),var(--accent),#ffbd59);box-shadow:0 0 10px rgba(34,211,238,.28);transition:width .2s ease}
+.smart-mix-note{margin:10px 0 0;color:var(--text-2);font-size:.69rem}
 #tab-mix .attitude-strip{
   margin-bottom:14px;
   background:rgba(255,255,255,.015);
@@ -2473,6 +2527,10 @@ input,
   }
   .mix-stat{display:none}
   .mix-listen-button{padding:0 12px}
+  .smart-mix-console{padding:13px}
+  .smart-mix-heading{gap:10px}
+  .smart-mix-controls{grid-template-columns:1fr}
+  .mix-health{padding-top:3px}
   #tab-mix .attitude-strip{flex-direction:column;overflow:visible}
   #tab-mix .attitude-actions{
     flex-direction:row;

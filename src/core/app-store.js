@@ -18,6 +18,11 @@ export function createInitialAppState() {
     loop: false,
     isGenerating: false,
     selectedTrack: "drums",
+    mixAssistant: {
+      enabled: true,
+      spotlightTrack: "auto",
+      spotlightIntensity: 68,
+    },
     activeWorkspace: "create",
     workflowStep: 1,
     guidedMode: true,

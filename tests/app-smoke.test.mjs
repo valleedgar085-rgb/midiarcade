@@ -6,7 +6,10 @@ import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-d
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  normalizeMixAssistant,
   PREVIEW_TRANSITION,
+  previewMixHealth,
+  previewSidechain,
   previewSpotlight,
 } from "../src/core/preview-audio.js";
 
@@ -54,6 +57,24 @@ test("preview transitions and the persistent instrument spotlight stay determini
     4 + PREVIEW_TRANSITION.stopSeconds + PREVIEW_TRANSITION.sourceTailSeconds,
     "active voices need time to finish their click-safe release",
   );
+});
+
+test("smart performance mix stays bounded, comparable, and user-directed", () => {
+  const song = { meta: { genre: "house", tempo: 128 }, characteristicVoice: { trackId: "bass" } };
+  const directed = normalizeMixAssistant({ enabled: true, spotlightTrack: "melody", spotlightIntensity: 92 });
+  const original = normalizeMixAssistant({ enabled: false, spotlightTrack: "melody", spotlightIntensity: 92 });
+  assert.equal(characteristicTrackForPreview(song, directed.spotlightTrack), "melody");
+  assert.equal(previewSpotlight(song, "melody", directed).active, true);
+  assert.equal(previewSpotlight(song, "bass", directed).active, false);
+  assert.equal(previewSpotlight(song, "melody", original).gain, 1);
+  assert.equal(previewSidechain(song, original).enabled, false);
+  assert.ok(previewSidechain(song, directed).depth > 0.08);
+  assert.equal(normalizeMixAssistant({ spotlightIntensity: -10 }).spotlightIntensity, 0);
+  assert.equal(normalizeMixAssistant({ spotlightIntensity: 500 }).spotlightIntensity, 100);
+  const health = previewMixHealth(song, { drums: { volume: 0.8 }, bass: { volume: 0.75 } }, directed);
+  assert.ok(health.load >= 0 && health.load <= 100);
+  assert.ok(health.headroom >= 0 && health.headroom <= 12);
+  assert.equal(health.spotlight, "melody");
 });
 
 class MockElement {
@@ -125,6 +146,8 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "showcaseSimilarButton", "showcaseArc", "showcaseArcStatus",
     "arrangeWorkflow", "arrangeSectionStep", "arrangeNoteStep", "mixOverview",
     "mixFocusName", "mixFocusSound", "mixAudibleCount", "mixLockedCount", "mixPlayButton",
+    "smartMixConsole", "mixEnhanceToggle", "spotlightTrackControl", "spotlightIntensityControl",
+    "spotlightIntensityValue", "mixHealthMeter", "mixHealthStatus", "mixHeadroomStatus", "smartMixNote",
   ]) {
     assert.ok(ids.includes(id), `#${id} rhythm control must exist in index.html`);
   }

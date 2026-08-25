@@ -713,6 +713,23 @@
               <span class="mix-stat"><small>PRESERVED</small><strong id="mixLockedCount">0</strong></span>
               <button class="mix-listen-button" id="mixPlayButton" type="button"><span aria-hidden="true"></span><b>Listen</b></button>
             </div>
+            <section class="smart-mix-console" id="smartMixConsole" aria-labelledby="smartMixTitle">
+              <div class="smart-mix-heading">
+                <span class="smart-mix-signal" aria-hidden="true"><i></i><i></i><i></i></span>
+                <span><small>SMART PERFORMANCE MIX</small><strong id="smartMixTitle">Give one voice the light</strong></span>
+                <button class="smart-mix-toggle" id="mixEnhanceToggle" type="button" aria-pressed="true"><i aria-hidden="true"></i><span>Enhanced</span></button>
+              </div>
+              <div class="smart-mix-controls">
+                <label class="smart-mix-field"><span>Featured instrument</span><select id="spotlightTrackControl"><option value="auto">Auto · song character</option><option value="bass">Bass</option><option value="chords">Chords</option><option value="melody">Melody</option><option value="counterpoint">Counterline</option><option value="pad">Pad</option></select></label>
+                <label class="smart-mix-field strength"><span>Spotlight <output id="spotlightIntensityValue">68%</output></span><input id="spotlightIntensityControl" type="range" min="0" max="100" value="68" /></label>
+                <div class="mix-health" id="mixHealthMeter" role="meter" aria-label="Estimated mix load" aria-valuemin="0" aria-valuemax="100" aria-valuenow="68">
+                  <span><small>MIX HEALTH</small><strong id="mixHealthStatus">Balanced</strong></span>
+                  <span class="mix-health-track" aria-hidden="true"><i></i></span>
+                  <em id="mixHeadroomStatus">4 dB room</em>
+                </div>
+              </div>
+              <p class="smart-mix-note" id="smartMixNote" role="status" aria-live="polite">Bass is featured automatically; kick-triggered space keeps the low end moving.</p>
+            </section>
             <section class="attitude-strip" id="attitudeStrip" aria-labelledby="attitudeTitle">
               <div class="attitude-target">
                 <span class="attitude-orbit" aria-hidden="true"><i></i><i></i></span>
