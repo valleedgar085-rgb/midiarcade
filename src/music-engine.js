@@ -1724,6 +1724,14 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     );
     const sourcePlan = source?.sectionPlans?.find((plan) => plan.sectionId === section.id)
       ?? source?.sectionPlans?.find((plan) => plan.sectionName === section.name);
+    const baseDevelopmentPath = developmentPathForTransform(motifTransform);
+    const patternVariant = Number.isFinite(Number(sourcePlan?.patternVariant))
+      ? mod(Math.round(sourcePlan.patternVariant), baseDevelopmentPath.length)
+      : rng.int(0, Math.max(0, baseDevelopmentPath.length - 1));
+    const developmentPath = [
+      ...baseDevelopmentPath.slice(patternVariant),
+      ...baseDevelopmentPath.slice(0, patternVariant),
+    ];
     const tension = round(clamp(energy * 0.72 + (cadence === "lift" ? 0.22 : cadence === "suspend" ? 0.12 : 0), 0, 1));
     const inheritedEnvelope = sourcePlan?.tensionEnvelope;
     const tensionEnvelope = inheritedEnvelope
@@ -1770,7 +1778,8 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       harmonicActivity: round(clamp(0.25 + config.harmonicRhythm * 0.45 + energy * 0.24, 0.2, 1)),
       cadence,
       motifTransform,
-      developmentPath: developmentPathForTransform(motifTransform),
+      patternVariant,
+      developmentPath,
       direction,
       harmonicRole: sourcePlan?.harmonicRole ?? harmonicStory.role,
       harmonicColor: sourcePlan?.harmonicColor ?? harmonicStory.color,
@@ -2177,6 +2186,14 @@ function harmonicStoryMetadata(plan, section, position = "motion", plannedTensio
 
 function harmonicExtensionForTension(config, plan, tension, atResolution = false) {
   if (atResolution && plan?.cadence === "resolve") return false;
+  const color = String(plan?.harmonicColor ?? "stable");
+  const colorful = ["neoSoul", "rnbSoul", "jazz", "hipHop", "rap", "loFiHipHop"].includes(config.genre)
+    || ["soul", "jazz"].includes(config.chordPath);
+  if (config.complexity >= 0.42 && ["radiant", "open"].includes(color) && tension >= 0.5) {
+    return colorful && config.complexity >= 0.62 ? "9" : "7";
+  }
+  if (config.complexity >= 0.42 && color === "modal" && tension >= 0.56) return colorful && config.complexity >= 0.76 ? "11" : "7";
+  if (config.complexity >= 0.42 && ["shadow", "wandering", "dominant"].includes(color) && tension >= 0.58) return "7";
   if (tension < 0.5) return false;
   if (config.chordPath === "trap") return tension >= 0.72 ? "7" : false;
   if (config.chordPath === "house" && tension < 0.7) return false;
@@ -2185,8 +2202,6 @@ function harmonicExtensionForTension(config, plan, tension, atResolution = false
       ? "7"
       : false;
   }
-  const colorful = ["neoSoul", "rnbSoul", "jazz", "hipHop", "rap", "loFiHipHop"].includes(config.genre)
-    || ["soul", "jazz"].includes(config.chordPath);
   if (tension >= 0.88 && colorful && config.complexity >= 0.72) return config.genre === "neoSoul" ? "11" : "9";
   if (tension >= 0.76 && colorful) return "9";
   return "7";
@@ -4563,7 +4578,12 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
     const chord = harmonyAt(harmony, start);
     const position = mod(start, beatsPerBar(config));
     if (chord && Math.abs(position - Math.round(position)) < 0.04) pitch = nearestChordTone(pitch, chord);
-    addNote(result, pitch, start, duration, note.velocity, totalBeats, note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : null);
+    addNote(result, pitch, start, duration, note.velocity, totalBeats, {
+      ...(note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : {}),
+      ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
+      ...(note.plannedTension == null ? {} : { plannedTension: note.plannedTension }),
+      ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
+    });
   }
 
   // Very dense lead phrases can consume every candidate from the original
@@ -4580,6 +4600,65 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
     }
   }
   return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+}
+
+function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, structure) {
+  const melody = [...(melodyNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const counterpoint = [...(counterNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  if (!melody.length || !counterpoint.length) {
+    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0 } };
+  }
+  let previousCounter = null;
+  let contrary = 0;
+  let oblique = 0;
+  const shapedCounterpoint = counterpoint.map((note) => {
+    const priorIndex = melody.findLastIndex((lead) => lead.start <= note.start + 0.001);
+    const lead = melody[Math.max(0, priorIndex)];
+    const earlierLead = melody[Math.max(0, priorIndex - 1)];
+    const leadDirection = lead && earlierLead ? Math.sign(lead.pitch - earlierLead.pitch) : 0;
+    const desiredDirection = leadDirection === 0 ? 0 : -leadDirection;
+    const chord = harmonyAt(harmony, note.start);
+    const candidates = [
+      note.pitch,
+      nearestScalePitch(note.pitch + desiredDirection * 2, config, desiredDirection),
+      nearestScalePitch(note.pitch + desiredDirection * 4, config, desiredDirection),
+      nearestScalePitch(note.pitch - (desiredDirection || 1) * 2, config, -(desiredDirection || 1)),
+    ].filter((pitch, index, values) => pitch >= 36 && pitch <= 108 && values.indexOf(pitch) === index);
+    const score = (pitch) => {
+      const motion = previousCounter ? pitch - previousCounter.pitch : 0;
+      const directionPenalty = desiredDirection && Math.sign(motion) !== desiredDirection ? 5 : 0;
+      const leapPenalty = Math.max(0, Math.abs(motion) - 4) * 3;
+      const chordPenalty = chord?.tones?.includes(mod(pitch, 12)) ? 0 : 1.5;
+      const registerPenalty = Math.abs(pitch - note.pitch) * 0.3;
+      return directionPenalty + leapPenalty + chordPenalty + registerPenalty;
+    };
+    candidates.sort((left, right) => score(left) - score(right) || Math.abs(left - note.pitch) - Math.abs(right - note.pitch));
+    const pitch = candidates[0] ?? note.pitch;
+    const counterDirection = previousCounter ? Math.sign(pitch - previousCounter.pitch) : 0;
+    const relationship = leadDirection && counterDirection === -leadDirection ? "contrary" : "oblique";
+    if (relationship === "contrary") contrary += 1;
+    else oblique += 1;
+    const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6);
+    const shaped = {
+      ...note,
+      pitch,
+      counterMelodyRole: "answer",
+      melodicRelationship: relationship,
+      answerToBeat: round(lead?.start ?? note.start),
+      dialogueSectionId: section?.id ?? null,
+    };
+    previousCounter = shaped;
+    return shaped;
+  });
+  const shapedMelody = melody.map((note, index) => ({
+    ...note,
+    melodyRole: index % 2 === 0 ? "call" : "development",
+  }));
+  return {
+    melody: shapedMelody,
+    counterpoint: shapedCounterpoint,
+    report: { version: 1, answers: shapedCounterpoint.length, contrary, oblique },
+  };
 }
 
 function generatePad(
@@ -4978,6 +5057,11 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
+      ...(note.melodyRole ? { melodyRole: note.melodyRole } : {}),
+      ...(note.counterMelodyRole ? { counterMelodyRole: note.counterMelodyRole } : {}),
+      ...(note.melodicRelationship ? { melodicRelationship: note.melodicRelationship } : {}),
+      ...(Number.isFinite(note.answerToBeat) ? { answerToBeat: round(note.answerToBeat) } : {}),
+      ...(note.dialogueSectionId ? { dialogueSectionId: note.dialogueSectionId } : {}),
       ...(note.bassGrooveRole ? { bassGrooveRole: note.bassGrooveRole } : {}),
       ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
       ...(note.motifHandoffRole ? { motifHandoffRole: note.motifHandoffRole } : {}),
@@ -5592,13 +5676,30 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
       note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
     ));
     if (hasFeature) continue;
-    const anchor = (fallbackById.get(entry.featuredTrack) ?? [])
+    let anchor = (fallbackById.get(entry.featuredTrack) ?? [])
       .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
       .sort((left, right) => (
         Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor))
         || right.velocity - left.velocity
         || left.start - right.start
       ))[0];
+    if (!anchor && entry.featuredTrack === "counterpoint") {
+      const melodyAnchor = (fallbackById.get("melody") ?? [])
+        .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+        .sort((left, right) => Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor)) || left.start - right.start)[0];
+      if (melodyAnchor) {
+        anchor = {
+          ...melodyAnchor,
+          pitch: melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12,
+          velocity: clamp(Math.round(melodyAnchor.velocity * 0.78), 1, 120),
+          duration: round(Math.min(melodyAnchor.duration, 0.75)),
+          counterMelodyRole: "answer",
+          melodicRelationship: "oblique",
+          answerToBeat: round(melodyAnchor.start),
+          dialogueSectionId: section.id,
+        };
+      }
+    }
     if (!anchor) continue;
     track.notes.push({
       ...anchor,
@@ -7316,6 +7417,15 @@ function compose(config, options = {}) {
     structure,
     harmony,
   );
+  const melodicDialogue = shapeMelodicDialogue(
+    raw.melody,
+    raw.counterpoint,
+    harmony,
+    config,
+    structure,
+  );
+  raw.melody = melodicDialogue.melody;
+  raw.counterpoint = melodicDialogue.counterpoint;
   raw.pad = generatePad(
     config,
     structure,
@@ -7547,6 +7657,7 @@ function compose(config, options = {}) {
     perceptualMix: perceptualMix.report,
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
+    melodicDialogue: melodicDialogue.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     vocalSpace: creativePolish.vocalSpace,
@@ -8198,18 +8309,34 @@ function fingerprintSequenceSimilarity(left = [], right = []) {
 
 export function createSongFingerprint(song) {
   const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const tracks = new Map((song?.tracks ?? []).map((track) => [track.id, track.notes ?? []]));
   const drums = song?.tracks?.find((track) => track.id === "drums")?.notes ?? [];
   const kicks = drums
     .filter((note) => note.pitch === 35 || note.pitch === 36)
     .map((note) => `${Math.floor(note.start / barBeats)}:${round(mod(note.start, barBeats))}`);
   const motif = song?.motifs?.family?.A?.melody ?? song?.motifs?.melody;
+  const notePattern = (id) => (tracks.get(id) ?? []).map((note) => (
+    `${Math.floor(note.start / barBeats)}:${round(mod(note.start, barBeats))}:${note.pitch}:${round(note.duration)}`
+  ));
+  const orchestration = (song?.structure ?? []).map((section) => {
+    const active = [...tracks.entries()]
+      .filter(([, notes]) => notes.some((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6))
+      .map(([id]) => id)
+      .sort();
+    return `${section.name}:${active.join("+")}`;
+  });
   return {
-    version: 1,
+    version: 2,
     structure: (song?.structure ?? []).map((section) => `${section.name}:${section.bars}`),
     harmony: (song?.harmony ?? []).map((event) => `${mod(event.degree, 7)}:${round(event.duration)}`),
+    harmonyColor: (song?.harmony ?? []).map((event) => `${event.harmonicColor ?? "stable"}:${event.extension ?? "triad"}`),
     motifContour: (motif?.events ?? []).map((event) => Math.round(finite(event.degree, 0))),
     motifRhythm: (motif?.events ?? []).map((event) => `${round(event.offset)}:${round(event.duration)}`),
     groove: kicks,
+    bass: notePattern("bass"),
+    melody: notePattern("melody"),
+    counterpoint: notePattern("counterpoint"),
+    orchestration,
   };
 }
 
@@ -8220,14 +8347,24 @@ function fingerprintSimilarity(left, right) {
     motifContour: fingerprintSequenceSimilarity(left.motifContour, right.motifContour),
     motifRhythm: fingerprintSequenceSimilarity(left.motifRhythm, right.motifRhythm),
     groove: fingerprintSequenceSimilarity(left.groove, right.groove),
+    harmonyColor: fingerprintSequenceSimilarity(left.harmonyColor, right.harmonyColor),
+    bass: fingerprintSequenceSimilarity(left.bass, right.bass),
+    melody: fingerprintSequenceSimilarity(left.melody, right.melody),
+    counterpoint: fingerprintSequenceSimilarity(left.counterpoint, right.counterpoint),
+    orchestration: fingerprintSequenceSimilarity(left.orchestration, right.orchestration),
   };
   return {
     similarity: clamp(
-      components.structure * 0.16
-      + components.harmony * 0.24
-      + components.motifContour * 0.24
-      + components.motifRhythm * 0.16
-      + components.groove * 0.2,
+      components.structure * 0.1
+      + components.harmony * 0.13
+      + components.harmonyColor * 0.07
+      + components.motifContour * 0.12
+      + components.motifRhythm * 0.08
+      + components.groove * 0.12
+      + components.bass * 0.1
+      + components.melody * 0.12
+      + components.counterpoint * 0.09
+      + components.orchestration * 0.07,
       0,
       1,
     ),
@@ -8244,7 +8381,7 @@ function normalizeRecentSongs(value) {
     const identity = String(song.id ?? `${song.seed}:${song.title}`);
     if (seen.has(identity)) continue;
     seen.add(identity);
-    if (!song.meta.ideaFingerprint) {
+    if (finite(song.meta.ideaFingerprint?.version, 0) < 2) {
       song.meta.ideaFingerprint = createSongFingerprint(song);
     }
     result.push(song);
@@ -8263,6 +8400,8 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
       score: 75,
       novelty: 1,
       maxSimilarity: 0,
+      immediateSimilarity: 0,
+      backToBackRepeat: false,
       targetSimilarity: generation === "similar" ? clamp(finite(song?.settings?.similarity, 0.82), 0.55, 0.95) : 0.25,
       closestSongId: null,
       components: null,
@@ -8273,6 +8412,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
     ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
   })).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
+  const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
   const targetSimilarity = generation === "similar"
     ? clamp(finite(song?.settings?.similarity, 0.82), 0.55, 0.95)
     : 0.25;
@@ -8285,6 +8425,8 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
     score: clamp(Math.round(score), 0, 100),
     novelty: round(1 - closest.similarity),
     maxSimilarity: round(closest.similarity),
+    immediateSimilarity: round(immediate?.similarity ?? 0),
+    backToBackRepeat: generation === "new" && finite(immediate?.similarity, 0) >= 0.9,
     targetSimilarity: round(targetSimilarity),
     closestSongId: closest.songId,
     components: Object.fromEntries(
@@ -8815,6 +8957,8 @@ function commitCandidate(candidates, search = {}) {
         passedBalanceGate: candidateBalance.passed,
         noveltyScore: novelty?.score ?? 75,
         maxSimilarity: novelty?.maxSimilarity ?? 0,
+        immediateSimilarity: novelty?.immediateSimilarity ?? 0,
+        backToBackRepeat: Boolean(novelty?.backToBackRepeat),
         compositionRoute: song.compositionRoute?.id ?? null,
         passedPhase9: qualityGateForEvaluation(evaluation).passed,
         repairGroup: song.criticRepair?.group ?? null,
@@ -8871,8 +9015,9 @@ function commitCandidate(candidates, search = {}) {
 
 function candidateSelectionScore(evaluation, novelty, generation) {
   const balance = evaluateCandidateBalance(evaluation);
+  const replayPenalty = generation === "new" && novelty?.backToBackRepeat ? 200 : 0;
   if (!novelty?.compared) {
-    return round(evaluation.score * 0.8 + balance.balanceScore * 0.12 + balance.creativeFloor * 0.08);
+    return round(evaluation.score * 0.8 + balance.balanceScore * 0.12 + balance.creativeFloor * 0.08 - replayPenalty);
   }
   const weights = generation === "similar"
     ? { quality: 0.68, balance: 0.12, floor: 0.08, novelty: 0.12 }
@@ -8881,7 +9026,8 @@ function candidateSelectionScore(evaluation, novelty, generation) {
     evaluation.score * weights.quality
     + balance.balanceScore * weights.balance
     + balance.creativeFloor * weights.floor
-    + novelty.score * weights.novelty,
+    + novelty.score * weights.novelty
+    - replayPenalty,
   );
 }
 
@@ -8977,8 +9123,7 @@ export function generateNew(input = {}) {
   const search = candidateSearchPlan(input);
   const recentSongs = normalizeRecentSongs(input.recentSongs);
   const candidates = [];
-
-  for (let index = 0; index < search.maxCandidateCount; index += 1) {
+  const composeCandidate = (index) => {
     const seed = candidateSeed(baseSeed, "new", index);
     const config = normalizeConfig({ ...input, seed });
     const routeId = candidateCompositionRoute(baseSeed, index, input.compositionRoute);
@@ -8997,10 +9142,25 @@ export function generateNew(input = {}) {
       novelty,
       selectionScore: candidateSelectionScore(evaluation, novelty, "new"),
     });
+  };
+
+  for (let index = 0; index < search.maxCandidateCount; index += 1) {
+    composeCandidate(index);
     if (
       candidates.length >= search.baseCandidateCount
       && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "new")))
     ) break;
+  }
+
+  // A fresh request must never settle for the immediately previous musical
+  // identity. Search a few more deterministic routes even when the normal
+  // candidate budget was explicitly small, but remain inside the global cap.
+  while (
+    recentSongs.length
+    && candidates.length < MAX_CANDIDATE_COUNT
+    && candidates.every((candidate) => candidate.novelty?.backToBackRepeat)
+  ) {
+    composeCandidate(candidates.length);
   }
 
   runTargetedCriticRepair(candidates, {

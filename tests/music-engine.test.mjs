@@ -2705,6 +2705,44 @@ test("comparative novelty critic avoids replaying a recent winning fingerprint",
   assertAllGeneratedPitchesInScale(compared);
 });
 
+test("New idea hard-rejects an immediate replay even with a one-candidate request", () => {
+  const input = { ...CONFIG, seed: "strict-back-to-back-novelty", bars: 16, candidateCount: 1 };
+  const first = engine.generateNew(input);
+  const next = engine.generateNew({ ...input, recentSongs: [first] });
+  assert.deepEqual(next, engine.generateNew({ ...input, recentSongs: [first] }));
+  assert.notDeepEqual(next.meta.ideaFingerprint, first.meta.ideaFingerprint);
+  assert.ok(next.meta.novelty.immediateSimilarity < 0.9);
+  assert.equal(next.meta.novelty.backToBackRepeat, false);
+  assert.ok(next.meta.scoreDetails.candidatesEvaluated >= 2);
+  assert.ok(next.meta.scoreDetails.candidateScores.some((candidate) => candidate.backToBackRepeat));
+  assertValidNotes(next);
+  assertAllGeneratedPitchesInScale(next);
+});
+
+test("melody and counter melody form a colored section-aware dialogue", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    seed: "colored-melodic-dialogue",
+    bars: 20,
+    complexity: 0.86,
+    candidateCount: 1,
+    tracks: {
+      melody: { density: 0.9, variation: 0.82 },
+      counterpoint: { density: 0.9, variation: 0.82 },
+    },
+  });
+  const melody = song.tracks.find((track) => track.id === "melody").notes;
+  const counterpoint = song.tracks.find((track) => track.id === "counterpoint").notes;
+  assert.ok(melody.some((note) => note.melodyRole === "call"));
+  assert.ok(counterpoint.some((note) => note.counterMelodyRole === "answer"));
+  assert.ok(counterpoint.every((note) => !note.melodicRelationship || ["contrary", "oblique"].includes(note.melodicRelationship)));
+  assert.ok(song.melodicDialogue.answers > 0);
+  assert.ok(song.songBlueprint.sectionPlans.every((plan) => Number.isInteger(plan.patternVariant)));
+  assert.ok(song.harmony.some((event) => event.extension), "the harmonic story should contain audible color tones");
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
 test("hook motifs enforce earworm catchiness, step-resolution, and distinctiveness across seeds", () => {
   const seeds = ["hit-catchy-seed-1", "hit-catchy-seed-2", "hit-catchy-seed-3", "hit-catchy-seed-4"];
   for (const seed of seeds) {
