@@ -967,6 +967,60 @@ test("sound-ready MIDI matches the audible mix and carries complete instrument s
   assert.ok(allNoteOns.every((events) => events.length > 0), "includeMuted remains an explicit archival override");
 });
 
+test("DAW-ready export embeds navigation, resolves channels, supports stems, and ends safely", () => {
+  const song = engine.generateNew({ ...CONFIG, seed: "daw-ready-export", bars: 8 });
+  const report = engine.createMidiExportReport(song);
+  assert.ok(Object.values(report.checks).every(Boolean), JSON.stringify(report));
+  assert.equal(report.trackCount, 6);
+  assert.equal(report.sectionMarkers, song.structure.length);
+  assert.equal(report.chordCues, song.harmony.length);
+  assert.ok(report.noteCount > 0);
+
+  const midi = engine.encodeMidi(song);
+  const decoded = new TextDecoder().decode(midi);
+  const firstSection = song.structure[0];
+  assert.ok(decoded.includes("Created with MIDI Arcade"), "export should carry authorship metadata");
+  assert.ok(
+    decoded.includes(`01 ${firstSection.name.toUpperCase()} · bars 1-${firstSection.bars}`),
+    "section markers should include ordinal and bar range",
+  );
+  assert.ok(decoded.includes(song.harmony[0].symbol), "chord cues should be embedded in the conductor track");
+
+  const endTick = song.meta.totalBeats * song.meta.ppq;
+  for (const [index, events] of midiTrackChunks(midi).slice(1).map(midiChannelEvents).entries()) {
+    const channel = report.tracks[index].channel - 1;
+    const hasController = (controller, value = null, tick = null) => events.some((event) => (
+      event.status === (0xb0 | channel)
+      && event.data[0] === controller
+      && (value == null || event.data[1] === value)
+      && (tick == null || event.tick === tick)
+    ));
+    assert.ok(hasController(101, 0), `${report.tracks[index].id} should select pitch-bend RPN MSB`);
+    assert.ok(hasController(100, 0), `${report.tracks[index].id} should select pitch-bend RPN LSB`);
+    assert.ok(hasController(6, 2), `${report.tracks[index].id} should declare a ±2 semitone bend range`);
+    assert.ok(hasController(64, 0, endTick), `${report.tracks[index].id} should release sustain at end`);
+    assert.ok(hasController(123, 0, endTick), `${report.tracks[index].id} should send all-notes-off at end`);
+    assert.ok(events.some((event) => (
+      event.tick === endTick && event.status === (0xe0 | channel) && event.data[0] === 0 && event.data[1] === 64
+    )), `${report.tracks[index].id} should center pitch bend at end`);
+  }
+
+  const stemReport = engine.createMidiExportReport(song, { trackIds: ["melody"] });
+  const stem = engine.encodeMidi(song, { trackIds: ["melody"] });
+  const stemView = new DataView(stem.buffer, stem.byteOffset, stem.byteLength);
+  assert.equal(stemReport.trackCount, 1);
+  assert.equal(stemView.getUint16(10), 2, "a stem should contain one conductor and one musical track");
+  assert.throws(() => engine.encodeMidi(song, { trackIds: ["missing-track"] }), /did not match/);
+
+  const collided = structuredClone(song);
+  collided.tracks.find((track) => track.id === "melody").channel = 9;
+  collided.tracks.find((track) => track.id === "counterpoint").channel = collided.tracks.find((track) => track.id === "bass").channel;
+  const collidedReport = engine.createMidiExportReport(collided);
+  assert.equal(new Set(collidedReport.tracks.map((track) => track.channel)).size, collidedReport.trackCount);
+  assert.equal(collidedReport.tracks.find((track) => track.id === "drums").channel, 10);
+  assert.ok(collidedReport.warnings.some((warning) => /reassigned/i.test(warning)));
+});
+
 test("exported note velocity and gate use the same performance scaling as preview", () => {
   const settings = {
     volume: 0.73,

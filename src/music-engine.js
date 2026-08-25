@@ -8559,9 +8559,15 @@ function candidateSearchPlan(input = {}) {
 
 function candidateMeetsAdaptiveTarget(candidate, generation) {
   const balance = evaluateCandidateBalance(candidate?.evaluation);
+  const releaseReady = candidateReleaseGate(candidate).passed;
   const noveltyReady = !candidate?.novelty?.compared
     || finite(candidate.novelty.score, 0) >= (generation === "similar" ? 55 : 65);
-  return balance.aspirational && noveltyReady;
+  return balance.aspirational && noveltyReady && releaseReady;
+}
+
+function candidateReleaseGate(candidate) {
+  if (!candidate?.releaseGate) candidate.releaseGate = evaluateSongReleaseGate(candidate?.song, candidate?.evaluation);
+  return candidate.releaseGate;
 }
 
 /**
@@ -8887,9 +8893,54 @@ function qualityGateForEvaluation(evaluation) {
   };
 }
 
+export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate(song)) {
+  const subscores = evaluation?.subscores ?? {};
+  const minimums = {
+    total: 78,
+    harmonic: 68,
+    groove: 62,
+    motif: 55,
+    voiceLeading: 68,
+    separation: 72,
+    phraseResolution: 58,
+    production: 68,
+    stageInterlock: 68,
+    genreAuthenticity: 58,
+  };
+  const failures = [];
+  if (finite(evaluation?.score, 0) < minimums.total) failures.push(`total:${round(finite(evaluation?.score, 0))}<${minimums.total}`);
+  for (const [dimension, floor] of Object.entries(minimums)) {
+    if (dimension === "total") continue;
+    const value = finite(subscores[dimension], 0);
+    if (value < floor) failures.push(`${dimension}:${round(value)}<${floor}`);
+  }
+  const finalChecks = {
+    ...(song?.finalMaster?.checks ?? {}),
+    ...(song?.finalAssembly?.checks ?? {}),
+  };
+  if (!Object.keys(finalChecks).length || !Object.values(finalChecks).every(Boolean)) failures.push("final-contract");
+  let exportReport = null;
+  try {
+    exportReport = createMidiExportReport(song);
+    if (!Object.values(exportReport.checks).every(Boolean)) failures.push("midi-export");
+  } catch {
+    failures.push("midi-export");
+  }
+  return {
+    version: 1,
+    passed: failures.length === 0,
+    minimums,
+    failures,
+    totalScore: finite(evaluation?.score, 0),
+    exportChecks: exportReport?.checks ?? null,
+  };
+}
+
 function rankCandidates(candidates) {
   return [...candidates].sort(
     (left, right) =>
+      Number(candidateReleaseGate(right).passed) - Number(candidateReleaseGate(left).passed)
+      ||
       Number(qualityGateForEvaluation(right.evaluation).passed) - Number(qualityGateForEvaluation(left.evaluation).passed)
       || Number(evaluateCandidateBalance(right.evaluation).passed) - Number(evaluateCandidateBalance(left.evaluation).passed)
       || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
@@ -8904,6 +8955,7 @@ function commitCandidate(candidates, search = {}) {
   const selected = ranked[0];
   if (!selected) throw new Error("Generation produced no candidates.");
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
+  const releaseGate = candidateReleaseGate(selected);
   const balance = evaluateCandidateBalance(selected.evaluation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
@@ -8929,6 +8981,7 @@ function commitCandidate(candidates, search = {}) {
     selectionScore: selected.selectionScore,
     subscores: selected.evaluation.subscores,
     diagnostics: selected.evaluation.diagnostics ?? {},
+    releaseGate,
     novelty: selected.novelty,
     candidatesEvaluated: candidates.length,
     selectedCandidate: selected.index,
@@ -8946,7 +8999,8 @@ function commitCandidate(candidates, search = {}) {
       selectedFromRepair,
       selectedGroup: selected.repair?.group ?? null,
     },
-    candidateScores: candidates.map(({ index, evaluation, novelty, selectionScore, song }) => {
+    candidateScores: candidates.map((candidate) => {
+      const { index, evaluation, novelty, selectionScore, song } = candidate;
       const candidateBalance = evaluateCandidateBalance(evaluation);
       return {
         index,
@@ -8961,6 +9015,7 @@ function commitCandidate(candidates, search = {}) {
         backToBackRepeat: Boolean(novelty?.backToBackRepeat),
         compositionRoute: song.compositionRoute?.id ?? null,
         passedPhase9: qualityGateForEvaluation(evaluation).passed,
+        passedReleaseGate: candidateReleaseGate(candidate).passed,
         repairGroup: song.criticRepair?.group ?? null,
         repairSourceCandidate: song.criticRepair?.sourceCandidate ?? null,
       };
@@ -9434,19 +9489,30 @@ function conductorTrack(song, ppq) {
   const totalTicks = Math.round(song.meta.totalBeats * ppq);
   events.push({ tick: 0, order: 0, data: textMeta(0x03, "Conductor") });
   events.push({ tick: 0, order: 1, data: systemExclusive([0x7e, 0x7f, 0x09, 0x03, 0xf7]) });
-  events.push({ tick: 0, order: 2, data: textMeta(0x01, "MIDI Arcade · General MIDI 2 sound-ready export") });
+  events.push({ tick: 0, order: 2, data: textMeta(0x01, `MIDI Arcade · General MIDI 2 sound-ready export · ${song.title ?? "Untitled"} · ${song.genre ?? song.meta.genre ?? "song"}`) });
+  events.push({ tick: 0, order: 2, data: textMeta(0x02, "Created with MIDI Arcade") });
   const microseconds = clamp(Math.round(60000000 / clamp(finite(song.meta.tempo, 120), 30, 300)), 1, 0xffffff);
   events.push({ tick: 0, order: 3, data: meta(0x51, [(microseconds >> 16) & 0xff, (microseconds >> 8) & 0xff, microseconds & 0xff]) });
   const [numerator, denominator] = normalizeTimeSignature(song.meta.timeSignature);
   const denominatorPower = Math.round(Math.log2(denominator));
   const metronome = denominator === 8 && numerator % 3 === 0 ? 36 : 24;
+  const beatsPerBar = Math.max(0.01, finite(song.meta.beatsPerBar, numerator));
   events.push({ tick: 0, order: 4, data: meta(0x58, [numerator, denominatorPower, metronome, 8]) });
   events.push({ tick: 0, order: 5, data: meta(0x59, keySignature(song)) });
-  for (const section of song.structure ?? []) {
+  for (const [index, section] of (song.structure ?? []).entries()) {
+    const startBar = Math.max(0, Math.round(finite(section.startBar, finite(section.startBeat, 0) / beatsPerBar))) + 1;
+    const endBar = startBar + Math.max(1, Math.round(finite(section.bars, 1))) - 1;
     events.push({
       tick: Math.round(finite(section.startBeat, 0) * ppq),
       order: 5,
-      data: textMeta(0x06, String(section.name ?? "Section")),
+      data: textMeta(0x06, `${String(index + 1).padStart(2, "0")} ${String(section.name ?? "Section").toUpperCase()} · bars ${startBar}-${endBar}`),
+    });
+  }
+  for (const chord of song.harmony ?? []) {
+    events.push({
+      tick: clamp(Math.round(finite(chord.start, 0) * ppq), 0, totalTicks),
+      order: 6,
+      data: textMeta(0x07, String(chord.symbol ?? chord.roman ?? chord.root ?? "Chord")),
     });
   }
   return encodeTrack(events, totalTicks);
@@ -9457,8 +9523,8 @@ function cutoffControllerValue(value) {
   return clamp(Math.round((cutoff - 1000) / 13000 * 127), 0, 127);
 }
 
-function musicalTrack(track, song, ppq, audible, trackIndex = 0) {
-  const channel = track.id === "drums" ? 9 : clamp(Math.round(finite(track.channel, 0)), 0, 15);
+function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel = null) {
+  const channel = track.id === "drums" ? 9 : clamp(Math.round(finite(exportChannel, track.channel ?? 0)), 0, 15);
   const defaults = TRACK_DEFINITIONS[track.id] ?? {};
   const settings = track.settings ?? {};
   const trackLabel = `${String(trackIndex + 1).padStart(2, "0")} ${track.name ?? track.id}`;
@@ -9489,6 +9555,15 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0) {
   events.push({ tick: 0, order: 8, data: [0xb0 | channel, 91, clamp(Math.round(unit(settings.reverb, 0.2) * 127), 0, 127)] });
   events.push({ tick: 0, order: 9, data: [0xb0 | channel, 74, cutoffControllerValue(settings.cutoff)] });
   events.push({ tick: 0, order: 10, data: [0xb0 | channel, 71, clamp(Math.round(unit(settings.resonance, 0.2) * 127), 0, 127)] });
+  // Declare a conventional ±2-semitone bend range so pitch automation opens
+  // consistently in DAWs and hardware instead of inheriting a device default.
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 101, 0] });
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 100, 0] });
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 6, 2] });
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 38, 0] });
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 101, 127] });
+  events.push({ tick: 0, order: 10, data: [0xb0 | channel, 100, 127] });
+  events.push({ tick: 0, order: 10, data: [0xe0 | channel, 0, 64] });
   const automation = Array.isArray(track.automation)
     ? track.automation.filter((event) => (
       event
@@ -9531,38 +9606,130 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0) {
       clamp(finite(settings.gate, defaults.gate ?? 1), 0.08, 1.5)
       / Math.max(0.08, finite(defaults.gate, settings.gate ?? 1)),
     ), 0.65, 1.4);
+    const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
       const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
       const velocity = clamp(Math.round(finite(note.velocity, 90) * velocityScale), 1, 127);
-      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.round(song.meta.totalBeats * ppq));
+      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
       const offTick = clamp(
         Math.max(onTick + 1, Math.round((finite(note.start, 0) + finite(note.duration, 0.25) * gateScale) * ppq)),
         1,
-        Math.round(song.meta.totalBeats * ppq),
+        totalTicks,
       );
       events.push({ tick: onTick, order: 20, data: [0x90 | channel, pitch, velocity] });
       events.push({ tick: offTick, order: 10, data: [0x80 | channel, pitch, 0] });
     }
   }
-  return encodeTrack(events, Math.round(song.meta.totalBeats * ppq));
+  const endTick = Math.round(song.meta.totalBeats * ppq);
+  events.push({ tick: endTick, order: 80, data: [0xb0 | channel, 64, 0] });
+  events.push({ tick: endTick, order: 81, data: [0xe0 | channel, 0, 64] });
+  events.push({ tick: endTick, order: 82, data: [0xb0 | channel, 123, 0] });
+  return encodeTrack(events, endTick);
 }
 
 /**
  * Encode a song as a Standard MIDI File type 1 Uint8Array. The first track is a
  * conductor track; every instrument receives its own named MIDI track.
  */
-export function encodeMidi(song, options = {}) {
-  if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("encodeMidi requires a song JSON object");
-  const ppq = clamp(Math.round(finite(options.ppq, song.meta.ppq ?? PPQ)), 24, 32767);
-  const soloed = song.tracks.filter((track) => track.settings?.solo);
+function selectedExportTracks(song, options = {}) {
+  if (!Array.isArray(options.trackIds)) return song.tracks;
+  const requested = new Set(options.trackIds.map(String));
+  const selected = song.tracks.filter((track) => requested.has(String(track.id)));
+  if (!selected.length) throw new RangeError("encodeMidi trackIds did not match any song tracks");
+  return selected;
+}
+
+function resolveExportChannels(tracks) {
+  const used = new Set();
+  const channels = new Map();
+  for (const track of tracks) {
+    if (track.id === "drums") {
+      channels.set(track, 9);
+      used.add(9);
+      continue;
+    }
+    const preferred = clamp(Math.round(finite(track.channel, 0)), 0, 15);
+    const channel = preferred !== 9 && !used.has(preferred)
+      ? preferred
+      : Array.from({ length: 16 }, (_, index) => index).find((candidate) => candidate !== 9 && !used.has(candidate));
+    if (!Number.isFinite(channel)) throw new RangeError("MIDI export has more melodic tracks than available channels");
+    channels.set(track, channel);
+    used.add(channel);
+  }
+  return channels;
+}
+
+export function createMidiExportReport(song, options = {}) {
+  if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("createMidiExportReport requires a song JSON object");
+  const tracks = selectedExportTracks(song, options);
+  const channels = resolveExportChannels(tracks);
+  const soloed = tracks.filter((track) => track.settings?.solo);
   const includeMuted = Boolean(options.includeMuted);
   const alwaysIncluded = new Set(Array.isArray(options.alwaysIncludeTrackIds) ? options.alwaysIncludeTrackIds.map(String) : []);
-  const chunks = [conductorTrack(song, ppq)];
-  for (const [trackIndex, track] of song.tracks.entries()) {
+  const trackReports = tracks.map((track) => {
     const audible = includeMuted
       || alwaysIncluded.has(String(track.id))
       || (!track.settings?.mute && (!soloed.length || track.settings?.solo));
-    chunks.push(musicalTrack(track, song, ppq, audible, trackIndex));
+    return {
+      id: String(track.id),
+      name: String(track.name ?? track.id),
+      channel: channels.get(track) + 1,
+      program: clamp(Math.round(finite(track.program, 0)), 0, 127),
+      audible,
+      notes: audible ? (track.notes ?? []).length : 0,
+      automationEvents: Array.isArray(track.automation) ? track.automation.length : 0,
+      channelReassigned: track.id !== "drums" && channels.get(track) !== clamp(Math.round(finite(track.channel, 0)), 0, 15),
+    };
+  });
+  const warnings = [];
+  if (trackReports.some((track) => !track.audible)) warnings.push("Muted or non-soloed tracks are retained as named empty shells");
+  if (trackReports.some((track) => track.channelReassigned)) warnings.push("Conflicting MIDI channels were reassigned safely");
+  return {
+    version: 1,
+    format: 1,
+    ppq: clamp(Math.round(finite(options.ppq, song.meta.ppq ?? PPQ)), 24, 32767),
+    tracks: trackReports,
+    trackCount: trackReports.length,
+    noteCount: trackReports.reduce((sum, track) => sum + track.notes, 0),
+    sectionMarkers: (song.structure ?? []).length,
+    chordCues: (song.harmony ?? []).length,
+    tempo: clamp(finite(song.meta.tempo, 120), 30, 300),
+    timeSignature: normalizeTimeSignature(song.meta.timeSignature),
+    keySignature: keySignature(song),
+    warnings,
+    checks: {
+      type1: true,
+      conductorTrack: true,
+      uniqueChannels: new Set(trackReports.map((track) => track.channel)).size === trackReports.length,
+      drumChannel10: trackReports.every((track) => track.id !== "drums" || track.channel === 10),
+      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => (
+        Number.isFinite(note.pitch)
+        && Number.isFinite(note.start)
+        && Number.isFinite(note.duration)
+        && note.pitch >= 0 && note.pitch <= 127
+        && note.start >= 0 && note.duration > 0
+        && note.start + note.duration <= song.meta.totalBeats + 1e-6
+      ))),
+    },
+  };
+}
+
+export function encodeMidi(song, options = {}) {
+  if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("encodeMidi requires a song JSON object");
+  const ppq = clamp(Math.round(finite(options.ppq, song.meta.ppq ?? PPQ)), 24, 32767);
+  const tracks = selectedExportTracks(song, options);
+  const channels = resolveExportChannels(tracks);
+  const report = createMidiExportReport(song, options);
+  if (!Object.values(report.checks).every(Boolean)) throw new RangeError("MIDI export preflight rejected invalid song or channel data");
+  const soloed = tracks.filter((track) => track.settings?.solo);
+  const includeMuted = Boolean(options.includeMuted);
+  const alwaysIncluded = new Set(Array.isArray(options.alwaysIncludeTrackIds) ? options.alwaysIncludeTrackIds.map(String) : []);
+  const chunks = [conductorTrack(song, ppq)];
+  for (const [trackIndex, track] of tracks.entries()) {
+    const audible = includeMuted
+      || alwaysIncluded.has(String(track.id))
+      || (!track.settings?.mute && (!soloed.length || track.settings?.solo));
+    chunks.push(musicalTrack(track, song, ppq, audible, trackIndex, channels.get(track)));
   }
   const header = [
     ...ascii("MThd"),

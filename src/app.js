@@ -1,4 +1,5 @@
 import {
+  createMidiExportReport,
   defaultChordPathForGenre,
   encodeMidi,
   generateNew,
@@ -3772,6 +3773,7 @@ async function exportSong() {
   let isNative = false;
   try {
     const clone = buildExportSongSnapshot();
+    const exportReport = createMidiExportReport(clone, { alwaysIncludeTrackIds: ["live-take"] });
     const bytes = encodeMidi(clone, { alwaysIncludeTrackIds: ["live-take"] });
     const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
     const keyStr = songKey().toLowerCase();
@@ -3801,8 +3803,8 @@ async function exportSong() {
       renderCreativeThread();
     }, 1800);
     showToast(isNative
-      ? `Sound-ready MIDI prepared with ${clone.tracks?.length || 0} named tracks and instrument setup.`
-      : `Exported sound-ready MIDI with ${clone.tracks?.length || 0} named tracks and matching performance data.`);
+      ? `Sound-ready MIDI prepared: ${exportReport.trackCount} tracks, ${exportReport.noteCount} notes, ${exportReport.sectionMarkers} section markers, with DAW-ready setup.`
+      : `Exported DAW-ready MIDI: ${exportReport.trackCount} tracks, ${exportReport.noteCount} notes, ${exportReport.chordCues} chord cues.`);
   } catch (error) {
     console.error(error);
     if (isNative) {

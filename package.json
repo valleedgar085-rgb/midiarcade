@@ -7,6 +7,7 @@
     "build": "node scripts/build.js",
     "dev": "python -m http.server 4173",
     "test": "node --test",
+    "test:gauntlet": "node --test tests/song-quality-gauntlet.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage",
     "benchmark:generation": "node scripts/benchmark-generation.mjs",
     "quality": "npm test && npm run build && node scripts/check-build-quality.js",
