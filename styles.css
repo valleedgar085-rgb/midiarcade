@@ -759,7 +759,13 @@ input[type=range].is-auto{
 
 /* GENERATION BUTTONS */
 .generation-actions-bar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.song-variation-tray[hidden]{display:none}
+.song-variation-options{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.song-variation-options button{min-width:0;padding:8px;text-align:left}
+.song-variation-options button.is-active{outline:1px solid var(--accent)}
+.song-variation-options b,.song-variation-options small{display:block}
 @media(max-width:600px){.generation-actions-bar{grid-template-columns:1fr}}
+@media(max-width:600px){.song-variation-options{display:flex;overflow-x:auto}.song-variation-options button{flex:0 0 132px}}
 .guide-privacy-link{margin:18px 0 0;text-align:center}
 .guide-privacy-link a{color:var(--text-2);font-size:.78rem;text-underline-offset:3px}
 .guide-privacy-link a:hover{color:var(--accent)}

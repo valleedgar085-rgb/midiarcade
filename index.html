@@ -473,10 +473,21 @@
               </button>
               <button class="generation-button generation-similar" id="generateSimilar" type="button">
                 <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M10 5v18.5a5 5 0 1 1-3-4.6V9l19-4v14.5a5 5 0 1 1-3-4.6V5"/></svg></span>
-                <span class="action-copy"><small>KEEP THE CURRENT DNA</small><strong>More like this</strong><em>Applies staged direction while preserving its identity</em></span>
+                <span class="action-copy"><small>KEEP THE CURRENT DNA</small><strong>Create 3 variations</strong><em>Producer compares six complete arrangements</em></span>
                 <kbd>S</kbd>
               </button>
             </div>
+            <section class="song-variation-tray" id="songVariationTray" aria-labelledby="songVariationTitle" hidden>
+              <div class="song-variation-heading">
+                <span><small>PRODUCER A/B/C</small><strong id="songVariationTitle">Three directions, one song</strong></span>
+                <em>Tap any version to switch instantly</em>
+              </div>
+              <div class="song-variation-options" role="radiogroup" aria-label="Full-song variations">
+                <button type="button" data-song-variation="0" role="radio"><b>A · Pocket</b><small>Rhythm-led</small></button>
+                <button type="button" data-song-variation="1" role="radio"><b>B · Hook</b><small>Lead-led</small></button>
+                <button type="button" data-song-variation="2" role="radio"><b>C · Journey</b><small>Arc-led</small></button>
+              </div>
+            </section>
           </section>
           </div>
         </div>

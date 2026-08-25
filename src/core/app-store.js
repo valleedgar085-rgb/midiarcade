@@ -33,6 +33,8 @@ export function createInitialAppState() {
     editorZoom: 64,
     editorSelection: new Set(),
     sectionVariations: null,
+    songVariations: [],
+    activeSongVariation: -1,
     sectionMacroValues: {},
     coverVariation: 0,
     tasteProfile: {

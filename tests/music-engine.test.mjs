@@ -741,6 +741,55 @@ test("fresh and chained generation advance to distinct arrangements", () => {
   );
 });
 
+test("whole-song variation set auditions three distinct directions from one musical identity", () => {
+  const source = engine.generateNew({
+    ...CONFIG,
+    genre: "neoSoul",
+    seed: "three-song-directions",
+    bars: 16,
+    candidateCount: 1,
+  });
+  const input = {
+    seed: "three-song-directions-set",
+    count: 3,
+    candidatesPerVariation: 1,
+  };
+  const variations = engine.generateSongVariations(source, input);
+
+  assert.equal(variations.length, 3);
+  assert.deepEqual(variations, engine.generateSongVariations(source, input));
+  assert.deepEqual(variations.map((song) => song.variationSet.direction.id), ["pocket", "hook", "journey"]);
+  assert.equal(new Set(variations.map((song) => song.id)).size, 3);
+  assert.equal(new Set(variations.map((song) => song.seed)).size, 3);
+  assert.equal(new Set(variations.map((song) => song.oneShotKit.id)).size, 3);
+  assert.equal(new Set(variations.map((song) => JSON.stringify(engine.createSongFingerprint(song)))).size, 3);
+  for (const song of variations) {
+    assert.equal(song.parentId, source.id);
+    assert.equal(song.title, source.title);
+    assert.equal(song.generation, "song-variation");
+    assert.equal(song.variationSet.sourceSongId, source.id);
+    assert.equal(song.variationSet.total, 3);
+    assert.equal(song.variationSet.candidatesAuditioned, 1);
+    assert.deepEqual(song.structure.map(({ name, bars }) => ({ name, bars })), source.structure.map(({ name, bars }) => ({ name, bars })));
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
+test("deep producer search evaluates a larger bounded candidate pool", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    seed: "deep-producer-search",
+    bars: 8,
+    thinkingDepth: "deep",
+  });
+  const search = song.meta.scoreDetails.candidateSearch;
+  assert.equal(search.thinkingDepth, "deep");
+  assert.equal(search.baseCandidateCount, 6);
+  assert.ok(search.candidatesEvaluated >= 6 && search.candidatesEvaluated <= 12);
+  assertValidNotes(song);
+});
+
 test("every generation chooses a different one-shot kit unless one is explicitly requested", () => {
   const first = engine.generateNew({ ...CONFIG, seed: "one-shot-first" });
   const next = engine.generateNew({

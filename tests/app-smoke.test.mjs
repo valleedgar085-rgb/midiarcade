@@ -217,7 +217,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /function commitArrangementCommand[\s\S]*?executeArrangementCommand[\s\S]*?pushHistory/, "Shape mutations must share one immutable command and history boundary");
   assert.match(appSource, /const ARRANGEMENT_ERROR_COPY[\s\S]*?invalid-automation-events[\s\S]*?function commitArrangementCommand/, "command validation failures must provide actionable musical diagnostics");
   assert.match(htmlSource, /id="undoButton"[\s\S]*?id="redoButton"/, "transactional history must expose adjacent Undo and Redo controls");
-  assert.match(appSource, /function restoreHistory[\s\S]*?state\.future\.push[\s\S]*?function redoHistory/, "Undo must capture a forward snapshot that Redo can reapply");
+  assert.match(appSource, /function restoreHistory[\s\S]*?appendWithinLimit\(state\.future, current\)[\s\S]*?function redoHistory/, "Undo must capture a bounded forward snapshot that Redo can reapply");
   assert.match(appSource, /function pushHistory[\s\S]*?state\.future = \[\]/, "a new edit after Undo must invalidate the abandoned Redo branch");
   assert.match(appSource, /function applySectionMacro[\s\S]*?commitArrangementCommand[\s\S]*?function simplifyFocusedSection/, "section macros must route through the shared arrangement command path");
   assert.match(htmlSource, /id="editorMusicalGuide"[\s\S]*?id="editorOverlayControl"/, "Phase 56 must expose harmony and relationship guidance");
@@ -325,7 +325,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
 
 test("every static button is either directly wired or owns a delegated action", async () => {
   const buttonTags = [...htmlSource.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
-  const delegated = /\bdata-(?:workspace|workflow-step|bus|attitude|section-action|editor-action)=/;
+  const delegated = /\bdata-(?:workspace|workflow-step|bus|attitude|section-action|editor-action|song-variation)=/;
   const orphaned = [];
   for (const tag of buttonTags) {
     const id = tag.match(/\bid="([^"]+)"/)?.[1];
@@ -524,6 +524,16 @@ test("browser app initializes against the engine contract", async () => {
   gracefulSource.onended();
   assert.equal(gracefulGain.disconnected, 1, "the completed release must disconnect its audio graph");
 
+  const contextlessPlayer = new app.PreviewPlayer();
+  contextlessPlayer.playing = true;
+  contextlessPlayer.events = [{ id: "melody", time: 1 }];
+  contextlessPlayer.playbackView = { retained: true };
+  contextlessPlayer.pause();
+  assert.equal(contextlessPlayer.playing, false, "a closed audio context must not leave playback logically active");
+  contextlessPlayer.stop();
+  assert.deepEqual(contextlessPlayer.events, [], "stopped playback must release its song-event cache");
+  assert.equal(contextlessPlayer.playbackView, null, "stopped playback must release its rendered lookup cache");
+
   const schedulerPlayer = new app.PreviewPlayer();
   schedulerPlayer.playing = true;
   schedulerPlayer.context = { state: "running", currentTime: 10 };
@@ -603,6 +613,8 @@ test("browser app initializes against the engine contract", async () => {
   await new Promise((resolve) => setTimeout(resolve, 560));
   const relatedGeneration = app.getAppStateSnapshot();
   assert.equal(relatedGeneration.generationCount, freshGeneration.generationCount + 1);
+  assert.equal(relatedGeneration.songVariationCount, 3, "Similar must prepare three complete full-song directions");
+  assert.equal(relatedGeneration.activeSongVariation, 0);
   assert.equal(relatedGeneration.song.revision, freshGeneration.song.revision + 1);
   assert.notEqual(relatedGeneration.song.oneShotKit.id, freshGeneration.song.oneShotKit.id, "Similar must load a different one-shot kit");
   assert.notEqual(relatedGeneration.song.seed, freshGeneration.song.seed, "Similar must advance the variation seed");

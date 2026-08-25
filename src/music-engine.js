@@ -1685,6 +1685,7 @@ function createProducerIntentContract(
   peakSectionId,
 ) {
   const matrixBySection = new Map(orchestrationMatrix.map((entry) => [entry.sectionId, entry]));
+  const returnAxes = ["rhythm", "density", "register", "dialogue"];
   const scenes = structure.map((section, index) => {
     const plan = sectionPlans[index];
     const matrix = matrixBySection.get(section.id);
@@ -1692,6 +1693,14 @@ function createProducerIntentContract(
     const answerTrack = answerTrackForForeground(foregroundTrack, section, config);
     const purpose = PRODUCER_PURPOSES[section.name]
       ?? (plan.role === "peak" ? "payoff" : plan.role === "release" ? "resolve" : "develop");
+    const returnIndex = finite(matrix?.featureOccurrence, 0);
+    const developmentAxis = returnIndex > 0
+      ? returnAxes[hashSeed(`${config.seed}|${section.name}|${returnIndex}|development-axis`) % returnAxes.length]
+      : purpose === "build" ? "tension"
+        : purpose === "payoff" ? "hook"
+          : purpose === "reset" ? "space"
+            : purpose === "resolve" ? "release"
+              : "statement";
     const silenceBudget = round(clamp(
       purpose === "reset" ? 0.34
         : purpose === "establish" ? 0.24
@@ -1727,6 +1736,8 @@ function createProducerIntentContract(
       sectionId: section.id,
       sectionName: section.name,
       purpose,
+      returnIndex,
+      developmentAxis,
       foregroundTrack,
       answerTrack: roles[answerTrack] === "answer" ? answerTrack : null,
       silenceBudget,
@@ -1751,6 +1762,7 @@ function createProducerIntentContract(
       grooveIdentity: ["house", "techno", "drumBass", "trap", "drill", "funk"].includes(config.genre)
         ? "rhythm-led"
         : "phrase-led",
+      structuralArc: scenes.map((scene) => `${scene.purpose}:${scene.developmentAxis}`),
     },
     rules: {
       maxForegroundVoices: 1,
@@ -4886,6 +4898,13 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         texture: 0.72,
         rest: 0.12,
       }[producerRole] ?? 0.88;
+      const developmentPresence = scene?.developmentAxis === "density" && ["support", "texture"].includes(producerRole)
+        ? 0.72
+        : scene?.developmentAxis === "dialogue" && producerRole === "answer"
+          ? 1.08
+          : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
+            ? 0.68
+            : 1;
       const roleVelocity = {
         foreground: 1.05,
         foundation: 0.98,
@@ -4923,7 +4942,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         ));
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
-        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence, 0.04, 1))) continue;
+        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
         kept.push({
           ...note,
           velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
@@ -5013,6 +5032,8 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     return {
       sectionId: scene.sectionId,
       purpose: scene.purpose,
+      returnIndex: scene.returnIndex,
+      developmentAxis: scene.developmentAxis,
       foregroundTrack: scene.foregroundTrack,
       foregroundNotes: foreground.length,
       answerTrack: scene.answerTrack,
@@ -5032,6 +5053,9 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
   const completeRoles = (producerIntent?.scenes ?? []).every((scene) => (
     TRACK_IDS.every((id) => typeof scene.roles?.[id] === "string")
   ));
+  const developedReturns = (producerIntent?.scenes ?? [])
+    .filter((scene) => finite(scene.returnIndex, 0) > 0)
+    .every((scene) => ["rhythm", "density", "register", "dialogue"].includes(scene.developmentAxis));
   return {
     tracks,
     report: {
@@ -5049,6 +5073,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       checks: {
         completeRoles,
         singleForeground,
+        developedReturns,
         foregroundAudible: foregroundCoverage >= 0.9,
         answersSeparated: answerCollisionRate <= 0.28,
         allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
@@ -8744,6 +8769,8 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
 const DEFAULT_CANDIDATE_COUNT = 4;
 const MAX_CANDIDATE_COUNT = 12;
 const DEFAULT_ADAPTIVE_CANDIDATES = 3;
+const DEEP_CANDIDATE_COUNT = 6;
+const DEEP_ADAPTIVE_CANDIDATES = 4;
 const DEFAULT_TARGETED_REPAIR_ATTEMPTS = 2;
 const BALANCE_DIMENSIONS = Object.freeze([
   "harmonic",
@@ -8841,10 +8868,16 @@ export function evaluateCandidateBalance(evaluation = {}) {
 }
 
 function candidateSearchPlan(input = {}) {
-  const baseCandidateCount = normalizeCandidateCount(input.candidateCount);
+  const thinkingDepth = input.thinkingDepth === "deep" ? "deep" : "standard";
+  const baseCandidateCount = normalizeCandidateCount(
+    input.candidateCount ?? (thinkingDepth === "deep" ? DEEP_CANDIDATE_COUNT : DEFAULT_CANDIDATE_COUNT),
+  );
   const adaptive = input.candidateCount == null && input.adaptiveCandidates !== false;
   const maxCandidateCount = adaptive
-    ? Math.min(MAX_CANDIDATE_COUNT, baseCandidateCount + DEFAULT_ADAPTIVE_CANDIDATES)
+    ? Math.min(
+      MAX_CANDIDATE_COUNT,
+      baseCandidateCount + (thinkingDepth === "deep" ? DEEP_ADAPTIVE_CANDIDATES : DEFAULT_ADAPTIVE_CANDIDATES),
+    )
     : baseCandidateCount;
   const targetedRepair = adaptive && input.targetedRepair !== false;
   const repairAttempts = targetedRepair
@@ -8855,6 +8888,7 @@ function candidateSearchPlan(input = {}) {
     )
     : 0;
   return {
+    thinkingDepth,
     adaptive,
     baseCandidateCount,
     maxCandidateCount,
@@ -9300,9 +9334,11 @@ function commitCandidate(candidates, search = {}) {
     selectedCandidate: selected.index,
     balance,
     candidateSearch: {
+      thinkingDepth: search.thinkingDepth ?? "standard",
       adaptive: Boolean(search.adaptive),
       baseCandidateCount: finite(search.baseCandidateCount, candidates.length),
       maxCandidateCount: finite(search.maxCandidateCount, candidates.length),
+      candidatesEvaluated: candidates.length,
       expandedBy: Math.max(0, composedCandidates - finite(search.baseCandidateCount, composedCandidates)),
       targetReached,
     },
@@ -9624,6 +9660,102 @@ export function generateSimilar(current, input = {}) {
     baseSeed,
   });
   return commitCandidate(candidates, search);
+}
+
+export const SONG_VARIATION_DIRECTIONS = deepFreeze([
+  {
+    id: "pocket",
+    label: "Pocket",
+    description: "A stronger drum-and-bass conversation with more rhythmic lift.",
+    route: "groove-first",
+    variationDelta: 0.08,
+    evolutionDelta: 0.03,
+    surpriseDelta: -0.04,
+    syncopationDelta: 0.1,
+  },
+  {
+    id: "hook",
+    label: "Hook",
+    description: "A clearer lead motif, stronger callbacks, and more breathing room.",
+    route: "hook-first",
+    variationDelta: 0.06,
+    evolutionDelta: 0.09,
+    surpriseDelta: 0.02,
+    syncopationDelta: 0,
+  },
+  {
+    id: "journey",
+    label: "Journey",
+    description: "A wider section arc with richer harmony and more dramatic returns.",
+    route: "harmony-first",
+    variationDelta: 0.1,
+    evolutionDelta: 0.14,
+    surpriseDelta: 0.05,
+    syncopationDelta: 0.02,
+  },
+]);
+
+/**
+ * Compose three recognizably related versions from one source song. Each
+ * direction auditions a small candidate pair in the worker, so the set hears
+ * six complete arrangements without blocking the interface or cloning one
+ * result three times.
+ */
+export function generateSongVariations(current, input = {}) {
+  if (!current || !Array.isArray(current.tracks) || !current.meta) {
+    throw new TypeError("generateSongVariations requires a generated song JSON object");
+  }
+  const count = clamp(Math.round(finite(input.count, 3)), 1, 3);
+  const candidatesPerVariation = clamp(Math.round(finite(input.candidatesPerVariation, 2)), 1, 4);
+  const sourceSeed = String(input.seed ?? current.seed ?? current.id ?? "song");
+  const setId = `variation-set-${hashSeed(`${sourceSeed}|${current.id ?? "song"}`).toString(36)}`;
+  const baseVariation = clamp(finite(input.variation, current.settings?.variation ?? 0.42), 0, 1);
+  const baseEvolution = clamp(finite(input.evolution, current.settings?.evolution ?? 0.58), 0, 1);
+  const baseSurprise = clamp(finite(input.surprise, current.settings?.surprise ?? 0.28), 0, 1);
+  const baseSyncopation = clamp(finite(input.syncopation, current.settings?.syncopation ?? 0.38), 0, 1);
+  const variations = [];
+
+  for (const [index, direction] of SONG_VARIATION_DIRECTIONS.slice(0, count).entries()) {
+    const variation = generateSimilar(current, {
+      ...input,
+      count: undefined,
+      candidatesPerVariation: undefined,
+      seed: `${sourceSeed}:whole-song:${direction.id}`,
+      candidateCount: candidatesPerVariation,
+      adaptiveCandidates: false,
+      targetedRepair: false,
+      compositionRoute: direction.route,
+      variation: clamp(baseVariation + direction.variationDelta, 0, 1),
+      evolution: clamp(baseEvolution + direction.evolutionDelta, 0, 1),
+      surprise: clamp(baseSurprise + direction.surpriseDelta, 0, 1),
+      syncopation: clamp(baseSyncopation + direction.syncopationDelta, 0, 1),
+      recentSongs: [current, ...variations, ...(input.recentSongs ?? [])],
+      excludeOneShotKitIds: [
+        current.oneShotKit?.id,
+        ...variations.map((song) => song.oneShotKit?.id),
+        ...(input.excludeOneShotKitIds ?? []),
+      ].filter(Boolean),
+    });
+    variation.title = current.title;
+    variation.parentId = current.id ?? null;
+    variation.generation = "song-variation";
+    variation.variationSet = {
+      version: 1,
+      id: setId,
+      index,
+      total: count,
+      sourceSongId: current.id ?? null,
+      sourceSeed: current.seed ?? null,
+      candidatesAuditioned: candidatesPerVariation,
+      direction: {
+        id: direction.id,
+        label: direction.label,
+        description: direction.description,
+      },
+    };
+    variations.push(variation);
+  }
+  return variations;
 }
 
 /**

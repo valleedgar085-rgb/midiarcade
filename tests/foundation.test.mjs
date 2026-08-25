@@ -3,6 +3,7 @@ import test from "node:test";
 import { createAppStore, createInitialAppState } from "../src/core/app-store.js";
 import { createGenerationRunner } from "../src/core/generation-runner.js";
 import { createGenerationExecutor } from "../src/core/generation-executor.js";
+import { appendWithinLimit, compactRecentSongs, HISTORY_LIMIT } from "../src/core/generation-memory.js";
 import { applyGenerationTheme, generationTheme } from "../src/core/generation-theme.js";
 import { createSessionStorage } from "../src/core/session-storage.js";
 import { createWorkspaceController } from "../src/ui/workspace-controller.js";
@@ -51,6 +52,25 @@ test("session storage isolates JSON access and rejects stale schemas", () => {
   assert.equal(sessions.load().status, "invalid");
   assert.equal(sessions.discard(), true);
   assert.equal(values.has("studio/session"), false);
+});
+
+test("generation memory keeps bounded undo state and compacts scored recent songs", () => {
+  let history = [];
+  for (let index = 0; index < 12; index += 1) history = appendWithinLimit(history, { index });
+  assert.equal(history.length, HISTORY_LIMIT);
+  assert.deepEqual(history.map(({ index }) => index), [6, 7, 8, 9, 10, 11]);
+
+  const fullSong = {
+    id: "song-one",
+    seed: "one",
+    title: "One",
+    meta: { ideaFingerprint: { version: 2, motifContour: [0, 2, 1] } },
+    tracks: [{ id: "melody", notes: Array.from({ length: 200 }, (_, pitch) => ({ pitch })) }],
+  };
+  const compact = compactRecentSongs([fullSong, fullSong]);
+  assert.equal(compact.length, 1);
+  assert.deepEqual(compact[0].tracks, []);
+  assert.equal(compact[0].meta.ideaFingerprint, fullSong.meta.ideaFingerprint);
 });
 
 test("generation runner commits one complete result and rejects overlapping runs", async () => {

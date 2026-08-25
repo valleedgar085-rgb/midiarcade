@@ -22,6 +22,11 @@ export const GENERATION_STATUS_COPY = Object.freeze({
     thread: "Evolving the shared musical DNA…",
     ready: "A related composition preserved the spark and reshaped the journey.",
   }),
+  songVariations: Object.freeze({
+    busy: "AUDITIONING SIX COMPLETE ARRANGEMENTS",
+    thread: "Comparing pocket, hook, and song-journey directions…",
+    ready: "Three related full-song directions are ready to compare.",
+  }),
 });
 
 export function generationIntentCopy(staged) {

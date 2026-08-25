@@ -5,6 +5,7 @@ import {
   generateNew,
   generateSectionVariations,
   generateSimilar,
+  generateSongVariations,
   GENRE_PROFILES,
   ONE_SHOT_KITS,
   TRACK_DEFINITIONS,
@@ -17,6 +18,7 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
+import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import {
@@ -1053,6 +1055,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     trackControls,
     tracks: trackControls,
     tasteProfile: deepClone(state.tasteProfile),
+    thinkingDepth: "deep",
   };
 }
 
@@ -1819,8 +1822,7 @@ function updateHistoryButtons() {
 
 function pushHistory(snapshot = createHistorySnapshot(), { preserveFuture = false } = {}) {
   if (!snapshot) return;
-  state.history.push(snapshot);
-  if (state.history.length > 12) state.history.shift();
+  state.history = appendWithinLimit(state.history, snapshot);
   if (!preserveFuture) state.future = [];
   updateHistoryButtons();
 }
@@ -1830,14 +1832,7 @@ function recentSongsForGeneration(sourceSong = state.song) {
     sourceSong,
     ...[...state.history].reverse().map((snapshot) => snapshot?.song),
   ];
-  const seen = new Set();
-  return candidates.filter((song) => {
-    if (!song?.meta || !Array.isArray(song.tracks)) return false;
-    const identity = String(song.id ?? `${song.seed}:${song.title}`);
-    if (seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  }).slice(0, 6);
+  return compactRecentSongs(candidates);
 }
 
 export function getAppStateSnapshot() {
@@ -1852,6 +1847,8 @@ export function getAppStateSnapshot() {
     editorTrack: state.editorTrack,
     generationCount: state.generationCount,
     isGenerating: state.isGenerating,
+    songVariationCount: state.songVariations.length,
+    activeSongVariation: state.activeSongVariation,
   });
 }
 
@@ -1867,6 +1864,8 @@ function applyHistorySnapshot(snapshot) {
   state.focusedSection = snapshot.focusedSection ?? null;
   state.editorTrack = TRACK_ORDER.includes(snapshot.editorTrack) ? snapshot.editorTrack : state.selectedTrack;
   state.sectionEditorOpen = Boolean(snapshot.sectionEditorOpen && state.focusedSection);
+  state.songVariations = [];
+  state.activeSongVariation = -1;
   state.editorSelection.clear();
   syncControlsFromSong();
   renderAll();
@@ -1879,8 +1878,7 @@ function restoreHistory({ captureFuture = true, announce = true } = {}) {
   if (!snapshot) return;
   const current = captureFuture ? createHistorySnapshot() : null;
   if (current && captureFuture) {
-    state.future.push(current);
-    if (state.future.length > 12) state.future.shift();
+    state.future = appendWithinLimit(state.future, current);
   }
   applyHistorySnapshot(snapshot);
   updateHistoryButtons();
@@ -2134,6 +2132,48 @@ function renderSongShowcase() {
   }
 }
 
+function renderSongVariationTray() {
+  const tray = $("#songVariationTray");
+  if (!tray) return;
+  const variations = Array.isArray(state.songVariations) ? state.songVariations : [];
+  tray.hidden = variations.length !== 3;
+  if (tray.hidden) return;
+  $$('[data-song-variation]', tray).forEach((button) => {
+    const index = Number(button.dataset.songVariation);
+    const song = variations[index];
+    const direction = song?.variationSet?.direction;
+    const score = Math.round(Number(song?.meta?.scoreDetails?.totalScore) || 0);
+    const active = index === state.activeSongVariation;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-checked", String(active));
+    const title = $("b", button);
+    const detail = $("small", button);
+    if (title) title.textContent = `${String.fromCharCode(65 + index)} · ${direction?.label ?? `Version ${index + 1}`}`;
+    if (detail) detail.textContent = `${score ? `${score} quality · ` : ""}${direction?.description ?? "Related arrangement"}`;
+  });
+}
+
+export function selectSongVariation(index) {
+  const safeIndex = Math.round(Number(index));
+  const variation = state.songVariations?.[safeIndex];
+  if (!variation) return false;
+  player.stop();
+  appStore.transaction("generation:variation-select", (draft) => {
+    draft.song = variation;
+    draft.activeSongVariation = safeIndex;
+    draft.focusedSection = null;
+    draft.coverVariation = safeIndex;
+  });
+  captureResolvedAutoTrackSettings(state.song);
+  applyTrackSettingsToSong(state.song);
+  syncControlsFromSong();
+  renderAll();
+  scheduleSessionSave();
+  const direction = variation.variationSet?.direction?.label ?? `Version ${safeIndex + 1}`;
+  showToast(`${direction} variation selected.`);
+  return true;
+}
+
 function rateCurrentSong(rating) {
   if (!state.song || !["like", "reject", "favorite"].includes(rating)) return;
   const profile = state.tasteProfile;
@@ -2211,6 +2251,7 @@ function renderSummary() {
   renderModeGuidance();
   renderIdeaInspector();
   renderSongShowcase();
+  renderSongVariationTray();
   renderCreativeThread();
 }
 
@@ -3283,7 +3324,7 @@ function armGenerationSafetyTimer() {
   clearGenerationSafetyTimer();
   generationSafetyTimer = setTimeout(() => {
     if (state.isGenerating) {
-      console.warn("[generation-watchdog] Resetting stuck generation state after 15s timeout.");
+      console.warn("[generation-watchdog] Resetting stuck generation state after 45s timeout.");
       try { hideGenerationActivity(); } catch { /* ignore */ }
       try {
         appStore.transaction("generation:watchdog-reset", (draft) => {
@@ -3294,7 +3335,7 @@ function armGenerationSafetyTimer() {
       }
       showToast("Generation took longer than expected. Please try again.");
     }
-  }, 15000);
+  }, 45000);
 }
 
 function showGenerationActivity(message, { threadCopy = "" } = {}) {
@@ -3323,12 +3364,19 @@ const generationRunner = createGenerationRunner({
 });
 
 const generationExecutor = createGenerationExecutor({
+  timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
   fallback: (kind, payload) => {
     if (kind === "sectionVariations") {
       return Promise.resolve({
         status: "committed",
         options: generateSectionVariations(payload.sourceSong, payload.sectionId, payload.input),
+      });
+    }
+    if (kind === "songVariations") {
+      return Promise.resolve({
+        status: "committed",
+        variations: generateSongVariations(payload.sourceSong, payload.config ?? {}),
       });
     }
     return generationRunner.generate(kind, {
@@ -3391,7 +3439,14 @@ async function runGeneration(kind, options = {}) {
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
     const [generated] = await Promise.all([work, generationDelay()]);
-    let candidateSong = generated?.song;
+    let variationSongs = kind === "songVariations" ? generated?.variations : null;
+    if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
+      variationSongs = generateSongVariations(sourceSong, config);
+    }
+    if (kind === "songVariations") {
+      variationSongs = variationSongs.map((song) => preserveLockedTracks(sourceSong, song));
+    }
+    let candidateSong = kind === "songVariations" ? variationSongs[0] : generated?.song;
     if (!candidateSong) {
       candidateSong = kind === "new"
         ? generateNew(config)
@@ -3401,6 +3456,8 @@ async function runGeneration(kind, options = {}) {
     const nextSong = kind === "similar" ? preserveLockedTracks(state.song, candidateSong) : candidateSong;
     appStore.transaction("generation:commit", (draft) => {
       draft.song = nextSong;
+      draft.songVariations = kind === "songVariations" ? variationSongs : [];
+      draft.activeSongVariation = kind === "songVariations" ? 0 : -1;
       draft.generationCount += 1;
       draft.focusedSection = null;
       draft.coverVariation = 0;
@@ -4230,6 +4287,7 @@ export class PreviewPlayer {
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
     this.periodicWaves = new Map();
+    this.audioGraphNodes = new Set();
     this.timer = null;
     this.frame = null;
     this.idleTimer = null;
@@ -4306,6 +4364,11 @@ export class PreviewPlayer {
       limiter.ratio.value = 20;
       limiter.attack.value = 0.002;
       limiter.release.value = 0.075;
+      this.audioGraphNodes.add(this.master);
+      this.audioGraphNodes.add(highpass);
+      this.audioGraphNodes.add(warmth);
+      this.audioGraphNodes.add(compressor);
+      this.audioGraphNodes.add(limiter);
 
       // Soft-clip waveshaper — reduced drive (1.08) for less harshness on phone.
       if (typeof this.context.createWaveShaper === "function") {
@@ -4317,6 +4380,7 @@ export class PreviewPlayer {
         }
         saturation.curve = curve;
         saturation.oversample = "4x";
+        this.audioGraphNodes.add(saturation);
         this.master.connect(highpass).connect(warmth).connect(saturation).connect(compressor).connect(limiter).connect(this.context.destination);
       } else {
         this.master.connect(highpass).connect(warmth).connect(compressor).connect(limiter).connect(this.context.destination);
@@ -4342,6 +4406,9 @@ export class PreviewPlayer {
         this.reverbReturn = this.context.createGain();
         this.reverbReturn.gain.value = 0.26;
         this.reverbBus.connect(reverbFilter).connect(this.reverbReturn).connect(this.master);
+        this.audioGraphNodes.add(this.reverbBus);
+        this.audioGraphNodes.add(reverbFilter);
+        this.audioGraphNodes.add(this.reverbReturn);
       }
 
       // Delay bus — reduced feedback (0.18) and return (0.12) to avoid mud on mobile.
@@ -4358,6 +4425,10 @@ export class PreviewPlayer {
         this.delayBus.connect(delayFilter);
         delayFilter.connect(feedback).connect(this.delayBus);
         delayFilter.connect(this.delayReturn).connect(this.master);
+        this.audioGraphNodes.add(this.delayBus);
+        this.audioGraphNodes.add(delayFilter);
+        this.audioGraphNodes.add(feedback);
+        this.audioGraphNodes.add(this.delayReturn);
       }
     }
     if (["suspended", "interrupted"].includes(this.context.state)) await this.context.resume();
@@ -4365,6 +4436,11 @@ export class PreviewPlayer {
   }
 
   resetContextReferences(context = this.context) {
+    this.clearScheduledAudio();
+    for (const node of this.audioGraphNodes) {
+      try { node.disconnect(); } catch { /* node was already released */ }
+    }
+    this.audioGraphNodes.clear();
     if (context && context.onstatechange) context.onstatechange = null;
     if (context === this.context) this.context = null;
     this.master = null;
@@ -4467,6 +4543,7 @@ export class PreviewPlayer {
       bus.gain.value = 1;
       bus.connect(this.master);
       this.trackBuses.set(id, bus);
+      this.audioGraphNodes.add(bus);
     }
     return this.trackBuses.get(id);
   }
@@ -4699,8 +4776,19 @@ export class PreviewPlayer {
   liveNoteOff(pitch, immediate = false) {
     const safePitch = clamp(Math.round(Number(pitch) || 60), 0, 127);
     const active = this.liveVoices.get(safePitch);
-    if (!active || !this.context) return;
+    if (!active) return;
     this.liveVoices.delete(safePitch);
+    if (!this.context) {
+      for (const oscillator of active.oscillators) {
+        oscillator.onended = null;
+        try { oscillator.stop(); } catch { /* voice already ended */ }
+      }
+      for (const node of active.nodes) {
+        try { node.disconnect(); } catch { /* node already disconnected */ }
+      }
+      active.nodes.clear();
+      return;
+    }
     const now = this.context.currentTime;
     const release = immediate ? 0.012 : 0.09;
     if (typeof active.gain.gain.cancelAndHoldAtTime === "function") active.gain.gain.cancelAndHoldAtTime(now);
@@ -5167,6 +5255,29 @@ export class PreviewPlayer {
     for (const voice of [...this.scheduledVoices]) this.cleanupScheduledVoice(voice, true);
   }
 
+  resetDynamicBuses() {
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    for (const bus of this.trackBuses.values()) {
+      const gain = bus?.gain;
+      if (!gain) continue;
+      try {
+        if (typeof gain.cancelAndHoldAtTime === "function") gain.cancelAndHoldAtTime(now);
+        else gain.cancelScheduledValues(now);
+        gain.setTargetAtTime(1, now, 0.015);
+      } catch {
+        gain.value = 1;
+      }
+    }
+  }
+
+  releasePlaybackCache() {
+    this.events = [];
+    this.eventIndex = 0;
+    this.playbackView = null;
+    this.lastDetailRefreshAt = -Infinity;
+  }
+
   cancelPendingPlay() {
     this.playRequestGeneration += 1;
   }
@@ -5174,8 +5285,12 @@ export class PreviewPlayer {
   pause() {
     this.cancelPendingPlay();
     if (this.playing && this.context) this.position = this.offset + (this.context.currentTime - this.startedAt);
-    if (!this.context) return;
-    if (this.master?.gain) {
+    this.playing = false;
+    setPlaybackPresentation(false);
+    this.clearTimers();
+    this.clearScheduledAudio();
+    this.resetDynamicBuses();
+    if (this.context && this.master?.gain) {
       try {
         const now = this.context.currentTime;
         this.master.gain.cancelScheduledValues(now);
@@ -5183,11 +5298,7 @@ export class PreviewPlayer {
         this.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
       } catch { /* ignore */ }
     }
-    this.playing = false;
-    setPlaybackPresentation(false);
-    this.clearTimers();
-    this.clearScheduledAudio();
-    this.suspendWhenIdle();
+    if (this.context) this.suspendWhenIdle();
     $("#playButton").classList.remove("playing");
     $("#playButton").setAttribute("aria-label", "Play song");
     const mobileDockPlay = $("#mobilePlayPause");
@@ -5204,6 +5315,7 @@ export class PreviewPlayer {
   stop() {
     this.pause();
     this.position = 0;
+    this.releasePlaybackCache();
     updatePlaybackUi(0, totalSeconds());
     $("#playhead").classList.remove("visible");
   }
@@ -5220,6 +5332,22 @@ export class PreviewPlayer {
     const shouldPlay = this.playing;
     this.stop();
     if (shouldPlay) this.play();
+  }
+
+  dispose() {
+    this.cancelPendingPlay();
+    this.stop();
+    this.stopAllLiveNotes();
+    this.cancelIdleSuspend();
+    if (this.visibilityHandler) document.removeEventListener("visibilitychange", this.visibilityHandler);
+    if (this.deviceChangeHandler) navigator.mediaDevices?.removeEventListener?.("devicechange", this.deviceChangeHandler);
+    this.visibilityHandler = null;
+    this.deviceChangeHandler = null;
+    const context = this.context;
+    this.resetContextReferences(context);
+    this.noiseBuffers.clear();
+    this.periodicWaves.clear();
+    if (context && context.state !== "closed") void context.close().catch(() => {});
   }
 }
 
@@ -5307,7 +5435,7 @@ function bindGlobalControls() {
       menuBtn.setAttribute("aria-expanded", "false");
     });
     $("#menuItemNew")?.addEventListener("click", () => runGeneration("new"));
-    $("#menuItemSimilar")?.addEventListener("click", () => runGeneration("similar"));
+    $("#menuItemSimilar")?.addEventListener("click", () => runGeneration("songVariations"));
     $("#menuItemReset")?.addEventListener("click", () => $("#resetControlsButton")?.click());
     $("#menuItemFullscreen")?.addEventListener("click", toggleFullscreen);
     $("#menuItemExport")?.addEventListener("click", exportSong);
@@ -5425,7 +5553,11 @@ function toggleFullscreen() {
   $("#keyTransposeUp")?.addEventListener("click", () => transposeKey(1));
 
   $("#generateNew").addEventListener("click", () => runGeneration("new"));
-  $("#generateSimilar").addEventListener("click", () => runGeneration("similar"));
+  $("#generateSimilar").addEventListener("click", () => runGeneration("songVariations"));
+  $("#songVariationTray")?.addEventListener("click", (event) => {
+    const button = event.target.closest?.("[data-song-variation]");
+    if (button) selectSongVariation(button.dataset.songVariation);
+  });
   for (const [workspace, selector] of Object.entries(MOBILE_WORKSPACE_BUTTONS)) {
     $(selector)?.addEventListener("click", () => switchWorkspace(workspace));
   }
@@ -5544,7 +5676,7 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
-  $("#showcaseSimilarButton")?.addEventListener("click", () => runGeneration("similar"));
+  $("#showcaseSimilarButton")?.addEventListener("click", () => runGeneration("songVariations"));
   $("#tasteRating")?.addEventListener("change", (event) => rateCurrentSong(event.target.value));
   $("#mixPlayButton")?.addEventListener("click", () => player.toggle());
   $("#previousButton").addEventListener("click", () => player.restart());
@@ -5693,7 +5825,7 @@ function toggleFullscreen() {
     if (event.code === "Space") { event.preventDefault(); player.toggle(); }
     if (key === "n") runGeneration("new");
     if (key === "a") switchWorkspace("arrange");
-    if (key === "s") runGeneration("similar");
+    if (key === "s") runGeneration("songVariations");
     if (key === "e") exportSong();
     if (key === "f") toggleFullscreen();
   });
@@ -5706,6 +5838,7 @@ function toggleFullscreen() {
   });
   window.addEventListener?.("pagehide", () => {
     saveSessionNow();
+    player.dispose();
     generationExecutor.dispose();
   });
 }
@@ -5737,6 +5870,8 @@ function resetSessionStateForFreshStart() {
   state.editorZoom = 64;
   state.editorSelection = new Set();
   state.sectionVariations = null;
+  state.songVariations = [];
+  state.activeSongVariation = -1;
   state.sectionMacroValues = {};
   midiConnectionRequestGeneration += 1;
   latestMidiRequestedDeviceId = "onscreen";
