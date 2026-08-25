@@ -14,6 +14,7 @@ import {
   previewSpotlight,
 } from "../src/core/preview-audio.js";
 import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "../src/ui/value-formatters.js";
+import { qualityTier } from "../src/ui/copy-catalog.js";
 
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
@@ -30,6 +31,12 @@ test("Create unifies now playing with the essential song controls", () => {
   }
   assert.match(cssSource, /\.create-console\s*\{[\s\S]*?grid-template-columns/);
   assert.match(cssSource, /\.create-live-controls\s*\{[\s\S]*?backdrop-filter:blur\(20px\)/);
+});
+
+test("producer score tiers explain progress without presenting a fake percentage", () => {
+  assert.deepEqual(qualityTier(92), { id: "studio", label: "STUDIO READY", nextTarget: 95 });
+  assert.deepEqual(qualityTier(96), { id: "release", label: "RELEASE READY", nextTarget: 98 });
+  assert.deepEqual(qualityTier(98), { id: "exceptional", label: "EXCEPTIONAL", nextTarget: 100 });
 });
 
 test("lead and pad envelopes stay expressive without overlapping later phrases", () => {

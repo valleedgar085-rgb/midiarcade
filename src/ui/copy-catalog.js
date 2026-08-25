@@ -37,3 +37,12 @@ export function trackRewriteStatus(trackName) {
   const label = String(trackName || "TRACK").toUpperCase();
   return `RECOMPOSING ${label === "DRUMS" ? "DRUM" : label} TRACK`;
 }
+
+export function qualityTier(score) {
+  const value = Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+  if (value >= 98) return Object.freeze({ id: "exceptional", label: "EXCEPTIONAL", nextTarget: 100 });
+  if (value >= 95) return Object.freeze({ id: "release", label: "RELEASE READY", nextTarget: 98 });
+  if (value >= 92) return Object.freeze({ id: "studio", label: "STUDIO READY", nextTarget: 95 });
+  if (value >= 88) return Object.freeze({ id: "strong", label: "STRONG DRAFT", nextTarget: 92 });
+  return Object.freeze({ id: "polish", label: "NEEDS POLISH", nextTarget: 88 });
+}

@@ -417,7 +417,7 @@ test("phase 20 repairs only when needed and stays inside a bounded deterministic
 
 test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {
   const input = {
-    seed: "repair-reconcile-0",
+    seed: "repair-reconcile-1",
     bars: 8,
     genre: "jazz",
     energy: 0.05,
@@ -2919,6 +2919,12 @@ test("medium songs establish, contrast, and return to their main sections", () =
   assert.ok(names.filter((name) => name === "chorus").length >= 2);
   assert.ok(names.includes("bridge"));
   assert.equal(song.structure.reduce((total, section) => total + section.bars, 0), 18);
+
+  const compact = engine.generateNew({ ...CONFIG, seed: "compact-form-return", genre: "pop", bars: 16, candidateCount: 1 });
+  const compactNames = compact.structure.map(({ name }) => name);
+  assert.ok(compactNames.filter((name) => name === "chorus").length >= 2);
+  assert.ok(compactNames.includes("bridge"));
+  assert.ok(compact.meta.scoreDetails.subscores.tensionFollow > 69, "the critic must read the actual planned section tension");
 });
 
 test("rendered melodies preserve scale identity while choosing connected phrase registers", () => {

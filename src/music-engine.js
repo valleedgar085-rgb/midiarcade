@@ -1334,7 +1334,12 @@ function createStructure(config, rng) {
             { name: "verse", weight: 1.5 }, { name: "bridge", weight: 1 },
             { name: "chorus", weight: 1.75 }, { name: "outro", weight: 0.6 },
           ]
-        : [{ name: "intro", weight: 1 }, { name: "verse", weight: 2 }, { name: "prechorus", weight: 1 }, { name: "chorus", weight: 2 }, { name: "outro", weight: 1 }];
+        : [
+            { name: "intro", weight: 0.7 }, { name: "verse", weight: 1.8 },
+            { name: "prechorus", weight: 0.7 }, { name: "chorus", weight: 1.6 },
+            { name: "bridge", weight: 0.9 }, { name: "chorus", weight: 1.8 },
+            { name: "outro", weight: 0.6 },
+          ];
   } else {
     const alternate = rng.bool(form === "half-time" ? 0.58 : 0.35);
     layout = electronic
@@ -8295,7 +8300,15 @@ function tensionFollowScoreForSong(song) {
     const end = finite(section.endBeat, start + 1);
     const sectionPitched = pitched.filter((note) => note.start >= start && note.start < end);
     const sectionDrums = drums.filter((note) => note.start >= start && note.start < end);
-    tension.push(clamp(finite(section.plannedTension ?? section.tension ?? section.energy, 0.5), 0, 1));
+    const plan = blueprintPlanForSection(song.songBlueprint, section);
+    tension.push(clamp(finite(
+      section.plannedTension
+        ?? section.tension
+        ?? section.intent?.tension
+        ?? plan?.tension
+        ?? section.energy,
+      0.5,
+    ), 0, 1));
     activity.push(
       sectionPitched.length / Math.max(1, end - start) * 0.46
       + average(sectionPitched.map((note) => note.velocity / 127), 0.5) * 0.3
@@ -8860,10 +8873,11 @@ export function evaluateCandidateBalance(evaluation = {}) {
     creativeFloor,
     spread: round(spread),
     passed: scaleSafe && totalScore >= 82 && balanceScore >= 68 && creativeFloor >= 64,
-    // Groove-role scoring became more expressive in 1.2.x; require one extra
-    // quality point so adaptive search does not stop merely because the richer
-    // bass vocabulary lifted an otherwise unchanged candidate to 92.
-    aspirational: scaleSafe && totalScore >= 93 && balanceScore >= 80 && creativeFloor >= 75,
+    // A studio-ready draft may land around 92, but adaptive generation keeps
+    // listening until it finds a more balanced 95-point candidate or exhausts
+    // its strict CPU budget. Scores near 98 remain exceptional rather than a
+    // number the UI manufactures.
+    aspirational: scaleSafe && totalScore >= 95 && balanceScore >= 82 && creativeFloor >= 75,
   };
 }
 

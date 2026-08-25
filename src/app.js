@@ -45,6 +45,7 @@ import { coverArtworkDataUrl, coverArtworkFinish, createCoverArtworkSvg } from "
 import {
   GENERATION_STATUS_COPY,
   generationIntentCopy,
+  qualityTier,
   trackRewriteStatus,
 } from "./ui/copy-catalog.js";
 import {
@@ -2025,7 +2026,8 @@ function renderIdeaInspector() {
   const scoreBadge = $("#dnaScoreBadge");
   if (scoreBadge) {
     const scoreVal = scoreDetails?.totalScore ?? 94;
-    scoreBadge.textContent = `✦ SCORE ${scoreVal}/100`;
+    const tier = qualityTier(scoreVal);
+    scoreBadge.textContent = `✦ ${tier.label} · ${scoreVal}/100`;
     const scoreNames = {
       harmonic: "Harmony",
       groove: "Groove",
@@ -2048,14 +2050,15 @@ function renderIdeaInspector() {
       registerHealth: "Register health",
       stageInterlock: "Generation connections",
     };
-    scoreBadge.title = Object.entries(scoreDetails?.subscores ?? {})
-      .map(([name, value]) => `${scoreNames[name] ?? name}: ${value}`)
-      .concat(scoreDetails?.balance
-        ? [
-            `Balanced floor: ${scoreDetails.balance.creativeFloor}`,
-            `Lower-band balance: ${scoreDetails.balance.balanceScore}`,
-          ]
-        : [])
+    scoreBadge.title = [`Producer score ${scoreVal}/100; next target ${tier.nextTarget}. This is a musical diagnostic, not a percentage.`]
+      .concat(Object.entries(scoreDetails?.subscores ?? {})
+        .map(([name, value]) => `${scoreNames[name] ?? name}: ${value}`)
+        .concat(scoreDetails?.balance
+          ? [
+              `Balanced floor: ${scoreDetails.balance.creativeFloor}`,
+              `Lower-band balance: ${scoreDetails.balance.balanceScore}`,
+            ]
+          : []))
       .join(" · ");
   }
 
