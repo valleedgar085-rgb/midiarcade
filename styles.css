@@ -1504,24 +1504,25 @@ input[type=range].is-auto{
 /* ─── GENERATION WASH ───────────────────────────────────────────────────── */
 .generation-wash{
   position:fixed;inset:0;z-index:500;
-  background:rgba(8,8,11,.85);
+  background:rgba(8,8,11,.9);
   display:flex;align-items:center;justify-content:center;
-  -webkit-backdrop-filter:blur(12px);
-  backdrop-filter:blur(12px);
   opacity:0;pointer-events:none;transition:opacity .3s;
 }
 .generation-wash:not([aria-hidden=true]){opacity:1;pointer-events:auto}
 .generation-message{
-  display:flex;align-items:center;gap:16px;
-  padding:24px 36px;border-radius:var(--radius-lg);
-  background:var(--bg-1);border:1px solid var(--border-1);
-  font-size:14px;font-weight:700;letter-spacing:.2em;color:var(--text);
+  width:min(540px,calc(100vw - 32px));padding:24px;border-radius:var(--radius-lg);text-align:center;
+  background:var(--bg-1);border:1px solid var(--border-1)
 }
-.generation-message i{
-  width:20px;height:20px;border-radius:50%;
-  border:2px solid var(--accent);border-top-color:transparent;
-  animation:spin .8s linear infinite;
-}
+.generation-orbit{display:flex;justify-content:center;gap:8px;margin-bottom:12px}
+.generation-orbit i,.generation-stages i{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:blink 1.2s ease-in-out infinite}
+.generation-message>p:first-of-type{display:flex;justify-content:space-between;color:var(--text-2)}
+.generation-message h2{margin:14px 0 12px}
+.generation-meter{height:4px;border-radius:9px;background:rgba(255,255,255,.07);overflow:hidden}
+.generation-meter i{display:block;width:var(--generation-progress,17%);height:100%;background:linear-gradient(90deg,var(--accent),var(--teal))}
+.generation-stage-copy{color:var(--text-2);font-size:12px}
+.generation-stages{display:grid;grid-template-columns:repeat(6,1fr);margin:16px 0}
+.generation-stages span{display:grid;justify-items:center;font-size:8px;color:var(--text-3)}
+.generation-stages span[data-state=done] i{background:var(--teal)}
 
 /* ─── TOAST ─────────────────────────────────────────────────────────────── */
 .toast{
@@ -3425,6 +3426,7 @@ body.is-playing .status-dot{animation:blink 2s ease-in-out infinite}
   body[aria-busy="true"] .floating-note,
   body[aria-busy="true"] .pocket-orbit i,
   body[aria-busy="true"] .macro-art i,
+  body[aria-busy="true"] .generation-orbit i,
   body.is-playing .thread-live-orbit i,
   body.is-playing .editor-focus-orbit i,
   body.is-playing .attitude-orbit i,

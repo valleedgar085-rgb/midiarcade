@@ -35,6 +35,7 @@ import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
+import { generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
   nearestScalePitch,
@@ -1587,7 +1588,7 @@ async function exploreSectionVariations() {
   });
   armGenerationSafetyTimer();
   renderSectionVariationLab(section);
-  showGenerationActivity("COMPOSING THREE SECTION DIRECTIONS");
+  showGenerationActivity("COMPOSING THREE SECTION DIRECTIONS", { kind: "songVariations" });
   try {
     const variationInput = {
       count: 3,
@@ -3315,12 +3316,39 @@ function generationDelay() {
  * overlay, stale aria-busy state, or CPU-heavy generating animations behind.
  */
 let generationSafetyTimer = null;
+let generationProgressTimer = null;
 
 function clearGenerationSafetyTimer() {
   if (generationSafetyTimer) {
     clearTimeout(generationSafetyTimer);
     generationSafetyTimer = null;
   }
+}
+
+function clearGenerationProgressTimer() {
+  if (generationProgressTimer) {
+    clearInterval(generationProgressTimer);
+    generationProgressTimer = null;
+  }
+}
+
+function renderGenerationProgress(kind, elapsedMs) {
+  const progress = generationStageState(kind, elapsedMs);
+  const wash = $("#generationWash");
+  if (!wash) return;
+  $("#generationStageCount").textContent = `PASS ${progress.stageNumber} OF ${progress.stageCount}`;
+  $("#generationStageCopy").textContent = progress.stage.copy;
+  wash.style.setProperty("--generation-progress", `${Math.round(progress.progress * 100)}%`);
+  $$("[data-generation-stage]", wash).forEach((element, index) => {
+    element.dataset.state = index < progress.stageIndex ? "done" : index === progress.stageIndex ? "active" : "waiting";
+  });
+}
+
+function startGenerationProgress(kind) {
+  clearGenerationProgressTimer();
+  const startedAt = Date.now();
+  renderGenerationProgress(kind, 0);
+  generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 410);
 }
 
 function armGenerationSafetyTimer() {
@@ -3341,7 +3369,7 @@ function armGenerationSafetyTimer() {
   }, 45000);
 }
 
-function showGenerationActivity(message, { threadCopy = "" } = {}) {
+function showGenerationActivity(message, { threadCopy = "", kind = "new" } = {}) {
   const wash = $("#generationWash");
   const messageElement = $("#generationMessage");
   if (messageElement && message) messageElement.textContent = message;
@@ -3350,9 +3378,11 @@ function showGenerationActivity(message, { threadCopy = "" } = {}) {
   document.body?.setAttribute("aria-busy", "true");
   $("#creativeThread")?.classList.add("is-generating");
   if (threadCopy && $("#threadLiveSection")) $("#threadLiveSection").textContent = threadCopy;
+  startGenerationProgress(kind);
 }
 
 function hideGenerationActivity() {
+  clearGenerationProgressTimer();
   const wash = $("#generationWash");
   wash?.classList.remove("visible");
   wash?.setAttribute("aria-hidden", "true");
@@ -3428,7 +3458,7 @@ async function runGeneration(kind, options = {}) {
   try {
     try { player.stop(); } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
-    showGenerationActivity(copy.busy, { threadCopy: copy.thread });
+    showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
 
     const seed = createSeed();
     if (kind === "new") chooseNewGenrePrograms(seed);
@@ -3613,7 +3643,7 @@ async function regenerateTrack(id, options = {}) {
     draft.isGenerating = true;
   });
   armGenerationSafetyTimer();
-  showGenerationActivity(trackRewriteStatus(TRACK_META[id].name));
+  showGenerationActivity(trackRewriteStatus(TRACK_META[id].name), { kind: "similar" });
   try {
     const generationInput = buildTrackRerollInput(id, original, createSeed());
     const work = generationExecutor.run("similar", { sourceSong: original, config: generationInput })

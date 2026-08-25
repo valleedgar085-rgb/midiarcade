@@ -1,11 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-// The project intentionally has no package-level module-mode requirement yet.
-// A data URL lets this browser-native ES module be tested in plain Node.
-const source = await readFile(new URL("../src/music-engine.js", import.meta.url), "utf8");
-const engine = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+import * as engine from "../src/music-engine.js";
 
 const CONFIG = {
   seed: "test-seed-2026",

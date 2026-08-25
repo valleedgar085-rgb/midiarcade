@@ -6,6 +6,12 @@
  * expressed in quarter-note beats; MIDI conversion happens only in encodeMidi.
  */
 
+import {
+  cadentialHarmonyDegree,
+  phraseLandingProfile,
+  phraseLandingRole,
+} from "./core/phrase-architecture.js";
+
 export const PPQ = 480;
 
 export const SCALES = deepFreeze({
@@ -2356,6 +2362,13 @@ function harmonicExtensionForTension(config, plan, tension, atResolution = false
 function createHarmony(config, structure, rng, blueprint = null, songBlueprint = null) {
   const barBeats = beatsPerBar(config);
   const harmony = [];
+  const cadencePlans = new Map(structure.map((section) => {
+    const cadenceRng = rng.fork(`cadence-path-${section.id}`);
+    return [section.id, {
+      approachDegree: genreCadenceApproach(config, cadenceRng),
+      flavor: cadenceRng.int(0, 1),
+    }];
+  }));
   if (Array.isArray(blueprint) && blueprint.length) {
     const sourceBars = Math.max(1, ...blueprint.map((event) => Math.round(finite(event.bar, 0)) + 1));
     for (let bar = 0; bar < config.bars; bar += 1) {
@@ -2379,6 +2392,19 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
           degree += rng.pick([-2, -1, 1, 2]);
         }
         const finalSongEvent = bar === config.bars - 1 && index === events.length - 1;
+        const cadencePlan = cadencePlans.get(section.id);
+        if (index === events.length - 1) {
+          degree = cadentialHarmonyDegree({
+            cadence: sectionPlan?.cadence,
+            currentDegree: degree,
+            approachDegree: cadencePlan?.approachDegree,
+            harmonicGoalDegree: sectionPlan?.harmonicGoalDegree,
+            localBar,
+            sectionBars: section.bars,
+            flavor: cadencePlan?.flavor,
+            finalSongBar: finalSongEvent,
+          });
+        }
         degree = plannedHarmonyDegree(
           sectionPlan,
           localBar,
@@ -2416,6 +2442,7 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
   const family = PROGRESSIONS[progressionFamily(config.scale)];
   for (const section of structure) {
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+    const cadencePlan = cadencePlans.get(section.id);
     const harmonicSection = section.name === "drop" ? "chorus"
       : section.name === "build" ? "prechorus"
         : section.name === "breakdown" ? "bridge" : section.name;
@@ -2426,9 +2453,16 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
     for (let localBar = 0; localBar < section.bars; localBar += 1) {
       const bar = section.startBar + localBar;
       let degree = progression[localBar % progression.length];
-      if (sectionPlan?.cadence === "resolve" && section.bars > 1 && localBar === section.bars - 2) {
-        degree = genreCadenceApproach(config, progRng);
-      }
+      degree = cadentialHarmonyDegree({
+        cadence: sectionPlan?.cadence,
+        currentDegree: degree,
+        approachDegree: cadencePlan?.approachDegree,
+        harmonicGoalDegree: sectionPlan?.harmonicGoalDegree,
+        localBar,
+        sectionBars: section.bars,
+        flavor: cadencePlan?.flavor,
+        finalSongBar: bar === config.bars - 1,
+      });
       degree = plannedHarmonyDegree(
         sectionPlan,
         localBar,
@@ -2444,7 +2478,9 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
       const closingTension = plannedTensionAtBeat(songBlueprint, section, start + barBeats - 0.05, barBeats);
       const activity = sectionPlan?.harmonicActivity ?? config.harmonicRhythm;
       const splitChance = activity * (0.18 + config.complexity * 0.52);
-      const canSplit = barBeats >= 2 && bar !== config.bars - 1 && rng.bool(splitChance);
+      const cadenceDistance = section.bars - 1 - localBar;
+      const protectCadence = ["resolve", "lift"].includes(sectionPlan?.cadence) && cadenceDistance <= 1;
+      const canSplit = barBeats >= 2 && bar !== config.bars - 1 && !protectCadence && rng.bool(splitChance);
       if (canSplit) {
         const half = barBeats / 2;
         harmony.push(harmonyEvent(
@@ -5004,7 +5040,8 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
         || note.transitionHandoffRole
         || note.memoryRole
         || note.motifHandoffRole
-        || note.ensembleAccent;
+        || note.ensembleAccent
+        || note.finalAssemblyRole;
       if (protectedAnchor) return true;
       return !foreground.some((lead) => (
         lead.start >= section.startBeat - 1e-6
@@ -5030,6 +5067,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       || note.memoryRole
       || note.motifHandoffRole
       || note.ensembleAccent
+      || note.finalAssemblyRole
     )).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
@@ -5371,6 +5409,9 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.articulationIntent ? { articulationIntent: note.articulationIntent } : {}),
       ...(note.connectionId ? { connectionId: note.connectionId } : {}),
       ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
+      ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
+      ...(note.phraseRole ? { phraseRole: note.phraseRole } : {}),
+      ...(note.phraseCadenceRole ? { phraseCadenceRole: note.phraseCadenceRole } : {}),
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
@@ -5990,11 +6031,11 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
     const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     const hasFeature = track.notes.some((note) => (
-      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
     ));
     if (hasFeature) continue;
     let anchor = (fallbackById.get(entry.featuredTrack) ?? [])
-      .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+      .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
       .sort((left, right) => (
         Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor))
         || right.velocity - left.velocity
@@ -6002,7 +6043,7 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
       ))[0];
     if (!anchor && entry.featuredTrack === "counterpoint") {
       const melodyAnchor = (fallbackById.get("melody") ?? [])
-        .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+        .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
         .sort((left, right) => Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor)) || left.start - right.start)[0];
       if (melodyAnchor) {
         anchor = {
@@ -6018,8 +6059,11 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
       }
     }
     if (!anchor) continue;
+    const restoredStart = round(clamp(anchor.start, section.startBeat, section.endBeat - 0.02));
     track.notes.push({
       ...anchor,
+      start: restoredStart,
+      duration: round(Math.min(anchor.duration, section.endBeat - restoredStart)),
       orchestrationRole: "feature",
       finalAssemblyRole: "restored-feature-anchor",
     });
@@ -6075,14 +6119,14 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
     const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     if (!track.notes.some((note) => (
-      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
     ))) {
       missingFeaturedSections.push(entry.sectionId);
     }
   }
   const silentSections = structure
     .filter((section) => !tracks.some((track) => track.notes.some((note) => (
-      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
     ))))
     .map((section) => section.id);
   const transitionContracts = (songBlueprint?.transitions ?? []).filter((transition) => {
@@ -7265,7 +7309,8 @@ function applyPhraseResolutions(
       boundaries.push(section.endBeat);
     }
 
-    for (const boundary of boundaries) {
+    for (let boundaryIndex = 0; boundaryIndex < boundaries.length; boundaryIndex += 1) {
+      const boundary = boundaries[boundaryIndex];
       const candidates = result
         .filter((note) => (
           note.start < boundary - 0.04
@@ -7277,11 +7322,19 @@ function applyPhraseResolutions(
       const chord = harmonyAt(harmony, Math.max(section.startBeat, boundary - 0.05));
       if (!chord?.tones?.length) continue;
       const previous = candidates.at(-2);
-      const direction = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
-      const cadence = plan?.cadence ?? (boundary >= section.endBeat - 1e-6 ? "resolve" : "continue");
-      const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
-      const forceTonic = finalSongLanding || cadence === "resolve";
       const sectionBoundary = boundary >= section.endBeat - 0.05;
+      const cadence = sectionBoundary ? (plan?.cadence ?? "resolve") : "continue";
+      const landingRole = phraseLandingRole({
+        boundaryIndex,
+        boundaryCount: boundaries.length,
+        cadence,
+        trackId,
+      });
+      const landingProfile = phraseLandingProfile(landingRole);
+      const melodicDirection = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
+      const direction = landingProfile.direction || melodicDirection;
+      const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
+      const forceTonic = finalSongLanding || sectionBoundary && cadence === "resolve";
       const contract = generationInterlock?.sectionContracts?.find((candidate) => candidate.sectionId === section.id);
       const contractTones = sectionBoundary ? contract?.harmonicGoalPitchClasses : null;
       const targetChord = forceTonic
@@ -7289,22 +7342,28 @@ function applyPhraseResolutions(
         : Array.isArray(contractTones) && contractTones.length
           ? { ...chord, tones: contractTones }
           : chord;
-      const target = nearestChordTone(landing.pitch, targetChord, direction);
+      const expressiveTones = landingProfile.avoidRoot
+        ? targetChord.tones.filter((tone) => tone !== chord.rootPc && tone !== config.keyPc)
+        : targetChord.tones;
+      const landingChord = expressiveTones.length ? { ...targetChord, tones: expressiveTones } : targetChord;
+      const target = nearestChordTone(landing.pitch, landingChord, direction);
       const maximumLeap = trackId === "counterpoint" ? 5 : 7;
       if (Math.abs(target - landing.pitch) <= maximumLeap || forceTonic) {
         landing.pitch = nearestScalePitch(target, config, direction);
       }
       landing.duration = round(clamp(
-        Math.max(landing.duration, Math.min(barBeats * 0.55, boundary - landing.start - 0.03)),
+        Math.max(
+          landing.duration * landingProfile.durationScale,
+          Math.min(barBeats * 0.55 * landingProfile.durationScale, boundary - landing.start - 0.03),
+        ),
         0.08,
         Math.max(0.08, boundary - landing.start - 0.02),
       ));
-      landing.velocity = clamp(landing.velocity + (forceTonic ? 6 : 2), 1, 127);
+      landing.velocity = clamp(landing.velocity + landingProfile.velocityDelta, 1, 127);
       landing.resolutionRole = forceTonic ? "tonic-landing" : "chord-landing";
+      landing.phraseCadenceRole = landingRole;
       landing.phraseBoundary = round(boundary);
-      if (rng.fork(`${trackId}-${section.id}-${boundary}`).bool(trackId === "melody" ? 0.7 : 0.38)) {
-        landing.articulationIntent = "tenuto";
-      }
+      landing.articulationIntent = landingProfile.articulation;
     }
   }
   return result;
@@ -7908,14 +7967,30 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  const tracks = producerIntentAudit.tracks;
+  const postIntentAssembly = runFinalAssemblyPass(
+    producerIntentAudit.tracks,
+    finalAssemblyRepair.tracks,
+    structure,
+    songBlueprint,
+  );
+  const finalProducerIntentAudit = auditProducerIntentContract(
+    postIntentAssembly.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const tracks = finalProducerIntentAudit.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
     songBlueprint,
-    finalAssemblyRepair.repairs,
+    {
+      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
+        + postIntentAssembly.repairs.featuredAnchorsRestored,
+      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
+        + postIntentAssembly.repairs.transitionEventsTagged,
+    },
   );
   const sectionContrast = createSectionContrastReport(
     tracks,
@@ -7990,7 +8065,7 @@ function compose(config, options = {}) {
     rhythmTurnaroundConversation,
     characteristicVoice: characteristicVoice.report,
     producerIntent: clone(songBlueprint.producerIntent),
-    producerIntentReport: producerIntentAudit.report,
+    producerIntentReport: finalProducerIntentAudit.report,
     finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
@@ -8027,7 +8102,7 @@ function compose(config, options = {}) {
       { phase: 71, id: "genre-native-drum-fill-vocabulary", status: "complete" },
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
-      { phase: 76, id: "producer-intent-contract", status: producerIntentAudit.report.status },
+      { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
     ],
     idea,
   };
@@ -9100,12 +9175,28 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  song.tracks = producerIntentAudit.tracks;
+  const postIntentAssembly = runFinalAssemblyPass(
+    producerIntentAudit.tracks,
+    finalAssemblyRepair.tracks,
+    song.structure,
+    song.songBlueprint,
+  );
+  const finalProducerIntentAudit = auditProducerIntentContract(
+    postIntentAssembly.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  song.tracks = finalProducerIntentAudit.tracks;
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
     song.songBlueprint,
-    finalAssemblyRepair.repairs,
+    {
+      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
+        + postIntentAssembly.repairs.featuredAnchorsRestored,
+      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
+        + postIntentAssembly.repairs.transitionEventsTagged,
+    },
   );
   song.sectionContrast = createSectionContrastReport(
     song.tracks,
@@ -9122,7 +9213,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
   song.producerIntent = clone(song.songBlueprint?.producerIntent);
-  song.producerIntentReport = producerIntentAudit.report;
+  song.producerIntentReport = finalProducerIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);
