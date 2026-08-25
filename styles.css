@@ -4245,34 +4245,128 @@ h1, h2, h3, h4, .font-display {
 .home-path b{font:800 10px var(--font-mono);color:var(--accent)}
 .home-path span,.home-path strong,.home-path small{display:block}
 .home-path strong{font-size:11px}.home-path small{margin-top:1px;color:var(--text-3);font-size:9px}
-#tab-create>.song-showcase{grid-column:1;grid-row:2}
-#tab-create>.song-creator-panel{grid-column:2;grid-row:2}
-#tab-create>.workflow-panel{grid-column:1/-1}
-#tab-create>.song-showcase{
-  grid-template-columns:minmax(180px,.58fr) minmax(0,1.35fr);
-  align-content:start;
-  min-height:100%;
-}
-#tab-create>.song-showcase .dna-integrated-card{grid-column:1/-1;width:100%}
-#tab-create>.song-creator-panel{padding:22px}
-#tab-create>.song-creator-panel .creator-heading h2{font-size:clamp(24px,2.5vw,34px)}
-#tab-create>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr}
-#tab-create>.song-creator-panel .generation-button{min-height:82px}
-
 @media(max-width:1120px){
   #tab-create.is-active{grid-template-columns:1fr}
-  .home-command,#tab-create>.song-showcase,#tab-create>.song-creator-panel,#tab-create>.workflow-panel{grid-column:1}
-  #tab-create>.song-showcase{grid-row:2}
-  #tab-create>.song-creator-panel{grid-row:3}
-  #tab-create>.workflow-panel{grid-row:4}
-  #tab-create>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr 1fr}
 }
 @media(max-width:760px){
   .home-command{align-items:flex-start;flex-direction:column;gap:18px;padding:8px 2px 0}
   .home-command h2{font-size:clamp(31px,10vw,46px)}
   .home-path{width:100%;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
   .home-path li{min-width:126px}
-  #tab-create>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr}
+}
+
+/* ─── CREATE CONSOLE: NOW PLAYING + DIRECTION ─────────────────────────── */
+.create-console{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:minmax(0,1.45fr) minmax(360px,.72fr);
+  gap:1px;
+  overflow:hidden;
+  border:1px solid rgba(192,132,252,.2);
+  border-radius:22px;
+  background:rgba(192,132,252,.16);
+  box-shadow:0 30px 90px rgba(0,0,0,.3);
+}
+.create-console>.panel{
+  margin:0;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+.create-console>.song-showcase{
+  grid-column:1;
+  grid-row:1;
+  grid-template-columns:minmax(170px,.54fr) minmax(0,1.46fr);
+  min-height:100%;
+}
+.create-console>.song-showcase .dna-integrated-card{grid-column:1/-1;width:100%}
+.create-console>.song-creator-panel{grid-column:2;grid-row:1;padding:22px}
+.create-console>.song-creator-panel .creator-heading h2{font-size:clamp(24px,2.5vw,34px)}
+.create-console>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr}
+.create-console>.song-creator-panel .generation-button{min-height:82px}
+.create-console>.workflow-panel{grid-column:1/-1;grid-row:2}
+
+.create-live-controls{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;
+  margin-top:18px;
+  padding:12px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:14px;
+  background:rgba(4,4,9,.38);
+  -webkit-backdrop-filter:blur(20px);
+  backdrop-filter:blur(20px);
+}
+.create-live-control{
+  grid-column:span 2;
+  display:grid;
+  grid-template-columns:1fr auto;
+  align-items:center;
+  gap:5px 8px;
+  min-width:0;
+  padding:8px 9px;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+}
+.create-live-control>span{display:contents}
+.create-live-control b,
+.create-live-select>span{
+  color:var(--text-2);
+  font:800 .66rem var(--font-data);
+  letter-spacing:.1em;
+}
+.create-live-control output{
+  color:var(--accent-2);
+  font:800 .68rem var(--font-mono);
+  white-space:nowrap;
+}
+.create-live-control input{grid-column:1/-1;width:100%;min-height:24px}
+.create-live-control>small{
+  grid-column:1/-1;
+  color:var(--text-3);
+  font-size:.64rem;
+  line-height:1.35;
+}
+.create-live-control>.auto-control-button{grid-column:1/-1;justify-self:start}
+.create-live-select{
+  grid-column:span 3;
+  display:grid;
+  gap:6px;
+  min-width:0;
+  padding:8px 9px;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+}
+.create-live-select select{
+  width:100%;
+  min-height:42px;
+  padding:0 10px;
+  border:1px solid var(--border-1);
+  border-radius:9px;
+  color:var(--text);
+  background:var(--bg-2);
+}
+
+@media(max-width:1120px){
+  .create-console{grid-template-columns:1fr}
+  .create-console>.song-showcase{grid-column:1;grid-row:1}
+  .create-console>.song-creator-panel{grid-column:1;grid-row:2}
+  .create-console>.workflow-panel{grid-column:1;grid-row:3}
+  .create-console>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr 1fr}
+}
+@media(max-width:700px){
+  .create-console>.song-showcase{grid-template-columns:104px minmax(0,1fr);gap:18px;padding:20px}
+  .create-live-controls{grid-template-columns:1fr 1fr;padding:10px}
+  .create-live-control,.create-live-select{grid-column:span 1}
+  .create-live-control:first-child{grid-column:1/-1}
+}
+@media(max-width:480px){
+  .create-console{border-radius:16px}
+  .create-console>.song-showcase{grid-template-columns:1fr}
+  .create-live-controls{grid-template-columns:1fr}
+  .create-live-control,.create-live-control:first-child,.create-live-select{grid-column:1}
+  .create-console>.song-creator-panel .generation-actions-bar{grid-template-columns:1fr}
 }
 
 /* ─── PHASE 73: SHAPE WORKSPACE CLARITY ────────────────────────────────── */

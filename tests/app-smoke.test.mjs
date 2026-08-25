@@ -21,6 +21,17 @@ const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", im
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
 
+test("Create unifies now playing with the essential song controls", () => {
+  assert.match(htmlSource, /class="create-console"[\s\S]*?id="heroPanel"[\s\S]*?id="preGenSection"/);
+  assert.match(htmlSource, /NOW PLAYING &amp; CREATING/);
+  assert.match(htmlSource, /class="create-live-controls"/);
+  for (const id of ["tempoControl", "energyControl", "complexityControl", "barsControl", "grooveControl"]) {
+    assert.equal((htmlSource.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${id} must have one authoritative control`);
+  }
+  assert.match(cssSource, /\.create-console\s*\{[\s\S]*?grid-template-columns/);
+  assert.match(cssSource, /\.create-live-controls\s*\{[\s\S]*?backdrop-filter:blur\(20px\)/);
+});
+
 test("lead and pad envelopes stay expressive without overlapping later phrases", () => {
   const lead = previewNoteEnvelope({ trackId: "melody", duration: 8, release: 2.5, reverb: 1, articulation: "legato" });
   const pad = previewNoteEnvelope({ trackId: "pad", duration: 16, release: 2.5, reverb: 1, articulation: "sustain" });

@@ -94,6 +94,7 @@
               <li><b>03</b><span><strong>Shape</strong><small>Edit only what matters</small></span></li>
             </ol>
           </section>
+          <div class="create-console" aria-label="Now playing and song controls">
           <section class="hero-panel song-showcase panel" id="heroPanel" aria-labelledby="songTitle">
             <div class="showcase-art" id="showcaseArt" data-cover-style="eclipse" aria-hidden="true">
               <div class="showcase-cover-shape showcase-cover-shape-a"></div>
@@ -112,7 +113,7 @@
               </div>
             </div>
             <div class="hero-copy showcase-copy">
-              <p class="eyebrow"><span></span> NOW CREATING</p>
+              <p class="eyebrow"><span></span> NOW PLAYING &amp; CREATING</p>
               <div class="title-row">
                 <div><h1 id="songTitle">Midnight Polaroid</h1><p id="songSummary">A luminous groove is waiting to be generated.</p></div>
                 <button class="tiny-button" id="renameButton" type="button" aria-label="Rename">
@@ -126,6 +127,42 @@
                 <span id="factBars">32 BARS</span>
                 <span id="factDuration">01:09</span>
                 <span class="fact-rhythm" id="factRhythm">LAID-BACK</span>
+              </div>
+              <div class="create-live-controls" aria-label="Quick song controls">
+                <label class="create-live-control">
+                  <span><b>TEMPO</b><output id="tempoValue">84 BPM</output></span>
+                  <input id="tempoControl" type="range" min="58" max="200" value="84" aria-label="Tempo in beats per minute" />
+                  <small>Updates current playback when the genre matches</small>
+                </label>
+                <label class="create-live-control">
+                  <span><b>ENERGY</b><output id="energyValue">68</output></span>
+                  <input id="energyControl" type="range" min="0" max="100" value="68" />
+                  <small>Calm to electric</small>
+                </label>
+                <label class="create-live-control">
+                  <span><b>COMPLEXITY</b><output id="complexityValue">54</output></span>
+                  <input id="complexityControl" type="range" min="0" max="100" value="54" />
+                  <small>Simple to intricate</small>
+                </label>
+                <label class="create-live-select">
+                  <span>SONG LENGTH</span>
+                  <select id="barsControl" aria-label="Song length">
+                    <option value="auto">Auto · choose length</option>
+                    <option value="16">16 bars</option><option value="24">24 bars</option>
+                    <option value="32" selected>32 bars</option><option value="48">48 bars</option>
+                    <option value="64">64 bars</option>
+                  </select>
+                </label>
+                <label class="create-live-select">
+                  <span>GROOVE FEEL</span>
+                  <select id="grooveControl" aria-label="Groove">
+                    <option value="auto">Auto · genre-aware</option>
+                    <option value="straight">Straight</option>
+                    <option value="laidback">Laid back</option>
+                    <option value="shuffled">Shuffled</option>
+                    <option value="syncopated">Syncopated</option>
+                  </select>
+                </label>
               </div>
               <div class="showcase-actions" aria-label="Current song actions">
                 <button class="showcase-action showcase-play" id="showcasePlayButton" type="button" aria-label="Play current song">
@@ -216,7 +253,7 @@
               <div>
                 <p class="eyebrow"><span></span> SONG DIRECTION</p>
                 <h2 id="directionTitle">Direct the next idea</h2>
-                <p class="section-description">Choose a genre, then shape its energy and complexity. Everything else is optional.</p>
+                <p class="section-description">Choose the genre here. Tempo, energy, complexity, length and groove now stay beside the song you are hearing.</p>
               </div>
               <div class="creator-heading-actions">
                 <button class="tiny-button reset-button" id="resetControlsButton" type="button" aria-label="Reset controls">
@@ -324,11 +361,6 @@
                       </select>
                     </label>
                     <div class="transpose-buttons">
-                        <option>E</option><option>F</option><option>F#</option><option>G</option>
-                        <option>G#</option><option>A</option><option>A#</option><option>B</option>
-                      </select>
-                    </label>
-                    <div class="transpose-buttons">
                       <button id="keyTransposeDown" type="button" aria-label="Transpose down">b -1</button>
                       <button id="keyTransposeUp" type="button" aria-label="Transpose up"># +1</button>
                     </div>
@@ -383,25 +415,6 @@
                     <span class="mode-descriptor" id="modeGuidance">Soulful minor with a bright 6th</span>
                   </div>
                   <label class="select-control">
-                    <span>SONG LENGTH</span>
-                    <select id="barsControl" aria-label="Song length">
-                      <option value="auto">Auto · choose length</option>
-                      <option value="16">16 bars</option><option value="24">24 bars</option>
-                      <option value="32" selected>32 bars</option><option value="48">48 bars</option>
-                      <option value="64">64 bars</option>
-                    </select>
-                  </label>
-                  <label class="select-control">
-                    <span>GROOVE FEEL</span>
-                    <select id="grooveControl" aria-label="Groove">
-                      <option value="auto">Auto · genre-aware</option>
-                      <option value="straight">Straight</option>
-                      <option value="laidback">Laid back</option>
-                      <option value="shuffled">Shuffled</option>
-                      <option value="syncopated">Syncopated</option>
-                    </select>
-                  </label>
-                  <label class="select-control">
                     <span>HARMONIC PATH</span>
                     <select id="chordPathControl" aria-label="Chord style">
                       <option value="auto" selected>Auto</option>
@@ -413,29 +426,8 @@
                     </select>
                   </label>
                 </div>
-                <div class="tempo-row">
-                  <label class="tempo-control">
-                    <span class="control-label"><b>TEMPO / BPM</b><output id="tempoValue">84 BPM</output></span>
-                    <input id="tempoControl" type="range" min="58" max="200" value="84" />
-                    <span class="range-scale"><i>58</i><i>130</i><i>200</i></span>
-                  </label>
-                </div>
                   </div>
                 </details>
-                <div class="macro-grid">
-                  <label class="macro-control energy">
-                    <span class="macro-top"><b>ENERGY</b><output id="energyValue">68</output></span>
-                    <span class="macro-art" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                    <input id="energyControl" type="range" min="0" max="100" value="68" />
-                    <small>calm to electric</small>
-                  </label>
-                  <label class="macro-control complexity">
-                    <span class="macro-top"><b>COMPLEXITY</b><output id="complexityValue">54</output></span>
-                    <span class="macro-art dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
-                    <input id="complexityControl" type="range" min="0" max="100" value="54" />
-                    <small>simple to intricate</small>
-                  </label>
-                </div>
               </div>
               <details class="creator-recipe-side">
                 <summary>
@@ -486,6 +478,7 @@
               </button>
             </div>
           </section>
+          </div>
         </div>
 
         <!-- ARRANGE TAB -->
