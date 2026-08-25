@@ -1643,6 +1643,125 @@ function createOrchestrationMatrix(config, structure, sectionPlans, source = nul
   });
 }
 
+const PRODUCER_PURPOSES = deepFreeze({
+  intro: "establish",
+  verse: "develop",
+  prechorus: "build",
+  chorus: "payoff",
+  bridge: "contrast",
+  build: "build",
+  drop: "payoff",
+  breakdown: "reset",
+  outro: "resolve",
+  idea: "establish",
+  theme: "payoff",
+  solo: "spotlight",
+});
+
+function answerTrackForForeground(foregroundTrack, section, config) {
+  if (foregroundTrack === "melody") return "counterpoint";
+  if (foregroundTrack === "counterpoint") return "melody";
+  if (["bass", "drums"].includes(foregroundTrack)) {
+    return ["house", "techno", "drumBass", "trap", "drill"].includes(config.genre)
+      ? "chords"
+      : "melody";
+  }
+  if (foregroundTrack === "chords") return "melody";
+  return ["breakdown", "outro"].includes(section.name) ? "counterpoint" : "melody";
+}
+
+/**
+ * Create one compact creative brief shared by every generator. Local track
+ * rules can still express the genre, but they must agree on who owns the
+ * listener's attention and where the arrangement intentionally leaves room.
+ */
+function createProducerIntentContract(
+  config,
+  structure,
+  sectionPlans,
+  orchestrationMatrix,
+  narrative,
+  hookSectionId,
+  peakSectionId,
+) {
+  const matrixBySection = new Map(orchestrationMatrix.map((entry) => [entry.sectionId, entry]));
+  const scenes = structure.map((section, index) => {
+    const plan = sectionPlans[index];
+    const matrix = matrixBySection.get(section.id);
+    const foregroundTrack = matrix?.featuredTrack ?? "melody";
+    const answerTrack = answerTrackForForeground(foregroundTrack, section, config);
+    const purpose = PRODUCER_PURPOSES[section.name]
+      ?? (plan.role === "peak" ? "payoff" : plan.role === "release" ? "resolve" : "develop");
+    const silenceBudget = round(clamp(
+      purpose === "reset" ? 0.34
+        : purpose === "establish" ? 0.24
+          : purpose === "resolve" ? 0.28
+            : purpose === "contrast" ? 0.2
+              : purpose === "payoff" ? 0.07
+                : 0.13,
+      0.05,
+      0.4,
+    ));
+    const roles = Object.fromEntries(TRACK_IDS.map((id) => {
+      const lane = matrix?.lanes?.[id];
+      let role = "support";
+      if (id === foregroundTrack) role = "foreground";
+      else if (id === answerTrack) role = "answer";
+      else if (["drums", "bass"].includes(id)) role = "foundation";
+      else if (id === "pad") role = lane?.presence < 0.5 || purpose === "payoff" ? "texture" : "support";
+      if (
+        role === "support"
+        && lane?.presence < 0.47
+        && finite(matrix?.featureOccurrence, 0) === 0
+        && !["build", "payoff"].includes(purpose)
+      ) role = "rest";
+      if (
+        id === "counterpoint"
+        && role === "answer"
+        && purpose === "establish"
+        && index === 0
+      ) role = "rest";
+      return [id, role];
+    }));
+    return {
+      sectionId: section.id,
+      sectionName: section.name,
+      purpose,
+      foregroundTrack,
+      answerTrack: roles[answerTrack] === "answer" ? answerTrack : null,
+      silenceBudget,
+      densityCeiling: round(clamp(0.64 + plan.energy * 0.3 - silenceBudget * 0.12, 0.58, 0.96)),
+      roles,
+    };
+  });
+  const featuredCounts = new Map();
+  for (const scene of scenes) {
+    featuredCounts.set(scene.foregroundTrack, (featuredCounts.get(scene.foregroundTrack) ?? 0) + 1);
+  }
+  const signatureTrack = [...featuredCounts.entries()]
+    .sort((left, right) => right[1] - left[1] || TRACK_IDS.indexOf(left[0]) - TRACK_IDS.indexOf(right[0]))[0]?.[0]
+    ?? "melody";
+  return {
+    version: 1,
+    identity: {
+      narrative: narrative.id,
+      hookSectionId: hookSectionId ?? null,
+      peakSectionId: peakSectionId ?? null,
+      signatureTrack,
+      grooveIdentity: ["house", "techno", "drumBass", "trap", "drill", "funk"].includes(config.genre)
+        ? "rhythm-led"
+        : "phrase-led",
+    },
+    rules: {
+      maxForegroundVoices: 1,
+      protectFoundation: true,
+      separateAnswers: true,
+      preserveCadences: true,
+    },
+    scenes,
+  };
+}
+
 function createMemoryMap(structure, sectionPlans, hookSectionId, source = null) {
   const firstByName = new Map();
   return structure.map((section, index) => {
@@ -1808,9 +1927,18 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     };
   });
   const orchestrationMatrix = createOrchestrationMatrix(config, structure, sectionPlans, source);
+  const producerIntent = createProducerIntentContract(
+    config,
+    structure,
+    sectionPlans,
+    orchestrationMatrix,
+    narrative,
+    hookSection?.id,
+    peakSection?.id,
+  );
   const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source);
   return {
-    version: 5,
+    version: 6,
     narrative: { id: narrative.id, label: narrative.label },
     hookSectionId: hookSection?.id ?? null,
     peakSectionId: peakSection?.id ?? null,
@@ -1838,6 +1966,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     sectionPlans,
     transitions,
     orchestrationMatrix,
+    producerIntent,
     memoryMap,
   };
 }
@@ -4727,48 +4856,206 @@ function generatePad(
 
 function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
   const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
+  const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
   return Object.fromEntries(Object.entries(rawTracks).map(([id, sourceNotes]) => {
     const result = [];
     for (const section of structure) {
       const notes = sourceNotes.filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
       const lane = matrix.get(section.id)?.lanes?.[id];
+      const scene = scenes.get(section.id);
+      const producerRole = scene?.roles?.[id] ?? lane?.role ?? "support";
       if (!lane || !notes.length) {
-        result.push(...notes.map((note) => ({ ...note })));
+        result.push(...notes.map((note) => ({
+          ...note,
+          producerRole,
+          producerScenePurpose: scene?.purpose ?? "develop",
+        })));
         continue;
       }
       const kept = [];
+      const foregroundAttacks = scene?.foregroundTrack && scene.foregroundTrack !== id
+        ? (rawTracks[scene.foregroundTrack] ?? []).filter((note) => (
+          note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+        ))
+        : [];
+      const rolePresence = {
+        foreground: 1,
+        foundation: 0.98,
+        answer: 0.8,
+        support: 0.88,
+        texture: 0.72,
+        rest: 0.12,
+      }[producerRole] ?? 0.88;
+      const roleVelocity = {
+        foreground: 1.05,
+        foundation: 0.98,
+        answer: 0.94,
+        support: 0.9,
+        texture: 0.84,
+        rest: 0.76,
+      }[producerRole] ?? 0.9;
       for (let index = 0; index < notes.length; index += 1) {
         const note = notes[index];
-        if (id === "drums") {
+        if (id === "drums" && producerRole !== "rest") {
           kept.push({
             ...note,
-            velocity: clamp(Math.round(note.velocity * lane.velocity), 1, 127),
+            velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
             orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
           });
           continue;
         }
         const barPosition = mod(note.start, beatsPerBar(config));
-        const structuralAnchor = index === 0
-          || note.phraseAnchor
+        const protectedAnchor = note.phraseAnchor
+          || note.resolutionRole
+          || note.transitionRole
+          || note.transitionFeature
+          || note.ensembleAccent;
+        const structuralAnchor = (producerRole !== "rest" && index === 0)
+          || protectedAnchor
           || (id === "drums" && ([36, 38, 39].includes(note.pitch) || Math.abs(barPosition) < 0.04))
           || (id === "bass" && Math.abs(note.start - Math.round(note.start)) < 0.04)
           || (["chords", "pad"].includes(id) && note.start <= section.startBeat + 0.04);
         const local = rng.fork(`phase7-${section.id}-${id}-${round(note.start, 4)}-${note.pitch}-${index}`);
-        if (!structuralAnchor && !local.bool(lane.presence)) continue;
+        const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
+          Math.abs(foreground.start - note.start) < 0.105
+        ));
+        if (!protectedAnchor && answerCollision) continue;
+        if (producerRole === "rest" && !protectedAnchor) continue;
+        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence, 0.04, 1))) continue;
         kept.push({
           ...note,
-          velocity: clamp(Math.round(note.velocity * lane.velocity), 1, 127),
+          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
           orchestrationRole: lane.role,
+          producerRole,
+          producerScenePurpose: scene?.purpose ?? "develop",
         });
       }
-      if (!kept.length && notes.length) {
+      if (!kept.length && notes.length && producerRole !== "rest") {
         const anchor = [...notes].sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
-        kept.push({ ...anchor, orchestrationRole: lane.role });
+        kept.push({
+          ...anchor,
+          orchestrationRole: lane.role,
+          producerRole,
+          producerScenePurpose: scene?.purpose ?? "develop",
+        });
       }
       result.push(...kept);
     }
     return [id, result.sort((left, right) => left.start - right.start || left.pitch - right.pitch)];
   }));
+}
+
+function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
+  const sectionForNote = (note) => structure.find((section) => (
+    note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+  ));
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => {
+      const section = sectionForNote(note);
+      const scene = scenes.get(section?.id);
+      return {
+        ...note,
+        producerRole: scene?.roles?.[track.id] ?? note.producerRole ?? "support",
+        producerScenePurpose: scene?.purpose ?? note.producerScenePurpose ?? "develop",
+      };
+    }),
+  }));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  for (const scene of producerIntent?.scenes ?? []) {
+    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
+    const answerTrack = trackById.get(scene.answerTrack);
+    if (!section || !answerTrack || !foreground.length) continue;
+    answerTrack.notes = answerTrack.notes.filter((note) => {
+      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
+      const protectedAnchor = note.phraseAnchor
+        || note.resolutionRole
+        || note.transitionRole
+        || note.transitionFeature
+        || note.transitionHandoffRole
+        || note.memoryRole
+        || note.motifHandoffRole
+        || note.ensembleAccent;
+      if (protectedAnchor) return true;
+      return !foreground.some((lead) => (
+        lead.start >= section.startBeat - 1e-6
+        && lead.start < section.endBeat - 1e-6
+        && Math.abs(lead.start - note.start) < 0.105
+      ));
+    });
+  }
+  const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
+      section && note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+    ));
+    const foreground = notesFor(scene.foregroundTrack);
+    const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
+    const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
+    const protectedSharedAnchors = collidingAnswers.filter((note) => (
+      note.phraseAnchor
+      || note.resolutionRole
+      || note.transitionRole
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.memoryRole
+      || note.motifHandoffRole
+      || note.ensembleAccent
+    )).length;
+    const collisions = collidingAnswers.length - protectedSharedAnchors;
+    const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
+    const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
+    return {
+      sectionId: scene.sectionId,
+      purpose: scene.purpose,
+      foregroundTrack: scene.foregroundTrack,
+      foregroundNotes: foreground.length,
+      answerTrack: scene.answerTrack,
+      answerCollisionRate: round(collisions / Math.max(1, answers.length)),
+      protectedSharedAnchors,
+      restTracks: restTrackIds.length,
+      restNotes,
+    };
+  });
+  const allNotes = tracks.flatMap((track) => track.notes);
+  const foregroundCoverage = sceneReports.filter((scene) => scene.foregroundNotes > 0).length
+    / Math.max(1, sceneReports.length);
+  const answerCollisionRate = average(sceneReports.map((scene) => scene.answerCollisionRate), 0);
+  const singleForeground = (producerIntent?.scenes ?? []).every((scene) => (
+    Object.values(scene.roles ?? {}).filter((role) => role === "foreground").length === 1
+  ));
+  const completeRoles = (producerIntent?.scenes ?? []).every((scene) => (
+    TRACK_IDS.every((id) => typeof scene.roles?.[id] === "string")
+  ));
+  return {
+    tracks,
+    report: {
+      phase: 76,
+      version: 1,
+      status: "complete",
+      signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
+      metrics: {
+        sceneCount: sceneReports.length,
+        taggedNotes: allNotes.filter((note) => note.producerRole).length,
+        foregroundCoverage: round(foregroundCoverage),
+        answerCollisionRate: round(answerCollisionRate),
+        restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+      },
+      checks: {
+        completeRoles,
+        singleForeground,
+        foregroundAudible: foregroundCoverage >= 0.9,
+        answersSeparated: answerCollisionRate <= 0.28,
+        allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
+      },
+      scenes: sceneReports,
+    },
+  };
 }
 
 function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifLength, totalBeats) {
@@ -6066,7 +6353,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
         const bar = Math.floor(note.start / barBeats);
-        const keepFill = bar % 4 === 3 || ["lift", "phrase-ending"].includes(note.performanceRole);
+        const keepFill = bar % 4 === 3 && ["lift", "phrase-ending"].includes(note.performanceRole);
         if (keepFill && id === "melody") {
           note.velocity = clamp(note.velocity - 7, 1, 120);
           note.duration = round(Math.max(0.04, note.duration * 0.72));
@@ -7586,7 +7873,12 @@ function compose(config, options = {}) {
   const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);
   const characteristicVoice = applyCharacteristicVoice(finalRhythmLock.tracks, structure, config);
-  const tracks = characteristicVoice.tracks;
+  const producerIntentAudit = auditProducerIntentContract(
+    characteristicVoice.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const tracks = producerIntentAudit.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -7667,6 +7959,8 @@ function compose(config, options = {}) {
     drumFillVocabulary,
     rhythmTurnaroundConversation,
     characteristicVoice: characteristicVoice.report,
+    producerIntent: clone(songBlueprint.producerIntent),
+    producerIntentReport: producerIntentAudit.report,
     finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
@@ -7703,6 +7997,7 @@ function compose(config, options = {}) {
       { phase: 71, id: "genre-native-drum-fill-vocabulary", status: "complete" },
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
+      { phase: 76, id: "producer-intent-contract", status: producerIntentAudit.report.status },
     ],
     idea,
   };
@@ -7882,7 +8177,14 @@ function orchestrationScoreForSong(song) {
   }
   const featuredRoles = song.tracks?.flatMap((track) => track.notes ?? [])
     .filter((note) => note.orchestrationRole === "feature").length ?? 0;
-  return clamp(Math.round(48 + average(results, 0.58) * 44 + (featuredRoles ? 8 : 0)), 35, 100);
+  const producerChecks = Object.values(song.producerIntentReport?.checks ?? {});
+  const producerIntentFit = average(producerChecks.map((passed) => passed ? 1 : 0), 0.6);
+  return clamp(Math.round(
+    44
+    + average(results, 0.58) * 42
+    + (featuredRoles ? 6 : 0)
+    + producerIntentFit * 8
+  ), 35, 100);
 }
 
 function memoryScoreForSong(song) {
@@ -8274,6 +8576,10 @@ export function evaluateSongCandidate(song) {
       harmonicJourneyFit: round(harmonicJourney / 100),
       performanceControl: round(performance / 100),
       orchestrationFit: round(orchestration / 100),
+      producerIntentFit: round(average(
+        Object.values(song.producerIntentReport?.checks ?? {}).map((passed) => passed ? 1 : 0),
+        0.6,
+      )),
       memoryRecall: round(memory / 100),
       productionReadiness: round(production / 100),
       phraseResolution: round(phraseResolution / 100),
@@ -8741,7 +9047,12 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   produced.report.metrics.perceptualDynamicRange = perceptualMix.report.dynamicRange;
   produced.report.metrics.spectralSpan = spectral.metrics.span;
   produced.report.checks.scaleSafety = scaleSafety.passed;
-  song.tracks = finalMaster.tracks;
+  const producerIntentAudit = auditProducerIntentContract(
+    finalMaster.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  song.tracks = producerIntentAudit.tracks;
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
@@ -8762,6 +9073,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   song.vocalSpace = creativePolish.vocalSpace;
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
+  song.producerIntent = clone(song.songBlueprint?.producerIntent);
+  song.producerIntentReport = producerIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);

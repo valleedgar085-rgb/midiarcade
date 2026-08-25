@@ -594,7 +594,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.notEqual(freshGeneration.song.seed, initialGeneration.song.seed, "New must advance to a fresh seed");
   assert.notEqual(freshGeneration.song.id, initialGeneration.song.id, "New must replace the arrangement");
   assert.notEqual(freshGeneration.song.oneShotKit.id, initialGeneration.song.oneShotKit.id, "New must load a different one-shot kit");
-  assert.equal(freshGeneration.song.songBlueprint.version, 5, "New must commit the shared song blueprint");
+  assert.equal(freshGeneration.song.songBlueprint.version, 6, "New must commit the shared song blueprint");
   assert.equal(freshGeneration.song.meta.scoreDetails.criticVersion, 6, "New must be selected by genre-aware Critic 6.0");
   assert.equal(freshGeneration.song.generationInterlock.phase, 39, "New must connect every generation stage");
   assert.equal(freshGeneration.song.producerPass.phase, 9, "New must complete the phase 9 producer pass");

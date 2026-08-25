@@ -9,7 +9,7 @@ import {
 } from "../src/music-engine.js";
 
 const VOCAL_GENRES = new Set(["rap", "hipHop", "trap", "drill", "rnbSoul", "neoSoul", "pop", "reggaeton", "afrobeats"]);
-const REQUIRED_PHASES = [7, 8, 9, 39, 41, 42, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75];
+const REQUIRED_PHASES = [7, 8, 9, 39, 41, 42, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76];
 
 function mod(value, divisor) {
   return ((value % divisor) + divisor) % divisor;

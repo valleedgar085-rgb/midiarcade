@@ -454,7 +454,7 @@ test("song blueprint coordinates narrative, section energy, cadence, and motif d
   const song = engine.generateNew(config);
   const blueprint = song.songBlueprint;
 
-  assert.equal(blueprint.version, 5);
+  assert.equal(blueprint.version, 6);
   assert.match(blueprint.narrative.label, /\S/);
   assert.equal(blueprint.sectionPlans.length, song.structure.length);
   assert.ok(blueprint.hookSectionId);
@@ -652,8 +652,8 @@ test("phases 7, 8, and 9 orchestrate sections, recall musical ideas, and pass a 
   };
   const song = engine.generateNew(config);
   assert.deepEqual(engine.generateNew(config), song, "phase 9 must remain deterministic for a fixed generation");
-  assert.equal(song.songBlueprint.version, 5);
-  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75]);
+  assert.equal(song.songBlueprint.version, 6);
+  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76]);
   assert.ok(song.generationPhases.every(({ status }) => status === "complete" || status === "passed" || status === "best-available"));
 
   assert.equal(song.orchestrationMatrix.length, song.structure.length);
@@ -677,6 +677,50 @@ test("phases 7, 8, and 9 orchestrate sections, recall musical ideas, and pass a 
   assert.equal(song.meta.qualityGate.phase, 9);
   assert.equal(song.meta.qualityGate.totalScore, song.meta.scoreDetails.totalScore);
   assert.equal(song.meta.scoreDetails.criticVersion, 6);
+});
+
+test("phase 76 gives every section one producer-led foreground and audible supporting roles", () => {
+  for (const genre of ["pop", "trap", "neoSoul", "rock"]) {
+    const input = {
+      ...CONFIG,
+      genre,
+      seed: `producer-intent-${genre}`,
+      bars: 32,
+      candidateCount: 1,
+      evolution: 0.8,
+    };
+    const song = engine.generateNew(input);
+    const contract = song.producerIntent;
+    const report = song.producerIntentReport;
+
+    assert.equal(contract.version, 1);
+    assert.equal(contract.scenes.length, song.structure.length);
+    assert.equal(report.phase, 76);
+    assert.equal(report.status, "complete");
+    assert.equal(report.metrics.sceneCount, song.structure.length);
+    assert.ok(report.metrics.foregroundCoverage >= 0.9);
+    assert.ok(report.metrics.answerCollisionRate <= 0.28);
+    assert.ok(report.metrics.restSections > 0, `${genre} should reserve deliberate negative space`);
+    assert.ok(Object.values(report.checks).every(Boolean));
+
+    for (const scene of contract.scenes) {
+      assert.equal(Object.values(scene.roles).filter((role) => role === "foreground").length, 1);
+      assert.deepEqual(Object.keys(scene.roles), song.tracks.map((track) => track.id));
+      assert.ok(scene.silenceBudget >= 0.05 && scene.silenceBudget <= 0.4);
+      const section = song.structure.find((candidate) => candidate.id === scene.sectionId);
+      const foreground = song.tracks.find((track) => track.id === scene.foregroundTrack).notes.filter((note) => (
+        note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+      ));
+      assert.ok(foreground.length > 0, `${genre} ${scene.sectionId} should audibly feature ${scene.foregroundTrack}`);
+      assert.ok(foreground.every((note) => note.producerRole === "foreground"));
+    }
+    assert.ok(song.tracks.flatMap((track) => track.notes).every((note) => (
+      note.producerRole && note.producerScenePurpose
+    )));
+    assert.deepEqual(song, engine.generateNew(input));
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
 });
 
 test("fresh and chained generation advance to distinct arrangements", () => {
