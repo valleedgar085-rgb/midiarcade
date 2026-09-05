@@ -1,3 +1,4 @@
+// Phase 3 permanent regression coverage for groove intelligence.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { evaluateSongCandidate, generateNew } from "../src/music-engine.js";
