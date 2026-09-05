@@ -7,35 +7,9 @@ if (source.includes("function reinforceGrooveMemory(")) {
   process.exit(0);
 }
 
-const returnAnchor = '  return developDuplicateDrumBars(notes, config, structure, settings, rng.fork("drum-development"), grooveConductor);';
-if (!source.includes(returnAnchor)) throw new Error("generateDrums return anchor not found");
-source = source.replace(returnAnchor, `  const developedDrums = developDuplicateDrumBars(
-    notes,
-    config,
-    structure,
-    settings,
-    rng.fork("drum-development"),
-    grooveConductor,
-  );
-  const memoryDrums = reinforceGrooveMemory(
-    developedDrums,
-    config,
-    structure,
-    settings,
-    rng.fork("groove-memory"),
-  );
-  return developDuplicateDrumBars(
-    memoryDrums,
-    config,
-    structure,
-    settings,
-    rng.fork("post-memory-development"),
-    grooveConductor,
-  );`);
-
 const insertAnchor = "function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {";
 if (!source.includes(insertAnchor)) throw new Error("post-drum-development insertion anchor not found");
-const helper = `function reinforceGrooveMemory(source, config, structure, settings, rng) {
+const helper = `function reinforceGrooveMemory(source, config, structure, rng) {
   if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
   const result = source.map((note) => ({ ...note }));
   const barBeats = beatsPerBar(config);
@@ -56,6 +30,7 @@ const helper = `function reinforceGrooveMemory(source, config, structure, settin
     return barNotes.some((note) => (
       note.drumFillId
       || note.transitionFeature
+      || note.transitionHandoffRole
       || note.rhythmicFeature === "phrase-boundary-roll"
       || note.rhythmicFeature === "transition-fill"
     ));
@@ -85,23 +60,21 @@ const helper = `function reinforceGrooveMemory(source, config, structure, settin
     const targetStart = bar * barBeats;
     const velocityRatio = clamp(
       averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
-      0.78,
-      1.24,
+      0.82,
+      1.2,
     );
-    const replacement = referenceNotes.map((note, index) => ({
+    const replacement = referenceNotes.map((note) => ({
       ...note,
       start: round(targetStart + (note.start - sourceStart), 4),
       velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 127),
       grooveMemoryRecall: true,
       grooveMemorySourceBar: referenceBar,
       grooveMemoryCycle: cycleBars,
-      grooveMemoryVariant: mod(index + rng.int(0, 1), 2),
     }));
 
-    const targetStartBeat = targetStart;
-    const targetEndBeat = targetStart + barBeats;
+    const targetEnd = targetStart + barBeats;
     for (let index = result.length - 1; index >= 0; index -= 1) {
-      if (result[index].start >= targetStartBeat - 1e-6 && result[index].start < targetEndBeat - 1e-6) {
+      if (result[index].start >= targetStart - 1e-6 && result[index].start < targetEnd - 1e-6) {
         result.splice(index, 1);
       }
     }
@@ -113,7 +86,29 @@ const helper = `function reinforceGrooveMemory(source, config, structure, settin
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
+function applyFinalGrooveMemory(tracks, config, structure, rng) {
+  return tracks.map((track) => track.id === "drums"
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, rng) }
+    : track);
+}
+
 `;
 source = source.replace(insertAnchor, helper + insertAnchor);
+
+const finalAnchor = `  const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
+  const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);`;
+if (!source.includes(finalAnchor)) throw new Error("final rhythm-lock anchor not found");
+source = source.replace(finalAnchor, `  const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
+  // Phase 3 late groove memory: establish recurring rhythmic identity only after
+  // the broad producer/mastering passes, then let the existing bass lock and
+  // final producer-intent/assembly audits validate the output listeners receive.
+  const finalGrooveMemoryTracks = applyFinalGrooveMemory(
+    finalScaleSafety.tracks,
+    config,
+    structure,
+    rootRng.fork("phase3-final-groove-memory"),
+  );
+  const finalRhythmLock = lockFinalBassToSurvivingKicks(finalGrooveMemoryTracks, config.genre, totalBeats);`);
+
 fs.writeFileSync(enginePath, source);
-console.log("Applied Phase 3 groove-memory recall.");
+console.log("Applied Phase 3 late groove-memory recall.");
