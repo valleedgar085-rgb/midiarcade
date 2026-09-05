@@ -9,11 +9,10 @@ if (source.includes("function reinforceGrooveMemory(")) {
 
 const insertAnchor = "function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {";
 if (!source.includes(insertAnchor)) throw new Error("post-drum-development insertion anchor not found");
-const helper = `function reinforceGrooveMemory(source, config, structure, rng) {
+const helper = `function reinforceGrooveMemory(source, config, structure) {
   if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
   const result = source.map((note) => ({ ...note }));
   const barBeats = beatsPerBar(config);
-  const cycleBars = 4;
   const notesForBar = (bar) => {
     const start = bar * barBeats;
     const end = start + barBeats;
@@ -40,22 +39,34 @@ const helper = `function reinforceGrooveMemory(source, config, structure, rng) {
     : 80;
 
   let recalls = 0;
-  for (let bar = cycleBars + 1; bar < config.bars; bar += 1) {
-    const role = mod(bar, cycleBars);
-    if (![1, 2].includes(role) || isProtectedBar(bar)) continue;
+  for (let bar = 2; bar < config.bars - 1; bar += 1) {
+    if (isProtectedBar(bar)) continue;
+    const targetSection = sectionForBar(bar);
+    const targetRole = bar - targetSection.startBar;
+    const previousSignature = drumBarSignature(result, bar - 1, barBeats);
 
-    let referenceBar = bar - cycleBars;
-    while (referenceBar > 0 && isProtectedBar(referenceBar)) referenceBar -= cycleBars;
-    if (referenceBar < 0 || isProtectedBar(referenceBar)) continue;
+    const candidates = [];
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      const referenceRole = referenceBar - referenceSection.startBar;
+      const sameSection = referenceSection.name === targetSection.name;
+      const sameRole = referenceRole === targetRole;
+      const roleDistance = Math.abs(referenceRole - targetRole);
+      const score = (sameSection ? 6 : 0) + (sameRole ? 5 : 0) - roleDistance * 0.5 + referenceBar / Math.max(1, config.bars) * 0.25;
+      candidates.push({ referenceBar, score });
+    }
+    candidates.sort((left, right) => right.score - left.score || right.referenceBar - left.referenceBar);
+    const referenceBar = candidates[0]?.referenceBar;
+    if (!Number.isInteger(referenceBar)) continue;
 
     const referenceNotes = notesForBar(referenceBar);
     const targetNotes = notesForBar(bar);
     if (!referenceNotes.length || !targetNotes.length) continue;
-
-    const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
-    const previousSignature = drumBarSignature(result, bar - 1, barBeats);
-    if (!referenceSignature || referenceSignature === previousSignature) continue;
-
     const sourceStart = referenceBar * barBeats;
     const targetStart = bar * barBeats;
     const velocityRatio = clamp(
@@ -69,7 +80,7 @@ const helper = `function reinforceGrooveMemory(source, config, structure, rng) {
       velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 127),
       grooveMemoryRecall: true,
       grooveMemorySourceBar: referenceBar,
-      grooveMemoryCycle: cycleBars,
+      grooveMemorySectionRole: targetRole,
     }));
 
     const targetEnd = targetStart + barBeats;
@@ -86,9 +97,9 @@ const helper = `function reinforceGrooveMemory(source, config, structure, rng) {
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
-function applyFinalGrooveMemory(tracks, config, structure, rng) {
+function applyFinalGrooveMemory(tracks, config, structure) {
   return tracks.map((track) => track.id === "drums"
-    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, rng) }
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure) }
     : track);
 }
 
@@ -99,16 +110,15 @@ const finalAnchor = `  const finalScaleSafety = enforceScaleSafety(finalMaster.t
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);`;
 if (!source.includes(finalAnchor)) throw new Error("final rhythm-lock anchor not found");
 source = source.replace(finalAnchor, `  const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
-  // Phase 3 late groove memory: establish recurring rhythmic identity only after
-  // the broad producer/mastering passes, then let the existing bass lock and
-  // final producer-intent/assembly audits validate the output listeners receive.
+  // Phase 3 late groove memory: recur section-relative interior groove roles only
+  // after broad producer/mastering passes. Bass is then re-locked to the final
+  // surviving kicks and the normal producer-intent/final-assembly audits run.
   const finalGrooveMemoryTracks = applyFinalGrooveMemory(
     finalScaleSafety.tracks,
     config,
     structure,
-    rootRng.fork("phase3-final-groove-memory"),
   );
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalGrooveMemoryTracks, config.genre, totalBeats);`);
 
 fs.writeFileSync(enginePath, source);
-console.log("Applied Phase 3 late groove-memory recall.");
+console.log("Applied Phase 3 section-role groove-memory recall.");
