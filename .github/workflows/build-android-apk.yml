@@ -2,7 +2,7 @@ name: Build MIDI Arcade APK
 
 on:
   push:
-    branches: [main, ui-quality-2-2]
+    branches: [main, 'phase-*']
   workflow_dispatch:
 
 permissions:
@@ -28,8 +28,10 @@ jobs:
           cache: gradle
       - name: Install dependencies
         run: npm ci
-      - name: Verify web release
-        run: npm run quality
+      - name: Verify web and music quality
+        run: |
+          npm run quality
+          npm run quality:music
       - name: Sync Android assets
         run: npx cap sync android
       - name: Build install-safe Preview APK
