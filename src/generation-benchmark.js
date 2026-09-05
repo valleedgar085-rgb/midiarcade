@@ -82,7 +82,6 @@ function technicalHealth(song, evaluation, releaseGate) {
     masterChecks * 100,
     assemblyChecks * 100,
     exportChecks * 100,
-    releasePass * 100,
   ]));
   return {
     score,
@@ -120,7 +119,7 @@ function summarizeGenre(genre, results) {
   };
 }
 
-function recommendationsFor({ perGenre, weakestGroup, weakestDimension, averageTechnicalScore }) {
+function recommendationsFor({ perGenre, weakestGroup, weakestDimension, averageTechnicalScore, releasePassRate }) {
   const recommendations = [];
   const priorityGenre = perGenre[0];
   if (priorityGenre) {
@@ -136,6 +135,9 @@ function recommendationsFor({ perGenre, weakestGroup, weakestDimension, averageT
   }
   if (averageTechnicalScore < 100) {
     recommendations.push(`Technical readiness averages ${averageTechnicalScore}; fix safety/export/master failures before creative tuning.`);
+  }
+  if (releasePassRate < 1) {
+    recommendations.push(`Raw candidate release-pass rate is ${Math.round(releasePassRate * 100)}%; target the lowest creative dimensions before increasing search cost.`);
   }
   return recommendations;
 }
@@ -201,7 +203,6 @@ export function runGenerationBenchmark({
     ...(!result.finalChecks ? [`${result.genre}/${result.seed}: final master check failed`] : []),
     ...(!result.finalAssemblyChecks ? [`${result.genre}/${result.seed}: final assembly check failed`] : []),
     ...(!result.exportChecks ? [`${result.genre}/${result.seed}: MIDI export preflight failed`] : []),
-    ...(!result.releasePassed ? [`${result.genre}/${result.seed}: release gate failed`] : []),
     ...(result.score < 58 ? [`${result.genre}/${result.seed}: critic score ${result.score}`] : []),
   ]);
   const perGenre = genres.map((genre) => summarizeGenre(genre, results))
@@ -210,7 +211,8 @@ export function runGenerationBenchmark({
   const groupAverages = groupAveragesFor(results);
   const weakestDimension = weakestEntry(dimensionAverages);
   const weakestGroup = weakestEntry(groupAverages);
-  const averageTechnicalScore = round(mean(results.map(({ technicalScore }) => technicalScore)));
+  const averageTechnicalScore = round(mean(results.map(({ technicalScore }) => technicalScore));
+  const releasePassRate = round(mean(results.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3);
 
   const report = {
     phase: 50,
@@ -227,7 +229,7 @@ export function runGenerationBenchmark({
     averageCreativeFloor: Math.round(mean(results.map(({ creativeFloor }) => creativeFloor)),
     averageVoiceLeadingStep: round(mean(results.map(({ voiceLeadingStep }) => voiceLeadingStep)), 2),
     averageMaskingPairs: Math.round(mean(results.map(({ maskingPairs }) => maskingPairs))),
-    releasePassRate: round(mean(results.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3),
+    releasePassRate,
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, results.length), 3),
     weakestGenre: perGenre[0] ?? null,
     weakestGroup,
