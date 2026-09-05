@@ -8,6 +8,7 @@ import {
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const round = (value, places = 0) => Number(finite(value).toFixed(places));
+const averageOf = (items, selector, places = 0) => round(mean(items.map(selector)), places);
 
 export const QUALITY_DIMENSION_GROUPS = Object.freeze({
   harmony: Object.freeze(["harmonic", "voiceLeading", "separation", "cadence", "harmonicJourney"]),
@@ -48,14 +49,14 @@ function dimensionAveragesFor(results) {
   const dimensions = new Set(results.flatMap(({ dimensionScores }) => Object.keys(dimensionScores ?? {})));
   return Object.fromEntries([...dimensions].sort().map((dimension) => [
     dimension,
-    round(mean(results.map(({ dimensionScores }) => finite(dimensionScores?.[dimension], 0))), 1),
+    averageOf(results, ({ dimensionScores }) => finite(dimensionScores?.[dimension], 0), 1),
   ]));
 }
 
 function groupAveragesFor(results) {
   return Object.fromEntries(Object.keys(QUALITY_DIMENSION_GROUPS).map((group) => [
     group,
-    round(mean(results.map(({ groupScores }) => finite(groupScores?.[group], 0))), 1),
+    averageOf(results, ({ groupScores }) => finite(groupScores?.[group], 0), 1),
   ]));
 }
 
@@ -95,16 +96,16 @@ function summarizeGenre(genre, results) {
   const groupAverages = groupAveragesFor(genreResults);
   const weakestDimension = weakestEntry(dimensionAverages);
   const weakestGroup = weakestEntry(groupAverages);
-  const averageOverallScore = round(mean(genreResults.map(({ overallScore }) => overallScore)), 1);
+  const averageOverallScore = averageOf(genreResults, ({ overallScore }) => overallScore, 1);
   return {
     genre,
     samples: genreResults.length,
-    averageMusicalScore: round(mean(genreResults.map(({ musicalScore }) => musicalScore)), 1),
+    averageMusicalScore: averageOf(genreResults, ({ musicalScore }) => musicalScore, 1),
     minimumMusicalScore: Math.min(...genreResults.map(({ musicalScore }) => musicalScore)),
-    averageTechnicalScore: round(mean(genreResults.map(({ technicalScore }) => technicalScore)), 1),
+    averageTechnicalScore: averageOf(genreResults, ({ technicalScore }) => technicalScore, 1),
     averageOverallScore,
-    averageCreativeFloor: round(mean(genreResults.map(({ creativeFloor }) => creativeFloor)), 1),
-    releasePassRate: round(mean(genreResults.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3),
+    averageCreativeFloor: averageOf(genreResults, ({ creativeFloor }) => creativeFloor, 1),
+    releasePassRate: averageOf(genreResults, ({ releasePassed }) => releasePassed ? 1 : 0, 3),
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
     weakestGroup,
     weakestDimension,
@@ -206,8 +207,8 @@ export function runGenerationBenchmark({
   const groupAverages = groupAveragesFor(results);
   const weakestDimension = weakestEntry(dimensionAverages);
   const weakestGroup = weakestEntry(groupAverages);
-  const averageTechnicalScore = round(mean(results.map(({ technicalScore }) => technicalScore));
-  const releasePassRate = round(mean(results.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3);
+  const averageTechnicalScore = averageOf(results, ({ technicalScore }) => technicalScore);
+  const releasePassRate = averageOf(results, ({ releasePassed }) => releasePassed ? 1 : 0, 3);
 
   const report = {
     phase: 50,
@@ -215,15 +216,15 @@ export function runGenerationBenchmark({
     labVersion: 1,
     genres: genres.length,
     generations: results.length,
-    averageScore: Math.round(mean(results.map(({ score }) => score))),
+    averageScore: averageOf(results, ({ score }) => score),
     minimumScore: Math.min(...results.map(({ score }) => score)),
-    averageMusicalScore: round(mean(results.map(({ musicalScore }) => musicalScore)),
+    averageMusicalScore: averageOf(results, ({ musicalScore }) => musicalScore),
     averageTechnicalScore,
-    averageOverallScore: round(mean(results.map(({ overallScore }) => overallScore)),
+    averageOverallScore: averageOf(results, ({ overallScore }) => overallScore),
     minimumOverallScore: Math.min(...results.map(({ overallScore }) => overallScore)),
-    averageCreativeFloor: Math.round(mean(results.map(({ creativeFloor }) => creativeFloor)),
-    averageVoiceLeadingStep: round(mean(results.map(({ voiceLeadingStep }) => voiceLeadingStep)), 2),
-    averageMaskingPairs: Math.round(mean(results.map(({ maskingPairs }) => maskingPairs))),
+    averageCreativeFloor: averageOf(results, ({ creativeFloor }) => creativeFloor),
+    averageVoiceLeadingStep: averageOf(results, ({ voiceLeadingStep }) => voiceLeadingStep, 2),
+    averageMaskingPairs: averageOf(results, ({ maskingPairs }) => maskingPairs),
     releasePassRate,
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, results.length), 3),
     weakestGenre: perGenre[0] ?? null,
