@@ -1,0 +1,41 @@
+name: Apply Phase 3 Groove Compatibility Fix
+
+on:
+  push:
+    branches:
+      - phase-3-groove-intelligence
+    paths:
+      - scripts/fix-phase3-groove.mjs
+      - .github/workflows/phase3-groove-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-3-groove-intelligence
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply compatibility fix
+        run: node scripts/fix-phase3-groove.mjs
+      - name: Verify affected contracts
+        run: |
+          node --check src/music-engine.js
+          node --test tests/groove-intelligence.test.mjs
+          node --test --test-name-pattern="phase 40|phase 71" tests/music-engine.test.mjs
+      - name: Commit fixed engine and remove patch machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/fix-phase3-groove.mjs .github/workflows/phase3-groove-fix.yml
+          git add src/music-engine.js
+          git commit -m "Preserve Phase 3 groove compatibility contracts"
+          git push origin HEAD:phase-3-groove-intelligence
