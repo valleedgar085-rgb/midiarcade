@@ -1,0 +1,55 @@
+name: Apply Phase 3 Groove Memory
+
+on:
+  push:
+    branches:
+      - phase-3-groove-intelligence
+    paths:
+      - scripts/apply-phase3-groove-memory.mjs
+      - .github/workflows/phase3-groove-memory.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-3-groove-intelligence
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply groove memory
+        run: node scripts/apply-phase3-groove-memory.mjs
+      - name: Verify engine and Phase 3 contracts
+        run: |
+          node --check src/music-engine.js
+          node --test tests/groove-intelligence.test.mjs
+          node --test --test-name-pattern="phase 37|phase 40|phase 71|phase 72" tests/music-engine.test.mjs
+      - name: Calibrate music quality delta
+        run: |
+          node scripts/benchmark-generation.mjs --seeds 3 --bars 16
+          node --input-type=module <<'NODE'
+          import { runGenerationBenchmark } from './src/generation-benchmark.js';
+          const report = runGenerationBenchmark({ seeds: ['calibration-a', 'calibration-b', 'calibration-c'], bars: 16 });
+          const groove = report.groupAverages.groove;
+          const drumVariety = report.dimensionAverages.drumVariety;
+          console.log(`Phase 3 calibration: groove=${groove}, drumVariety=${drumVariety}`);
+          if (groove < 85) throw new Error(`Groove improvement is not material enough: ${groove}`);
+          if (drumVariety < 82) throw new Error(`Drum variety improvement is not material enough: ${drumVariety}`);
+          NODE
+      - name: Commit calibrated engine and remove patch machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply-phase3-groove-memory.mjs .github/workflows/phase3-groove-memory.yml
+          git add src/music-engine.js
+          git commit -m "Add groove-memory recall to Phase 3"
+          git push origin HEAD:phase-3-groove-intelligence
