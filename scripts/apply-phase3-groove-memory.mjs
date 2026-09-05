@@ -61,7 +61,7 @@ const helper = `function reinforceGrooveMemory(source, config, structure, settin
     ));
   };
   const averageVelocity = (notes) => notes.length
-    ? mean(notes.map((note) => finite(note.velocity, 80)))
+    ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
     : 80;
 
   let recalls = 0;
