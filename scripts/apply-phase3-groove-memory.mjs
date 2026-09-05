@@ -25,7 +25,7 @@ const helper = `function reinforceGrooveMemory(source, config, structure) {
     const section = sectionForBar(bar);
     const barNotes = notesForBar(bar);
     if (!section || bar <= 0 || bar >= config.bars - 1) return true;
-    if (bar === section.startBar || bar === section.startBar + section.bars - 1) return true;
+    if (bar === section.startBar) return true;
     return barNotes.some((note) => (
       note.drumFillId
       || note.transitionFeature
@@ -110,9 +110,10 @@ const finalAnchor = `  const finalScaleSafety = enforceScaleSafety(finalMaster.t
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);`;
 if (!source.includes(finalAnchor)) throw new Error("final rhythm-lock anchor not found");
 source = source.replace(finalAnchor, `  const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
-  // Phase 3 late groove memory: recur section-relative interior groove roles only
-  // after broad producer/mastering passes. Bass is then re-locked to the final
-  // surviving kicks and the normal producer-intent/final-assembly audits run.
+  // Phase 3 late groove memory: recur section-relative groove roles after broad
+  // producer/mastering passes. Clean section endings may participate, while
+  // actual fills, handoffs, transition bars, starts, and the song ending remain
+  // protected. Bass is then re-locked to the final surviving kicks.
   const finalGrooveMemoryTracks = applyFinalGrooveMemory(
     finalScaleSafety.tracks,
     config,
@@ -121,4 +122,4 @@ source = source.replace(finalAnchor, `  const finalScaleSafety = enforceScaleSaf
   const finalRhythmLock = lockFinalBassToSurvivingKicks(finalGrooveMemoryTracks, config.genre, totalBeats);`);
 
 fs.writeFileSync(enginePath, source);
-console.log("Applied Phase 3 section-role groove-memory recall.");
+console.log("Applied Phase 3 section-role groove-memory recall with clean endings.");
