@@ -33,13 +33,13 @@ jobs:
           node --check src/music-engine.js
           node --test tests/groove-intelligence.test.mjs
           node --test --test-name-pattern="phase 37|phase 40|phase 71|phase 72" tests/music-engine.test.mjs
-      - name: Diagnose final groove memory
+      - name: Diagnose final groove memory and assembly
         run: |
           node --input-type=module <<'NODE'
-          import { generateNew } from './src/music-engine.js';
+          import { evaluateSongCandidate, evaluateSongReleaseGate, generateNew } from './src/music-engine.js';
           const genres = ['rnbSoul', 'techno', 'trap', 'drumBass', 'reggaeton', 'afrobeats', 'house'];
           for (const genre of genres) {
-            const song = generateNew({ genre, seed: `phase3-diagnostic:${genre}`, bars: 16, candidateCount: 1 });
+            const song = generateNew({ genre, seed: `quality-lab-01:${genre}`, bars: 16, candidateCount: 1 });
             const drums = song.tracks.find((track) => track.id === 'drums')?.notes ?? [];
             const barBeats = song.meta?.beatsPerBar ?? 4;
             const signatures = Array.from({ length: song.bars }, (_, bar) => drums
@@ -50,22 +50,10 @@ jobs:
             const recalls = drums.filter((note) => note.grooveMemoryRecall).length;
             const uniqueRatio = new Set(signatures).size / Math.max(1, signatures.length);
             const adjacentCopies = signatures.slice(1).filter((sig, index) => sig === signatures[index]).length;
-            console.log(`${genre}: recalls=${recalls}, uniqueRatio=${uniqueRatio.toFixed(3)}, adjacentCopies=${adjacentCopies}`);
-            if (genre === 'rnbSoul' || genre === 'house') {
-              for (let bar = 0; bar < song.bars; bar += 1) {
-                const barNotes = drums.filter((note) => Math.floor(note.start / barBeats) === bar);
-                const section = song.structure.find((item) => bar >= item.startBar && bar < item.startBar + item.bars);
-                const flags = {
-                  fill: barNotes.filter((note) => note.drumFillId).length,
-                  transition: barNotes.filter((note) => note.transitionFeature).length,
-                  handoff: barNotes.filter((note) => note.transitionHandoffRole).length,
-                  boundaryRoll: barNotes.filter((note) => note.rhythmicFeature === 'phrase-boundary-roll').length,
-                  transitionFill: barNotes.filter((note) => note.rhythmicFeature === 'transition-fill').length,
-                  memory: barNotes.filter((note) => note.grooveMemoryRecall).length,
-                };
-                console.log(`${genre} bar=${bar} section=${section?.name ?? '?'} start=${section?.startBar ?? '?'} len=${section?.bars ?? '?'} flags=${JSON.stringify(flags)}`);
-              }
-            }
+            const evaluation = evaluateSongCandidate(song);
+            const release = evaluateSongReleaseGate(song, evaluation);
+            console.log(`${genre}: recalls=${recalls}, uniqueRatio=${uniqueRatio.toFixed(3)}, adjacentCopies=${adjacentCopies}, drumVariety=${evaluation.subscores.drumVariety}`);
+            console.log(`${genre}: finalAssembly=${JSON.stringify(song.finalAssembly?.checks)} metrics=${JSON.stringify(song.finalAssembly?.metrics)} release=${release.passed}`);
           }
           NODE
       - name: Calibrate music quality delta
