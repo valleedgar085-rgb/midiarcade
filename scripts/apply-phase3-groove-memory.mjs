@@ -113,13 +113,34 @@ source = source.replace(finalAnchor, `  const finalScaleSafety = enforceScaleSaf
   // Phase 3 late groove memory: recur section-relative groove roles after broad
   // producer/mastering passes. Clean section endings may participate, while
   // actual fills, handoffs, transition bars, starts, and the song ending remain
-  // protected. Bass is then re-locked to the final surviving kicks.
+  // protected. Re-run the established final-assembly repair immediately after
+  // memory so no rhythmic recall can bypass anchor/transition safety contracts.
   const finalGrooveMemoryTracks = applyFinalGrooveMemory(
     finalScaleSafety.tracks,
     config,
     structure,
   );
-  const finalRhythmLock = lockFinalBassToSurvivingKicks(finalGrooveMemoryTracks, config.genre, totalBeats);`);
+  const grooveMemoryAssembly = runFinalAssemblyPass(
+    finalGrooveMemoryTracks,
+    finalAssemblyRepair.tracks,
+    structure,
+    songBlueprint,
+  );
+  const finalRhythmLock = lockFinalBassToSurvivingKicks(grooveMemoryAssembly.tracks, config.genre, totalBeats);`);
+
+const featuredReport = `      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
+        + postIntentAssembly.repairs.featuredAnchorsRestored,`;
+if (!source.includes(featuredReport)) throw new Error("featured assembly report anchor not found");
+source = source.replace(featuredReport, `      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
+        + grooveMemoryAssembly.repairs.featuredAnchorsRestored
+        + postIntentAssembly.repairs.featuredAnchorsRestored,`);
+
+const transitionReport = `      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
+        + postIntentAssembly.repairs.transitionEventsTagged,`;
+if (!source.includes(transitionReport)) throw new Error("transition assembly report anchor not found");
+source = source.replace(transitionReport, `      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
+        + grooveMemoryAssembly.repairs.transitionEventsTagged
+        + postIntentAssembly.repairs.transitionEventsTagged,`);
 
 fs.writeFileSync(enginePath, source);
-console.log("Applied Phase 3 section-role groove-memory recall with clean endings.");
+console.log("Applied Phase 3 groove memory with final-assembly reconciliation.");
