@@ -1,9 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-
-const source = await readFile(new URL("../src/music-engine.js", import.meta.url), "utf8");
-const engine = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+import * as engine from "../src/music-engine.js";
 
 const KEYS = ["C", "F#", "Bb", "Db", "E", "Ab", "D"];
 const SCALES = ["major", "minor", "dorian", "mixolydian", "harmonicMinor", "minorPentatonic", "lydian"];

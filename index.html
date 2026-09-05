@@ -834,8 +834,18 @@
       </nav>
     </div>
 
-    <div class="generation-wash" id="generationWash" role="status" aria-live="polite" aria-hidden="true">
-      <div class="generation-message"><i></i><span id="generationMessage">COMPOSING HARMONIC ARCHITECTURE</span></div>
+    <div class="generation-wash" id="generationWash" role="status" aria-live="polite" aria-atomic="false" aria-hidden="true">
+      <section class="generation-message" aria-labelledby="generationMessage">
+        <div class="generation-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <p><b>PRODUCER BRAIN</b><span id="generationStageCount">PASS 1 OF 6</span></p>
+        <h2 id="generationMessage">COMPOSING HARMONIC ARCHITECTURE</h2>
+        <div class="generation-meter" aria-hidden="true"><i id="generationMeter"></i></div>
+        <p class="generation-stage-copy" id="generationStageCopy">Planning section energy, contrast, and the return of the hook.</p>
+        <div class="generation-stages" id="generationStages" aria-label="Composition passes">
+          <span data-generation-stage="blueprint"><i></i>Song map</span><span data-generation-stage="harmony"><i></i>Harmony</span><span data-generation-stage="phrases"><i></i>Phrases</span><span data-generation-stage="groove"><i></i>Pocket</span><span data-generation-stage="audition"><i></i>Producer</span><span data-generation-stage="master"><i></i>Final pass</span>
+        </div>
+        <small>Auditioning complete songs—not stitching random loops.</small>
+      </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
