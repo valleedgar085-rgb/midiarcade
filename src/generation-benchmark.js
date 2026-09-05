@@ -9,11 +9,6 @@ const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.ma
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const round = (value, places = 0) => Number(finite(value).toFixed(places));
 
-/**
- * Human-readable quality families used by the Music Quality Lab.
- * The engine remains the source of truth for individual critic dimensions;
- * this layer only groups them so regressions point to an actionable subsystem.
- */
 export const QUALITY_DIMENSION_GROUPS = Object.freeze({
   harmony: Object.freeze(["harmonic", "voiceLeading", "separation", "cadence", "harmonicJourney"]),
   groove: Object.freeze(["groove", "density", "performance", "drumVariety"]),
@@ -106,9 +101,9 @@ function summarizeGenre(genre, results) {
     samples: genreResults.length,
     averageMusicalScore: round(mean(genreResults.map(({ musicalScore }) => musicalScore)), 1),
     minimumMusicalScore: Math.min(...genreResults.map(({ musicalScore }) => musicalScore)),
-    averageTechnicalScore: round(mean(genreResults.map(({ technicalScore }) => technicalScore)),
+    averageTechnicalScore: round(mean(genreResults.map(({ technicalScore }) => technicalScore)), 1),
     averageOverallScore,
-    averageCreativeFloor: round(mean(genreResults.map(({ creativeFloor }) => creativeFloor))),
+    averageCreativeFloor: round(mean(genreResults.map(({ creativeFloor }) => creativeFloor)), 1),
     releasePassRate: round(mean(genreResults.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3),
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
     weakestGroup,
