@@ -1,0 +1,40 @@
+name: Apply Phase 3 Groove Intelligence
+
+on:
+  push:
+    branches:
+      - phase-3-groove-intelligence
+    paths:
+      - scripts/apply-phase3-groove.mjs
+      - .github/workflows/phase3-groove-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-3-groove-intelligence
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply groove intelligence
+        run: node scripts/apply-phase3-groove.mjs
+      - name: Verify syntax and focused tests
+        run: |
+          node --check src/music-engine.js
+          node --test tests/groove-intelligence.test.mjs
+      - name: Commit engine changes and remove patch machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply-phase3-groove.mjs .github/workflows/phase3-groove-patch.yml
+          git add src/music-engine.js tests/groove-intelligence.test.mjs
+          git commit -m "Implement Phase 3 groove intelligence"
+          git push origin HEAD:phase-3-groove-intelligence
