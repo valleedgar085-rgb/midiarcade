@@ -108,7 +108,7 @@ function summarizeGenre(genre, results) {
     minimumMusicalScore: Math.min(...genreResults.map(({ musicalScore }) => musicalScore)),
     averageTechnicalScore: round(mean(genreResults.map(({ technicalScore }) => technicalScore)),
     averageOverallScore,
-    averageCreativeFloor: round(mean(genreResults.map(({ creativeFloor }) => creativeFloor)),
+    averageCreativeFloor: round(mean(genreResults.map(({ creativeFloor }) => creativeFloor))),
     releasePassRate: round(mean(genreResults.map(({ releasePassed }) => releasePassed ? 1 : 0)), 3),
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
     weakestGroup,
