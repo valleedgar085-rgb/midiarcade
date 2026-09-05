@@ -12,6 +12,13 @@ const renames = [
 ];
 for (const [from, to] of renames) source = source.replaceAll(from, to);
 
+// Phase 71 reserves MIDI 36 as a protected kick anchor; fill vocabulary may
+// answer it, but must never introduce another kick as part of a transition fill.
+source = source.replace(
+  '{ id: "bassmusic-p3-kick-response", pitches: [36, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] }',
+  '{ id: "bassmusic-p3-tom-response", pitches: [45, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] }',
+);
+
 const helperAnchor = "function phase3DrumFillVocabularyForGenre(genre) {\n";
 if (!source.includes(helperAnchor)) throw new Error("Phase 3 fill helper anchor missing");
 source = source.replace(
@@ -27,4 +34,4 @@ source = source.replace(
 );
 
 fs.writeFileSync(path, source);
-console.log("Fixed Phase 3 family metadata and preserved jazz Phase 40 calibration.");
+console.log("Fixed Phase 3 family metadata, protected kick anchors, and preserved jazz Phase 40 calibration.");
