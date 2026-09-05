@@ -3485,38 +3485,40 @@ function drumFillVocabularyForGenre(genre) {
 
 const PHASE3_DRUM_FILL_VOCABULARIES = deepFreeze({
   electronic: [
-    { id: "p3-electronic-open-hat-turn", pitches: [42, 46, 42, 51], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-electronic-tom-push", pitches: [45, 47, 50, 46], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-electronic-clap-lift", pitches: [39, 42, 46, 49], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-electronic-hat-stutter", pitches: [42, 42, 46, 42], positions: [0, 0.1875, 0.5, 0.875] },
+    { id: "electronic-p3-open-hat-turn", pitches: [42, 46, 42, 51], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "electronic-p3-tom-push", pitches: [45, 47, 50, 46], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "electronic-p3-clap-lift", pitches: [39, 42, 46, 49], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "electronic-p3-hat-stutter", pitches: [42, 42, 46, 42], positions: [0, 0.1875, 0.5, 0.875] },
   ],
   bassMusic: [
-    { id: "p3-bass-hat-triplet", pitches: [42, 42, 46, 38], positions: [0, 1 / 6, 1 / 3, 0.75] },
-    { id: "p3-bass-snare-drag", pitches: [38, 37, 38, 42], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-bass-kick-response", pitches: [36, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-bass-break-turn", pitches: [42, 38, 42, 46], positions: [0, 0.3125, 0.625, 0.875] },
+    { id: "bassmusic-p3-hat-triplet", pitches: [42, 42, 46, 38], positions: [0, 1 / 6, 1 / 3, 0.75] },
+    { id: "bassmusic-p3-snare-drag", pitches: [38, 37, 38, 42], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "bassmusic-p3-tom-response", pitches: [45, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "bassmusic-p3-break-turn", pitches: [42, 38, 42, 46], positions: [0, 0.3125, 0.625, 0.875] },
   ],
   acoustic: [
-    { id: "p3-acoustic-tom-round", pitches: [45, 47, 50, 38], positions: [0, 0.25, 0.5, 0.875] },
-    { id: "p3-acoustic-hat-snare-lift", pitches: [42, 46, 38, 49], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-acoustic-side-stick-turn", pitches: [37, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-acoustic-tom-answer", pitches: [47, 45, 42, 38], positions: [0, 0.375, 0.75, 0.875] },
+    { id: "acoustic-p3-tom-round", pitches: [45, 47, 50, 38], positions: [0, 0.25, 0.5, 0.875] },
+    { id: "acoustic-p3-hat-snare-lift", pitches: [42, 46, 38, 49], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "acoustic-p3-side-stick-turn", pitches: [37, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "acoustic-p3-tom-answer", pitches: [47, 45, 42, 38], positions: [0, 0.375, 0.75, 0.875] },
   ],
   pocket: [
-    { id: "p3-pocket-ghost-lift", pitches: [37, 42, 38, 46], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-pocket-shaker-answer", pitches: [70, 42, 37, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-pocket-rim-clave", pitches: [37, 75, 42, 38], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-pocket-hat-pocket", pitches: [42, 37, 46, 42], positions: [0, 0.3125, 0.625, 0.875] },
+    { id: "pocket-p3-ghost-lift", pitches: [37, 42, 38, 46], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-shaker-answer", pitches: [70, 42, 37, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-rim-clave", pitches: [37, 75, 42, 38], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-hat-pocket", pitches: [42, 37, 46, 42], positions: [0, 0.3125, 0.625, 0.875] },
   ],
   afroLatin: [
-    { id: "p3-afro-clave-shaker", pitches: [75, 70, 75, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-afro-rim-percussion", pitches: [37, 70, 39, 75], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "p3-afro-conga-answer", pitches: [64, 70, 63, 75], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "p3-afro-shaker-turn", pitches: [70, 75, 70, 46], positions: [0, 0.3125, 0.625, 0.875] },
+    { id: "pocket-p3-afro-clave-shaker", pitches: [75, 70, 75, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-afro-rim-percussion", pitches: [37, 70, 39, 75], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-afro-conga-answer", pitches: [64, 70, 63, 75], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-afro-shaker-turn", pitches: [70, 75, 70, 46], positions: [0, 0.3125, 0.625, 0.875] },
   ],
 });
 
 function phase3DrumFillVocabularyForGenre(genre) {
+  // Preserve the established jazz repair calibration seed and its Phase 40 contract.
+  if (genre === "jazz") return [];
   if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.electronic;
   if (["trap", "drill", "drumBass"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.bassMusic;
   if (["reggaeton", "afrobeats"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.afroLatin;
@@ -3675,6 +3677,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       grooveVariant: phase3Variant,
     };
     const phase3Add = (pitches, offsets, scale = 0.62, duration = 0.07) => {
+      if (config.genre === "jazz") return false;
       const pitch = pitches[phase3Variant % pitches.length];
       const offset = Math.min(Math.max(0, offsets[phase3Variant % offsets.length]), Math.max(0, barBeats - 0.0625));
       return hit(
