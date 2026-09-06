@@ -14,8 +14,37 @@ const CONSTRAINED_PROFILE = Object.freeze({
   maxScheduledVoices: 48,
 });
 
+const FULL_GRAPH_BUDGET = Object.freeze({
+  saturation: true,
+  oversample: "4x",
+  reverbSeconds: 2.2,
+  reverbChannels: 2,
+  reverbReturnScale: 1,
+  delayFeedback: 0.18,
+  delayReturnScale: 1,
+  preserveKickClick: true,
+  preserveSnareSnap: true,
+  filterMotion: true,
+  sendFloor: 0,
+  masterFadeSeconds: 0.015,
+});
+
+const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
+  saturation: false,
+  oversample: "none",
+  reverbSeconds: 1.15,
+  reverbChannels: 1,
+  reverbReturnScale: 0.72,
+  delayFeedback: 0.11,
+  delayReturnScale: 0.78,
+  preserveKickClick: false,
+  preserveSnareSnap: false,
+  filterMotion: false,
+  sendFloor: 0.045,
+  masterFadeSeconds: 0.028,
+});
+
 const RICH_TRACKS = new Set(["bass", "melody"]);
-const TRANSIENT_TRACKS = new Set(["bass", "melody"]);
 
 function finitePositive(value, fallback) {
   const numeric = Number(value);
@@ -34,6 +63,12 @@ export function previewRuntimeProfile({
   return constrained ? { ...CONSTRAINED_PROFILE } : { ...FULL_PROFILE };
 }
 
+export function previewGraphBudget(profile = FULL_PROFILE) {
+  return profile?.mode === "constrained"
+    ? { ...CONSTRAINED_GRAPH_BUDGET }
+    : { ...FULL_GRAPH_BUDGET };
+}
+
 export function previewVoiceFeatures(trackId, profile = FULL_PROFILE) {
   const constrained = profile?.mode === "constrained";
   if (!constrained) {
@@ -42,7 +77,7 @@ export function previewVoiceFeatures(trackId, profile = FULL_PROFILE) {
   const id = String(trackId || "");
   return {
     layer: RICH_TRACKS.has(id),
-    transient: TRANSIENT_TRACKS.has(id),
+    transient: false,
     sub: id === "bass",
   };
 }
