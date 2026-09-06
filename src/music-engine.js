@@ -3483,6 +3483,53 @@ function drumFillVocabularyForGenre(genre) {
   return DRUM_FILL_VOCABULARIES.pocket;
 }
 
+const PHASE3_DRUM_FILL_VOCABULARIES = deepFreeze({
+  electronic: [
+    { id: "electronic-p3-open-hat-turn", pitches: [42, 46, 42, 51], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "electronic-p3-tom-push", pitches: [45, 47, 50, 46], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "electronic-p3-clap-lift", pitches: [39, 42, 46, 49], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "electronic-p3-hat-stutter", pitches: [42, 42, 46, 42], positions: [0, 0.1875, 0.5, 0.875] },
+  ],
+  bassMusic: [
+    { id: "bassmusic-p3-hat-triplet", pitches: [42, 42, 46, 38], positions: [0, 1 / 6, 1 / 3, 0.75] },
+    { id: "bassmusic-p3-snare-drag", pitches: [38, 37, 38, 42], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "bassmusic-p3-tom-response", pitches: [45, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "bassmusic-p3-break-turn", pitches: [42, 38, 42, 46], positions: [0, 0.3125, 0.625, 0.875] },
+  ],
+  acoustic: [
+    { id: "acoustic-p3-tom-round", pitches: [45, 47, 50, 38], positions: [0, 0.25, 0.5, 0.875] },
+    { id: "acoustic-p3-hat-snare-lift", pitches: [42, 46, 38, 49], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "acoustic-p3-side-stick-turn", pitches: [37, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "acoustic-p3-tom-answer", pitches: [47, 45, 42, 38], positions: [0, 0.375, 0.75, 0.875] },
+  ],
+  pocket: [
+    { id: "pocket-p3-ghost-lift", pitches: [37, 42, 38, 46], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-shaker-answer", pitches: [70, 42, 37, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-rim-clave", pitches: [37, 75, 42, 38], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-hat-pocket", pitches: [42, 37, 46, 42], positions: [0, 0.3125, 0.625, 0.875] },
+  ],
+  afroLatin: [
+    { id: "pocket-p3-afro-clave-shaker", pitches: [75, 70, 75, 46], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-afro-rim-percussion", pitches: [37, 70, 39, 75], positions: [0, 0.375, 0.625, 0.875] },
+    { id: "pocket-p3-afro-conga-answer", pitches: [64, 70, 63, 75], positions: [0, 0.25, 0.625, 0.875] },
+    { id: "pocket-p3-afro-shaker-turn", pitches: [70, 75, 70, 46], positions: [0, 0.3125, 0.625, 0.875] },
+  ],
+});
+
+function phase3DrumFamilyForGenre(genre) {
+  if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return "electronic";
+  if (["trap", "drill", "drumBass"].includes(genre)) return "bassMusic";
+  if (["reggaeton", "afrobeats"].includes(genre)) return "afroLatin";
+  if (["rock", "country", "pop", "popRadio"].includes(genre)) return "acoustic";
+  return "pocket";
+}
+
+function phase3DrumFillVocabularyForGenre(genre) {
+  // Preserve the established jazz repair calibration seed and its Phase 40 contract.
+  if (genre === "jazz") return [];
+  return PHASE3_DRUM_FILL_VOCABULARIES[phase3DrumFamilyForGenre(genre)];
+}
+
 function generateDrums(config, structure, _harmony, style, settings, rng, songBlueprint = null, grooveConductor = null) {
   const notes = [];
   if (settings.density <= 0.001) return notes;
@@ -3604,6 +3651,66 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     const transition = sectionEnd ? transitionFromSection(songBlueprint, section) : null;
     const incomingTransition = bar === section.startBar ? transitionIntoSection(songBlueprint, section) : null;
     const phraseEnd = evolution.phraseEnd;
+
+    // Phase 3: evolve one restrained, genre-native detail per bar. Core kick/snare
+    // anchors are never deleted or moved; this layer creates statement/answer/lift/
+    // cadence contrast so repeated sections retain identity without cloning bars.
+    const phase3Family = phase3DrumFamilyForGenre(config.genre);
+    const phase3Role = phraseEnd
+      ? "cadence"
+      : evolution.barInPhrase === 0
+        ? "statement"
+        : evolution.barInPhrase === 1
+          ? "answer"
+          : "lift";
+    const phase3Rng = phraseRng.fork(`phase3-groove-${phase3Role}-${evolution.phraseIndex}`);
+    const phase3Variant = mod(evolution.phraseIndex + bar + phase3Rng.int(0, 2), 3);
+    const phase3Strength = clamp(0.48 + settings.variation * 0.2 + config.evolution * 0.18 + config.energy * 0.12, 0.48, 0.88);
+    const phase3Meta = {
+      rhythmicFeature: "phase3-groove-development",
+      grooveRole: phase3Role,
+      grooveFamily: phase3Family,
+      grooveVariant: phase3Variant,
+    };
+    const phase3Add = (pitches, offsets, scale = 0.62, duration = 0.07) => {
+      if (config.genre === "jazz") return false;
+      const pitch = pitches[phase3Variant % pitches.length];
+      const offset = Math.min(Math.max(0, offsets[phase3Variant % offsets.length]), Math.max(0, barBeats - 0.0625));
+      return hit(
+        pitch,
+        start + offset,
+        eventVelocity(config, settings, intensity, phase3Rng.fork(`detail-${pitch}-${offset}`), scale),
+        duration,
+        phase3Meta,
+      );
+    };
+
+    if (phase3Role === "statement") {
+      if (phase3Rng.bool(phase3Strength * 0.58)) {
+        if (phase3Family === "afroLatin") phase3Add([70, 75, 70], [0.75, 1.25, 2.75], 0.52);
+        else if (phase3Family === "electronic") phase3Add([42, 42, 46], [0.75, 1.75, 2.75], 0.5);
+        else phase3Add([42, 37, 42], [0.75, 1.5, 2.75], 0.48);
+      }
+    } else if (phase3Role === "answer") {
+      if (phase3Family === "electronic") phase3Add([46, 42, 51], [1.5, 2.5, 3.5], 0.58);
+      else if (phase3Family === "bassMusic") phase3Add([42, 37, 46], [1.75, 2.75, 3.25], 0.54);
+      else if (phase3Family === "afroLatin") phase3Add([75, 70, 63], [1.25, 2.25, 3.25], 0.56);
+      else if (phase3Family === "acoustic") phase3Add([37, 42, 46], [1.5, 2.5, 3.5], 0.52);
+      else phase3Add([37, 42, 70], [1.25, 2.5, 3.25], 0.5);
+    } else if (phase3Role === "lift") {
+      if (phase3Family === "electronic") phase3Add([46, 42, 39], [2.25, 2.75, 3.25], 0.62);
+      else if (phase3Family === "bassMusic") phase3Add([42, 46, 38], [2 + 1 / 3, 2.75, 3 + 1 / 6], 0.58);
+      else if (phase3Family === "afroLatin") phase3Add([70, 75, 64], [2.25, 2.75, 3.25], 0.6);
+      else if (phase3Family === "acoustic") phase3Add([42, 47, 46], [2.25, 2.75, 3.25], 0.58);
+      else phase3Add([42, 37, 46], [2.25, 2.75, 3.25], 0.54);
+    } else {
+      if (phase3Family === "electronic") phase3Add([46, 49, 39], [3.25, 3.5, 3.75], 0.68);
+      else if (phase3Family === "bassMusic") phase3Add([38, 42, 46], [3 + 1 / 6, 3.5, 3.75], 0.64);
+      else if (phase3Family === "afroLatin") phase3Add([75, 70, 63], [3.25, 3.5, 3.75], 0.64);
+      else if (phase3Family === "acoustic") phase3Add([47, 50, 38], [3.25, 3.5, 3.75], 0.62);
+      else phase3Add([37, 42, 46], [3.25, 3.5, 3.75], 0.58);
+    }
+
     const featuredGenre = config.genre === "trap" || config.genre === "drumBass";
     const transitionRng = phraseRng.fork("transition-detail");
     const forceTriplet = config.tripletAmount >= 0.5 && featuredGenre && config.energy >= 0.8 && config.complexity >= 0.7 && tripletFigures === 0 && sectionEnd;
@@ -3775,7 +3882,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       (["launch", "build", "turnaround"].includes(transition?.type) && transition.strength >= 0.56)
       || transitionRng.bool(config.drumFills * profile.arrangement.fillFrequency * (0.5 + settings.variation * 0.5))
     )) {
-      const vocabulary = drumFillVocabularyForGenre(config.genre);
+      const vocabulary = [...drumFillVocabularyForGenre(config.genre), ...phase3DrumFillVocabularyForGenre(config.genre)];
       const freshVocabulary = vocabulary.filter((pattern) => pattern.id !== lastFillId);
       const fill = transitionRng.pick(freshVocabulary.length ? freshVocabulary : vocabulary);
       const fillStart = Math.max(0, barBeats - 1);
@@ -3868,6 +3975,133 @@ function developDuplicateDrumBars(source, config, structure, settings, rng, groo
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
+function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveConductor) {
+  if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
+  const barBeats = beatsPerBar(config);
+  const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, 4);
+  const sectionForBar = (bar) => structure.find((section) => (
+    bar >= section.startBar && bar < section.startBar + section.bars
+  )) ?? structure.at(-1);
+  const transitionBars = new Set();
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    if (from) transitionBars.add(from.startBar + from.bars - 1);
+    if (to) transitionBars.add(to.startBar);
+  }
+
+  const notesByBar = Array.from({ length: config.bars }, () => []);
+  const outsideNotes = [];
+  for (const sourceNote of source) {
+    const note = { ...sourceNote };
+    const bar = Math.floor(note.start / barBeats);
+    if (bar >= 0 && bar < config.bars) notesByBar[bar].push(note);
+    else outsideNotes.push(note);
+  }
+  const notesForBar = (bar) => notesByBar[bar] ?? [];
+  const signatureForBar = (bar) => notesForBar(bar)
+    .map((note) => note.pitch + ":" + round(mod(note.start, barBeats), 4))
+    .sort()
+    .join("|");
+  const isProtectedBar = (bar) => {
+    const section = sectionForBar(bar);
+    const barNotes = notesForBar(bar);
+    if (!section || bar <= 0 || bar >= config.bars - 1) return true;
+    if (bar === section.startBar || transitionBars.has(bar)) return true;
+    if (mod(bar - section.startBar, phraseBars) === 0) return true;
+    return barNotes.some((note) => (
+      note.drumFillId
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.transitionHandoffId
+      || note.rhythmicFeature === "phrase-boundary-roll"
+      || note.rhythmicFeature === "transition-fill"
+    ));
+  };
+  const averageVelocity = (notes) => notes.length
+    ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
+    : 80;
+
+  let recalls = 0;
+  for (let bar = 2; bar < config.bars - 1; bar += 1) {
+    if (isProtectedBar(bar)) continue;
+    const targetSection = sectionForBar(bar);
+    if (!targetSection) continue;
+    const targetRole = mod(bar - targetSection.startBar, phraseBars);
+    const previousSignature = signatureForBar(bar - 1);
+    const candidates = [];
+    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
+    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      if (!referenceSection) continue;
+      const sameSection = referenceSection.name === targetSection.name;
+      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
+      if (!sameSection && referenceFamily !== targetFamily) continue;
+      const referenceRole = mod(referenceBar - referenceSection.startBar, phraseBars);
+      if (referenceRole !== targetRole) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = signatureForBar(referenceBar);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      candidates.push({ referenceBar, sameSection });
+    }
+    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
+    const referenceBar = candidates[0]?.referenceBar;
+    if (!Number.isInteger(referenceBar)) continue;
+
+    const referenceNotes = notesForBar(referenceBar);
+    const targetNotes = notesForBar(bar);
+    if (!referenceNotes.length || !targetNotes.length) continue;
+    const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
+    const targetStart = bar * barBeats;
+    const velocityRatio = clamp(
+      averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
+      0.86,
+      1.16,
+    );
+    const replacement = referenceNotes.map((note) => {
+      const {
+        connectionId: _connectionId,
+        connectionRole: _connectionRole,
+        sectionPatternId: _sectionPatternId,
+        phraseRole: _phraseRole,
+        transitionFeature: _transitionFeature,
+        transitionHandoffRole: _transitionHandoffRole,
+        transitionHandoffId: _transitionHandoffId,
+        ensembleCadenceRole: _ensembleCadenceRole,
+        sectionId: _sectionId,
+        ...rhythmicNote
+      } = note;
+      return {
+        ...rhythmicNote,
+        start: round(targetStart + round(mod(note.start, barBeats))),
+        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 120),
+        sectionId: targetSection.id,
+        connectionId: targetConnectionNote?.connectionId ?? `interlock:${targetSection.id}`,
+        ...(targetConnectionNote?.connectionRole ? { connectionRole: targetConnectionNote.connectionRole } : {}),
+        ...(targetConnectionNote?.sectionPatternId ? { sectionPatternId: targetConnectionNote.sectionPatternId } : {}),
+        ...(targetConnectionNote?.phraseRole ? { phraseRole: targetConnectionNote.phraseRole } : {}),
+        grooveMemoryRecall: true,
+        grooveMemorySourceBar: referenceBar,
+        grooveMemorySectionRole: targetRole,
+      };
+    });
+    notesByBar[bar] = replacement;
+    recalls += 1;
+  }
+
+  if (!recalls) return source;
+  return [...outsideNotes, ...notesByBar.flat()]
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+function applyFinalGrooveMemory(tracks, config, structure, songBlueprint, grooveConductor) {
+  return tracks.map((track) => track.id === "drums"
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint, grooveConductor) }
+    : track);
+}
+
 function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {
   if (!bassNotes?.length || settings.density <= 0.001) return drumNotes;
   const result = drumNotes.map((note) => ({ ...note }));
@@ -3885,7 +4119,10 @@ function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, setting
       .map((note) => ({ note, desired: desiredForBass(note) }))
       .filter(({ desired }) => desired >= barStart - 1e-6 && desired < barEnd - 0.04)
       .sort((a, b) => b.note.velocity - a.note.velocity || a.desired - b.desired);
-    const maximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
+    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
+    const maximumAdditions = config.genre === "trap"
+      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))
+      : baseMaximumAdditions;
     let additions = 0;
     for (const { note, desired } of candidates) {
       if (additions >= maximumAdditions) break;
@@ -7978,18 +8215,75 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  const tracks = finalProducerIntentAudit.tracks;
+  // Phase 3 groove memory runs only after the existing producer/master pipeline
+  // has converged. It recalls matching interior roles from repeated sections,
+  // never transition boundary bars. Bass is re-locked to the surviving kick
+  // pattern, producer intent is re-audited, and final assembly gets the last word.
+  const finalGrooveMemoryTracks = targetTrack
+    ? finalProducerIntentAudit.tracks
+    : applyFinalGrooveMemory(
+      finalProducerIntentAudit.tracks,
+      config,
+      structure,
+      songBlueprint,
+      grooveConductor,
+    );
+  const finalGrooveRhythmLock = lockFinalBassToSurvivingKicks(
+    finalGrooveMemoryTracks,
+    config.genre,
+    totalBeats,
+  );
+  const postGrooveIntentAudit = auditProducerIntentContract(
+    finalGrooveRhythmLock.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalGrooveAssembly = runFinalAssemblyPass(
+    postGrooveIntentAudit.tracks,
+    finalProducerIntentAudit.tracks,
+    structure,
+    songBlueprint,
+  );
+  let tracks = finalGrooveAssembly.tracks;
+  if (targetTrack === "drums" && contextTracks.bass?.length) {
+    const finalDrumTrack = tracks.find((track) => track.id === "drums");
+    if (finalDrumTrack) {
+      const fittedFinalDrums = fitDrumsToRetainedBass(
+        finalDrumTrack.notes,
+        contextTracks.bass,
+        config,
+        structure,
+        config.tracks.drums,
+        rootRng.fork("final-drums-retained-bass"),
+      );
+      const finalNotesById = Object.fromEntries(tracks.map((track) => [track.id, track.notes]));
+      finalNotesById.drums = fittedFinalDrums;
+      const reconnectedFinal = applyGenerationInterlocks(
+        finalNotesById,
+        generationInterlock,
+        structure,
+        config,
+        { adjustVelocity: false },
+      );
+      tracks = tracks.map((track) => ({
+        ...track,
+        notes: reconnectedFinal[track.id] ?? track.notes,
+      }));
+    }
+  }
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
-  finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
+  finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
     songBlueprint,
     {
       featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored,
+        + postIntentAssembly.repairs.featuredAnchorsRestored
+        + finalGrooveAssembly.repairs.featuredAnchorsRestored,
       transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged,
+        + postIntentAssembly.repairs.transitionEventsTagged
+        + finalGrooveAssembly.repairs.transitionEventsTagged,
     },
   );
   const sectionContrast = createSectionContrastReport(
@@ -8065,8 +8359,8 @@ function compose(config, options = {}) {
     rhythmTurnaroundConversation,
     characteristicVoice: characteristicVoice.report,
     producerIntent: clone(songBlueprint.producerIntent),
-    producerIntentReport: finalProducerIntentAudit.report,
-    finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
+    producerIntentReport: postGrooveIntentAudit.report,
+    finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
@@ -9186,16 +9480,45 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  song.tracks = finalProducerIntentAudit.tracks;
+  const repairedGrooveMemoryTracks = sourceCandidate.targetTrack
+    ? finalProducerIntentAudit.tracks
+    : applyFinalGrooveMemory(
+      finalProducerIntentAudit.tracks,
+      config,
+      song.structure,
+      song.songBlueprint,
+      song.grooveConductor,
+    );
+  const repairedGrooveRhythmLock = lockFinalBassToSurvivingKicks(
+    repairedGrooveMemoryTracks,
+    config.genre,
+    config.bars * beatsPerBar(config),
+  );
+  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
+    repairedGrooveRhythmLock.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  const repairedFinalGrooveAssembly = runFinalAssemblyPass(
+    repairedPostGrooveIntentAudit.tracks,
+    finalProducerIntentAudit.tracks,
+    song.structure,
+    song.songBlueprint,
+  );
+  song.tracks = repairedFinalGrooveAssembly.tracks;
+  finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
+  song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
     song.songBlueprint,
     {
       featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored,
+        + postIntentAssembly.repairs.featuredAnchorsRestored
+        + repairedFinalGrooveAssembly.repairs.featuredAnchorsRestored,
       transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged,
+        + postIntentAssembly.repairs.transitionEventsTagged
+        + repairedFinalGrooveAssembly.repairs.transitionEventsTagged,
     },
   );
   song.sectionContrast = createSectionContrastReport(
@@ -9213,7 +9536,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
   song.producerIntent = clone(song.songBlueprint?.producerIntent);
-  song.producerIntentReport = finalProducerIntentAudit.report;
+  song.producerIntentReport = repairedPostGrooveIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);
@@ -9249,6 +9572,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
 
 function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
   const sourceSong = sourceCandidate.song;
+  const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;
+  const sourceContextTracks = sourceCandidate.contextTracks ?? {};
   const config = normalizeConfig({
     ...configFromSong(sourceSong),
     seed,
@@ -9274,7 +9599,10 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
     ...(performanceRepair || arrangementRepair ? {} : {
       performanceProfile: sourceSong.performanceProfile,
     }),
-    ...(harmonyRepair ? {
+    ...(sourceTargetTrack ? {
+      targetTrack: sourceTargetTrack,
+      contextTracks: sourceContextTracks,
+    } : harmonyRepair ? {
       targetTrack: "bass",
       contextTracks: {
         drums: sourceSong.tracks.find((track) => track.id === "drums"),
@@ -9284,7 +9612,19 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
   const variant = compose(config, options);
   let repaired;
 
-  if (arrangementRepair) {
+  if (sourceTargetTrack) {
+    repaired = clone(sourceSong);
+    repaired.id = variant.id;
+    repaired.seed = variant.seed;
+    repaired.settings = variant.settings;
+    repaired.compositionRoute = variant.compositionRoute;
+    repaired.grooveConductor = variant.grooveConductor;
+    repaired.tracks = replaceSongTracks(
+      sourceSong.tracks,
+      variant.tracks,
+      [sourceTargetTrack],
+    );
+  } else if (arrangementRepair) {
     repaired = variant;
   } else {
     repaired = clone(sourceSong);
@@ -9596,6 +9936,8 @@ function runTargetedCriticRepair(candidates, {
       evaluation,
       novelty,
       repair: song.criticRepair,
+      targetTrack: sourceCandidate.targetTrack ?? null,
+      contextTracks: sourceCandidate.contextTracks ?? null,
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
     };
     candidates.push(candidate);
@@ -9726,6 +10068,7 @@ export function generateSimilar(current, input = {}) {
     );
     const inheritedContext = normalizeContextTracks(current.tracks, config);
     const suppliedContext = normalizeContextTracks(input.contextTracks, config);
+    const targetContextTracks = { ...inheritedContext, ...suppliedContext };
 
     const candidateSong = compose(config, {
       generation: "similar",
@@ -9739,7 +10082,7 @@ export function generateSimilar(current, input = {}) {
       performanceProfile: current.performanceProfile,
       compositionRoute: routeId,
       targetTrack,
-      contextTracks: { ...inheritedContext, ...suppliedContext },
+      contextTracks: targetContextTracks,
     });
 
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
@@ -9750,6 +10093,8 @@ export function generateSimilar(current, input = {}) {
       song: candidateSong,
       evaluation,
       novelty,
+      targetTrack,
+      contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
     });
     if (
