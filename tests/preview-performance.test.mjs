@@ -18,6 +18,7 @@ test("Android preview uses a smaller low-latency scheduling graph with next-beat
   assert.equal(profile.lookAheadSeconds, 0.55);
   assert.ok(profile.lookAheadSeconds >= 0.5, "constrained scheduling must still pre-queue the next half-second beat");
   assert.equal(profile.maxScheduledVoices, 48);
+  assert.ok(profile.maxScheduledVoices <= 48, "Android must keep the preview graph inside the constrained voice budget");
 });
 
 test("desktop preview keeps the full synthesis profile", () => {
