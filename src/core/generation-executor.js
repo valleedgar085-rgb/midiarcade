@@ -1,5 +1,4 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
-import { decorateProducerBrainResult } from "./producer-brain.js";
 
 export function createGenerationExecutor({
   fallback,
@@ -16,7 +15,6 @@ export function createGenerationExecutor({
   function runFallback(request) {
     Promise.resolve()
       .then(() => fallback(request.kind, request.payload))
-      .then((result) => decorateProducerBrainResult(result, request.payload?.config?.producerBrain))
       .then(request.resolve, request.reject);
   }
 
@@ -62,12 +60,8 @@ export function createGenerationExecutor({
       worker.addEventListener("message", (event) => {
         const request = takePending(event.data?.requestId);
         if (!request) return;
-        if (event.data?.ok) {
-          request.resolve(decorateProducerBrainResult(
-            event.data.result,
-            request.payload?.config?.producerBrain,
-          ));
-        } else {
+        if (event.data?.ok) request.resolve(event.data.result);
+        else {
           workerUnavailable = true;
           disposeWorker();
           runFallback(request);
@@ -89,10 +83,7 @@ export function createGenerationExecutor({
   async function run(kind, payload = {}) {
     const adaptedPayload = adaptGenerationRequest(kind, payload);
     const activeWorker = ensureWorker();
-    if (!activeWorker) {
-      const result = await fallback(kind, adaptedPayload);
-      return decorateProducerBrainResult(result, adaptedPayload.config?.producerBrain);
-    }
+    if (!activeWorker) return fallback(kind, adaptedPayload);
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
