@@ -1,0 +1,310 @@
+name: Apply Phase 3 Review Cleanup
+
+on:
+  push:
+    branches:
+      - phase-3-groove-intelligence
+    paths:
+      - .github/workflows/phase3-review-cleanup.yml
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-3-groove-intelligence
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply review cleanup
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path = 'src/music-engine.js';
+          let source = fs.readFileSync(path, 'utf8');
+          const replaceOne = (before, after, label) => {
+            if (!source.includes(before)) throw new Error(`${label} anchor not found`);
+            source = source.replace(before, after);
+          };
+
+          // Keep Phase 3 fill and development families sourced from one mapping.
+          const oldVocabularySelector = `function phase3DrumFillVocabularyForGenre(genre) {
+            // Preserve the established jazz repair calibration seed and its Phase 40 contract.
+            if (genre === "jazz") return [];
+            if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.electronic;
+            if (["trap", "drill", "drumBass"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.bassMusic;
+            if (["reggaeton", "afrobeats"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.afroLatin;
+            if (["rock", "country", "pop", "popRadio"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.acoustic;
+            return PHASE3_DRUM_FILL_VOCABULARIES.pocket;
+          }`.replace(/^          /gm, '');
+          const newVocabularySelector = `function phase3DrumFamilyForGenre(genre) {
+            if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return "electronic";
+            if (["trap", "drill", "drumBass"].includes(genre)) return "bassMusic";
+            if (["reggaeton", "afrobeats"].includes(genre)) return "afroLatin";
+            if (["rock", "country", "pop", "popRadio"].includes(genre)) return "acoustic";
+            return "pocket";
+          }
+
+          function phase3DrumFillVocabularyForGenre(genre) {
+            // Preserve the established jazz repair calibration seed and its Phase 40 contract.
+            if (genre === "jazz") return [];
+            return PHASE3_DRUM_FILL_VOCABULARIES[phase3DrumFamilyForGenre(genre)];
+          }`.replace(/^          /gm, '');
+          replaceOne(oldVocabularySelector, newVocabularySelector, 'Phase 3 vocabulary selector');
+
+          const oldFamily = `    const phase3Family = ["house", "techno", "synthwave", "synthPopRadio"].includes(config.genre)
+            ? "electronic"
+            : ["trap", "drill", "drumBass"].includes(config.genre)
+              ? "bassMusic"
+              : ["reggaeton", "afrobeats"].includes(config.genre)
+                ? "afroLatin"
+                : ["rock", "country", "pop", "popRadio"].includes(config.genre)
+                  ? "acoustic"
+                  : "pocket";`.replace(/^          /gm, '');
+          replaceOne(oldFamily, '    const phase3Family = phase3DrumFamilyForGenre(config.genre);', 'Phase 3 development family');
+
+          // Replace repeated whole-track filtering with mutable per-bar buckets.
+          const memoryStart = source.indexOf('function reinforceGrooveMemory(');
+          const memoryEnd = source.indexOf('\nfunction applyFinalGrooveMemory(', memoryStart);
+          if (memoryStart < 0 || memoryEnd < 0) throw new Error('groove-memory function bounds not found');
+          const optimizedMemory = `function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveConductor) {
+            if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
+            const barBeats = beatsPerBar(config);
+            const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, 4);
+            const sectionForBar = (bar) => structure.find((section) => (
+              bar >= section.startBar && bar < section.startBar + section.bars
+            )) ?? structure.at(-1);
+            const transitionBars = new Set();
+            for (const transition of songBlueprint?.transitions ?? []) {
+              const from = structure.find((section) => section.id === transition.fromSectionId);
+              const to = structure.find((section) => section.id === transition.toSectionId);
+              if (from) transitionBars.add(from.startBar + from.bars - 1);
+              if (to) transitionBars.add(to.startBar);
+            }
+
+            const notesByBar = Array.from({ length: config.bars }, () => []);
+            const outsideNotes = [];
+            for (const sourceNote of source) {
+              const note = { ...sourceNote };
+              const bar = Math.floor(note.start / barBeats);
+              if (bar >= 0 && bar < config.bars) notesByBar[bar].push(note);
+              else outsideNotes.push(note);
+            }
+            const notesForBar = (bar) => notesByBar[bar] ?? [];
+            const signatureForBar = (bar) => notesForBar(bar)
+              .map((note) => \`${'${note.pitch}'}:${'${round(mod(note.start, barBeats), 4)}'}\`)
+              .sort()
+              .join("|");
+            const isProtectedBar = (bar) => {
+              const section = sectionForBar(bar);
+              const barNotes = notesForBar(bar);
+              if (!section || bar <= 0 || bar >= config.bars - 1) return true;
+              if (bar === section.startBar || transitionBars.has(bar)) return true;
+              if (mod(bar - section.startBar, phraseBars) === 0) return true;
+              return barNotes.some((note) => (
+                note.drumFillId
+                || note.transitionFeature
+                || note.transitionHandoffRole
+                || note.transitionHandoffId
+                || note.rhythmicFeature === "phrase-boundary-roll"
+                || note.rhythmicFeature === "transition-fill"
+              ));
+            };
+            const averageVelocity = (notes) => notes.length
+              ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
+              : 80;
+
+            let recalls = 0;
+            for (let bar = 2; bar < config.bars - 1; bar += 1) {
+              if (isProtectedBar(bar)) continue;
+              const targetSection = sectionForBar(bar);
+              if (!targetSection) continue;
+              const targetRole = mod(bar - targetSection.startBar, phraseBars);
+              const previousSignature = signatureForBar(bar - 1);
+              const candidates = [];
+              const coreSectionNames = new Set(["verse", "chorus", "drop"]);
+              const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
+              for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+                if (isProtectedBar(referenceBar)) continue;
+                const referenceSection = sectionForBar(referenceBar);
+                if (!referenceSection) continue;
+                const sameSection = referenceSection.name === targetSection.name;
+                const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
+                if (!sameSection && referenceFamily !== targetFamily) continue;
+                const referenceRole = mod(referenceBar - referenceSection.startBar, phraseBars);
+                if (referenceRole !== targetRole) continue;
+                const referenceNotes = notesForBar(referenceBar);
+                if (!referenceNotes.length) continue;
+                const referenceSignature = signatureForBar(referenceBar);
+                if (!referenceSignature || referenceSignature === previousSignature) continue;
+                candidates.push({ referenceBar, sameSection });
+              }
+              candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
+              const referenceBar = candidates[0]?.referenceBar;
+              if (!Number.isInteger(referenceBar)) continue;
+
+              const referenceNotes = notesForBar(referenceBar);
+              const targetNotes = notesForBar(bar);
+              if (!referenceNotes.length || !targetNotes.length) continue;
+              const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
+              const sourceStart = referenceBar * barBeats;
+              const targetStart = bar * barBeats;
+              const velocityRatio = clamp(
+                averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
+                0.86,
+                1.16,
+              );
+              const replacement = referenceNotes.map((note) => {
+                const {
+                  connectionId: _connectionId,
+                  connectionRole: _connectionRole,
+                  sectionPatternId: _sectionPatternId,
+                  phraseRole: _phraseRole,
+                  transitionFeature: _transitionFeature,
+                  transitionHandoffRole: _transitionHandoffRole,
+                  transitionHandoffId: _transitionHandoffId,
+                  ensembleCadenceRole: _ensembleCadenceRole,
+                  sectionId: _sectionId,
+                  ...rhythmicNote
+                } = note;
+                return {
+                  ...rhythmicNote,
+                  start: round(targetStart + round(mod(note.start, barBeats))),
+                  velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 120),
+                  sectionId: targetSection.id,
+                  connectionId: targetConnectionNote?.connectionId ?? \`interlock:${'${targetSection.id}'}\`,
+                  ...(targetConnectionNote?.connectionRole ? { connectionRole: targetConnectionNote.connectionRole } : {}),
+                  ...(targetConnectionNote?.sectionPatternId ? { sectionPatternId: targetConnectionNote.sectionPatternId } : {}),
+                  ...(targetConnectionNote?.phraseRole ? { phraseRole: targetConnectionNote.phraseRole } : {}),
+                  grooveMemoryRecall: true,
+                  grooveMemorySourceBar: referenceBar,
+                  grooveMemorySectionRole: targetRole,
+                };
+              });
+              notesByBar[bar] = replacement;
+              recalls += 1;
+            }
+
+            if (!recalls) return source;
+            return [...outsideNotes, ...notesByBar.flat()]
+              .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+          }
+          `.replace(/^          /gm, '').trimEnd();
+          source = source.slice(0, memoryStart) + optimizedMemory + source.slice(memoryEnd);
+
+          // Report the lock that actually ran after groove-memory recall.
+          replaceOne(
+            '  finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;',
+            '  finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;',
+            'final master rhythm-lock report',
+          );
+          replaceOne(
+            '    finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },',
+            '    finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },',
+            'song rhythm-lock report',
+          );
+
+          // Ordinary critic-repaired songs must receive the same Phase 3 finalization
+          // as fresh songs. Surgical target-track repairs stay surgical.
+          const finishStart = source.indexOf('function finishRepairedSong(');
+          const finishEnd = source.indexOf('\nfunction repairCandidateSong(', finishStart);
+          if (finishStart < 0 || finishEnd < 0) throw new Error('finishRepairedSong bounds not found');
+          let finish = source.slice(finishStart, finishEnd);
+          const replaceFinish = (before, after, label) => {
+            if (!finish.includes(before)) throw new Error(`${label} anchor not found`);
+            finish = finish.replace(before, after);
+          };
+          const repairAudit = `  const finalProducerIntentAudit = auditProducerIntentContract(
+            postIntentAssembly.tracks,
+            song.structure,
+            song.songBlueprint?.producerIntent,
+          );
+          song.tracks = finalProducerIntentAudit.tracks;`.replace(/^          /gm, '');
+          const repairFinalization = `  const finalProducerIntentAudit = auditProducerIntentContract(
+            postIntentAssembly.tracks,
+            song.structure,
+            song.songBlueprint?.producerIntent,
+          );
+          const repairedGrooveMemoryTracks = sourceCandidate.targetTrack
+            ? finalProducerIntentAudit.tracks
+            : applyFinalGrooveMemory(
+              finalProducerIntentAudit.tracks,
+              config,
+              song.structure,
+              song.songBlueprint,
+              song.grooveConductor,
+            );
+          const repairedGrooveRhythmLock = lockFinalBassToSurvivingKicks(
+            repairedGrooveMemoryTracks,
+            config.genre,
+            config.bars * beatsPerBar(config),
+          );
+          const repairedPostGrooveIntentAudit = auditProducerIntentContract(
+            repairedGrooveRhythmLock.tracks,
+            song.structure,
+            song.songBlueprint?.producerIntent,
+          );
+          const repairedFinalGrooveAssembly = runFinalAssemblyPass(
+            repairedPostGrooveIntentAudit.tracks,
+            finalProducerIntentAudit.tracks,
+            song.structure,
+            song.songBlueprint,
+          );
+          song.tracks = repairedFinalGrooveAssembly.tracks;
+          finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
+          song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };`.replace(/^          /gm, '');
+          replaceFinish(repairAudit, repairFinalization, 'critic-repair groove finalization');
+          replaceFinish(
+            '      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored\n        + postIntentAssembly.repairs.featuredAnchorsRestored,',
+            '      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored\n        + postIntentAssembly.repairs.featuredAnchorsRestored\n        + repairedFinalGrooveAssembly.repairs.featuredAnchorsRestored,',
+            'critic-repair final assembly featured repairs',
+          );
+          replaceFinish(
+            '      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged\n        + postIntentAssembly.repairs.transitionEventsTagged,',
+            '      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged\n        + postIntentAssembly.repairs.transitionEventsTagged\n        + repairedFinalGrooveAssembly.repairs.transitionEventsTagged,',
+            'critic-repair final assembly transition repairs',
+          );
+          replaceFinish(
+            '  song.producerIntentReport = finalProducerIntentAudit.report;',
+            '  song.producerIntentReport = repairedPostGrooveIntentAudit.report;',
+            'critic-repair producer intent report',
+          );
+          source = source.slice(0, finishStart) + finish + source.slice(finishEnd);
+
+          fs.writeFileSync(path, source);
+          console.log('Applied Phase 3 PR review cleanup.');
+          NODE
+      - name: Verify focused contracts
+        run: |
+          node --check src/music-engine.js
+          node --test tests/groove-intelligence.test.mjs
+          node --test --test-name-pattern="phase 20|phase 40|phase 39|targeted Similar generation composes" tests/music-engine.test.mjs
+          node --test --test-name-pattern="dense maximum-length output" tests/engine-adversarial.test.mjs
+      - name: Recheck strict Phase 3 calibration
+        run: |
+          node --input-type=module <<'NODE'
+          import { runGenerationBenchmark } from './src/generation-benchmark.js';
+          const report = runGenerationBenchmark({ seeds: ['calibration-a', 'calibration-b', 'calibration-c'], bars: 16 });
+          const groove = report.groupAverages.groove;
+          const drumVariety = report.dimensionAverages.drumVariety;
+          console.log(`Review-cleanup calibration: groove=${groove}, drumVariety=${drumVariety}`);
+          if (groove < 85) throw new Error(`Groove regressed below target: ${groove}`);
+          if (drumVariety < 82) throw new Error(`Drum variety regressed below target: ${drumVariety}`);
+          NODE
+      - name: Commit engine cleanup and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/phase3-review-cleanup.yml
+          git add src/music-engine.js
+          git commit -m "Address Phase 3 review contracts"
+          git push origin HEAD:phase-3-groove-intelligence
