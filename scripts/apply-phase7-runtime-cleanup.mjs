@@ -161,6 +161,20 @@ smoke = replaceOnce(
   '  assert.match(appSource, /createWaveShaper/, "full preview audio must retain the saturation stage");\n  assert.match(appSource, /previewGraphBudget/, "preview audio must resolve a runtime DSP budget");\n  assert.match(appSource, /this\\.previewBudget\\.saturation/, "constrained playback must be able to bypass saturation");\n  assert.match(appSource, /saturation\\.oversample = this\\.previewBudget\\.oversample/, "oversampling must follow the runtime graph budget");',
   "app smoke DSP assertions",
 );
+smoke = replaceOnce(
+  smoke,
+  `  assert.deepEqual(fxCalls, [
+    [clubMix.delaySeconds, 3, 0.025],
+    [clubMix.reverbReturn, 3, 0.025],
+    [clubMix.delayReturn, 3, 0.025],
+  ]);`,
+  `  assert.deepEqual(fxCalls, [
+    [clubMix.delaySeconds, 3, 0.025],
+    [clubMix.reverbReturn * fxPlayer.previewBudget.reverbReturnScale, 3, 0.025],
+    [clubMix.delayReturn * fxPlayer.previewBudget.delayReturnScale, 3, 0.025],
+  ], "song FX returns must respect the active runtime DSP budget");`,
+  "runtime-aware FX smoke expectation",
+);
 fs.writeFileSync("tests/app-smoke.test.mjs", smoke);
 
 console.log("Phase 7 runtime audio integration applied.");
