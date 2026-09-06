@@ -25,7 +25,7 @@ jobs:
       - run: npm ci
       - name: Apply preview stability patch
         run: node scripts/apply-audio-stability-hotfix.mjs
-      - name: Focused audio stability tests
+      - name: Focused audio stability and next-beat tests
         run: node --test tests/preview-performance.test.mjs tests/app-smoke.test.mjs
       - name: Full production quality
         run: npm run quality
