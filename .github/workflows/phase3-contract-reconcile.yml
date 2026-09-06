@@ -97,8 +97,47 @@ jobs:
             'final retained-bass drum lock',
           );
 
+          // Preserve the user's surgical reroll contract through Phase 20 critic
+          // repair. Repair candidates must continue regenerating only the target
+          // track against the same retained partner context.
+          replaceOne(
+            'function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {\n  const sourceSong = sourceCandidate.song;',
+            'function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {\n  const sourceSong = sourceCandidate.song;\n  const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;\n  const sourceContextTracks = sourceCandidate.contextTracks ?? {};',
+            'critic repair targeted context',
+          );
+          replaceOne(
+            '    ...(harmonyRepair ? {\n      targetTrack: "bass",\n      contextTracks: {\n        drums: sourceSong.tracks.find((track) => track.id === "drums"),\n      },\n    } : {}),',
+            '    ...(sourceTargetTrack ? {\n      targetTrack: sourceTargetTrack,\n      contextTracks: sourceContextTracks,\n    } : harmonyRepair ? {\n      targetTrack: "bass",\n      contextTracks: {\n        drums: sourceSong.tracks.find((track) => track.id === "drums"),\n      },\n    } : {}),',
+            'critic repair options',
+          );
+          replaceOne(
+            '  if (arrangementRepair) {\n    repaired = variant;\n  } else {',
+            '  if (sourceTargetTrack) {\n    repaired = clone(sourceSong);\n    repaired.id = variant.id;\n    repaired.seed = variant.seed;\n    repaired.settings = variant.settings;\n    repaired.compositionRoute = variant.compositionRoute;\n    repaired.grooveConductor = variant.grooveConductor;\n    repaired.tracks = replaceSongTracks(\n      sourceSong.tracks,\n      variant.tracks,\n      [sourceTargetTrack],\n    );\n  } else if (arrangementRepair) {\n    repaired = variant;\n  } else {',
+            'critic repair targeted replacement',
+          );
+          replaceOne(
+            '    const inheritedContext = normalizeContextTracks(current.tracks, config);\n    const suppliedContext = normalizeContextTracks(input.contextTracks, config);\n\n    const candidateSong = compose(config, {',
+            '    const inheritedContext = normalizeContextTracks(current.tracks, config);\n    const suppliedContext = normalizeContextTracks(input.contextTracks, config);\n    const targetContextTracks = { ...inheritedContext, ...suppliedContext };\n\n    const candidateSong = compose(config, {',
+            'similar retained context capture',
+          );
+          replaceOne(
+            '      targetTrack,\n      contextTracks: { ...inheritedContext, ...suppliedContext },\n    });',
+            '      targetTrack,\n      contextTracks: targetContextTracks,\n    });',
+            'similar compose retained context',
+          );
+          replaceOne(
+            '      novelty,\n      selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),\n    });',
+            '      novelty,\n      targetTrack,\n      contextTracks: targetContextTracks,\n      selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),\n    });',
+            'similar candidate target metadata',
+          );
+          replaceOne(
+            '      repair: song.criticRepair,\n      selectionScore: candidateSelectionScore(evaluation, novelty, generation),\n    };',
+            '      repair: song.criticRepair,\n      targetTrack: sourceCandidate.targetTrack ?? null,\n      contextTracks: sourceCandidate.contextTracks ?? null,\n      selectionScore: candidateSelectionScore(evaluation, novelty, generation),\n    };',
+            'repair candidate target metadata',
+          );
+
           fs.writeFileSync(path, source);
-          console.log('Reconciled Phase 3 with final retained-partner drum locking after producer/master transforms.');
+          console.log('Reconciled Phase 3 and preserved targeted Similar context through critic repair.');
           NODE
       - name: Verify four caught regressions and Phase 3 contracts
         run: |
@@ -112,7 +151,7 @@ jobs:
           const report = runGenerationBenchmark({ seeds: ['calibration-a', 'calibration-b', 'calibration-c'], bars: 16 });
           const groove = report.groupAverages.groove;
           const drumVariety = report.dimensionAverages.drumVariety;
-          console.log(`Phase 3 reconciled calibration: groove=${groove}, drumVariety=${drumVariety}, technical=${report.technicalAverage ?? report.technical}`);
+          console.log(`Phase 3 reconciled calibration: groove=${groove}, drumVariety=${drumVariety}`);
           if (groove < 85) throw new Error(`Groove regressed below target: ${groove}`);
           if (drumVariety < 82) throw new Error(`Drum variety regressed below target: ${drumVariety}`);
           NODE
