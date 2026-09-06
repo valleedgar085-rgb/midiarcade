@@ -86,9 +86,14 @@ jobs:
             '  const finalGrooveMemoryTracks = targetTrack\n    ? finalProducerIntentAudit.tracks\n    : applyFinalGrooveMemory(\n      finalProducerIntentAudit.tracks,\n      config,\n      structure,\n      songBlueprint,\n      grooveConductor,\n    );',
             'targeted-generation guard',
           );
+          replaceOne(
+            '    const maximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);',
+            '    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);\n    const maximumAdditions = config.genre === "trap"\n      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))\n      : baseMaximumAdditions;',
+            'retained-bass kick budget',
+          );
 
           fs.writeFileSync(path, source);
-          console.log('Reconciled Phase 3 groove memory with velocity, interlock, phrase-grammar, and targeted-reroll contracts.');
+          console.log('Reconciled Phase 3 with velocity, interlock, phrase grammar, targeted rerolls, and dense retained-bass kick fitting.');
           NODE
       - name: Verify four caught regressions and Phase 3 contracts
         run: |
