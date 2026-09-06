@@ -33,12 +33,49 @@ jobs:
           import fs from 'node:fs';
           const path = 'src/music-engine.js';
           let source = fs.readFileSync(path, 'utf8');
-          const before = '        start: round(targetStart + (note.start - sourceStart), 4),';
-          const after = '        start: round(targetStart + round(mod(note.start, barBeats))),';
-          if (!source.includes(before)) throw new Error('groove-memory timing anchor not found');
-          source = source.replace(before, after);
+          const timingBefore = '        start: round(targetStart + (note.start - sourceStart), 4),';
+          const timingAfter = '        start: round(targetStart + round(mod(note.start, barBeats))),';
+          if (!source.includes(timingBefore)) throw new Error('groove-memory timing anchor not found');
+          source = source.replace(timingBefore, timingAfter);
+
+          const selectionBefore = `    const candidates = [];
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      if (!referenceSection || referenceSection.name !== targetSection.name) continue;
+      const referenceRole = referenceBar - referenceSection.startBar;
+      if (referenceRole !== targetRole) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      candidates.push(referenceBar);
+    }
+    const referenceBar = candidates[0];`;
+          const selectionAfter = `    const candidates = [];
+    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
+    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      if (!referenceSection) continue;
+      const referenceRole = referenceBar - referenceSection.startBar;
+      if (referenceRole !== targetRole) continue;
+      const sameSection = referenceSection.name === targetSection.name;
+      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
+      if (!sameSection && referenceFamily !== targetFamily) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      candidates.push({ referenceBar, sameSection });
+    }
+    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
+    const referenceBar = candidates[0]?.referenceBar;`;
+          if (!source.includes(selectionBefore)) throw new Error('groove-memory canonical selection anchor not found');
+          source = source.replace(selectionBefore, selectionAfter);
           fs.writeFileSync(path, source);
-          console.log('Aligned groove-memory recall to Critic 6 six-decimal timing precision.');
+          console.log('Aligned six-decimal timing and shared canonical pocket across verse/chorus/drop roles.');
           NODE
       - name: Verify engine and Phase 3 contracts
         run: |
