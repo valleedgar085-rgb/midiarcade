@@ -9,7 +9,7 @@ const FULL_PROFILE = Object.freeze({
 const CONSTRAINED_PROFILE = Object.freeze({
   mode: "constrained",
   scheduleIntervalMs: 45,
-  lookAheadSeconds: 0.42,
+  lookAheadSeconds: 0.55,
   lateEventGraceSeconds: 0.08,
   maxScheduledVoices: 48,
 });
