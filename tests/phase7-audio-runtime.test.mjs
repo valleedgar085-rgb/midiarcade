@@ -36,7 +36,8 @@ test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android 
   assert.match(appSource, /this\.clearTimers\(\)/);
   assert.match(appSource, /this\.clearScheduledAudio\(\)/);
   assert.match(appSource, /this\.context\.suspend\(\)\.catch/);
-  assert.match(appSource, /\["suspended", "interrupted"\]\.includes\(this\.context\?\.state\)/);
+  assert.match(appSource, /\["suspended", "interrupted", "closed"\]\.includes\(context\.state\)/);
+  assert.match(appSource, /document\.visibilityState === "hidden"\) return/);
   assert.match(appSource, /recoverAudioContext\(this\.context\)/);
 });
 

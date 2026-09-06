@@ -20,6 +20,8 @@ import {
 import {
   createSongDNA as createDeterministicSongDNA,
 } from "./core/song-dna.js";
+import { measureMusicalDensity } from "./core/musical-density.js";
+import { musicalIdentity, musicalIdentitySimilarity, scoreCandidateChoice } from "./core/candidate-choice.js";
 
 export const PPQ = 480;
 
@@ -8959,7 +8961,8 @@ export function evaluateSongCandidate(song) {
   const motif = clamp(Math.round(controlledMotion * 56 + repetition * 0.44), 25, 100);
 
   const storyArc = blueprintArcScore(song);
-  const notesPerBar = pitchedNotes.length / bars;
+  const densityReport = measureMusicalDensity(song);
+  const notesPerBar = densityReport.eventsPerBar;
   const densityTarget = criticProfile.density;
   const density = clamp(Math.round(100 - Math.abs(notesPerBar - densityTarget) / Math.max(10, densityTarget) * 42), 35, 100);
 
@@ -9090,6 +9093,8 @@ export function evaluateSongCandidate(song) {
       stageInterlock: round(stageInterlock / 100),
       genreProfile: song.genre,
       densityTarget,
+      measuredDensity: round(notesPerBar),
+      densityEventsByTrack: densityReport.perTrackEvents,
       repetitionTarget: round(repetitionTarget),
       syncopationTarget: criticProfile.syncopation,
       measuredSyncopation: round(measuredSyncopation),
@@ -9134,6 +9139,7 @@ export function createSongFingerprint(song) {
   });
   return {
     version: 2,
+    musicalIdentity: musicalIdentity(song),
     structure: (song?.structure ?? []).map((section) => `${section.name}:${section.bars}`),
     harmony: (song?.harmony ?? []).map((event) => `${mod(event.degree, 7)}:${round(event.duration)}`),
     harmonyColor: (song?.harmony ?? []).map((event) => `${event.harmonicColor ?? "stable"}:${event.extension ?? "triad"}`),
@@ -9189,9 +9195,10 @@ function normalizeRecentSongs(value) {
     if (seen.has(identity)) continue;
     seen.add(identity);
     if (finite(song.meta.ideaFingerprint?.version, 0) < 2) {
-      song.meta.ideaFingerprint = createSongFingerprint(song);
+      result.push({ ...song, meta: { ...song.meta, ideaFingerprint: createSongFingerprint(song) } });
+    } else {
+      result.push(song);
     }
-    result.push(song);
     if (result.length >= 8) break;
   }
   return result;
@@ -9216,6 +9223,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   }
   const comparisons = recent.map((candidate) => ({
     songId: candidate.id ?? null,
+    musicalSimilarity: musicalIdentitySimilarity(fingerprint.musicalIdentity, candidate.meta?.ideaFingerprint?.musicalIdentity),
     ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
   })).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
@@ -9233,7 +9241,9 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
     novelty: round(1 - closest.similarity),
     maxSimilarity: round(closest.similarity),
     immediateSimilarity: round(immediate?.similarity ?? 0),
-    backToBackRepeat: generation === "new" && finite(immediate?.similarity, 0) >= 0.9,
+    musicalSimilarity: comparisons.every((comparison) => comparison.musicalSimilarity == null) ? null
+      : round(Math.max(...comparisons.map((comparison) => comparison.musicalSimilarity ?? 0))),
+    backToBackRepeat: generation === "new" && (finite(immediate?.similarity, 0) >= 0.9 || closest.similarity >= 0.95),
     targetSimilarity: round(targetSimilarity),
     closestSongId: closest.songId,
     components: Object.fromEntries(
@@ -9794,6 +9804,12 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
     genreAuthenticity: 58,
   };
   const failures = [];
+  // Re-evaluate actual note membership; rounded ratios or stale final checks
+  // must never let even one out-of-key pitched note pass a release gate.
+  const scaleConfig = configFromSong(song);
+  const allowedScale = scalePitchClasses(scaleConfig);
+  if ((song?.tracks ?? []).some((track) => track.id !== "drums"
+    && (track.notes ?? []).some((note) => !pitchFitsScale(note.pitch, scaleConfig, allowedScale)))) failures.push("scale-safety");
   if (finite(evaluation?.score, 0) < minimums.total) failures.push(`total:${round(finite(evaluation?.score, 0))}<${minimums.total}`);
   for (const [dimension, floor] of Object.entries(minimums)) {
     if (dimension === "total") continue;
@@ -9842,6 +9858,7 @@ function commitCandidate(candidates, search = {}) {
   if (!selected) throw new Error("Generation produced no candidates.");
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
   const releaseGate = candidateReleaseGate(selected);
+  if (releaseGate.failures.includes("scale-safety")) throw new Error("No scale-safe candidate was found; the previous song is unchanged.");
   const balance = evaluateCandidateBalance(selected.evaluation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
@@ -9957,21 +9974,7 @@ function commitCandidate(candidates, search = {}) {
 }
 
 function candidateSelectionScore(evaluation, novelty, generation) {
-  const balance = evaluateCandidateBalance(evaluation);
-  const replayPenalty = generation === "new" && novelty?.backToBackRepeat ? 200 : 0;
-  if (!novelty?.compared) {
-    return round(evaluation.score * 0.8 + balance.balanceScore * 0.12 + balance.creativeFloor * 0.08 - replayPenalty);
-  }
-  const weights = generation === "similar"
-    ? { quality: 0.68, balance: 0.12, floor: 0.08, novelty: 0.12 }
-    : { quality: 0.7, balance: 0.12, floor: 0.08, novelty: 0.1 };
-  return round(
-    evaluation.score * weights.quality
-    + balance.balanceScore * weights.balance
-    + balance.creativeFloor * weights.floor
-    + novelty.score * weights.novelty
-    - replayPenalty,
-  );
+  return round(scoreCandidateChoice(evaluation, evaluateCandidateBalance(evaluation), novelty, generation));
 }
 
 function runTargetedCriticRepair(candidates, {
@@ -9979,6 +9982,7 @@ function runTargetedCriticRepair(candidates, {
   generation,
   recentSongs,
   baseSeed,
+  onProgress,
 } = {}) {
   const summary = {
     phase: 20,
@@ -10035,6 +10039,7 @@ function runTargetedCriticRepair(candidates, {
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
     };
     candidates.push(candidate);
+    onProgress?.({ stage: "repair", completed: candidates.length, maximum: MAX_CANDIDATE_COUNT, bestScore: Math.max(...candidates.map((entry) => entry.evaluation.score)) });
     summary.attempts += 1;
     summary.groups.push(diagnosis.group);
     summary.targetReached = candidateMeetsAdaptiveTarget(candidate, generation);
@@ -10063,7 +10068,7 @@ function runTargetedCriticRepair(candidates, {
  * 4. Expand the pool only when its balanced musical target is still unmet.
  * 5. Commit the strongest all-around candidate with a stable index tie-break.
  */
-export function generateNew(input = {}) {
+export function generateNew(input = {}, { onProgress } = {}) {
   const baseSeed = input.seed == null ? randomSeed() : String(input.seed);
   const search = candidateSearchPlan(input);
   const recentSongs = normalizeRecentSongs(input.recentSongs);
@@ -10087,6 +10092,7 @@ export function generateNew(input = {}) {
       novelty,
       selectionScore: candidateSelectionScore(evaluation, novelty, "new"),
     });
+    onProgress?.({ stage: "compose", completed: candidates.length, maximum: MAX_CANDIDATE_COUNT, bestScore: Math.max(...candidates.map((entry) => entry.evaluation.score)) });
   };
 
   for (let index = 0; index < search.maxCandidateCount; index += 1) {
@@ -10113,6 +10119,7 @@ export function generateNew(input = {}) {
     generation: "new",
     recentSongs,
     baseSeed,
+    onProgress,
   });
   return commitCandidate(candidates, search);
 }
@@ -10120,7 +10127,7 @@ export function generateNew(input = {}) {
 /**
  * Generate a related arrangement from the current song's musical DNA.
  */
-export function generateSimilar(current, input = {}) {
+export function generateSimilar(current, input = {}, { onProgress } = {}) {
   if (!current || !Array.isArray(current.tracks) || !current.meta) {
     throw new TypeError("generateSimilar requires a generated song JSON object");
   }
@@ -10191,6 +10198,7 @@ export function generateSimilar(current, input = {}) {
       contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
     });
+    onProgress?.({ stage: "compose", completed: candidates.length, maximum: MAX_CANDIDATE_COUNT, bestScore: Math.max(...candidates.map((entry) => entry.evaluation.score)) });
     if (
       candidates.length >= search.baseCandidateCount
       && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "similar")))
@@ -10202,6 +10210,7 @@ export function generateSimilar(current, input = {}) {
     generation: "similar",
     recentSongs,
     baseSeed,
+    onProgress,
   });
   return commitCandidate(candidates, search);
 }

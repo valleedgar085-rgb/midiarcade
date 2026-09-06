@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
+import { GENRE_PROFILES, ONE_SHOT_KITS, generateNew, generateSimilar, generateSongVariations, generateSectionVariations } from "../src/music-engine.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 import {
   characteristicTrackForPreview,
@@ -244,7 +244,9 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(cssSource, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy");
   assert.match(appSource, /function renderMixOverview\(\)[\s\S]*?mixAudibleCount/, "the mix overview must render from live mixer state");
   assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?SHAPE INSTRUMENT/, "deep track controls must use progressive disclosure");
-  assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationRunner[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the Phase 10 core modules");
+  assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationExecutor[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the background generation executor");
+  assert.doesNotMatch(appSource, /\bgenerate(?:New|Similar|SongVariations|SectionVariations)\(/, "heavy composition must never run on the UI thread, including cold start");
+  assert.match(appSource, /allowFallback: false/);
   assert.match(appSource, /createGenerationExecutor[\s\S]*?new Worker\(new URL\("\.\/generation-worker\.js"/, "candidate search must run outside the UI thread when workers are available");
   assert.match(appSource, /resolveControlHelp[\s\S]*?from "\.\/ui\/control-catalog\.js"/, "Phase 21 must keep the control catalog outside the application shell");
   assert.doesNotMatch(appSource, /const CONTROL_HELP\s*=/, "Phase 21 must not duplicate the extracted help catalog in app.js");
@@ -394,6 +396,27 @@ test("browser app initializes against the engine contract", async () => {
   }
 
   globalThis.window = globalThis;
+  // The production app requires a worker. This protocol double exercises the
+  // same message/response contract without browser-only Worker infrastructure.
+  globalThis.Worker = class {
+    listeners = new Map();
+    addEventListener(type, listener) { this.listeners.set(type, listener); }
+    terminate() { this.listeners.clear(); }
+    postMessage({ requestId, kind, payload }) {
+      queueMicrotask(() => {
+        try {
+          let result;
+          if (kind === "new") result = { song: generateNew(payload.config) };
+          else if (kind === "similar") result = { song: generateSimilar(payload.sourceSong, payload.config) };
+          else if (kind === "songVariations") result = { variations: generateSongVariations(payload.sourceSong, payload.config) };
+          else result = { options: generateSectionVariations(payload.sourceSong, payload.sectionId, payload.input) };
+          this.listeners.get("message")?.({ data: { requestId, ok: true, result: { status: "committed", ...result } } });
+        } catch (error) {
+          this.listeners.get("message")?.({ data: { requestId, ok: false, error: error.message } });
+        }
+      });
+    }
+  };
   globalThis.localStorage = {
     getItem(key) { return storedValues.get(key) ?? null; },
     setItem(key, value) { storedValues.set(key, String(value)); },
@@ -580,9 +603,94 @@ test("browser app initializes against the engine contract", async () => {
   recoveryPlayer.playing = true;
   recoveryPlayer.startedAt = 0;
   recoveryPlayer.events = [];
+  recoveryPlayer.updateFrame = () => {};
   assert.equal(await recoveryPlayer.recoverAudioContext(interruptedContext), true);
   assert.equal(interruptedContext.state, "running", "an interrupted context must be resumed and resynchronized");
+  assert.ok(recoveryPlayer.timer, "recovery must restart recurring audio scheduling, not just one lookahead");
+  recoveryPlayer.clearTimers();
   recoveryPlayer.playing = false;
+
+  const visibilityPlayer = new app.PreviewPlayer();
+  let resumes = 0;
+  const visibilityContext = {
+    state: "running", currentTime: 4,
+    async suspend() { this.state = "suspended"; visibilityPlayer.handleContextStateChange(this); },
+    async resume() { resumes += 1; this.state = "running"; },
+  };
+  visibilityPlayer.context = visibilityContext;
+  visibilityPlayer.playing = true;
+  visibilityPlayer.updateFrame = () => {};
+  visibilityPlayer.events = [
+    { id: "pad", time: 2, duration: 6, pitch: 60 },
+    { id: "drums", time: 3.99, duration: 0.2, pitch: 36 },
+    { id: "melody", time: 4.3, duration: 0.3, pitch: 64 },
+  ];
+  const restored = [];
+  visibilityPlayer.scheduleEvent = (event) => restored.push(event);
+  document.visibilityState = "hidden";
+  await visibilityPlayer.suspendForVisibility();
+  assert.equal(resumes, 0, "hidden suspension must not trigger autoplay recovery");
+  assert.equal(visibilityPlayer.position, 4);
+  assert.equal(visibilityPlayer.timer, null);
+  document.visibilityState = "visible";
+  assert.equal(await visibilityPlayer.recoverAudioContext(visibilityContext), true);
+  assert.equal(resumes, 1);
+  assert.equal(restored[0].id, "pad", "the chord/pad spanning the resume position must be restored");
+  assert.equal(restored[0].duration, 4, "resume must play only the remaining sustain");
+  assert.ok(!restored.some((event) => event.id === "drums"), "resume must not replay a just-expired drum hit");
+  assert.ok(visibilityPlayer.timer);
+  visibilityPlayer.clearTimers();
+  visibilityPlayer.playing = false;
+
+  const partialPlayer = new app.PreviewPlayer();
+  partialPlayer.context = { currentTime: 2 };
+  const endedTransient = makeAudioNode();
+  const longBody = makeAudioNode();
+  const partialGain = makeAudioNode();
+  const partialVoice = partialPlayer.registerScheduledVoice([endedTransient, longBody], [partialGain], { id: "drums" }, 1);
+  endedTransient.onended();
+  partialPlayer.cleanupScheduledVoice(partialVoice);
+  assert.equal(partialPlayer.retiringVoices.size, 1);
+  longBody.onended();
+  assert.equal(partialGain.disconnected, 1, "an already-ended transient must not prevent graph cleanup");
+  assert.equal(partialPlayer.retiringVoices.size, 0);
+
+  const queuePlayer = new app.PreviewPlayer();
+  queuePlayer.playing = true;
+  queuePlayer.context = { state: "running", currentTime: 1 };
+  queuePlayer.previewRuntime = { ...queuePlayer.previewRuntime, maxScheduledVoices: 1 };
+  queuePlayer.scheduledVoices.add({ cleaned: false });
+  queuePlayer.events = [{ id: "melody", time: 1.4, duration: 0.2 }];
+  let queuedNotes = 0;
+  queuePlayer.scheduleEvent = () => { queuedNotes += 1; };
+  queuePlayer.schedule();
+  assert.equal(queuePlayer.eventIndex, 0, "full voice pool must defer future notes, not consume them");
+  queuePlayer.scheduledVoices.clear();
+  queuePlayer.context.currentTime = 1.1;
+  queuePlayer.schedule();
+  assert.equal(queuedNotes, 1);
+  assert.equal(queuePlayer.eventIndex, 1);
+
+  const loopPlayer = new app.PreviewPlayer();
+  loopPlayer.context = { state: "running", currentTime: app.totalSeconds() - 0.1 };
+  loopPlayer.playing = true;
+  loopPlayer.events = [{ id: "drums", time: 0, duration: 0.1 }];
+  loopPlayer.eventIndex = 1;
+  const loopStarts = [];
+  loopPlayer.scheduleEvent = (event, when) => loopStarts.push(when);
+  elementFor("#loopButton").dispatch("click");
+  loopPlayer.schedule();
+  assert.equal(loopStarts.length, 1, "the next loop's downbeat must be queued before the boundary");
+  assert.equal(loopStarts[0], app.totalSeconds());
+  loopPlayer.context.currentTime = app.totalSeconds() + 0.03;
+  loopPlayer.updateFrame();
+  loopPlayer.schedule();
+  assert.equal(loopStarts.length, 1, "loop wrap must not replay the pre-scheduled downbeat");
+  assert.equal(loopPlayer.playing, true, "looping must not stop/restart the graph or master fade");
+  assert.ok(loopPlayer.position < 0.04);
+  loopPlayer.clearTimers();
+  loopPlayer.playing = false;
+  elementFor("#loopButton").dispatch("click");
 
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:keys", "native:keys"), false, "an older waiter for a shared same-port connect must not tear down the winner");
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:old", "native:new"), true, "a stale different-port connection should be disposed");

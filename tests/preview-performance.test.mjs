@@ -76,3 +76,12 @@ test("voice stealing discards a future low-priority voice before audible voices"
   const victim = selectPreviewVoiceVictim(voices, { now: 10, maxVoices: 3 });
   assert.equal(victim.id, "future-pad-far");
 });
+
+test("a full pool of sounding pads cannot discard every upcoming drum or lead", () => {
+  const voices = [
+    { priority: 2, startedAt: 8, id: "old-pad" },
+    { priority: 2, startedAt: 9, id: "new-pad" },
+    { priority: 7, startedAt: 10.06, id: "next-kick" },
+  ];
+  assert.equal(selectPreviewVoiceVictim(voices, { now: 10, maxVoices: 2 }).id, "old-pad");
+});

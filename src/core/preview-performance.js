@@ -103,8 +103,13 @@ export function selectPreviewVoiceVictim(voices, {
   if (active.length <= maxVoices) return null;
 
   const currentTime = Number.isFinite(Number(now)) ? Number(now) : 0;
-  const future = active.filter((voice) => Number(voice.startedAt) > currentTime + futureGuardSeconds);
-  const pool = future.length ? future : active;
+  const lowestPriority = Math.min(...active.map((voice) => Number(voice.priority || 0)));
+  const eligible = active.filter((voice) => Number(voice.priority || 0) === lowestPriority);
+  const future = eligible.filter((voice) => Number(voice.startedAt) > currentTime + futureGuardSeconds);
+  // A just-queued kick/lead must not steal itself solely because every pad is
+  // already sounding. First choose the least important role, then prefer a
+  // future voice within that role to preserve its currently sounding notes.
+  const pool = future.length ? future : eligible;
 
   return [...pool].sort((left, right) => {
     const priorityDelta = Number(left.priority || 0) - Number(right.priority || 0);

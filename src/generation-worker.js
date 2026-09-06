@@ -7,12 +7,13 @@ import {
 
 self.addEventListener("message", (event) => {
   const { requestId, kind, payload = {} } = event.data ?? {};
+  const execution = { onProgress: (progress) => self.postMessage({ requestId, type: "progress", progress }) };
   try {
     let result;
     if (kind === "new") {
-      result = { status: "committed", song: generateNew(payload.config ?? {}) };
+      result = { status: "committed", song: generateNew(payload.config ?? {}, execution) };
     } else if (kind === "similar") {
-      result = { status: "committed", song: generateSimilar(payload.sourceSong, payload.config ?? {}) };
+      result = { status: "committed", song: generateSimilar(payload.sourceSong, payload.config ?? {}, execution) };
     } else if (kind === "sectionVariations") {
       result = {
         status: "committed",

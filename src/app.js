@@ -2,10 +2,6 @@ import {
   createMidiExportReport,
   defaultChordPathForGenre,
   encodeMidi,
-  generateNew,
-  generateSectionVariations,
-  generateSimilar,
-  generateSongVariations,
   GENRE_PROFILES,
   ONE_SHOT_KITS,
   TRACK_DEFINITIONS,
@@ -16,13 +12,13 @@ import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
-import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { resumePreviewEvent, shouldDeferPreviewEvent } from "./core/preview-continuity.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -1602,7 +1598,8 @@ async function exploreSectionVariations() {
       sectionId: section.id,
       input: variationInput,
     });
-    const options = generated?.options || generateSectionVariations(base, section.id, variationInput);
+    const options = generated?.options;
+    if (!Array.isArray(options) || options.length !== 3) throw new Error("The background variation result was incomplete.");
     state.sectionVariations = { sectionId: section.id, base, options, activeOption: 0 };
     renderSectionVariationLab(section);
     showToast(`Three ${section.name} alternatives are ready. Audition A, B, and C, then keep your favorite.`);
@@ -3319,6 +3316,7 @@ function generationDelay() {
  */
 let generationSafetyTimer = null;
 let generationProgressTimer = null;
+const GENERATION_TIMEOUT_MS = 90000;
 
 function clearGenerationSafetyTimer() {
   if (generationSafetyTimer) {
@@ -3357,18 +3355,12 @@ function armGenerationSafetyTimer() {
   clearGenerationSafetyTimer();
   generationSafetyTimer = setTimeout(() => {
     if (state.isGenerating) {
-      console.warn("[generation-watchdog] Resetting stuck generation state after 45s timeout.");
-      try { hideGenerationActivity(); } catch { /* ignore */ }
-      try {
-        appStore.transaction("generation:watchdog-reset", (draft) => {
-          draft.isGenerating = false;
-        });
-      } catch {
-        state.isGenerating = false;
-      }
-      showToast("Generation took longer than expected. Please try again.");
+      console.warn("[generation-watchdog] Canceling timed-out background composition.");
+      // Reject the owning request before its finally block unlocks the UI. A
+      // late worker reply must never overwrite a newer song or rerun on the UI.
+      generationExecutor.cancel("Generation exceeded its time budget. Your previous song is safe; please retry.");
     }
-  }, 45000);
+  }, GENERATION_TIMEOUT_MS);
 }
 
 function showGenerationActivity(message, { threadCopy = "", kind = "new" } = {}) {
@@ -3392,33 +3384,18 @@ function hideGenerationActivity() {
   $("#creativeThread")?.classList.remove("is-generating");
 }
 
-const generationRunner = createGenerationRunner({
-  generateNew,
-  generateSimilar,
-  validate: (song) => Boolean(song && songTracks(song).length),
-});
-
 const generationExecutor = createGenerationExecutor({
-  timeoutMs: 90000,
-  workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
-  fallback: (kind, payload) => {
-    if (kind === "sectionVariations") {
-      return Promise.resolve({
-        status: "committed",
-        options: generateSectionVariations(payload.sourceSong, payload.sectionId, payload.input),
-      });
-    }
-    if (kind === "songVariations") {
-      return Promise.resolve({
-        status: "committed",
-        variations: generateSongVariations(payload.sourceSong, payload.config ?? {}),
-      });
-    }
-    return generationRunner.generate(kind, {
-      sourceSong: payload.sourceSong,
-      config: payload.config,
-    });
+  timeoutMs: GENERATION_TIMEOUT_MS,
+  allowFallback: false,
+  onProgress: (progress) => {
+    if (!state.isGenerating) return;
+    clearGenerationProgressTimer();
+    $("#generationStageCount").textContent = `IDEA ${progress.completed} / ${progress.maximum}`;
+    $("#generationStageCopy").textContent = progress.stage === "repair"
+      ? "Refining the weakest musical part; keeping the key and groove locked."
+      : `Comparing harmony, phrasing and freshness. Best candidate: ${progress.bestScore}.`;
   },
+  workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
 });
 
 function chooseNewGenrePrograms(seed) {
@@ -3476,17 +3453,12 @@ async function runGeneration(kind, options = {}) {
     const [generated] = await Promise.all([work, generationDelay()]);
     let variationSongs = kind === "songVariations" ? generated?.variations : null;
     if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
-      variationSongs = generateSongVariations(sourceSong, config);
+      throw new Error("The background variation result was incomplete.");
     }
     if (kind === "songVariations") {
       variationSongs = variationSongs.map((song) => preserveLockedTracks(sourceSong, song));
     }
     let candidateSong = kind === "songVariations" ? variationSongs[0] : generated?.song;
-    if (!candidateSong) {
-      candidateSong = kind === "new"
-        ? generateNew(config)
-        : generateSimilar(sourceSong, config);
-    }
     if (!candidateSong) throw new Error("The composition engine could not produce a valid arrangement.");
     const nextSong = kind === "similar" ? preserveLockedTracks(state.song, candidateSong) : candidateSong;
     appStore.transaction("generation:commit", (draft) => {
@@ -3649,10 +3621,9 @@ async function regenerateTrack(id, options = {}) {
   try {
     const generationInput = buildTrackRerollInput(id, original, createSeed());
     const work = generationExecutor.run("similar", { sourceSong: original, config: generationInput })
-      .then((result) => result?.song)
-      .catch(() => null);
+      .then((result) => result?.song);
     let [candidate] = await Promise.all([work, generationDelay()]);
-    if (!candidate) candidate = generateSimilar(original, generationInput);
+    if (!candidate) throw new Error("The background track result was incomplete.");
     const replacement = songTracks(candidate).find((track, index) => trackId(track, index) === id);
     if (!replacement) throw new Error(`No ${id} track was generated.`);
     const next = deepClone(original);
@@ -4335,12 +4306,16 @@ export class PreviewPlayer {
     this.idleTimer = null;
     this.events = [];
     this.eventIndex = 0;
+    this.nextLoopEventIndex = 0;
     this.startedAt = 0;
     this.offset = 0;
     this.position = 0;
     this.playing = false;
     this.playRequestGeneration = 0;
     this.scheduledVoices = new Set();
+    this.retiringVoices = new Set();
+    this.hiddenPlayback = false;
+    this.suspensionPromise = null;
     this.previewRuntime = previewRuntimeProfile({
       userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
       hardwareConcurrency: typeof navigator === "undefined" ? 8 : navigator.hardwareConcurrency,
@@ -4367,16 +4342,9 @@ export class PreviewPlayer {
       if (typeof window !== "undefined") {
         if (!this.visibilityHandler) {
           this.visibilityHandler = () => {
-            if (document.visibilityState === "hidden" && this.playing && this.context?.state === "running") {
-              this.position = this.currentSongTime();
-              this.offset = this.position;
-              this.startedAt = this.context.currentTime;
-              this.clearTimers();
-              this.clearScheduledAudio();
-              void this.context.suspend().catch(() => {});
-              return;
-            }
-            if (document.visibilityState === "visible" && this.playing && ["suspended", "interrupted"].includes(this.context?.state)) {
+            if (document.visibilityState === "hidden") {
+              void this.suspendForVisibility();
+            } else if (this.playing && this.context) {
               void this.recoverAudioContext(this.context);
             }
           };
@@ -4493,7 +4461,7 @@ export class PreviewPlayer {
   }
 
   resetContextReferences(context = this.context) {
-    this.clearScheduledAudio();
+    this.clearScheduledAudio(true);
     for (const node of this.audioGraphNodes) {
       try { node.disconnect(); } catch { /* node was already released */ }
     }
@@ -4511,40 +4479,69 @@ export class PreviewPlayer {
   }
 
   currentSongTime() {
-    if (!this.playing || !this.context) return this.position;
+    if (!this.playing || !this.context || this.hiddenPlayback) return this.position;
     return clamp(this.offset + (this.context.currentTime - this.startedAt), 0, totalSeconds());
   }
 
+  async suspendForVisibility() {
+    if (!this.context) return;
+    if (!this.hiddenPlayback) this.position = this.currentSongTime();
+    this.hiddenPlayback = true;
+    this.offset = this.position;
+    this.clearTimers();
+    this.clearScheduledAudio(true);
+    for (const pitch of [...this.liveVoices.keys()]) this.liveNoteOff(pitch, true);
+    if (this.context.state !== "running" || this.suspensionPromise) return this.suspensionPromise;
+    const context = this.context;
+    this.suspensionPromise = context.suspend().catch((error) => {
+      console.warn("Audio suspension failed", error);
+    });
+    try {
+      await this.suspensionPromise;
+    } catch (error) {
+      console.warn("Audio suspension failed", error);
+    } finally {
+      this.suspensionPromise = null;
+    }
+  }
+
   handleContextStateChange(context) {
-    if (context !== this.context || !this.playing) return;
+    if (context !== this.context || !this.playing || this.hiddenPlayback || document.visibilityState === "hidden") return;
     if (["suspended", "interrupted", "closed"].includes(context.state)) {
       void this.recoverAudioContext(context);
     }
   }
 
   async recoverAudioContext(interruptedContext = this.context) {
-    if (!this.playing || !interruptedContext) return false;
+    if (!this.playing || !interruptedContext || document.visibilityState === "hidden") return false;
     if (this.recoveryPromise) return this.recoveryPromise;
     const requestGeneration = this.playRequestGeneration;
     const resumePosition = this.currentSongTime();
     const recovery = (async () => {
-      this.clearScheduledAudio();
+      this.clearTimers();
+      await this.suspensionPromise;
+      if (!this.playing || requestGeneration !== this.playRequestGeneration || document.visibilityState === "hidden") return false;
+      this.clearScheduledAudio(true);
       if (interruptedContext.state === "closed") this.resetContextReferences(interruptedContext);
       try {
         await this.ensureContext();
-      } catch {
+      } catch (error) {
+        this.pause();
+        showToast(`Audio needs another tap on Play. ${error.message}`);
         return false;
       }
-      if (!this.playing || requestGeneration !== this.playRequestGeneration || this.context?.state !== "running") {
+      if (!this.playing || requestGeneration !== this.playRequestGeneration || this.context?.state !== "running" || document.visibilityState === "hidden") {
+        if (document.visibilityState === "hidden") void this.suspendForVisibility();
         return false;
       }
+      this.hiddenPlayback = false;
       this.position = resumePosition;
       this.offset = resumePosition;
       this.startedAt = this.context.currentTime;
-      this.eventIndex = this.events.findIndex((event) => event.time >= resumePosition - this.previewRuntime.lateEventGraceSeconds);
-      if (this.eventIndex < 0) this.eventIndex = this.events.length;
+      this.resetDynamicBuses();
+      this.restoreSustainedEvents(resumePosition);
       this.lastScheduleAt = this.context.currentTime;
-      this.schedule();
+      this.startPlaybackTimers();
       return true;
     })();
     this.recoveryPromise = recovery;
@@ -4625,6 +4622,7 @@ export class PreviewPlayer {
 
   async play() {
     if (!state.song) return false;
+    if (document.visibilityState === "hidden") return false;
     if (this.playing) return true;
     const requestGeneration = ++this.playRequestGeneration;
     try {
@@ -4634,6 +4632,10 @@ export class PreviewPlayer {
       return false;
     }
     if (requestGeneration !== this.playRequestGeneration || this.playing) return this.playing;
+    if (document.visibilityState === "hidden") {
+      await this.suspendForVisibility();
+      return false;
+    }
     void requestScreenWakeLock();
     if (this.master?.gain) {
       try {
@@ -4649,9 +4651,9 @@ export class PreviewPlayer {
     const duration = totalSeconds();
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
+    this.hiddenPlayback = false;
     this.startedAt = this.context.currentTime;
-    this.eventIndex = this.events.findIndex((event) => event.time >= this.offset - this.previewRuntime.lateEventGraceSeconds);
-    if (this.eventIndex < 0) this.eventIndex = this.events.length;
+    this.restoreSustainedEvents(this.offset);
     this.lastScheduleAt = this.context.currentTime;
     this.playing = true;
     setPlaybackPresentation(true);
@@ -4666,15 +4668,31 @@ export class PreviewPlayer {
       if (mobileText) mobileText.textContent = "Pause";
     }
     $("#playhead").classList.add("visible");
-    this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
-    this.updateFrame();
+    this.startPlaybackTimers();
     setWorkflowStep(3);
     return true;
   }
 
+  restoreSustainedEvents(position) {
+    this.nextLoopEventIndex = 0;
+    this.eventIndex = this.events.findIndex((event) => event.time >= position);
+    if (this.eventIndex < 0) this.eventIndex = this.events.length;
+    for (let index = 0; index < this.eventIndex; index += 1) {
+      const resumed = resumePreviewEvent(this.events[index], position);
+      if (resumed) this.scheduleEvent(resumed, this.context.currentTime + 0.005);
+    }
+  }
+
+  startPlaybackTimers() {
+    this.clearTimers();
+    this.schedule();
+    if (!this.playing || this.hiddenPlayback || document.visibilityState === "hidden") return;
+    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.updateFrame();
+  }
+
   schedule() {
-    if (!this.playing || !this.context) return;
+    if (!this.playing || !this.context || this.hiddenPlayback || document.visibilityState === "hidden") return;
     if (this.context.state !== "running") {
       void this.recoverAudioContext(this.context);
       return;
@@ -4682,10 +4700,25 @@ export class PreviewPlayer {
     this.lastScheduleAt = this.context.currentTime;
     const currentSongTime = this.offset + (this.context.currentTime - this.startedAt);
     const horizon = currentSongTime + this.previewRuntime.lookAheadSeconds;
+    for (const voice of this.scheduledVoices) {
+      if (voice.endsAt <= this.context.currentTime) this.cleanupScheduledVoice(voice, false);
+    }
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
-      const event = this.events[this.eventIndex++];
-      if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
-        const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
+      const event = this.events[this.eventIndex];
+      const when = this.context.currentTime + Math.max(0.005, event.time - currentSongTime);
+      if (shouldDeferPreviewEvent(when, this.context.currentTime, this.scheduledVoices.size, this.previewRuntime)) break;
+      this.eventIndex += 1;
+      const audibleEvent = event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds
+        ? event : resumePreviewEvent(event, currentSongTime);
+      if (audibleEvent) this.scheduleEvent(audibleEvent, when);
+    }
+    const duration = totalSeconds();
+    if (state.loop && duration > 0 && horizon >= duration) {
+      while (this.nextLoopEventIndex < this.events.length && this.events[this.nextLoopEventIndex].time <= horizon - duration) {
+        const event = this.events[this.nextLoopEventIndex];
+        const when = this.context.currentTime + Math.max(0.005, duration + event.time - currentSongTime);
+        if (shouldDeferPreviewEvent(when, this.context.currentTime, this.scheduledVoices.size, this.previewRuntime)) break;
+        this.nextLoopEventIndex += 1;
         this.scheduleEvent(event, when);
       }
     }
@@ -4695,7 +4728,7 @@ export class PreviewPlayer {
     return previewVoicePriority(event?.id, Boolean(event?.spotlight));
   }
 
-  registerScheduledVoice(sources, nodes, event, startedAt) {
+  registerScheduledVoice(sources, nodes, event, startedAt, endsAt = Infinity) {
     const voiceSources = new Set(sources.filter(Boolean));
     const voiceNodes = new Set([...nodes, ...voiceSources].filter(Boolean));
     const voice = {
@@ -4704,6 +4737,7 @@ export class PreviewPlayer {
       endedSources: new Set(),
       priority: this.voicePriority(event),
       startedAt,
+      endsAt,
       cleaned: false,
     };
     this.scheduledVoices.add(voice);
@@ -4718,11 +4752,15 @@ export class PreviewPlayer {
     return voice;
   }
 
-  cleanupScheduledVoice(voice, stopSources = true) {
-    if (!voice || voice.cleaned) return;
+  cleanupScheduledVoice(voice, stopSources = true, immediate = false) {
+    if (!voice || voice.finalized || (voice.cleaned && !immediate)) return;
     voice.cleaned = true;
     this.scheduledVoices.delete(voice);
     const finalize = () => {
+      if (voice.finalized) return;
+      voice.finalized = true;
+      this.retiringVoices.delete(voice);
+      for (const source of voice.sources) source.onended = null;
       for (const node of voice.nodes) {
         try { node.disconnect(); } catch { /* node already disconnected */ }
       }
@@ -4730,7 +4768,7 @@ export class PreviewPlayer {
       voice.nodes.clear();
       voice.endedSources.clear();
     };
-    if (stopSources && !this.context) {
+    if (stopSources && (!this.context || immediate)) {
       for (const source of voice.sources) {
         source.onended = null;
         try { source.stop(); } catch { /* source already stopped */ }
@@ -4752,13 +4790,15 @@ export class PreviewPlayer {
           } catch { /* ignore */ }
         }
       }
-      let remainingSources = voice.sources.size;
+      const remaining = new Set([...voice.sources].filter((source) => !voice.endedSources.has(source)));
+      let remainingSources = remaining.size;
       if (!remainingSources) {
         finalize();
         return;
       }
       const stopAt = clickSafeStopTime(now, voice.startedAt);
-      for (const source of voice.sources) {
+      this.retiringVoices.add(voice);
+      for (const source of remaining) {
         source.onended = () => {
           remainingSources -= 1;
           if (remainingSources <= 0) finalize();
@@ -5122,7 +5162,7 @@ export class PreviewPlayer {
       motion.start(when);
       motion.stop(when + duration + release + 0.02);
     }
-    this.registerScheduledVoice(sources, nodes, event, when);
+    this.registerScheduledVoice(sources, nodes, event, when, when + duration + release + 0.02);
   }
 
   createDrumOutput(event, character, nodes, reverbScale) {
@@ -5193,7 +5233,7 @@ export class PreviewPlayer {
       body.connect(bodyGain).connect(output);
       body.start(when);
       body.stop(when + 0.1);
-      this.registerScheduledVoice(sources, nodes, event, when);
+      this.registerScheduledVoice(sources, nodes, event, when, when + Math.max(character.kickDecay + 0.015, 0.1));
       return;
     }
 
@@ -5211,7 +5251,7 @@ export class PreviewPlayer {
       oscillator.connect(gain).connect(output);
       oscillator.start(when);
       oscillator.stop(when + 0.25);
-      this.registerScheduledVoice([oscillator], nodes, event, when);
+      this.registerScheduledVoice([oscillator], nodes, event, when, when + 0.25);
       return;
     }
 
@@ -5265,11 +5305,11 @@ export class PreviewPlayer {
         snap.stop(when + character.snapDecay + 0.01);
       }
     }
-    this.registerScheduledVoice(sources, nodes, event, when);
+    this.registerScheduledVoice(sources, nodes, event, when, when + Math.max(duration + 0.01, 0.14, (character.snapDecay || 0) + 0.01));
   }
 
   updateFrame() {
-    if (!this.playing || !this.context) return;
+    if (!this.playing || !this.context || this.hiddenPlayback) return;
     const duration = totalSeconds();
     this.position = this.offset + (this.context.currentTime - this.startedAt);
     if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm())) {
@@ -5281,15 +5321,16 @@ export class PreviewPlayer {
       return;
     }
     if (this.position >= duration) {
-      if (state.loop) {
-        this.position = 0;
-        this.clearTimers();
-        this.playing = false;
-        this.play();
+      if (state.loop && duration > 0) {
+        const loops = Math.floor(this.position / duration);
+        this.startedAt += loops * duration;
+        this.position %= duration;
+        this.eventIndex = loops === 1 ? this.nextLoopEventIndex : 0;
+        this.nextLoopEventIndex = 0;
+      } else {
+        this.stop();
         return;
       }
-      this.stop();
-      return;
     }
     const refreshDetails = shouldRefreshPlaybackDetails(
       this.lastDetailRefreshAt,
@@ -5313,8 +5354,8 @@ export class PreviewPlayer {
     this.frame = null;
   }
 
-  clearScheduledAudio() {
-    for (const voice of [...this.scheduledVoices]) this.cleanupScheduledVoice(voice, true);
+  clearScheduledAudio(immediate = false) {
+    for (const voice of [...this.scheduledVoices, ...this.retiringVoices]) this.cleanupScheduledVoice(voice, true, immediate);
   }
 
   resetDynamicBuses() {
@@ -5346,7 +5387,7 @@ export class PreviewPlayer {
 
   pause() {
     this.cancelPendingPlay();
-    if (this.playing && this.context) this.position = this.offset + (this.context.currentTime - this.startedAt);
+    if (this.playing && this.context) this.position = this.currentSongTime();
     this.playing = false;
     setPlaybackPresentation(false);
     this.clearTimers();
@@ -5949,6 +5990,19 @@ function hydrateInitialSong() {
   updatePlaybackUi(0, totalSeconds());
 }
 
+async function createInitialSongInBackground() {
+  state.isGenerating = true;
+  showGenerationActivity("PREPARING YOUR FIRST SONG", { kind: "new" });
+  try {
+    const result = await generationExecutor.run("new", { config: buildConfig(0x9f32d6a1) });
+    if (!result?.song) throw new Error("The background engine returned no song.");
+    return result.song;
+  } finally {
+    state.isGenerating = false;
+    hideGenerationActivity();
+  }
+}
+
 async function init() {
   initTabNav();
   decorateAutoRangeControls();
@@ -5959,7 +6013,7 @@ async function init() {
     let restored = restorePersistedSession();
     let recovered = rejectedPersistedSession;
     syncAutoSelects();
-    if (!restored) state.song = await Promise.resolve(generateNew(buildConfig(0x9f32d6a1)));
+    if (!restored) state.song = await createInitialSongInBackground();
     try {
       hydrateInitialSong();
     } catch (error) {
@@ -5969,7 +6023,7 @@ async function init() {
       resetSessionStateForFreshStart();
       applyGenreDefaultsToControls(selectedGenreId());
       updateRangeDisplays();
-      state.song = await Promise.resolve(generateNew(buildConfig(0x9f32d6a1)));
+      state.song = await createInitialSongInBackground();
       hydrateInitialSong();
       restored = false;
       recovered = true;

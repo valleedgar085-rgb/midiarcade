@@ -412,7 +412,7 @@ test("phase 20 repairs only when needed and stays inside a bounded deterministic
 
 test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {
   const input = {
-    seed: "repair-reconcile-1",
+    seed: "repair-reconcile-3",
     bars: 8,
     genre: "jazz",
     energy: 0.05,
@@ -573,6 +573,12 @@ test("Critic 6.0 scores genre authenticity, phrase resolution, tension, drum var
   assert.ok(Object.values(evaluation.subscores).every((score) => score >= 0 && score <= 100));
   assert.equal(song.meta.scoreDetails.criticVersion, 6);
   assert.equal(evaluation.diagnostics.genreProfile, "pop");
+  assert.ok(evaluation.diagnostics.measuredDensity > 0);
+  assert.equal(
+    evaluation.diagnostics.measuredDensity,
+    Number((Object.values(evaluation.diagnostics.densityEventsByTrack)
+      .reduce((sum, value) => sum + value, 0) / song.meta.bars).toFixed(3)),
+  );
   assert.ok(Object.keys(song.meta.scoreDetails.diagnostics).length >= 5);
 
   const damaged = structuredClone(song);
