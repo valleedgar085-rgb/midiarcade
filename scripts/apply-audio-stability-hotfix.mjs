@@ -72,4 +72,13 @@ for (const [before, after, label] of [
 
 source = `${source.slice(0, scheduleStart)}${scheduleEvent}${source.slice(drumStart)}`;
 fs.writeFileSync(appPath, source);
+
+const smokePath = "tests/app-smoke.test.mjs";
+let smoke = fs.readFileSync(smokePath, "utf8");
+const oldSmoke = `  const boundedPlayer = new app.PreviewPlayer();\n  const boundedSources = Array.from({ length: app.PREVIEW_AUDIO_LIMITS.maxScheduledVoices + 1 }, () => makeAudioNode());\n  boundedSources.forEach((source, index) => {\n    boundedPlayer.registerScheduledVoice([source], [source], { id: "drums" }, index);\n  });\n  assert.equal(boundedPlayer.scheduledVoices.size, app.PREVIEW_AUDIO_LIMITS.maxScheduledVoices);\n  assert.equal(boundedSources[0].stopped, 1, "the oldest low-priority voice must be released at the ceiling");\n  boundedPlayer.clearScheduledAudio();\n  assert.equal(boundedPlayer.scheduledVoices.size, 0);`;
+const newSmoke = `  const boundedPlayer = new app.PreviewPlayer();\n  boundedPlayer.context = { currentTime: 0 };\n  const runtimeVoiceLimit = boundedPlayer.previewRuntime.maxScheduledVoices;\n  const boundedSources = Array.from({ length: runtimeVoiceLimit + 1 }, () => makeAudioNode());\n  boundedSources.forEach((source, index) => {\n    boundedPlayer.registerScheduledVoice([source], [source], { id: index === 0 ? "melody" : "pad" }, index * 0.05);\n  });\n  assert.equal(boundedPlayer.scheduledVoices.size, runtimeVoiceLimit);\n  assert.equal(boundedSources[0].stopped, 0, "an already-audible lead must survive scheduler pressure");\n  assert.ok(boundedSources.slice(1).some((source) => source.stopped === 1), "a future low-priority voice must yield first");\n  boundedPlayer.clearScheduledAudio();\n  assert.equal(boundedPlayer.scheduledVoices.size, 0);`;
+if (!smoke.includes(oldSmoke)) throw new Error("Missing adaptive voice-limit smoke target");
+smoke = smoke.replace(oldSmoke, newSmoke);
+fs.writeFileSync(smokePath, smoke);
+
 console.log("Applied Android preview audio stability hotfix.");
