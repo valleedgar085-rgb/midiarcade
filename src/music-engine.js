@@ -11,6 +11,9 @@ import {
   phraseLandingProfile,
   phraseLandingRole,
 } from "./core/phrase-architecture.js";
+import {
+  createSongDNA as createDeterministicSongDNA,
+} from "./core/song-dna.js";
 
 export const PPQ = 480;
 
@@ -1694,6 +1697,7 @@ function createProducerIntentContract(
   narrative,
   hookSectionId,
   peakSectionId,
+  songDNA = null,
 ) {
   const matrixBySection = new Map(orchestrationMatrix.map((entry) => [entry.sectionId, entry]));
   const returnAxes = ["rhythm", "density", "register", "dialogue"];
@@ -1770,6 +1774,9 @@ function createProducerIntentContract(
       hookSectionId: hookSectionId ?? null,
       peakSectionId: peakSectionId ?? null,
       signatureTrack,
+      songDNAId: songDNA?.id ?? null,
+      songDNAFamilyId: songDNA?.familyId ?? null,
+      signatureBias: songDNA?.identity?.signatureBias ?? "hook",
       grooveIdentity: ["house", "techno", "drumBass", "trap", "drill", "funk"].includes(config.genre)
         ? "rhythm-led"
         : "phrase-led",
@@ -1832,7 +1839,33 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
   const peakSection = peakCandidates.at(-1)
     ?? [...structure].sort((left, right) => right.intensity - left.intensity)[0]
     ?? structure[0];
-  const direction = rng.bool(0.58) ? 1 : -1;
+  const dnaMelodicDirection = rng.bool(0.58) ? 1 : -1;
+  const songDNA = createDeterministicSongDNA({
+    genre: config.genre,
+    bpm: config.tempo,
+    key: config.key,
+    scale: config.scale,
+    seed: config.seed,
+    narrativeId: narrative.id,
+    styleAnchor: {
+      drumGroove: style.drumGroove,
+      bassGroove: style.bassGroove,
+      chordMotion: style.chordMotion,
+      melodyShape: style.melodyShape,
+    },
+    structure,
+    sourceDNA: source?.songDNA ?? null,
+    syncopation: config.syncopation,
+    swing: config.swing,
+    melodicRange: config.melodicRange,
+    melodicDirection: dnaMelodicDirection,
+    phraseBars: clamp(
+      Math.round(finite(style.rhythmIdentity?.phraseCycle, GENRE_PROFILES[config.genre].arrangement.phraseBars)),
+      2,
+      8,
+    ),
+  });
+  const direction = songDNA.melodic.direction;
   const sectionPlans = structure.map((section, index) => {
     const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
     const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
@@ -1958,11 +1991,13 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     narrative,
     hookSection?.id,
     peakSection?.id,
+    songDNA,
   );
   const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source);
   return {
     version: 6,
     narrative: { id: narrative.id, label: narrative.label },
+    songDNA,
     hookSectionId: hookSection?.id ?? null,
     peakSectionId: peakSection?.id ?? null,
     tensionCurve: sectionPlans.map(({ sectionId, tension, tensionEnvelope }) => ({
@@ -2000,6 +2035,7 @@ function applySongBlueprint(structure, blueprint) {
   const outgoing = new Map((blueprint?.transitions ?? []).map((transition) => [transition.fromSectionId, transition]));
   const orchestration = new Map((blueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const memories = new Map((blueprint?.memoryMap ?? []).map((entry) => [entry.sectionId, entry]));
+  const dnaSections = new Map((blueprint?.songDNA?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   return structure.map((section) => {
     const plan = plans.get(section.id);
     if (!plan) return section;
@@ -2019,6 +2055,7 @@ function applySongBlueprint(structure, blueprint) {
         transitionOut: outgoing.get(section.id)?.type ?? null,
         featuredTrack: orchestration.get(section.id)?.featuredTrack ?? null,
         memoryRelationship: memories.get(section.id)?.relationship ?? "statement",
+        songDNADevelopmentSeed: dnaSections.get(section.id)?.developmentSeed ?? null,
       },
     };
   });
@@ -8358,6 +8395,7 @@ function compose(config, options = {}) {
     drumFillVocabulary,
     rhythmTurnaroundConversation,
     characteristicVoice: characteristicVoice.report,
+    songDNA: clone(songBlueprint.songDNA),
     producerIntent: clone(songBlueprint.producerIntent),
     producerIntentReport: postGrooveIntentAudit.report,
     finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },

@@ -103,6 +103,7 @@ export function createSongDNA({
   syncopation = 0.5,
   swing = 0,
   melodicRange = 10,
+  melodicDirection = null,
   phraseBars = 4,
 } = {}) {
   const seedText = String(seed ?? "0");
@@ -127,7 +128,9 @@ export function createSongDNA({
   const identitySeed = sourceDNA?.identitySeed ?? domainSeed(familyHash, "identity");
   const sections = normalizedStructure(structure);
   const direction = sourceDNA?.melodic?.direction
-    ?? (domainSeed(identitySeed, "melodic-direction") % 2 === 0 ? 1 : -1);
+    ?? ([1, -1].includes(melodicDirection)
+      ? melodicDirection
+      : (domainSeed(identitySeed, "melodic-direction") % 2 === 0 ? 1 : -1));
   const shape = sourceDNA?.melodic?.shape
     ?? String(styleAnchor?.melodyShape ?? select(["arch", "rising", "falling", "wave"], domainSeed(identitySeed, "melodic-shape")));
   const pocket = sourceDNA?.rhythmic?.pocket
