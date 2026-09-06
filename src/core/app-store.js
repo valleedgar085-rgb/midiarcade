@@ -1,3 +1,5 @@
+import { createTasteProfile } from "./taste-profile.js";
+
 function isObject(value) {
   return Boolean(value && typeof value === "object");
 }
@@ -37,17 +39,7 @@ export function createInitialAppState() {
     activeSongVariation: -1,
     sectionMacroValues: {},
     coverVariation: 0,
-    tasteProfile: {
-      ratings: 0,
-      likes: 0,
-      rejects: 0,
-      favorites: 0,
-      energyTotal: 0,
-      complexityTotal: 0,
-      variationTotal: 0,
-      genreVotes: {},
-      songRatings: {},
-    },
+    tasteProfile: createTasteProfile(),
     playingSection: null,
   };
 }
