@@ -1,3 +1,5 @@
+import { adaptGenerationRequest } from "./adaptive-generation.js";
+
 export function createGenerationExecutor({
   fallback,
   workerFactory = null,
@@ -79,8 +81,9 @@ export function createGenerationExecutor({
   }
 
   async function run(kind, payload = {}) {
+    const adaptedPayload = adaptGenerationRequest(kind, payload);
     const activeWorker = ensureWorker();
-    if (!activeWorker) return fallback(kind, payload);
+    if (!activeWorker) return fallback(kind, adaptedPayload);
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -90,9 +93,9 @@ export function createGenerationExecutor({
         disposeWorker();
         runFallback(request);
       }, Math.max(1000, Number(timeoutMs) || 60000));
-      pending.set(id, { resolve, reject, timer, kind, payload });
+      pending.set(id, { resolve, reject, timer, kind, payload: adaptedPayload });
       try {
-        activeWorker.postMessage({ requestId: id, kind, payload });
+        activeWorker.postMessage({ requestId: id, kind, payload: adaptedPayload });
       } catch {
         const request = takePending(id);
         workerUnavailable = true;
