@@ -2,7 +2,7 @@ name: Build MIDI Arcade APK
 
 on:
   push:
-    branches: [main, ui-quality-2-2]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
