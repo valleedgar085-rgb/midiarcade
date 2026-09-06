@@ -6,6 +6,7 @@ on:
       - work-6-adaptive-groove-variety
     paths:
       - scripts/apply-phase6-integration.mjs
+      - scripts/apply-audio-cleanup.mjs
       - .github/workflows/phase6-integration.yml
 
 permissions:
@@ -23,12 +24,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Check integration patcher
-        run: node --check scripts/apply-phase6-integration.mjs
+      - name: Check integration patchers
+        run: |
+          node --check scripts/apply-phase6-integration.mjs
+          node --check scripts/apply-audio-cleanup.mjs
       - name: Apply adaptive generation integration
         run: node scripts/apply-phase6-integration.mjs
-      - name: Focused adaptive contracts
-        run: node --test tests/adaptive-generation.test.mjs tests/foundation.test.mjs tests/app-smoke.test.mjs tests/music-engine.test.mjs tests/groove-intelligence.test.mjs tests/phrase-memory-intelligence.test.mjs
+      - name: Apply Android audio cleanup
+        run: node scripts/apply-audio-cleanup.mjs
+      - name: Focused adaptive and playback contracts
+        run: node --test tests/adaptive-generation.test.mjs tests/preview-performance.test.mjs tests/foundation.test.mjs tests/app-smoke.test.mjs tests/music-engine.test.mjs tests/groove-intelligence.test.mjs tests/phrase-memory-intelligence.test.mjs
       - name: Full production quality
         run: npm run quality
       - name: Music quality regression gate
@@ -36,9 +41,10 @@ jobs:
       - name: Commit permanent Phase 6 implementation only
         run: |
           rm scripts/apply-phase6-integration.mjs
+          rm scripts/apply-audio-cleanup.mjs
           rm .github/workflows/phase6-integration.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app.js src/music-engine.js src/core/taste-profile.js src/core/groove-expression.js src/core/pattern-variety.js src/core/app-store.js tests/adaptive-generation.test.mjs scripts/apply-phase6-integration.mjs .github/workflows/phase6-integration.yml
-          git commit -m "Integrate adaptive taste groove and phrase variety"
+          git add src/app.js src/music-engine.js src/core/preview-audio.js src/core/taste-profile.js src/core/groove-expression.js src/core/pattern-variety.js src/core/app-store.js tests/adaptive-generation.test.mjs scripts/apply-phase6-integration.mjs scripts/apply-audio-cleanup.mjs .github/workflows/phase6-integration.yml
+          git commit -m "Integrate adaptive generation and Android audio cleanup"
           git push origin HEAD:work-6-adaptive-groove-variety
