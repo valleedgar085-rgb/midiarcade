@@ -22,8 +22,7 @@ function criticBarSignatures(song) {
   return Array.from({ length: song.bars }, (_, bar) => drums
     .filter((note) => Math.floor(note.start / barBeats) === bar)
     .map((note) => `${note.pitch}:${Math.round((((note.start % barBeats) + barBeats) % barBeats + Number.EPSILON) * 1e6) / 1e6}`)
-    .join("|"))
-    .filter(Boolean);
+    .join("|"));
 }
 
 function beatPhase(value) {
@@ -67,7 +66,7 @@ test("phase 3 groove memory preserves transition contracts and avoids adjacent c
     const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
     const recalls = drums.filter((note) => note.grooveMemoryRecall);
     const signatures = criticBarSignatures(song);
-    const adjacentCopies = signatures.slice(1).filter((signature, index) => signature === signatures[index]);
+    const adjacentCopies = signatures.slice(1).filter((signature, index) => signature && signatures[index] && signature === signatures[index]);
 
     assert.ok(recalls.length > 0, `${genre} should retain at least one canonical groove-memory recall`);
     assert.ok(recalls.every((note) => note.connectionId), `${genre} recalled groove notes must retain target-section interlock metadata`);

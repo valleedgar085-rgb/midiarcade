@@ -3516,14 +3516,18 @@ const PHASE3_DRUM_FILL_VOCABULARIES = deepFreeze({
   ],
 });
 
+function phase3DrumFamilyForGenre(genre) {
+  if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return "electronic";
+  if (["trap", "drill", "drumBass"].includes(genre)) return "bassMusic";
+  if (["reggaeton", "afrobeats"].includes(genre)) return "afroLatin";
+  if (["rock", "country", "pop", "popRadio"].includes(genre)) return "acoustic";
+  return "pocket";
+}
+
 function phase3DrumFillVocabularyForGenre(genre) {
   // Preserve the established jazz repair calibration seed and its Phase 40 contract.
   if (genre === "jazz") return [];
-  if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.electronic;
-  if (["trap", "drill", "drumBass"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.bassMusic;
-  if (["reggaeton", "afrobeats"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.afroLatin;
-  if (["rock", "country", "pop", "popRadio"].includes(genre)) return PHASE3_DRUM_FILL_VOCABULARIES.acoustic;
-  return PHASE3_DRUM_FILL_VOCABULARIES.pocket;
+  return PHASE3_DRUM_FILL_VOCABULARIES[phase3DrumFamilyForGenre(genre)];
 }
 
 function generateDrums(config, structure, _harmony, style, settings, rng, songBlueprint = null, grooveConductor = null) {
@@ -3651,15 +3655,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     // Phase 3: evolve one restrained, genre-native detail per bar. Core kick/snare
     // anchors are never deleted or moved; this layer creates statement/answer/lift/
     // cadence contrast so repeated sections retain identity without cloning bars.
-    const phase3Family = ["house", "techno", "synthwave", "synthPopRadio"].includes(config.genre)
-      ? "electronic"
-      : ["trap", "drill", "drumBass"].includes(config.genre)
-        ? "bassMusic"
-        : ["reggaeton", "afrobeats"].includes(config.genre)
-          ? "afroLatin"
-          : ["rock", "country", "pop", "popRadio"].includes(config.genre)
-            ? "acoustic"
-            : "pocket";
+    const phase3Family = phase3DrumFamilyForGenre(config.genre);
     const phase3Role = phraseEnd
       ? "cadence"
       : evolution.barInPhrase === 0
@@ -3981,7 +3977,6 @@ function developDuplicateDrumBars(source, config, structure, settings, rng, groo
 
 function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveConductor) {
   if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
-  const result = source.map((note) => ({ ...note }));
   const barBeats = beatsPerBar(config);
   const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, 4);
   const sectionForBar = (bar) => structure.find((section) => (
@@ -3994,11 +3989,20 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
     if (from) transitionBars.add(from.startBar + from.bars - 1);
     if (to) transitionBars.add(to.startBar);
   }
-  const notesForBar = (bar) => {
-    const start = bar * barBeats;
-    const end = start + barBeats;
-    return result.filter((note) => note.start >= start - 1e-6 && note.start < end - 1e-6);
-  };
+
+  const notesByBar = Array.from({ length: config.bars }, () => []);
+  const outsideNotes = [];
+  for (const sourceNote of source) {
+    const note = { ...sourceNote };
+    const bar = Math.floor(note.start / barBeats);
+    if (bar >= 0 && bar < config.bars) notesByBar[bar].push(note);
+    else outsideNotes.push(note);
+  }
+  const notesForBar = (bar) => notesByBar[bar] ?? [];
+  const signatureForBar = (bar) => notesForBar(bar)
+    .map((note) => note.pitch + ":" + round(mod(note.start, barBeats), 4))
+    .sort()
+    .join("|");
   const isProtectedBar = (bar) => {
     const section = sectionForBar(bar);
     const barNotes = notesForBar(bar);
@@ -4024,11 +4028,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
     const targetSection = sectionForBar(bar);
     if (!targetSection) continue;
     const targetRole = mod(bar - targetSection.startBar, phraseBars);
-    const previousSignature = drumBarSignature(result, bar - 1, barBeats);
-
-    // Repeated sections should remember the same interior groove role. Use the
-    // earliest compatible role as the canonical template so later choruses,
-    // drops, verses, etc. sound related instead of continually inventing a new bar.
+    const previousSignature = signatureForBar(bar - 1);
     const candidates = [];
     const coreSectionNames = new Set(["verse", "chorus", "drop"]);
     const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
@@ -4043,7 +4043,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
       if (referenceRole !== targetRole) continue;
       const referenceNotes = notesForBar(referenceBar);
       if (!referenceNotes.length) continue;
-      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
+      const referenceSignature = signatureForBar(referenceBar);
       if (!referenceSignature || referenceSignature === previousSignature) continue;
       candidates.push({ referenceBar, sameSection });
     }
@@ -4055,7 +4055,6 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
     const targetNotes = notesForBar(bar);
     if (!referenceNotes.length || !targetNotes.length) continue;
     const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
-    const sourceStart = referenceBar * barBeats;
     const targetStart = bar * barBeats;
     const velocityRatio = clamp(
       averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
@@ -4089,21 +4088,14 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
         grooveMemorySectionRole: targetRole,
       };
     });
-
-    const targetEnd = targetStart + barBeats;
-    for (let index = result.length - 1; index >= 0; index -= 1) {
-      if (result[index].start >= targetStart - 1e-6 && result[index].start < targetEnd - 1e-6) {
-        result.splice(index, 1);
-      }
-    }
-    result.push(...replacement);
+    notesByBar[bar] = replacement;
     recalls += 1;
   }
 
   if (!recalls) return source;
-  return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return [...outsideNotes, ...notesByBar.flat()]
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
-
 function applyFinalGrooveMemory(tracks, config, structure, songBlueprint, grooveConductor) {
   return tracks.map((track) => track.id === "drums"
     ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint, grooveConductor) }
@@ -8280,7 +8272,7 @@ function compose(config, options = {}) {
     }
   }
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
-  finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
+  finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
@@ -8368,7 +8360,7 @@ function compose(config, options = {}) {
     characteristicVoice: characteristicVoice.report,
     producerIntent: clone(songBlueprint.producerIntent),
     producerIntentReport: postGrooveIntentAudit.report,
-    finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
+    finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
@@ -9488,16 +9480,45 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  song.tracks = finalProducerIntentAudit.tracks;
+  const repairedGrooveMemoryTracks = sourceCandidate.targetTrack
+    ? finalProducerIntentAudit.tracks
+    : applyFinalGrooveMemory(
+      finalProducerIntentAudit.tracks,
+      config,
+      song.structure,
+      song.songBlueprint,
+      song.grooveConductor,
+    );
+  const repairedGrooveRhythmLock = lockFinalBassToSurvivingKicks(
+    repairedGrooveMemoryTracks,
+    config.genre,
+    config.bars * beatsPerBar(config),
+  );
+  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
+    repairedGrooveRhythmLock.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  const repairedFinalGrooveAssembly = runFinalAssemblyPass(
+    repairedPostGrooveIntentAudit.tracks,
+    finalProducerIntentAudit.tracks,
+    song.structure,
+    song.songBlueprint,
+  );
+  song.tracks = repairedFinalGrooveAssembly.tracks;
+  finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
+  song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
     song.songBlueprint,
     {
       featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored,
+        + postIntentAssembly.repairs.featuredAnchorsRestored
+        + repairedFinalGrooveAssembly.repairs.featuredAnchorsRestored,
       transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged,
+        + postIntentAssembly.repairs.transitionEventsTagged
+        + repairedFinalGrooveAssembly.repairs.transitionEventsTagged,
     },
   );
   song.sectionContrast = createSectionContrastReport(
@@ -9515,7 +9536,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
   song.producerIntent = clone(song.songBlueprint?.producerIntent);
-  song.producerIntentReport = finalProducerIntentAudit.report;
+  song.producerIntentReport = repairedPostGrooveIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);
