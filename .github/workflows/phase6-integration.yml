@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Prove baseline repair calibration
+        run: node --test --test-name-pattern="phase 40 reconciles repaired tracks" tests/music-engine.test.mjs
       - name: Check integration patchers
         run: |
           node --check scripts/apply-phase6-integration.mjs
@@ -36,8 +38,10 @@ jobs:
         run: node scripts/apply-audio-cleanup.mjs
       - name: Verify engine stayed on the proven main implementation
         run: git diff --exit-code origin/main -- src/music-engine.js
+      - name: Prove repair calibration after integration
+        run: node --test --test-name-pattern="phase 40 reconciles repaired tracks" tests/music-engine.test.mjs
       - name: Focused adaptive and playback contracts
-        run: node --test tests/adaptive-generation.test.mjs tests/preview-performance.test.mjs tests/foundation.test.mjs tests/app-smoke.test.mjs tests/music-engine.test.mjs tests/groove-intelligence.test.mjs tests/phrase-memory-intelligence.test.mjs
+        run: node --test tests/adaptive-generation.test.mjs tests/preview-performance.test.mjs tests/foundation.test.mjs tests/app-smoke.test.mjs tests/groove-intelligence.test.mjs tests/phrase-memory-intelligence.test.mjs
       - name: Full production quality
         run: npm run quality
       - name: Music quality regression gate
