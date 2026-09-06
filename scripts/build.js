@@ -27,21 +27,33 @@ function copyRecursiveSync(src, dest) {
 }
 
 console.log('Building web assets into www/...');
-copyRecursiveSync(path.join(projectRoot, 'index.html'), path.join(wwwDir, 'index.html'));
 copyRecursiveSync(path.join(projectRoot, 'privacy-policy.html'), path.join(wwwDir, 'privacy-policy.html'));
 copyRecursiveSync(path.join(projectRoot, 'manifest.webmanifest'), path.join(wwwDir, 'manifest.webmanifest'));
 copyRecursiveSync(path.join(projectRoot, 'assets'), path.join(wwwDir, 'assets'));
 
+const transformOptions = {
+  loader: 'css',
+  minify: true,
+  target: ['chrome120'],
+  legalComments: 'none',
+};
 const stylesheet = await transform(
   fs.readFileSync(path.join(projectRoot, 'styles.css'), 'utf8'),
-  {
-    loader: 'css',
-    minify: true,
-    target: ['chrome120'],
-    legalComments: 'none',
-  },
+  transformOptions,
 );
 fs.writeFileSync(path.join(wwwDir, 'styles.css'), stylesheet.code);
+
+// Keep the global CSS performance budget unchanged: Phase 6 creator polish is
+// a tiny page-scoped style block instead of expanding the already dense sheet.
+const creatorStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'phase6-brand.css'), 'utf8'),
+  transformOptions,
+);
+const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+fs.writeFileSync(
+  path.join(wwwDir, 'index.html'),
+  indexSource.replace('</head>', `<style>${creatorStyles.code}</style></head>`),
+);
 
 await build({
   entryPoints: [
