@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  previewGraphBudget,
   previewRuntimeProfile,
   previewVoiceFeatures,
   previewVoicePriority,
@@ -28,12 +29,39 @@ test("desktop preview keeps the full synthesis profile", () => {
   assert.equal(profile.maxScheduledVoices, 96);
 });
 
-test("constrained preview preserves rich lead and bass while thinning backing voices", () => {
+test("constrained preview preserves core lead and bass tone while dropping extra transient oscillators", () => {
   const profile = previewRuntimeProfile({ userAgent: "Android" });
-  assert.deepEqual(previewVoiceFeatures("melody", profile), { layer: true, transient: true, sub: false });
-  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: true, sub: true });
+  assert.deepEqual(previewVoiceFeatures("melody", profile), { layer: true, transient: false, sub: false });
+  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: false, sub: true });
   assert.deepEqual(previewVoiceFeatures("chords", profile), { layer: false, transient: false, sub: false });
   assert.deepEqual(previewVoiceFeatures("pad", profile), { layer: false, transient: false, sub: false });
+});
+
+test("constrained graph budget removes the expensive mobile-only pressure points", () => {
+  const budget = previewGraphBudget(previewRuntimeProfile({ userAgent: "Android" }));
+  assert.equal(budget.saturation, false);
+  assert.equal(budget.reverbChannels, 1);
+  assert.ok(budget.reverbSeconds <= 1.2);
+  assert.ok(budget.delayFeedback <= 0.12);
+  assert.equal(budget.preserveKickClick, false);
+  assert.equal(budget.preserveSnareSnap, false);
+  assert.equal(budget.filterMotion, false);
+  assert.ok(budget.masterFadeSeconds >= 0.024);
+  assert.ok(budget.sendFloor >= 0.04);
+});
+
+test("desktop graph budget keeps the complete preview character", () => {
+  const budget = previewGraphBudget(previewRuntimeProfile({
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64)",
+    hardwareConcurrency: 12,
+    deviceMemory: 16,
+  }));
+  assert.equal(budget.saturation, true);
+  assert.equal(budget.saturationOversample, "4x");
+  assert.equal(budget.reverbChannels, 2);
+  assert.equal(budget.preserveKickClick, true);
+  assert.equal(budget.preserveSnareSnap, true);
+  assert.equal(budget.filterMotion, true);
 });
 
 test("voice priority protects the beat and lead before pad tails", () => {
