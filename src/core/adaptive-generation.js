@@ -12,11 +12,6 @@ const CHARACTER_DEFAULT = Object.freeze({
   fillDelta: 0.012,
 });
 
-/**
- * Genre character is deliberately small and bounded. It does not replace the
- * engine's genre grammar; it nudges existing controls toward a more audible,
- * intentional performance identity before candidate search begins.
- */
 const GENRE_CHARACTER = Object.freeze({
   neoSoul: { grooveDepth: 0.92, bassMotion: 0.86, melodyMotion: 0.78, harmonicColor: 0.94, space: 0.72, syncopationDelta: 0.045, swingDelta: 0.018, humanizeDelta: 0.025, fillDelta: 0.008 },
   rnbSoul: { grooveDepth: 0.88, bassMotion: 0.78, melodyMotion: 0.84, harmonicColor: 0.96, space: 0.78, syncopationDelta: 0.032, swingDelta: 0.014, humanizeDelta: 0.022, fillDelta: -0.004 },
@@ -60,7 +55,7 @@ function mix(from, to, amount) {
   return finite(from) * (1 - t) + finite(to) * t;
 }
 
-function boundedUnit(value, fallback) {
+function unit(value, fallback) {
   return round(clamp(finite(value, fallback), 0, 1));
 }
 
@@ -70,27 +65,22 @@ function cloneRecord(value) {
 
 export function normalizeTasteProfile(profile = {}) {
   const source = cloneRecord(profile);
-  const ratings = Math.max(0, finite(source.ratings, 0));
-  const likes = Math.max(0, finite(source.likes, 0));
-  const rejects = Math.max(0, finite(source.rejects, 0));
-  const favorites = Math.max(0, finite(source.favorites, 0));
-  const genreVotes = cloneRecord(source.genreVotes);
   return Object.freeze({
-    ratings,
-    likes,
-    rejects,
-    favorites,
+    ratings: Math.max(0, finite(source.ratings, 0)),
+    likes: Math.max(0, finite(source.likes, 0)),
+    rejects: Math.max(0, finite(source.rejects, 0)),
+    favorites: Math.max(0, finite(source.favorites, 0)),
     energyTotal: Math.max(0, finite(source.energyTotal, 0)),
     complexityTotal: Math.max(0, finite(source.complexityTotal, 0)),
     variationTotal: Math.max(0, finite(source.variationTotal, 0)),
-    genreVotes,
+    genreVotes: cloneRecord(source.genreVotes),
   });
 }
 
 export function tasteConfidence(profile = {}) {
   const taste = normalizeTasteProfile(profile);
-  const explicitSignals = taste.likes + taste.rejects * 0.72 + taste.favorites * 1.65;
-  return round(clamp(explicitSignals / 12, 0, 1));
+  const signals = taste.likes + taste.rejects * 0.72 + taste.favorites * 1.65;
+  return round(clamp(signals / 12, 0, 1));
 }
 
 export function tasteVector(profile = {}, genre = "") {
@@ -103,7 +93,11 @@ export function tasteVector(profile = {}, genre = "") {
   const vote = finite(taste.genreVotes[String(genre)] ?? 0, 0);
   const voteScale = Math.max(2, taste.likes + taste.favorites * 2 + taste.rejects);
   const genreAffinity = round(clamp(vote / voteScale, -1, 1));
-  const rejectionPressure = round(clamp(taste.rejects / Math.max(1, taste.likes + taste.rejects + taste.favorites), 0, 1));
+  const rejectionPressure = round(clamp(
+    taste.rejects / Math.max(1, taste.likes + taste.rejects + taste.favorites),
+    0,
+    1,
+  ));
   return Object.freeze({ confidence, energy, complexity, variation, genreAffinity, rejectionPressure });
 }
 
@@ -123,29 +117,18 @@ function adjustTrack(trackId, input, context) {
     counterpoint: 0.045 * character.melodyMotion,
     pad: 0.018 * character.harmonicColor,
   }[trackId] ?? 0;
+
   if (Number.isFinite(Number(out.variation))) {
-    out.variation = boundedUnit(finite(out.variation) + variationWeight + variationLift * 0.12, finite(out.variation));
+    out.variation = unit(finite(out.variation) + variationWeight + variationLift * 0.12, finite(out.variation));
   }
-
   if (Number.isFinite(Number(out.humanize))) {
-    const laneHuman = {
-      drums: 1,
-      bass: 0.92,
-      chords: 0.58,
-      melody: 0.82,
-      counterpoint: 0.68,
-      pad: 0.28,
-    }[trackId] ?? 0.5;
-    out.humanize = boundedUnit(finite(out.humanize) + character.humanizeDelta * laneHuman + grooveLift * 0.014 * laneHuman, finite(out.humanize));
+    const lane = { drums: 1, bass: 0.92, chords: 0.58, melody: 0.82, counterpoint: 0.68, pad: 0.28 }[trackId] ?? 0.5;
+    out.humanize = unit(finite(out.humanize) + character.humanizeDelta * lane + grooveLift * 0.014 * lane, finite(out.humanize));
   }
-
   if (Number.isFinite(Number(out.feel))) {
-    const laneFeel = { drums: 0.8, bass: 1, chords: 0.58, melody: 0.7, counterpoint: 0.52, pad: 0.18 }[trackId] ?? 0.5;
-    out.feel = boundedUnit(finite(out.feel) + 0.03 * character.grooveDepth * laneFeel + vector.genreAffinity * vector.confidence * 0.018 * laneFeel, finite(out.feel));
+    const lane = { drums: 0.8, bass: 1, chords: 0.58, melody: 0.7, counterpoint: 0.52, pad: 0.18 }[trackId] ?? 0.5;
+    out.feel = unit(finite(out.feel) + 0.03 * character.grooveDepth * lane + vector.genreAffinity * vector.confidence * 0.018 * lane, finite(out.feel));
   }
-
-  // More variety should create contrast, not a wall of notes. Backing lanes make
-  // a little more room while the rhythm section and lead become more articulate.
   if (Number.isFinite(Number(out.density))) {
     const densityDelta = trackId === "pad"
       ? -0.04 * character.space
@@ -154,23 +137,21 @@ function adjustTrack(trackId, input, context) {
         : trackId === "chords"
           ? -0.015 * character.space
           : 0;
-    out.density = boundedUnit(finite(out.density) + densityDelta, finite(out.density));
+    out.density = unit(finite(out.density) + densityDelta, finite(out.density));
   }
-
   if (Number.isFinite(Number(out.velocity))) {
     const velocityDelta = trackId === "drums" ? 0.012 * character.grooveDepth
       : trackId === "bass" ? 0.008 * character.bassMotion
         : trackId === "melody" ? 0.006 * character.melodyMotion : 0;
-    out.velocity = boundedUnit(finite(out.velocity) + velocityDelta, finite(out.velocity));
+    out.velocity = unit(finite(out.velocity) + velocityDelta, finite(out.velocity));
   }
-
   return out;
 }
 
 /**
- * Convert persisted taste signals and genre character into bounded engine
- * controls. The same config and taste snapshot always produce the same result.
- * No ambient state or random source is consulted.
+ * Deterministic, bounded taste + genre steering. The engine still owns note
+ * grammar, critic selection and Song DNA; this layer only improves the priors
+ * supplied to those systems. Same seed + same taste snapshot stays replayable.
  */
 export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
   const source = cloneRecord(config);
@@ -179,9 +160,9 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
   const vector = tasteVector(source.tasteProfile, genre);
   const tasteStrength = vector.confidence * 0.2;
 
-  const baseEnergy = boundedUnit(source.energy, 0.68);
-  const baseComplexity = boundedUnit(source.complexity, 0.54);
-  const baseVariation = boundedUnit(source.variation, 0.42);
+  const baseEnergy = unit(source.energy, 0.68);
+  const baseComplexity = unit(source.complexity, 0.54);
+  const baseVariation = unit(source.variation, 0.42);
   const learnedEnergy = vector.energy == null ? baseEnergy : mix(baseEnergy, vector.energy, tasteStrength);
   const learnedComplexity = vector.complexity == null ? baseComplexity : mix(baseComplexity, vector.complexity, tasteStrength);
   const learnedVariation = vector.variation == null ? baseVariation : mix(baseVariation, vector.variation, tasteStrength);
@@ -189,6 +170,7 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
   const variationLift = (character.bassMotion + character.melodyMotion + character.grooveDepth) / 3 - 0.58;
   const grooveLift = character.grooveDepth - 0.62;
   const dislikeNovelty = vector.rejectionPressure * vector.confidence * 0.03;
+  const fillTaste = vector.variation == null ? 0 : (vector.variation - baseVariation) * tasteStrength * 0.08;
   const related = kind === "similar";
 
   const out = {
@@ -199,15 +181,13 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
     evolution: round(clamp(finite(source.evolution, 0.58) + variationLift * 0.07 + vector.confidence * 0.018, 0, 1)),
     surprise: round(clamp(finite(source.surprise, 0.28) + character.melodyMotion * 0.022 + dislikeNovelty, 0, 0.78)),
     syncopation: round(clamp(finite(source.syncopation, 0.5) + character.syncopationDelta + vector.genreAffinity * vector.confidence * 0.018, 0, 1)),
-    drumFills: round(clamp(finite(source.drumFills, 0.4) + character.fillDelta + vector.variation != null ? 0 : 0, 0, 1)),
+    drumFills: round(clamp(finite(source.drumFills, 0.4) + character.fillDelta + fillTaste, 0, 1)),
     chordExtensions: round(clamp(finite(source.chordExtensions, 0.46) + (character.harmonicColor - 0.56) * 0.055 + (learnedComplexity - baseComplexity) * 0.05, 0, 1)),
-    harmonicRhythm: round(clamp(finite(source.harmonicRhythm, 0.34) + (character.grooveDepth - 0.62) * 0.018 + (learnedComplexity - baseComplexity) * 0.04, 0.08, 0.88)),
+    harmonicRhythm: round(clamp(finite(source.harmonicRhythm, 0.34) + grooveLift * 0.018 + (learnedComplexity - baseComplexity) * 0.04, 0.08, 0.88)),
     swing: round(clamp(finite(source.swing, 0) + character.swingDelta, 0, 0.72)),
     humanize: round(clamp(finite(source.humanize, 0.12) + character.humanizeDelta, 0, 0.72)),
   };
 
-  // Keep related generations recognizably related while letting explicit taste
-  // and variety controls prevent near-clones.
   if (Number.isFinite(Number(source.similarity))) {
     const loosen = clamp((out.variation - baseVariation) * 0.16 + dislikeNovelty, 0, related ? 0.045 : 0.08);
     out.similarity = round(clamp(finite(source.similarity) - loosen, related ? 0.58 : 0.5, 0.94));
