@@ -4,9 +4,9 @@ import test from "node:test";
 import {
   applyProducerBrainConfig,
   createProducerBrainPlan,
-  decorateProducerBrainResult,
 } from "../src/core/producer-brain.js";
 import { adaptGenerationConfig } from "../src/core/adaptive-generation.js";
+import { createGenerationExecutor } from "../src/core/generation-executor.js";
 
 const CHARACTER = {
   grooveDepth: 0.92,
@@ -111,31 +111,27 @@ test("adaptive generation publishes the producer brain without mutating the call
   assert.equal(result.producerBrain.search.baseCandidateCount, 6);
   assert.equal(result.producerBrain.search.maxCandidateCount, 10);
   assert.equal(result.producerBrain.qualityIntent.preserveDeterminism, true);
+  assert.ok(result.producerBrain.taste.learnedVariation > 0);
 });
 
-test("committed songs and variation directions retain the exact producer plan", () => {
-  const plan = createProducerBrainPlan(
-    { thinkingDepth: "deep" },
-    { kind: "songVariations", character: CHARACTER, taste: TASTE },
-  );
-  const source = {
-    status: "committed",
-    variations: [
-      { id: "p", meta: {}, variationSet: { direction: { id: "pocket" }, candidatesAuditioned: 3 } },
-      { id: "h", meta: {}, variationSet: { direction: { id: "hook" }, candidatesAuditioned: 3 } },
-      { id: "j", meta: {}, variationSet: { direction: { id: "journey" }, candidatesAuditioned: 3 } },
-    ],
-  };
-  const result = decorateProducerBrainResult(source, plan);
+test("executor receives producer orchestration without changing its stable result contract", async () => {
+  let received;
+  const expected = { status: "committed", song: { id: "stable-result" } };
+  const executor = createGenerationExecutor({
+    fallback: (_kind, payload) => {
+      received = payload;
+      return expected;
+    },
+  });
 
-  assert.equal(result.producerBrain, plan);
-  assert.deepEqual(result.variations.map((song) => song.meta.producerBrain.variationSelection.direction), [
-    "pocket",
-    "hook",
-    "journey",
-  ]);
-  assert.deepEqual(result.variations.map((song) => song.meta.producerBrain.variationSelection.index), [0, 1, 2]);
-  assert.ok(source.variations.every((song) => song.meta.producerBrain == null), "decoration must not mutate worker results");
+  const result = await executor.run("new", {
+    config: { seed: "stable-contract", genre: "pop", thinkingDepth: "deep" },
+  });
+
+  assert.equal(result, expected, "executor must preserve the exact engine result object");
+  assert.equal(received.config.producerBrain.version, 1);
+  assert.equal(received.config.producerBrain.search.baseCandidateCount, 6);
+  assert.equal(received.config.targetedRepair, true);
 });
 
 test("producer brain orchestration contains no unseeded randomness", () => {
