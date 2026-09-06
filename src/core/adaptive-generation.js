@@ -1,3 +1,5 @@
+import { applyProducerBrainConfig } from "./producer-brain.js";
+
 const TRACK_IDS = Object.freeze(["drums", "bass", "chords", "melody", "counterpoint", "pad"]);
 
 const CHARACTER_DEFAULT = Object.freeze({
@@ -227,7 +229,7 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
       space: round(character.space),
     },
   });
-  return out;
+  return applyProducerBrainConfig(out, { kind, character, taste: vector });
 }
 
 export function adaptGenerationRequest(kind, payload = {}) {
