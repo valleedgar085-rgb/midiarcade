@@ -180,3 +180,15 @@ export function phrasePerformanceAdjustment(memory, trackId, phraseRole) {
     6,
   ));
 }
+
+/**
+ * Interpret phrase-performance metadata only at playback/export boundaries.
+ * The composition JSON keeps its critic-calibrated pitch/timing/velocity data;
+ * renderers receive one shared, bounded interpretation for audible nuance.
+ */
+export function renderPhrasePerformance(note = {}) {
+  return {
+    velocityDelta: Math.round(clamp(finite(note.phrasePerformanceDelta, 0), -6, 6)),
+    durationScale: round(clamp(finite(note.phrasePerformanceDurationScale, 1), 0.72, 1.28)),
+  };
+}
