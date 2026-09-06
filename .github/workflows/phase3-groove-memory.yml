@@ -37,43 +37,22 @@ jobs:
           const timingAfter = '        start: round(targetStart + round(mod(note.start, barBeats))),';
           if (!source.includes(timingBefore)) throw new Error('groove-memory timing anchor not found');
           source = source.replace(timingBefore, timingAfter);
-
-          const selectionBefore = `    const candidates = [];
-    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
-      if (isProtectedBar(referenceBar)) continue;
-      const referenceSection = sectionForBar(referenceBar);
-      if (!referenceSection || referenceSection.name !== targetSection.name) continue;
-      const referenceRole = referenceBar - referenceSection.startBar;
-      if (referenceRole !== targetRole) continue;
-      const referenceNotes = notesForBar(referenceBar);
-      if (!referenceNotes.length) continue;
-      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
-      if (!referenceSignature || referenceSignature === previousSignature) continue;
-      candidates.push(referenceBar);
-    }
-    const referenceBar = candidates[0];`;
-          const selectionAfter = `    const candidates = [];
-    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
-    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
-    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
-      if (isProtectedBar(referenceBar)) continue;
-      const referenceSection = sectionForBar(referenceBar);
-      if (!referenceSection) continue;
-      const referenceRole = referenceBar - referenceSection.startBar;
-      if (referenceRole !== targetRole) continue;
-      const sameSection = referenceSection.name === targetSection.name;
-      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
-      if (!sameSection && referenceFamily !== targetFamily) continue;
-      const referenceNotes = notesForBar(referenceBar);
-      if (!referenceNotes.length) continue;
-      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
-      if (!referenceSignature || referenceSignature === previousSignature) continue;
-      candidates.push({ referenceBar, sameSection });
-    }
-    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
-    const referenceBar = candidates[0]?.referenceBar;`;
-          if (!source.includes(selectionBefore)) throw new Error('groove-memory canonical selection anchor not found');
-          source = source.replace(selectionBefore, selectionAfter);
+          const candidatesBefore = '    const candidates = [];';
+          const candidatesAfter = '    const candidates = [];\n    const coreSectionNames = new Set(["verse", "chorus", "drop"]);\n    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;';
+          if (!source.includes(candidatesBefore)) throw new Error('groove-memory candidate anchor not found');
+          source = source.replace(candidatesBefore, candidatesAfter);
+          const sectionBefore = '      if (!referenceSection || referenceSection.name !== targetSection.name) continue;';
+          const sectionAfter = '      if (!referenceSection) continue;\n      const sameSection = referenceSection.name === targetSection.name;\n      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;\n      if (!sameSection && referenceFamily !== targetFamily) continue;';
+          if (!source.includes(sectionBefore)) throw new Error('groove-memory section-family anchor not found');
+          source = source.replace(sectionBefore, sectionAfter);
+          const pushBefore = '      candidates.push(referenceBar);';
+          const pushAfter = '      candidates.push({ referenceBar, sameSection });';
+          if (!source.includes(pushBefore)) throw new Error('groove-memory candidate push anchor not found');
+          source = source.replace(pushBefore, pushAfter);
+          const chooseBefore = '    const referenceBar = candidates[0];';
+          const chooseAfter = '    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);\n    const referenceBar = candidates[0]?.referenceBar;';
+          if (!source.includes(chooseBefore)) throw new Error('groove-memory candidate choice anchor not found');
+          source = source.replace(chooseBefore, chooseAfter);
           fs.writeFileSync(path, source);
           console.log('Aligned six-decimal timing and shared canonical pocket across verse/chorus/drop roles.');
           NODE
