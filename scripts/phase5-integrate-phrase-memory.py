@@ -1,20 +1,23 @@
 from pathlib import Path
 
 ENGINE = Path("src/music-engine.js")
-TEST = Path("tests/phrase-memory-intelligence.test.mjs")
-source = ENGINE.read_text()
+APP = Path("src/app.js")
+PHRASE_TEST = Path("tests/phrase-memory-intelligence.test.mjs")
+APP_TEST = Path("tests/app-smoke.test.mjs")
+engine = ENGINE.read_text()
+app = APP.read_text()
+app_test = APP_TEST.read_text()
 
 
-def replace_once(before, after, label):
-    global source
-    count = source.count(before)
+def replace_once(text, before, after, label):
+    count = text.count(before)
     if count != 1:
         raise RuntimeError(f"{label}: expected exactly one anchor, found {count}")
-    source = source.replace(before, after, 1)
+    return text.replace(before, after, 1)
 
 
-# 1) Import the pure phrase-memory contract beside phrase architecture.
-replace_once(
+engine = replace_once(
+    engine,
     '''import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -33,6 +36,7 @@ import {
   createPhraseMemoryContract,
   phraseMemoryForSection,
   phrasePerformanceAdjustment,
+  renderPhrasePerformance,
 } from "./core/phrase-memory.js";
 import {
   createSongDNA as createDeterministicSongDNA,
@@ -41,8 +45,8 @@ import {
     "phrase memory import",
 )
 
-# 2) Build phrase memory only after section plans + memory map exist.
-replace_once(
+engine = replace_once(
+    engine,
     '''  const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source);
   return {
     version: 6,
@@ -59,7 +63,8 @@ replace_once(
 ''',
     "phrase memory blueprint creation",
 )
-replace_once(
+engine = replace_once(
+    engine,
     '''    producerIntent,
     memoryMap,
   };
@@ -76,28 +81,27 @@ function applySongBlueprint''',
     "phrase memory blueprint output",
 )
 
-# 3) Surface phrase intent on each section without changing structure schema.
-replace_once(
+engine = replace_once(
+    engine,
     '''  const memories = new Map((blueprint?.memoryMap ?? []).map((entry) => [entry.sectionId, entry]));
   const dnaSections = new Map((blueprint?.songDNA?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   return structure.map((section) => {
-    const plan = plans.get(section.id);
 ''',
     '''  const memories = new Map((blueprint?.memoryMap ?? []).map((entry) => [entry.sectionId, entry]));
   const phraseMemories = new Map((blueprint?.phraseMemory?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   const dnaSections = new Map((blueprint?.songDNA?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   return structure.map((section) => {
-    const plan = plans.get(section.id);
 ''',
     "section phrase memory map",
 )
-replace_once(
+engine = replace_once(
+    engine,
     '''        memoryRelationship: memories.get(section.id)?.relationship ?? "statement",
         songDNADevelopmentSeed: dnaSections.get(section.id)?.developmentSeed ?? null,
 ''',
     '''        memoryRelationship: memories.get(section.id)?.relationship ?? "statement",
         phraseSentenceRole: phraseMemories.get(section.id)?.sentenceRole ?? "statement",
-        phraseLandingRole: phraseMemories.get(section.id)?.landingRole ?? null,
+        phraseMemoryLandingRole: phraseMemories.get(section.id)?.landingRole ?? null,
         phraseMemoryTransform: phraseMemories.get(section.id)?.transform ?? "statement",
         phraseRegisterStrategy: phraseMemories.get(section.id)?.registerStrategy ?? "preserve",
         songDNADevelopmentSeed: dnaSections.get(section.id)?.developmentSeed ?? null,
@@ -105,8 +109,8 @@ replace_once(
     "section phrase intent",
 )
 
-# 4) Carry phrase memory into the interlock section contract.
-replace_once(
+engine = replace_once(
+    engine,
     '''  const sectionContracts = structure.map((section) => {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const sectionHarmony = harmony.filter((event) => (
@@ -118,7 +122,8 @@ replace_once(
 ''',
     "interlock phrase memory lookup",
 )
-replace_once(
+engine = replace_once(
+    engine,
     '''      performanceFeel: performanceProfile?.feel?.id ?? "balanced",
       transitionOut: outgoing.get(section.id)?.type ?? null,
       bars,
@@ -131,18 +136,22 @@ replace_once(
     "interlock phrase memory contract",
 )
 
-# 5) Add a restrained phrase-ending dynamic to existing ensemble turnarounds.
-replace_once(
+engine = replace_once(
+    engine,
     '''      const phraseRole = barContract?.role ?? "statement";
       const phraseDynamic = {
 ''',
     '''      const phraseRole = barContract?.role ?? "statement";
       const phraseMemoryDelta = phrasePerformanceAdjustment(contract.phraseMemory, trackId, phraseRole);
+      const phraseMemoryDurationScale = contract.phraseMemory && phraseRole === "turnaround"
+        ? clamp(finite(contract.phraseMemory.performance?.durationScale, 1), 0.72, 1.28)
+        : 1;
       const phraseDynamic = {
 ''',
-    "phrase performance delta",
+    "phrase render instructions",
 )
-replace_once(
+engine = replace_once(
+    engine,
     '''        velocity: adjustVelocity
           ? clamp(Math.round(note.velocity * sharedDynamic + accentBoost), 1, 127)
           : note.velocity,
@@ -153,7 +162,7 @@ replace_once(
         ...(ensembleAccent ? { ensembleAccent: true } : {}),
 ''',
     '''        velocity: adjustVelocity
-          ? clamp(Math.round(note.velocity * sharedDynamic + accentBoost + phraseMemoryDelta), 1, 127)
+          ? clamp(Math.round(note.velocity * sharedDynamic + accentBoost), 1, 127)
           : note.velocity,
         connectionId: contract.id,
         connectionRole: contract.role,
@@ -162,20 +171,22 @@ replace_once(
         ...(contract.phraseMemory ? {
           phraseMemoryRole: contract.phraseMemory.sentenceRole,
           phraseMemoryTransform: contract.phraseMemory.transform,
-          phraseLandingRole: contract.phraseMemory.landingRole,
+          phraseMemoryLandingRole: contract.phraseMemory.landingRole,
           phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
           phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
           phraseRecallStrength: contract.phraseMemory.recallStrength,
         } : {}),
-        ...(adjustVelocity && phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
+        ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
+        ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
+          phrasePerformanceDurationScale: round(phraseMemoryDurationScale),
+        } : {}),
         ...(ensembleAccent ? { ensembleAccent: true } : {}),
 ''',
-    "interlock phrase tags and performance",
+    "interlock phrase metadata",
 )
 
-# 6) Let the existing scale-safe phrase resolver honor the section's memory role
-# only at the section-ending boundary. Internal phrase cadence behavior stays intact.
-replace_once(
+engine = replace_once(
+    engine,
     '''  const barBeats = beatsPerBar(config);
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
@@ -187,26 +198,8 @@ replace_once(
 ''',
     "phrase resolver memory lookup",
 )
-replace_once(
-    '''      const landingRole = phraseLandingRole({
-        boundaryIndex,
-        boundaryCount: boundaries.length,
-        cadence,
-        trackId,
-      });
-''',
-    '''      const landingRole = sectionBoundary && sectionPhraseMemory?.landingRole
-        ? sectionPhraseMemory.landingRole
-        : phraseLandingRole({
-          boundaryIndex,
-          boundaryCount: boundaries.length,
-          cadence,
-          trackId,
-        });
-''',
-    "phrase resolver memory role",
-)
-replace_once(
+engine = replace_once(
+    engine,
     '''      landing.articulationIntent = landingProfile.articulation;
     }
   }
@@ -215,7 +208,7 @@ replace_once(
       if (sectionPhraseMemory) {
         landing.phraseMemoryRole = sectionPhraseMemory.sentenceRole;
         landing.phraseMemoryTransform = sectionPhraseMemory.transform;
-        landing.phraseLandingRole = sectionPhraseMemory.landingRole;
+        landing.phraseMemoryLandingRole = sectionPhraseMemory.landingRole;
         landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
         landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
         landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
@@ -226,8 +219,8 @@ replace_once(
     "phrase resolver metadata",
 )
 
-# 7) Preserve phrase-memory metadata through humanization/finalization.
-replace_once(
+engine = replace_once(
+    engine,
     '''      ...(note.phraseRole ? { phraseRole: note.phraseRole } : {}),
       ...(note.phraseCadenceRole ? { phraseCadenceRole: note.phraseCadenceRole } : {}),
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
@@ -236,18 +229,46 @@ replace_once(
       ...(note.phraseCadenceRole ? { phraseCadenceRole: note.phraseCadenceRole } : {}),
       ...(note.phraseMemoryRole ? { phraseMemoryRole: note.phraseMemoryRole } : {}),
       ...(note.phraseMemoryTransform ? { phraseMemoryTransform: note.phraseMemoryTransform } : {}),
-      ...(note.phraseLandingRole ? { phraseLandingRole: note.phraseLandingRole } : {}),
+      ...(note.phraseMemoryLandingRole ? { phraseMemoryLandingRole: note.phraseMemoryLandingRole } : {}),
       ...(note.phraseMemorySourceSectionId ? { phraseMemorySourceSectionId: note.phraseMemorySourceSectionId } : {}),
       ...(note.phraseRegisterStrategy ? { phraseRegisterStrategy: note.phraseRegisterStrategy } : {}),
       ...(Number.isFinite(note.phraseRecallStrength) ? { phraseRecallStrength: round(note.phraseRecallStrength) } : {}),
       ...(Number.isFinite(note.phrasePerformanceDelta) ? { phrasePerformanceDelta: note.phrasePerformanceDelta } : {}),
+      ...(Number.isFinite(note.phrasePerformanceDurationScale) ? {
+        phrasePerformanceDurationScale: round(note.phrasePerformanceDurationScale),
+      } : {}),
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
 ''',
     "finalized phrase metadata",
 )
 
-# 8) Expose the contract beside the existing memory map for diagnostics/UI.
-replace_once(
+engine = replace_once(
+    engine,
+    '''    for (const note of track.notes ?? []) {
+      const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
+      const velocity = clamp(Math.round(finite(note.velocity, 90) * velocityScale), 1, 127);
+      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+      const offTick = clamp(
+        Math.max(onTick + 1, Math.round((finite(note.start, 0) + finite(note.duration, 0.25) * gateScale) * ppq)),
+''',
+    '''    for (const note of track.notes ?? []) {
+      const phrasePerformance = renderPhrasePerformance(note);
+      const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
+      const velocity = clamp(Math.round(
+        (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+      ), 1, 127);
+      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+      const offTick = clamp(
+        Math.max(onTick + 1, Math.round((
+          finite(note.start, 0)
+          + finite(note.duration, 0.25) * gateScale * phrasePerformance.durationScale
+        ) * ppq)),
+''',
+    "MIDI phrase performance",
+)
+
+engine = replace_once(
+    engine,
     '''    memoryMap: clone(songBlueprint.memoryMap),
     producerPass: produced.report,
 ''',
@@ -258,16 +279,78 @@ replace_once(
     "song phrase memory output",
 )
 
-ENGINE.write_text(source)
+app = replace_once(
+    app,
+    '''import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+''',
+    '''import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import { renderPhrasePerformance } from "./core/phrase-memory.js";
+''',
+    "preview phrase performance import",
+)
+app = replace_once(
+    app,
+    '''    return trackNotes(track).map((note) => {
+      const startBeat = Math.max(0, noteStart(note));
+      const durationBeats = Math.max(0.01, noteDuration(note));
+      const audibleDurationBeats = durationBeats * clamp(gateScale, 0.65, 1.4);
+''',
+    '''    return trackNotes(track).map((note) => {
+      const startBeat = Math.max(0, noteStart(note));
+      const durationBeats = Math.max(0.01, noteDuration(note));
+      const phrasePerformance = renderPhrasePerformance(note);
+      const audibleDurationBeats = durationBeats
+        * clamp(gateScale, 0.65, 1.4)
+        * phrasePerformance.durationScale;
+''',
+    "preview phrase duration",
+)
+app = replace_once(
+    app,
+    '''      const baseVelocity = clamp(noteVelocity(note) * velocityScale, 1, 127);
+''',
+    '''      const baseVelocity = clamp(
+        (noteVelocity(note) + phrasePerformance.velocityDelta) * velocityScale,
+        1,
+        127,
+      );
+''',
+    "preview phrase velocity",
+)
 
-TEST.write_text(r'''import test from "node:test";
+app_test = replace_once(
+    app_test,
+    '''test("smart performance mix stays bounded, comparable, and user-directed", () => {
+''',
+    '''test("phrase performance is interpreted at the preview boundary", () => {
+  assert.match(appSource, /renderPhrasePerformance\\(note\\)/);
+  assert.match(appSource, /phrasePerformance\\.durationScale/);
+  assert.match(appSource, /phrasePerformance\\.velocityDelta/);
+});
+
+test("smart performance mix stays bounded, comparable, and user-directed", () => {
+''',
+    "preview phrase performance seam test",
+)
+
+ENGINE.write_text(engine)
+APP.write_text(app)
+APP_TEST.write_text(app_test)
+
+PHRASE_TEST.write_text(r'''import test from "node:test";
 import assert from "node:assert/strict";
 import {
   createPhraseMemoryContract,
   phraseMemoryForSection,
   phrasePerformanceAdjustment,
+  renderPhrasePerformance,
 } from "../src/core/phrase-memory.js";
-import { generateNew, generateSimilar } from "../src/music-engine.js";
+import {
+  createSongFingerprint,
+  encodeMidi,
+  generateNew,
+  generateSimilar,
+} from "../src/music-engine.js";
 
 const STRUCTURE = [
   { id: "intro-1", name: "intro", bars: 2 },
@@ -308,22 +391,19 @@ test("phrase memory contract is deterministic and section-addressable", () => {
   assert.equal(phraseMemoryForSection(first, "outro-1").registerStrategy, "lift");
 });
 
-test("phrase performance adjustment is bounded and only touches turnaround cells", () => {
-  const contract = createPhraseMemoryContract({
-    structure: STRUCTURE,
-    sectionPlans: PLANS,
-    memoryMap: MEMORIES,
-    songDNA: DNA,
-  });
+test("phrase performance stays bounded and is interpreted only at render time", () => {
+  const contract = createPhraseMemoryContract({ structure: STRUCTURE, sectionPlans: PLANS, memoryMap: MEMORIES, songDNA: DNA });
   const resolution = phraseMemoryForSection(contract, "outro-1");
   assert.equal(phrasePerformanceAdjustment(resolution, "melody", "statement"), 0);
   const leadDelta = phrasePerformanceAdjustment(resolution, "melody", "turnaround");
   const bassDelta = phrasePerformanceAdjustment(resolution, "bass", "turnaround");
   assert.ok(leadDelta > 0 && leadDelta <= 6);
   assert.ok(bassDelta >= 0 && bassDelta <= leadDelta);
+  assert.deepEqual(renderPhrasePerformance({ phrasePerformanceDelta: 99, phrasePerformanceDurationScale: 5 }), { velocityDelta: 6, durationScale: 1.28 });
+  assert.deepEqual(renderPhrasePerformance({ phrasePerformanceDelta: -99, phrasePerformanceDurationScale: 0.1 }), { velocityDelta: -6, durationScale: 0.72 });
 });
 
-test("generated songs carry one phrase-memory contract from blueprint through interlock and notes", () => {
+test("generated songs carry phrase memory through blueprint, interlock, and final notes", () => {
   const input = { genre: "rnbSoul", seed: "phase5-phrase-memory", bars: 20, candidateCount: 1 };
   const first = generateNew(input);
   const repeated = generateNew(input);
@@ -332,38 +412,45 @@ test("generated songs carry one phrase-memory contract from blueprint through in
   assert.equal(first.phraseMemory.version, 1);
   assert.equal(first.phraseMemory.familyId, first.songDNA.familyId);
   assert.equal(first.phraseMemory.sections.length, first.structure.length);
-
   for (const section of first.structure) {
     const memory = phraseMemoryForSection(first.phraseMemory, section.id);
     const interlock = first.generationInterlock.sectionContracts.find((entry) => entry.sectionId === section.id);
     assert.ok(memory, `${section.id} should have phrase memory`);
     assert.ok(interlock?.phraseMemory, `${section.id} should publish phrase memory to the interlock`);
     assert.equal(section.intent.phraseSentenceRole, memory.sentenceRole);
-    assert.equal(section.intent.phraseLandingRole, memory.landingRole);
+    assert.equal(section.intent.phraseMemoryLandingRole, memory.landingRole);
     assert.equal(interlock.phraseMemory.transform, memory.transform);
   }
-
-  const tagged = first.tracks.flatMap((track) => track.notes)
-    .filter((note) => note.phraseMemoryRole && note.phraseMemoryTransform);
-  assert.ok(tagged.length > 0, "rendered notes should retain phrase-memory metadata");
+  const tagged = first.tracks.flatMap((track) => track.notes).filter((note) => note.phraseMemoryRole && note.phraseMemoryTransform);
+  assert.ok(tagged.length > 0, "final notes should retain phrase-memory metadata");
   assert.ok(tagged.every((note) => !Number.isFinite(note.phrasePerformanceDelta) || Math.abs(note.phrasePerformanceDelta) <= 6));
-
+  assert.ok(tagged.every((note) => !Number.isFinite(note.phrasePerformanceDurationScale) || (note.phrasePerformanceDurationScale >= 0.72 && note.phrasePerformanceDurationScale <= 1.28)));
   const finalSection = first.structure.at(-1);
   const finalMemory = phraseMemoryForSection(first.phraseMemory, finalSection.id);
-  const finalLeadLandings = first.tracks.find((track) => track.id === "melody").notes
-    .filter((note) => note.phraseBoundary >= finalSection.endBeat - 0.05);
+  const finalLeadLandings = first.tracks.find((track) => track.id === "melody").notes.filter((note) => note.phraseBoundary >= finalSection.endBeat - 0.05);
   assert.ok(finalLeadLandings.length > 0, "the final lead phrase should expose a resolved landing");
-  assert.equal(finalLeadLandings.at(-1).phraseLandingRole, finalMemory.landingRole);
+  assert.equal(finalLeadLandings.at(-1).phraseMemoryLandingRole, finalMemory.landingRole);
   assert.equal(finalLeadLandings.at(-1).phraseMemoryRole, finalMemory.sentenceRole);
+});
+
+test("phrase metadata preserves composition identity while changing MIDI rendering", () => {
+  const song = generateNew({ genre: "pop", seed: "phase5-render-boundary", bars: 16, candidateCount: 1 });
+  const rendered = structuredClone(song);
+  const plain = structuredClone(song);
+  const renderedNote = rendered.tracks.find((track) => track.id === "melody")?.notes?.[0];
+  const plainNote = plain.tracks.find((track) => track.id === "melody")?.notes?.[0];
+  assert.ok(renderedNote && plainNote);
+  renderedNote.phrasePerformanceDelta = 6;
+  renderedNote.phrasePerformanceDurationScale = 1.28;
+  delete plainNote.phrasePerformanceDelta;
+  delete plainNote.phrasePerformanceDurationScale;
+  assert.deepEqual(createSongFingerprint(rendered), createSongFingerprint(plain));
+  assert.notDeepEqual(encodeMidi(rendered), encodeMidi(plain));
 });
 
 test("More like this preserves phrase-memory family identity without cloning the song", () => {
   const current = generateNew({ genre: "neoSoul", seed: "phase5-family-base", bars: 16, candidateCount: 1 });
-  const related = generateSimilar(current, {
-    seed: "phase5-family-related",
-    similarity: 0.88,
-    candidateCount: 1,
-  });
+  const related = generateSimilar(current, { seed: "phase5-family-related", similarity: 0.88, candidateCount: 1 });
   assert.equal(related.phraseMemory.familyId, current.phraseMemory.familyId);
   assert.equal(related.phraseMemory.familyId, related.songDNA.familyId);
   assert.notEqual(related.id, current.id);
@@ -371,4 +458,4 @@ test("More like this preserves phrase-memory family identity without cloning the
 });
 ''')
 
-print("Integrated Phase 5 phrase memory into blueprint, interlock, phrase resolution, and performance metadata.")
+print("Integrated Phase 5 as critic-neutral intent metadata with shared preview/MIDI performance rendering.")
