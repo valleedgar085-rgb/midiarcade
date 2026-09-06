@@ -1,7 +1,12 @@
 // Phase 3 permanent regression coverage for groove intelligence and compatibility contracts.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { evaluateSongCandidate, evaluateSongReleaseGate, generateNew } from "../src/music-engine.js";
+import {
+  evaluateSongCandidate,
+  evaluateSongReleaseGate,
+  generateNew,
+  generateSimilar,
+} from "../src/music-engine.js";
 
 const TARGET_GENRES = ["rnbSoul", "techno", "trap", "drumBass", "reggaeton", "afrobeats"];
 const GROOVE_MEMORY_GENRES = [...TARGET_GENRES, "house"];
@@ -21,6 +26,15 @@ function criticBarSignatures(song) {
     .filter(Boolean);
 }
 
+function beatPhase(value) {
+  return ((value % 1) + 1) % 1;
+}
+
+function phaseDelta(left, right) {
+  const difference = Math.abs(left - right);
+  return Math.min(difference, 1 - difference);
+}
+
 test("phase 3 groove intelligence is deterministic and leaves bounded genre-native development", () => {
   for (const genre of TARGET_GENRES) {
     const options = { genre, seed: `phase3-groove-test:${genre}`, bars: 16, candidateCount: 1 };
@@ -32,7 +46,7 @@ test("phase 3 groove intelligence is deterministic and leaves bounded genre-nati
     const developed = drums.filter((note) => note.rhythmicFeature === "phase3-groove-development");
     assert.ok(developed.length >= 4, `${genre} should develop multiple bars without flooding the groove`);
     assert.ok(developed.length <= 20, `${genre} development must remain bounded`);
-    assert.ok(developed.every((note) => note.velocity >= 1 && note.velocity <= 127));
+    assert.ok(developed.every((note) => note.velocity >= 1 && note.velocity <= 120));
   }
 });
 
@@ -56,6 +70,8 @@ test("phase 3 groove memory preserves transition contracts and avoids adjacent c
     const adjacentCopies = signatures.slice(1).filter((signature, index) => signature === signatures[index]);
 
     assert.ok(recalls.length > 0, `${genre} should retain at least one canonical groove-memory recall`);
+    assert.ok(recalls.every((note) => note.connectionId), `${genre} recalled groove notes must retain target-section interlock metadata`);
+    assert.ok(recalls.every((note) => note.velocity <= 120), `${genre} recalled groove notes must honor the engine velocity ceiling`);
     assert.equal(adjacentCopies.length, 0, `${genre} must not create adjacent cloned drum bars`);
     assert.deepEqual(song.finalAssembly?.checks, {
       sectionCoverage: true,
@@ -64,4 +80,31 @@ test("phase 3 groove memory preserves transition contracts and avoids adjacent c
     }, `${genre} final assembly safety must remain complete`);
     assert.equal(release.passed, true, `${genre} must remain release-safe after groove-memory recall`);
   }
+});
+
+test("targeted Similar drum rerolls preserve the retained Trap bass contract through critic repair", () => {
+  const current = generateNew({
+    genre: "trap",
+    scale: "harmonicMinor",
+    seed: "phase3-targeted-base",
+    bars: 8,
+    density: 0.8,
+    variation: 0.58,
+    humanize: 0,
+  });
+  const bass = current.tracks.find((track) => track.id === "bass");
+  assert.ok(bass?.notes.length);
+
+  const rerolled = generateSimilar(current, {
+    seed: "phase3-targeted-drums",
+    targetTrack: "drums",
+    contextTracks: { bass },
+  });
+  const kicks = rerolled.tracks.find((track) => track.id === "drums")?.notes
+    .filter((note) => note.pitch === 36) ?? [];
+  const interaction = bass.notes.filter((note) => kicks.some((kick) => (
+    phaseDelta(beatPhase(note.start), beatPhase(kick.start)) <= 0.250001
+  ))).length / bass.notes.length;
+
+  assert.ok(interaction >= 0.85, `retained bass interaction fell to ${interaction}`);
 });
