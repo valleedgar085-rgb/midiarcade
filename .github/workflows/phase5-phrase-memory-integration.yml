@@ -1,0 +1,49 @@
+name: Integrate Phase 5 Phrase Memory
+
+on:
+  push:
+    branches:
+      - phase-5-phrase-performance-intelligence
+    paths:
+      - .github/workflows/phase5-phrase-memory-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out Phase 5 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-5-phrase-performance-intelligence
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Integrate phrase memory elegantly
+        run: python scripts/phase5-integrate-phrase-memory.py
+      - name: Verify focused phrase contracts
+        run: |
+          node --check src/core/phrase-memory.js
+          node --check src/music-engine.js
+          node --test tests/phrase-memory-intelligence.test.mjs
+          node --test --test-name-pattern="song blueprint|musical returns|targeted Similar|New idea hard-rejects|phrase" tests/music-engine.test.mjs
+      - name: Run complete production quality gate
+        run: npm run quality
+      - name: Run Music Quality Lab
+        run: npm run quality:music
+      - name: Commit permanent Phase 5 integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/phase5-phrase-memory-integration.yml scripts/phase5-integrate-phrase-memory.py
+          git add src/music-engine.js tests/phrase-memory-intelligence.test.mjs
+          git commit -m "Integrate phrase memory and performance intelligence"
+          git push origin HEAD:phase-5-phrase-performance-intelligence
