@@ -9,6 +9,7 @@ import {
 import {
   createSongFingerprint,
   encodeMidi,
+  evaluateSongCandidate,
   generateNew,
   generateSimilar,
 } from "../src/music-engine.js";
@@ -107,6 +108,52 @@ test("phrase metadata preserves composition identity while changing MIDI renderi
   delete plainNote.phrasePerformanceDurationScale;
   assert.deepEqual(createSongFingerprint(rendered), createSongFingerprint(plain));
   assert.notDeepEqual(encodeMidi(rendered), encodeMidi(plain));
+});
+
+test("Phrase Memory remains critic-neutral on the repair reconciliation seed", () => {
+  const input = {
+    seed: "repair-reconcile-1",
+    bars: 8,
+    genre: "jazz",
+    energy: 0.05,
+    complexity: 0.05,
+  };
+  const song = generateNew(input);
+  assert.equal(song.meta.scoreDetails.criticRepair.selectedFromRepair, true);
+  assert.equal(song.generationInterlock.reconciliation?.phase, 40);
+  assert.ok(song.phraseMemory?.sections?.length === song.structure.length);
+
+  const withoutPhraseMetadata = structuredClone(song);
+  delete withoutPhraseMetadata.phraseMemory;
+  delete withoutPhraseMetadata.songBlueprint.phraseMemory;
+  for (const section of withoutPhraseMetadata.structure ?? []) {
+    if (!section.intent) continue;
+    delete section.intent.phraseSentenceRole;
+    delete section.intent.phraseMemoryLandingRole;
+    delete section.intent.phraseMemoryTransform;
+    delete section.intent.phraseRegisterStrategy;
+  }
+  for (const contract of withoutPhraseMetadata.generationInterlock?.sectionContracts ?? []) {
+    delete contract.phraseMemory;
+  }
+  for (const track of withoutPhraseMetadata.tracks ?? []) {
+    for (const note of track.notes ?? []) {
+      delete note.phraseMemoryRole;
+      delete note.phraseMemoryTransform;
+      delete note.phraseMemoryLandingRole;
+      delete note.phraseMemorySourceSectionId;
+      delete note.phraseRegisterStrategy;
+      delete note.phraseRecallStrength;
+      delete note.phrasePerformanceDelta;
+      delete note.phrasePerformanceDurationScale;
+    }
+  }
+
+  assert.deepEqual(
+    evaluateSongCandidate(song),
+    evaluateSongCandidate(withoutPhraseMetadata),
+    "Phrase Memory metadata must never change critic scoring or repair selection inputs",
+  );
 });
 
 test("More like this preserves phrase-memory family identity without cloning the song", () => {
