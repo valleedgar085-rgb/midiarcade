@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  previewGraphBudget,
   previewRuntimeProfile,
   previewVoiceFeatures,
   previewVoicePriority,
@@ -21,17 +22,40 @@ test("Android preview uses a smaller low-latency scheduling graph with next-beat
   assert.ok(profile.maxScheduledVoices <= 48, "Android must keep the preview graph inside the constrained voice budget");
 });
 
-test("desktop preview keeps the full synthesis profile", () => {
+test("constrained Android DSP budget removes expensive graph layers without muting ambience", () => {
+  const profile = previewRuntimeProfile({ userAgent: "Android" });
+  const budget = previewGraphBudget(profile);
+  assert.equal(budget.saturation, false);
+  assert.equal(budget.oversample, "none");
+  assert.ok(budget.reverbSeconds <= 1.2);
+  assert.equal(budget.reverbChannels, 1);
+  assert.ok(budget.reverbReturnScale < 1);
+  assert.ok(budget.delayFeedback < 0.18);
+  assert.ok(budget.delayReturnScale < 1);
+  assert.equal(budget.preserveKickClick, false);
+  assert.equal(budget.preserveSnareSnap, false);
+  assert.equal(budget.filterMotion, false);
+  assert.ok(budget.sendFloor >= 0.04);
+  assert.ok(budget.masterFadeSeconds >= 0.025);
+});
+
+test("desktop preview keeps the full synthesis and DSP profile", () => {
   const profile = previewRuntimeProfile({ userAgent: "Mozilla/5.0 (X11; Linux x86_64)", hardwareConcurrency: 12, deviceMemory: 16 });
+  const budget = previewGraphBudget(profile);
   assert.equal(profile.mode, "full");
   assert.equal(profile.lookAheadSeconds, 0.85);
   assert.equal(profile.maxScheduledVoices, 96);
+  assert.equal(budget.saturation, true);
+  assert.equal(budget.oversample, "4x");
+  assert.equal(budget.reverbSeconds, 2.2);
+  assert.equal(budget.reverbChannels, 2);
+  assert.equal(budget.filterMotion, true);
 });
 
-test("constrained preview preserves rich lead and bass while thinning backing voices", () => {
+test("constrained preview preserves lead and bass body while removing transient multipliers", () => {
   const profile = previewRuntimeProfile({ userAgent: "Android" });
-  assert.deepEqual(previewVoiceFeatures("melody", profile), { layer: true, transient: true, sub: false });
-  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: true, sub: true });
+  assert.deepEqual(previewVoiceFeatures("melody", profile), { layer: true, transient: false, sub: false });
+  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: false, sub: true });
   assert.deepEqual(previewVoiceFeatures("chords", profile), { layer: false, transient: false, sub: false });
   assert.deepEqual(previewVoiceFeatures("pad", profile), { layer: false, transient: false, sub: false });
 });
