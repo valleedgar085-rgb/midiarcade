@@ -12,6 +12,12 @@ import {
   phraseLandingRole,
 } from "./core/phrase-architecture.js";
 import {
+  createPhraseMemoryContract,
+  phraseMemoryForSection,
+  phrasePerformanceAdjustment,
+  renderPhrasePerformance,
+} from "./core/phrase-memory.js";
+import {
   createSongDNA as createDeterministicSongDNA,
 } from "./core/song-dna.js";
 
@@ -1994,6 +2000,12 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     songDNA,
   );
   const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source);
+  const phraseMemory = createPhraseMemoryContract({
+    structure,
+    sectionPlans,
+    memoryMap,
+    songDNA,
+  });
   return {
     version: 6,
     narrative: { id: narrative.id, label: narrative.label },
@@ -2026,6 +2038,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     orchestrationMatrix,
     producerIntent,
     memoryMap,
+    phraseMemory,
   };
 }
 
@@ -2035,6 +2048,7 @@ function applySongBlueprint(structure, blueprint) {
   const outgoing = new Map((blueprint?.transitions ?? []).map((transition) => [transition.fromSectionId, transition]));
   const orchestration = new Map((blueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const memories = new Map((blueprint?.memoryMap ?? []).map((entry) => [entry.sectionId, entry]));
+  const phraseMemories = new Map((blueprint?.phraseMemory?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   const dnaSections = new Map((blueprint?.songDNA?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   return structure.map((section) => {
     const plan = plans.get(section.id);
@@ -2055,6 +2069,10 @@ function applySongBlueprint(structure, blueprint) {
         transitionOut: outgoing.get(section.id)?.type ?? null,
         featuredTrack: orchestration.get(section.id)?.featuredTrack ?? null,
         memoryRelationship: memories.get(section.id)?.relationship ?? "statement",
+        phraseSentenceRole: phraseMemories.get(section.id)?.sentenceRole ?? "statement",
+        phraseMemoryLandingRole: phraseMemories.get(section.id)?.landingRole ?? null,
+        phraseMemoryTransform: phraseMemories.get(section.id)?.transform ?? "statement",
+        phraseRegisterStrategy: phraseMemories.get(section.id)?.registerStrategy ?? "preserve",
         songDNADevelopmentSeed: dnaSections.get(section.id)?.developmentSeed ?? null,
       },
     };
@@ -5686,6 +5704,16 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
       ...(note.phraseRole ? { phraseRole: note.phraseRole } : {}),
       ...(note.phraseCadenceRole ? { phraseCadenceRole: note.phraseCadenceRole } : {}),
+      ...(note.phraseMemoryRole ? { phraseMemoryRole: note.phraseMemoryRole } : {}),
+      ...(note.phraseMemoryTransform ? { phraseMemoryTransform: note.phraseMemoryTransform } : {}),
+      ...(note.phraseMemoryLandingRole ? { phraseMemoryLandingRole: note.phraseMemoryLandingRole } : {}),
+      ...(note.phraseMemorySourceSectionId ? { phraseMemorySourceSectionId: note.phraseMemorySourceSectionId } : {}),
+      ...(note.phraseRegisterStrategy ? { phraseRegisterStrategy: note.phraseRegisterStrategy } : {}),
+      ...(Number.isFinite(note.phraseRecallStrength) ? { phraseRecallStrength: round(note.phraseRecallStrength) } : {}),
+      ...(Number.isFinite(note.phrasePerformanceDelta) ? { phrasePerformanceDelta: note.phrasePerformanceDelta } : {}),
+      ...(Number.isFinite(note.phrasePerformanceDurationScale) ? {
+        phrasePerformanceDurationScale: round(note.phrasePerformanceDurationScale),
+      } : {}),
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
@@ -7397,6 +7425,7 @@ function createGenerationInterlockPlan(
   );
   const sectionContracts = structure.map((section) => {
     const plan = blueprintPlanForSection(songBlueprint, section);
+    const phraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
     const sectionHarmony = harmony.filter((event) => (
       event.start >= section.startBeat - 1e-6 && event.start < section.endBeat - 1e-6
     ));
@@ -7421,6 +7450,7 @@ function createGenerationInterlockPlan(
       featuredTrack: orchestration.get(section.id)?.featuredTrack ?? "melody",
       performanceFeel: performanceProfile?.feel?.id ?? "balanced",
       transitionOut: outgoing.get(section.id)?.type ?? null,
+      phraseMemory: phraseMemory ? clone(phraseMemory) : null,
       bars,
     };
   });
@@ -7484,6 +7514,10 @@ function applyGenerationInterlocks(
       const accentBeat = bar * barBeats + finite(barContract?.accent, 0);
       const ensembleAccent = Math.abs(note.start - accentBeat) <= 0.065;
       const phraseRole = barContract?.role ?? "statement";
+      const phraseMemoryDelta = phrasePerformanceAdjustment(contract.phraseMemory, trackId, phraseRole);
+      const phraseMemoryDurationScale = contract.phraseMemory && phraseRole === "turnaround"
+        ? clamp(finite(contract.phraseMemory.performance?.durationScale, 1), 0.72, 1.28)
+        : 1;
       const phraseDynamic = {
         statement: 1,
         answer: 0.97,
@@ -7511,6 +7545,18 @@ function applyGenerationInterlocks(
         connectionRole: contract.role,
         sectionPatternId: `${contract.motifId}:${contract.role}`,
         phraseRole,
+        ...(contract.phraseMemory ? {
+          phraseMemoryRole: contract.phraseMemory.sentenceRole,
+          phraseMemoryTransform: contract.phraseMemory.transform,
+          phraseMemoryLandingRole: contract.phraseMemory.landingRole,
+          phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
+          phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
+          phraseRecallStrength: contract.phraseMemory.recallStrength,
+        } : {}),
+        ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
+        ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
+          phrasePerformanceDurationScale: round(phraseMemoryDurationScale),
+        } : {}),
         ...(ensembleAccent ? { ensembleAccent: true } : {}),
       };
     }),
@@ -7566,6 +7612,7 @@ function applyPhraseResolutions(
   const barBeats = beatsPerBar(config);
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
+    const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
     const phraseBars = clamp(
       Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
       2,
@@ -7638,6 +7685,14 @@ function applyPhraseResolutions(
       landing.phraseCadenceRole = landingRole;
       landing.phraseBoundary = round(boundary);
       landing.articulationIntent = landingProfile.articulation;
+      if (sectionPhraseMemory) {
+        landing.phraseMemoryRole = sectionPhraseMemory.sentenceRole;
+        landing.phraseMemoryTransform = sectionPhraseMemory.transform;
+        landing.phraseMemoryLandingRole = sectionPhraseMemory.landingRole;
+        landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
+        landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
+        landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
+      }
     }
   }
   return result;
@@ -8412,6 +8467,7 @@ function compose(config, options = {}) {
     arrangementTransitions: clone(songBlueprint.transitions),
     orchestrationMatrix: clone(songBlueprint.orchestrationMatrix),
     memoryMap: clone(songBlueprint.memoryMap),
+    phraseMemory: clone(songBlueprint.phraseMemory),
     producerPass: produced.report,
     generationPhases: [
       { phase: 7, id: "dynamic-orchestration", status: "complete" },
@@ -10541,11 +10597,17 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     ), 0.65, 1.4);
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
+      const phrasePerformance = renderPhrasePerformance(note);
       const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
-      const velocity = clamp(Math.round(finite(note.velocity, 90) * velocityScale), 1, 127);
+      const velocity = clamp(Math.round(
+        (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+      ), 1, 127);
       const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
       const offTick = clamp(
-        Math.max(onTick + 1, Math.round((finite(note.start, 0) + finite(note.duration, 0.25) * gateScale) * ppq)),
+        Math.max(onTick + 1, Math.round((
+          finite(note.start, 0)
+          + finite(note.duration, 0.25) * gateScale * phrasePerformance.durationScale
+        ) * ppq)),
         1,
         totalTicks,
       );

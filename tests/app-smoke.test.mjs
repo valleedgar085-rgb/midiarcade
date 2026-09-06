@@ -96,6 +96,12 @@ test("preview transitions and the persistent instrument spotlight stay determini
   );
 });
 
+test("phrase performance is interpreted at the preview boundary", () => {
+  assert.match(appSource, /renderPhrasePerformance\(note\)/);
+  assert.match(appSource, /phrasePerformance\.durationScale/);
+  assert.match(appSource, /phrasePerformance\.velocityDelta/);
+});
+
 test("smart performance mix stays bounded, comparable, and user-directed", () => {
   const song = { meta: { genre: "house", tempo: 128 }, characteristicVoice: { trackId: "bass" } };
   const directed = normalizeMixAssistant({ enabled: true, spotlightTrack: "melody", spotlightIntensity: 92 });

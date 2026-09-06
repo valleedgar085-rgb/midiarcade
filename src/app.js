@@ -21,6 +21,7 @@ import { createGenerationExecutor } from "./core/generation-executor.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -4073,7 +4074,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     return trackNotes(track).map((note) => {
       const startBeat = Math.max(0, noteStart(note));
       const durationBeats = Math.max(0.01, noteDuration(note));
-      const audibleDurationBeats = durationBeats * clamp(gateScale, 0.65, 1.4);
+      const phrasePerformance = renderPhrasePerformance(note);
+      const audibleDurationBeats = durationBeats
+        * clamp(gateScale, 0.65, 1.4)
+        * phrasePerformance.durationScale;
       const noteExpressionCurve = expressionCurveBetween(automation, startBeat, startBeat + audibleDurationBeats);
       const expressionCurve = (id === "drums" ? noteExpressionCurve.slice(0, 1) : noteExpressionCurve)
         .map((point) => ({
@@ -4083,7 +4087,11 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         }));
       const expressionStart = expressionCurve[0]?.value ?? 1;
       const expressionEnd = expressionCurve.at(-1)?.value ?? expressionStart;
-      const baseVelocity = clamp(noteVelocity(note) * velocityScale, 1, 127);
+      const baseVelocity = clamp(
+        (noteVelocity(note) + phrasePerformance.velocityDelta) * velocityScale,
+        1,
+        127,
+      );
       return {
         id,
         oneShotKitId,
