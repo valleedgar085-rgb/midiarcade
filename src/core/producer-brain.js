@@ -137,12 +137,20 @@ export function createProducerBrainPlan(config = {}, {
       confidence: round(resolvedTaste.confidence),
       genreAffinity: round(resolvedTaste.genreAffinity),
       rejectionPressure: round(resolvedTaste.rejectionPressure),
+      learnedEnergy: resolvedTaste.energy == null ? null : round(resolvedTaste.energy),
+      learnedComplexity: resolvedTaste.complexity == null ? null : round(resolvedTaste.complexity),
+      learnedVariation: resolvedTaste.variation == null ? null : round(resolvedTaste.variation),
     }),
     priorities,
     qualityIntent,
   });
 }
 
+/**
+ * Convert producer intent into the existing engine knobs. This deliberately
+ * preserves explicit user/benchmark controls and does not change executor
+ * result shapes or bypass the engine's critic and key-safety contracts.
+ */
 export function applyProducerBrainConfig(config = {}, options = {}) {
   const source = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
   const plan = createProducerBrainPlan(source, options);
@@ -158,36 +166,4 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     out.candidatesPerVariation = plan.search.candidatesPerVariation;
   }
   return out;
-}
-
-function decorateSong(song, plan, variationIndex = null) {
-  if (!song || typeof song !== "object") return song;
-  const direction = song.variationSet?.direction?.id ?? null;
-  return {
-    ...song,
-    meta: {
-      ...(song.meta ?? {}),
-      producerBrain: variationIndex == null
-        ? plan
-        : {
-          ...plan,
-          variationSelection: Object.freeze({
-            index: variationIndex,
-            direction,
-            candidatesAuditioned: song.variationSet?.candidatesAuditioned ?? plan.search.candidatesPerVariation,
-          }),
-        },
-    },
-  };
-}
-
-/** Attach the exact brain plan used for a request to the committed result. */
-export function decorateProducerBrainResult(result, plan) {
-  if (!plan || !result || typeof result !== "object") return result;
-  const decorated = { ...result, producerBrain: plan };
-  if (result.song) decorated.song = decorateSong(result.song, plan);
-  if (Array.isArray(result.variations)) {
-    decorated.variations = result.variations.map((song, index) => decorateSong(song, plan, index));
-  }
-  return decorated;
 }
