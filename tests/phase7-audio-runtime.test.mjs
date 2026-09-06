@@ -29,6 +29,17 @@ test("Phase 7 wires runtime graph budgets into the real PreviewPlayer", () => {
   assert.match(appSource, /this\.previewBudget\.preserveSnareSnap/);
 });
 
+test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android audio", () => {
+  const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  assert.match(appSource, /document\.visibilityState === "hidden"/);
+  assert.match(appSource, /this\.position = this\.currentSongTime\(\)/);
+  assert.match(appSource, /this\.clearTimers\(\)/);
+  assert.match(appSource, /this\.clearScheduledAudio\(\)/);
+  assert.match(appSource, /this\.context\.suspend\(\)\.catch/);
+  assert.match(appSource, /\["suspended", "interrupted"\]\.includes\(this\.context\?\.state\)/);
+  assert.match(appSource, /recoverAudioContext\(this\.context\)/);
+});
+
 test("Phase 7 uses longer click-safe release windows", () => {
   assert.ok(PREVIEW_TRANSITION.stopSeconds >= 0.025);
   assert.ok(PREVIEW_TRANSITION.sourceTailSeconds >= 0.01);
