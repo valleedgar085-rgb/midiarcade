@@ -107,3 +107,37 @@ test("targeted Similar drum rerolls preserve the retained Trap bass contract thr
 
   assert.ok(interaction >= 0.85, `retained bass interaction fell to ${interaction}`);
 });
+
+test("phase 3 clone detection preserves empty bar positions", () => {
+  const song = {
+    bars: 3,
+    meta: { beatsPerBar: 4 },
+    tracks: [{
+      id: "drums",
+      notes: [
+        { pitch: 36, start: 0 },
+        { pitch: 36, start: 8 },
+      ],
+    }],
+  };
+  const signatures = criticBarSignatures(song);
+  assert.deepEqual(signatures, ["36:0", "", "36:0"]);
+  const adjacentCopies = signatures.slice(1).filter((signature, index) => (
+    signature && signatures[index] && signature === signatures[index]
+  ));
+  assert.equal(adjacentCopies.length, 0);
+});
+
+test("phase 3 reports the post-groove final rhythm lock", () => {
+  const song = generateNew({
+    genre: "techno",
+    seed: "phase3-final-rhythm-lock-report",
+    bars: 16,
+    candidateCount: 1,
+  });
+  assert.deepEqual(
+    song.finalMaster?.repairs?.finalRhythmLock,
+    song.finalRhythmLock?.repairs,
+    "final master diagnostics must describe the same post-groove lock exposed by the song",
+  );
+});
