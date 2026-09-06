@@ -32,15 +32,16 @@ copyRecursiveSync(path.join(projectRoot, 'privacy-policy.html'), path.join(wwwDi
 copyRecursiveSync(path.join(projectRoot, 'manifest.webmanifest'), path.join(wwwDir, 'manifest.webmanifest'));
 copyRecursiveSync(path.join(projectRoot, 'assets'), path.join(wwwDir, 'assets'));
 
-const stylesheet = await transform(
+const stylesheetSource = [
   fs.readFileSync(path.join(projectRoot, 'styles.css'), 'utf8'),
-  {
-    loader: 'css',
-    minify: true,
-    target: ['chrome120'],
-    legalComments: 'none',
-  },
-);
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'phase6-brand.css'), 'utf8'),
+].join('\n');
+const stylesheet = await transform(stylesheetSource, {
+  loader: 'css',
+  minify: true,
+  target: ['chrome120'],
+  legalComments: 'none',
+});
 fs.writeFileSync(path.join(wwwDir, 'styles.css'), stylesheet.code);
 
 await build({
