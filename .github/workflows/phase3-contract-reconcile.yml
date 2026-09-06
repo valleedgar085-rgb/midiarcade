@@ -91,9 +91,14 @@ jobs:
             '    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);\n    const maximumAdditions = config.genre === "trap"\n      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))\n      : baseMaximumAdditions;',
             'retained-bass kick budget',
           );
+          replaceOne(
+            '  const tracks = finalGrooveAssembly.tracks;',
+            '  let tracks = finalGrooveAssembly.tracks;\n  if (targetTrack === "drums" && contextTracks.bass?.length) {\n    const finalDrumTrack = tracks.find((track) => track.id === "drums");\n    if (finalDrumTrack) {\n      const fittedFinalDrums = fitDrumsToRetainedBass(\n        finalDrumTrack.notes,\n        contextTracks.bass,\n        config,\n        structure,\n        config.tracks.drums,\n        rootRng.fork("final-drums-retained-bass"),\n      );\n      const finalNotesById = Object.fromEntries(tracks.map((track) => [track.id, track.notes]));\n      finalNotesById.drums = fittedFinalDrums;\n      const reconnectedFinal = applyGenerationInterlocks(\n        finalNotesById,\n        generationInterlock,\n        structure,\n        config,\n        { adjustVelocity: false },\n      );\n      tracks = tracks.map((track) => ({\n        ...track,\n        notes: reconnectedFinal[track.id] ?? track.notes,\n      }));\n    }\n  }',
+            'final retained-bass drum lock',
+          );
 
           fs.writeFileSync(path, source);
-          console.log('Reconciled Phase 3 with velocity, interlock, phrase grammar, targeted rerolls, and dense retained-bass kick fitting.');
+          console.log('Reconciled Phase 3 with final retained-partner drum locking after producer/master transforms.');
           NODE
       - name: Verify four caught regressions and Phase 3 contracts
         run: |
