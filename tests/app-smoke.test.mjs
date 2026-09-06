@@ -502,12 +502,15 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(cleanupGain.disconnected, 1, "downstream nodes must be disconnected with their source");
 
   const boundedPlayer = new app.PreviewPlayer();
-  const boundedSources = Array.from({ length: app.PREVIEW_AUDIO_LIMITS.maxScheduledVoices + 1 }, () => makeAudioNode());
+  boundedPlayer.context = { currentTime: 0 };
+  const runtimeVoiceLimit = boundedPlayer.previewRuntime.maxScheduledVoices;
+  const boundedSources = Array.from({ length: runtimeVoiceLimit + 1 }, () => makeAudioNode());
   boundedSources.forEach((source, index) => {
-    boundedPlayer.registerScheduledVoice([source], [source], { id: "drums" }, index);
+    boundedPlayer.registerScheduledVoice([source], [source], { id: index === 0 ? "melody" : "pad" }, index * 0.05);
   });
-  assert.equal(boundedPlayer.scheduledVoices.size, app.PREVIEW_AUDIO_LIMITS.maxScheduledVoices);
-  assert.equal(boundedSources[0].stopped, 1, "the oldest low-priority voice must be released at the ceiling");
+  assert.equal(boundedPlayer.scheduledVoices.size, runtimeVoiceLimit);
+  assert.equal(boundedSources[0].stopped, 0, "an already-audible lead must survive scheduler pressure");
+  assert.ok(boundedSources.slice(1).some((source) => source.stopped === 1), "a future low-priority voice must yield first");
   boundedPlayer.clearScheduledAudio();
   assert.equal(boundedPlayer.scheduledVoices.size, 0);
 

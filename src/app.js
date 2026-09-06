@@ -22,6 +22,7 @@ import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
+import { previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -4340,6 +4341,11 @@ export class PreviewPlayer {
     this.playing = false;
     this.playRequestGeneration = 0;
     this.scheduledVoices = new Set();
+    this.previewRuntime = previewRuntimeProfile({
+      userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+      hardwareConcurrency: typeof navigator === "undefined" ? 8 : navigator.hardwareConcurrency,
+      deviceMemory: typeof navigator === "undefined" ? 8 : navigator.deviceMemory,
+    });
     this.lastScheduleAt = 0;
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
@@ -4525,7 +4531,7 @@ export class PreviewPlayer {
       this.position = resumePosition;
       this.offset = resumePosition;
       this.startedAt = this.context.currentTime;
-      this.eventIndex = this.events.findIndex((event) => event.time >= resumePosition - PREVIEW_AUDIO_LIMITS.lateEventGraceSeconds);
+      this.eventIndex = this.events.findIndex((event) => event.time >= resumePosition - this.previewRuntime.lateEventGraceSeconds);
       if (this.eventIndex < 0) this.eventIndex = this.events.length;
       this.lastScheduleAt = this.context.currentTime;
       this.schedule();
@@ -4634,7 +4640,7 @@ export class PreviewPlayer {
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
     this.startedAt = this.context.currentTime;
-    this.eventIndex = this.events.findIndex((event) => event.time >= this.offset - PREVIEW_AUDIO_LIMITS.lateEventGraceSeconds);
+    this.eventIndex = this.events.findIndex((event) => event.time >= this.offset - this.previewRuntime.lateEventGraceSeconds);
     if (this.eventIndex < 0) this.eventIndex = this.events.length;
     this.lastScheduleAt = this.context.currentTime;
     this.playing = true;
@@ -4651,7 +4657,7 @@ export class PreviewPlayer {
     }
     $("#playhead").classList.add("visible");
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), PREVIEW_AUDIO_LIMITS.scheduleIntervalMs);
+    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
     this.updateFrame();
     setWorkflowStep(3);
     return true;
@@ -4665,10 +4671,10 @@ export class PreviewPlayer {
     }
     this.lastScheduleAt = this.context.currentTime;
     const currentSongTime = this.offset + (this.context.currentTime - this.startedAt);
-    const horizon = currentSongTime + PREVIEW_AUDIO_LIMITS.lookAheadSeconds;
+    const horizon = currentSongTime + this.previewRuntime.lookAheadSeconds;
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
       const event = this.events[this.eventIndex++];
-      if (event.time >= currentSongTime - PREVIEW_AUDIO_LIMITS.lateEventGraceSeconds) {
+      if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
         const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
         this.scheduleEvent(event, when);
       }
@@ -4676,8 +4682,7 @@ export class PreviewPlayer {
   }
 
   voicePriority(event) {
-    return ({ melody: 6, bass: 5, counterpoint: 4, chords: 3, pad: 3, drums: 2 }[event?.id] || 1)
-      + (event?.spotlight ? 2 : 0);
+    return previewVoicePriority(event?.id, Boolean(event?.spotlight));
   }
 
   registerScheduledVoice(sources, nodes, event, startedAt) {
@@ -4759,10 +4764,11 @@ export class PreviewPlayer {
   }
 
   enforceScheduledVoiceLimit() {
-    while (this.scheduledVoices.size > PREVIEW_AUDIO_LIMITS.maxScheduledVoices) {
-      const victim = [...this.scheduledVoices].sort((left, right) => (
-        left.priority - right.priority || left.startedAt - right.startedAt
-      ))[0];
+    while (this.scheduledVoices.size > this.previewRuntime.maxScheduledVoices) {
+      const victim = selectPreviewVoiceVictim(this.scheduledVoices, {
+        now: this.context?.currentTime ?? 0,
+        maxVoices: this.previewRuntime.maxScheduledVoices,
+      });
       if (!victim) return;
       this.cleanupScheduledVoice(victim, true);
     }
@@ -4950,6 +4956,7 @@ export class PreviewPlayer {
     const sources = [oscillator];
     const nodes = new Set([gain, filter, oscillator, mainLevel]);
     const voice = previewVoice(event.id, event.program, state?.trackSettings?.[event.id]);
+    const voiceFeatures = previewVoiceFeatures(event.id, this.previewRuntime);
     const cutoffScale = clamp(Number(event.cutoff ?? 8000) / 8000, 0.125, 1.75);
     const resonanceScale = 0.65 + clamp(Number(event.resonance ?? 0.2), 0, 1) * 1.75;
     const velocityScale = 0.76 + (clamp(Number(event.velocity ?? 90), 1, 127) / 127) * 0.44;
@@ -5020,7 +5027,7 @@ export class PreviewPlayer {
     oscillator.connect(mainLevel).connect(filter).connect(gain);
     oscillator.start(when);
     oscillator.stop(when + duration + release + 0.02);
-    if (voice.layer) {
+    if (voice.layer && voiceFeatures.layer) {
       const layer = context.createOscillator();
       const layerLevel = context.createGain();
       sources.push(layer);
@@ -5054,7 +5061,7 @@ export class PreviewPlayer {
         lfo.stop(when + duration + release + 0.02);
       }
     }
-    if (voice.transientLevel > 0) {
+    if (voice.transientLevel > 0 && voiceFeatures.transient) {
       const transient = context.createOscillator();
       const transientGain = context.createGain();
       sources.push(transient);
@@ -5076,7 +5083,7 @@ export class PreviewPlayer {
       transient.start(when);
       transient.stop(when + voice.transientDecay + 0.012);
     }
-    if (voice.subLevel > 0 && targetFrequency >= 48) {
+    if (voice.subLevel > 0 && targetFrequency >= 48 && voiceFeatures.sub) {
       const sub = context.createOscillator();
       const subGain = context.createGain();
       sources.push(sub);
