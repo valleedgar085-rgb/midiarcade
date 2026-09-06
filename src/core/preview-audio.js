@@ -19,9 +19,9 @@ const SPOTLIGHT_BY_GENRE = Object.freeze({
 });
 
 export const PREVIEW_TRANSITION = Object.freeze({
-  startSeconds: 0.004,
-  stopSeconds: 0.016,
-  sourceTailSeconds: 0.006,
+  startSeconds: 0.005,
+  stopSeconds: 0.026,
+  sourceTailSeconds: 0.012,
 });
 
 const NOTE_ENVELOPE_LIMITS = Object.freeze({
