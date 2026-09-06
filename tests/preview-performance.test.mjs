@@ -7,7 +7,7 @@ import {
   selectPreviewVoiceVictim,
 } from "../src/core/preview-performance.js";
 
-test("Android preview uses a smaller low-latency scheduling graph", () => {
+test("Android preview uses a smaller low-latency scheduling graph with next-beat cushion", () => {
   const profile = previewRuntimeProfile({
     userAgent: "Mozilla/5.0 (Linux; Android 14)",
     hardwareConcurrency: 8,
@@ -15,7 +15,8 @@ test("Android preview uses a smaller low-latency scheduling graph", () => {
   });
   assert.equal(profile.mode, "constrained");
   assert.equal(profile.scheduleIntervalMs, 45);
-  assert.equal(profile.lookAheadSeconds, 0.42);
+  assert.equal(profile.lookAheadSeconds, 0.55);
+  assert.ok(profile.lookAheadSeconds >= 0.5, "constrained scheduling must still pre-queue the next half-second beat");
   assert.equal(profile.maxScheduledVoices, 48);
 });
 
