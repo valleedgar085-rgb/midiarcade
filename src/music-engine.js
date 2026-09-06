@@ -3979,6 +3979,127 @@ function developDuplicateDrumBars(source, config, structure, settings, rng, groo
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
+function reinforceGrooveMemory(source, config, structure, songBlueprint) {
+  if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
+  const result = source.map((note) => ({ ...note }));
+  const barBeats = beatsPerBar(config);
+  const sectionForBar = (bar) => structure.find((section) => (
+    bar >= section.startBar && bar < section.startBar + section.bars
+  )) ?? structure.at(-1);
+  const transitionBars = new Set();
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    if (from) transitionBars.add(from.startBar + from.bars - 1);
+    if (to) transitionBars.add(to.startBar);
+  }
+  const notesForBar = (bar) => {
+    const start = bar * barBeats;
+    const end = start + barBeats;
+    return result.filter((note) => note.start >= start - 1e-6 && note.start < end - 1e-6);
+  };
+  const isProtectedBar = (bar) => {
+    const section = sectionForBar(bar);
+    const barNotes = notesForBar(bar);
+    if (!section || bar <= 0 || bar >= config.bars - 1) return true;
+    if (bar === section.startBar || transitionBars.has(bar)) return true;
+    return barNotes.some((note) => (
+      note.drumFillId
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.transitionHandoffId
+      || note.rhythmicFeature === "phrase-boundary-roll"
+      || note.rhythmicFeature === "transition-fill"
+    ));
+  };
+  const averageVelocity = (notes) => notes.length
+    ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
+    : 80;
+
+  let recalls = 0;
+  for (let bar = 2; bar < config.bars - 1; bar += 1) {
+    if (isProtectedBar(bar)) continue;
+    const targetSection = sectionForBar(bar);
+    if (!targetSection) continue;
+    const targetRole = bar - targetSection.startBar;
+    const previousSignature = drumBarSignature(result, bar - 1, barBeats);
+
+    // Repeated sections should remember the same interior groove role. Use the
+    // earliest compatible role as the canonical template so later choruses,
+    // drops, verses, etc. sound related instead of continually inventing a new bar.
+    const candidates = [];
+    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
+    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      if (!referenceSection) continue;
+      const sameSection = referenceSection.name === targetSection.name;
+      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
+      if (!sameSection && referenceFamily !== targetFamily) continue;
+      const referenceRole = referenceBar - referenceSection.startBar;
+      if (referenceRole !== targetRole) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = drumBarSignature(result, referenceBar, barBeats);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      candidates.push({ referenceBar, sameSection });
+    }
+    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
+    const referenceBar = candidates[0]?.referenceBar;
+    if (!Number.isInteger(referenceBar)) continue;
+
+    const referenceNotes = notesForBar(referenceBar);
+    const targetNotes = notesForBar(bar);
+    if (!referenceNotes.length || !targetNotes.length) continue;
+    const sourceStart = referenceBar * barBeats;
+    const targetStart = bar * barBeats;
+    const velocityRatio = clamp(
+      averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
+      0.86,
+      1.16,
+    );
+    const replacement = referenceNotes.map((note) => {
+      const {
+        connectionId: _connectionId,
+        transitionFeature: _transitionFeature,
+        transitionHandoffRole: _transitionHandoffRole,
+        transitionHandoffId: _transitionHandoffId,
+        ensembleCadenceRole: _ensembleCadenceRole,
+        sectionId: _sectionId,
+        ...rhythmicNote
+      } = note;
+      return {
+        ...rhythmicNote,
+        start: round(targetStart + round(mod(note.start, barBeats))),
+        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 127),
+        sectionId: targetSection.id,
+        grooveMemoryRecall: true,
+        grooveMemorySourceBar: referenceBar,
+        grooveMemorySectionRole: targetRole,
+      };
+    });
+
+    const targetEnd = targetStart + barBeats;
+    for (let index = result.length - 1; index >= 0; index -= 1) {
+      if (result[index].start >= targetStart - 1e-6 && result[index].start < targetEnd - 1e-6) {
+        result.splice(index, 1);
+      }
+    }
+    result.push(...replacement);
+    recalls += 1;
+  }
+
+  if (!recalls) return source;
+  return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+
+function applyFinalGrooveMemory(tracks, config, structure, songBlueprint) {
+  return tracks.map((track) => track.id === "drums"
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint) }
+    : track);
+}
+
 function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {
   if (!bassNotes?.length || settings.density <= 0.001) return drumNotes;
   const result = drumNotes.map((note) => ({ ...note }));
@@ -8089,7 +8210,33 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  const tracks = finalProducerIntentAudit.tracks;
+  // Phase 3 groove memory runs only after the existing producer/master pipeline
+  // has converged. It recalls matching interior roles from repeated sections,
+  // never transition boundary bars. Bass is re-locked to the surviving kick
+  // pattern, producer intent is re-audited, and final assembly gets the last word.
+  const finalGrooveMemoryTracks = applyFinalGrooveMemory(
+    finalProducerIntentAudit.tracks,
+    config,
+    structure,
+    songBlueprint,
+  );
+  const finalGrooveRhythmLock = lockFinalBassToSurvivingKicks(
+    finalGrooveMemoryTracks,
+    config.genre,
+    totalBeats,
+  );
+  const postGrooveIntentAudit = auditProducerIntentContract(
+    finalGrooveRhythmLock.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalGrooveAssembly = runFinalAssemblyPass(
+    postGrooveIntentAudit.tracks,
+    finalProducerIntentAudit.tracks,
+    structure,
+    songBlueprint,
+  );
+  const tracks = finalGrooveAssembly.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -8098,9 +8245,11 @@ function compose(config, options = {}) {
     songBlueprint,
     {
       featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored,
+        + postIntentAssembly.repairs.featuredAnchorsRestored
+        + finalGrooveAssembly.repairs.featuredAnchorsRestored,
       transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged,
+        + postIntentAssembly.repairs.transitionEventsTagged
+        + finalGrooveAssembly.repairs.transitionEventsTagged,
     },
   );
   const sectionContrast = createSectionContrastReport(
@@ -8176,7 +8325,7 @@ function compose(config, options = {}) {
     rhythmTurnaroundConversation,
     characteristicVoice: characteristicVoice.report,
     producerIntent: clone(songBlueprint.producerIntent),
-    producerIntentReport: finalProducerIntentAudit.report,
+    producerIntentReport: postGrooveIntentAudit.report,
     finalRhythmLock: { status: "complete", repairs: finalRhythmLock.repairs },
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
