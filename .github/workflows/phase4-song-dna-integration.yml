@@ -1,0 +1,50 @@
+name: Integrate Phase 4 Song DNA
+
+on:
+  push:
+    branches:
+      - phase-4-deterministic-song-dna
+    paths:
+      - .github/workflows/phase4-song-dna-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Phase 4 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase-4-deterministic-song-dna
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Integrate deterministic Song DNA
+        run: python scripts/phase4-integrate-song-dna.py
+      - name: Verify Song DNA and producer-brain contracts
+        run: |
+          node --check src/core/song-dna.js
+          node --check src/song-dna.js
+          node --check src/music-engine.js
+          node --test tests/song-dna.test.mjs
+          node --test --test-name-pattern="song blueprint|producer intent|phase 20|phase 40|targeted Similar" tests/music-engine.test.mjs
+      - name: Run complete unit suite
+        run: npm test
+      - name: Run Music Quality Lab
+        run: npm run quality:music
+      - name: Commit Phase 4 integration and remove temporary machinery
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f .github/workflows/phase4-song-dna-integration.yml scripts/phase4-integrate-song-dna.py
+          git add src/music-engine.js tests/music-engine.test.mjs tests/song-dna.test.mjs
+          git commit -m "Integrate deterministic Song DNA into producer brain"
+          git push origin HEAD:phase-4-deterministic-song-dna
