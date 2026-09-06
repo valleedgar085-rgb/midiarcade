@@ -265,8 +265,10 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   );
   assert.match(appSource, /for \(const \[index, point\] of expressionCurve\.slice\(1\)\.entries\(\)\)/, "preview gain must schedule every interior expression point");
   assert.match(appSource, /createConvolver/, "preview audio must include a real ambience bus");
-  assert.match(appSource, /createWaveShaper/, "preview audio must include oversampled saturation");
-  assert.match(appSource, /oversample = "4x"/, "preview saturation must use high-quality oversampling");
+  assert.match(appSource, /createWaveShaper/, "full preview audio must retain the saturation stage");
+  assert.match(appSource, /previewGraphBudget/, "preview audio must resolve a runtime DSP budget");
+  assert.match(appSource, /this\.previewBudget\.saturation/, "constrained playback must be able to bypass saturation");
+  assert.match(appSource, /saturation\.oversample = this\.previewBudget\.oversample/, "oversampling must follow the runtime graph budget");
   assert.match(appSource, /createDelay/, "preview audio must include a tempo-safe stereo space bus");
   assert.match(appSource, /filter\.frequency\.exponentialRampToValueAtTime/, "preview voices must use animated filters");
   assert.match(appSource, /periodicWaveForVoice[\s\S]*?createPeriodicWave/, "instrument timbres must reuse cached harmonic waves");
@@ -458,9 +460,9 @@ test("browser app initializes against the engine contract", async () => {
   fxPlayer.configureSongFx({ genre: "house", bpm: 120 });
   assert.deepEqual(fxCalls, [
     [clubMix.delaySeconds, 3, 0.025],
-    [clubMix.reverbReturn, 3, 0.025],
-    [clubMix.delayReturn, 3, 0.025],
-  ]);
+    [clubMix.reverbReturn * fxPlayer.previewBudget.reverbReturnScale, 3, 0.025],
+    [clubMix.delayReturn * fxPlayer.previewBudget.delayReturnScale, 3, 0.025],
+  ], "song FX returns must respect the active runtime DSP budget");
 
   const timbrePrograms = {
     bass: [32, 33, 34, 35, 36, 38, 39, 43, 87, 88],

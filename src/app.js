@@ -22,7 +22,7 @@ import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
-import { previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -4346,6 +4346,7 @@ export class PreviewPlayer {
       hardwareConcurrency: typeof navigator === "undefined" ? 8 : navigator.hardwareConcurrency,
       deviceMemory: typeof navigator === "undefined" ? 8 : navigator.deviceMemory,
     });
+    this.previewBudget = previewGraphBudget(this.previewRuntime);
     this.lastScheduleAt = 0;
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
@@ -4366,7 +4367,16 @@ export class PreviewPlayer {
       if (typeof window !== "undefined") {
         if (!this.visibilityHandler) {
           this.visibilityHandler = () => {
-            if (document.visibilityState === "visible" && this.playing && this.context?.state === "suspended") {
+            if (document.visibilityState === "hidden" && this.playing && this.context?.state === "running") {
+              this.position = this.currentSongTime();
+              this.offset = this.position;
+              this.startedAt = this.context.currentTime;
+              this.clearTimers();
+              this.clearScheduledAudio();
+              void this.context.suspend().catch(() => {});
+              return;
+            }
+            if (document.visibilityState === "visible" && this.playing && ["suspended", "interrupted"].includes(this.context?.state)) {
               void this.recoverAudioContext(this.context);
             }
           };
@@ -4418,7 +4428,7 @@ export class PreviewPlayer {
       this.audioGraphNodes.add(limiter);
 
       // Soft-clip waveshaper — reduced drive (1.08) for less harshness on phone.
-      if (typeof this.context.createWaveShaper === "function") {
+      if (this.previewBudget.saturation && typeof this.context.createWaveShaper === "function") {
         const saturation = this.context.createWaveShaper();
         const curve = new Float32Array(4096);
         for (let index = 0; index < curve.length; index += 1) {
@@ -4426,7 +4436,7 @@ export class PreviewPlayer {
           curve[index] = Math.tanh(x * 1.08) / Math.tanh(1.08);
         }
         saturation.curve = curve;
-        saturation.oversample = "4x";
+        saturation.oversample = this.previewBudget.oversample;
         this.audioGraphNodes.add(saturation);
         this.master.connect(highpass).connect(warmth).connect(saturation).connect(compressor).connect(limiter).connect(this.context.destination);
       } else {
@@ -4436,8 +4446,8 @@ export class PreviewPlayer {
       // Reverb bus — extended to 2.2 s with smoother exponential decay (2.2 exponent).
       if (typeof this.context.createConvolver === "function") {
         this.reverbBus = this.context.createConvolver();
-        const length = Math.floor(this.context.sampleRate * 2.2);
-        const impulse = this.context.createBuffer(2, length, this.context.sampleRate);
+        const length = Math.floor(this.context.sampleRate * this.previewBudget.reverbSeconds);
+        const impulse = this.context.createBuffer(this.previewBudget.reverbChannels, length, this.context.sampleRate);
         for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
           const data = impulse.getChannelData(channel);
           for (let index = 0; index < length; index += 1) {
@@ -4451,7 +4461,7 @@ export class PreviewPlayer {
         reverbFilter.type = "lowpass";
         reverbFilter.frequency.value = 4600;
         this.reverbReturn = this.context.createGain();
-        this.reverbReturn.gain.value = 0.26;
+        this.reverbReturn.gain.value = 0.26 * this.previewBudget.reverbReturnScale;
         this.reverbBus.connect(reverbFilter).connect(this.reverbReturn).connect(this.master);
         this.audioGraphNodes.add(this.reverbBus);
         this.audioGraphNodes.add(reverbFilter);
@@ -4466,9 +4476,9 @@ export class PreviewPlayer {
         delayFilter.type = "lowpass";
         delayFilter.frequency.value = 4100;
         const feedback = this.context.createGain();
-        feedback.gain.value = 0.18;
+        feedback.gain.value = this.previewBudget.delayFeedback;
         this.delayReturn = this.context.createGain();
-        this.delayReturn.gain.value = 0.12;
+        this.delayReturn.gain.value = 0.12 * this.previewBudget.delayReturnScale;
         this.delayBus.connect(delayFilter);
         delayFilter.connect(feedback).connect(this.delayBus);
         delayFilter.connect(this.delayReturn).connect(this.master);
@@ -4577,8 +4587,8 @@ export class PreviewPlayer {
       else parameter.value = value;
     };
     settle(this.delayBus?.delayTime, profile.delaySeconds);
-    settle(this.reverbReturn?.gain, profile.reverbReturn);
-    settle(this.delayReturn?.gain, profile.delayReturn);
+    settle(this.reverbReturn?.gain, profile.reverbReturn * this.previewBudget.reverbReturnScale);
+    settle(this.delayReturn?.gain, profile.delayReturn * this.previewBudget.delayReturnScale);
     settle(this.trackBuses.get("bass")?.gain, 1);
     return profile;
   }
@@ -4630,7 +4640,7 @@ export class PreviewPlayer {
         const now = this.context.currentTime;
         this.master.gain.cancelScheduledValues(now);
         this.master.gain.setValueAtTime(0.0001, now);
-        this.master.gain.exponentialRampToValueAtTime(0.42, now + 0.015);
+        this.master.gain.exponentialRampToValueAtTime(0.42, now + this.previewBudget.masterFadeSeconds);
       } catch {
         this.master.gain.value = 0.42;
       }
@@ -4886,18 +4896,20 @@ export class PreviewPlayer {
       trackedNodes?.add(panner);
     }
     output.connect(this.trackBusFor(event.id));
-    if (this.reverbBus && Number(event.reverb) > 0) {
+    const reverbSend = clamp(Number(event.reverb) * 0.42 * reverbScale, 0, 0.48);
+    if (this.reverbBus && reverbSend > this.previewBudget.sendFloor) {
       const send = this.context.createGain();
-      send.gain.value = clamp(Number(event.reverb) * 0.42 * reverbScale, 0, 0.48);
+      send.gain.value = reverbSend;
       output.connect(send).connect(this.reverbBus);
       trackedNodes?.add(send);
     }
     const delayAmount = Number.isFinite(Number(event.delaySend))
       ? clamp(Number(event.delaySend), 0, 0.24)
       : ({ bass: 0.018, chords: 0.055, melody: 0.16, counterpoint: 0.2, pad: 0.09 }[event.id] || 0);
-    if (this.delayBus && delayAmount > 0) {
+    const delaySendAmount = delayAmount * clamp(0.35 + Number(event.reverb || 0), 0.35, 1.15);
+    if (this.delayBus && delaySendAmount > this.previewBudget.sendFloor) {
       const delaySend = this.context.createGain();
-      delaySend.gain.value = delayAmount * clamp(0.35 + Number(event.reverb || 0), 0.35, 1.15);
+      delaySend.gain.value = delaySendAmount;
       output.connect(delaySend).connect(this.delayBus);
       trackedNodes?.add(delaySend);
     }
@@ -5097,7 +5109,7 @@ export class PreviewPlayer {
       sub.start(when);
       sub.stop(when + duration + release + 0.02);
     }
-    if (voice.filterMotionDepth > 0 && duration >= 0.35) {
+    if (this.previewBudget.filterMotion && voice.filterMotionDepth > 0 && duration >= 0.35) {
       const motion = context.createOscillator();
       const motionDepth = context.createGain();
       sources.push(motion);
@@ -5150,22 +5162,24 @@ export class PreviewPlayer {
       oscillator.start(when);
       oscillator.stop(when + character.kickDecay + 0.015);
 
-      const click = context.createOscillator();
-      const clickFilter = context.createBiquadFilter();
-      const clickGain = context.createGain();
-      sources.push(click);
-      nodes.add(click);
-      nodes.add(clickFilter);
-      nodes.add(clickGain);
-      click.type = "triangle";
-      click.frequency.setValueAtTime(character.clickPitch, when);
-      click.frequency.exponentialRampToValueAtTime(Math.max(520, character.clickPitch * 0.28), when + 0.018);
-      clickFilter.type = "highpass";
-      clickFilter.frequency.value = Math.max(700, character.clickPitch * 0.28);
-      this.shapeDrumGain(clickGain.gain, character, character.clickLevel * mixGain, 0.026, when);
-      click.connect(clickFilter).connect(clickGain).connect(output);
-      click.start(when);
-      click.stop(when + 0.03);
+      if (this.previewBudget.preserveKickClick) {
+        const click = context.createOscillator();
+        const clickFilter = context.createBiquadFilter();
+        const clickGain = context.createGain();
+        sources.push(click);
+        nodes.add(click);
+        nodes.add(clickFilter);
+        nodes.add(clickGain);
+        click.type = "triangle";
+        click.frequency.setValueAtTime(character.clickPitch, when);
+        click.frequency.exponentialRampToValueAtTime(Math.max(520, character.clickPitch * 0.28), when + 0.018);
+        clickFilter.type = "highpass";
+        clickFilter.frequency.value = Math.max(700, character.clickPitch * 0.28);
+        this.shapeDrumGain(clickGain.gain, character, character.clickLevel * mixGain, 0.026, when);
+        click.connect(clickFilter).connect(clickGain).connect(output);
+        click.start(when);
+        click.stop(when + 0.03);
+      }
 
       const body = context.createOscillator();
       const bodyGain = context.createGain();
@@ -5233,7 +5247,7 @@ export class PreviewPlayer {
       tone.start(when);
       tone.stop(when + 0.14);
 
-      if (character.kind === "snare" || character.kind === "clap") {
+      if (this.previewBudget.preserveSnareSnap && (character.kind === "snare" || character.kind === "clap")) {
         const snap = context.createBufferSource();
         const snapFilter = context.createBiquadFilter();
         const snapGain = context.createGain();
@@ -5343,7 +5357,7 @@ export class PreviewPlayer {
         const now = this.context.currentTime;
         this.master.gain.cancelScheduledValues(now);
         this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
-        this.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.012);
+        this.master.gain.exponentialRampToValueAtTime(0.0001, now + this.previewBudget.masterFadeSeconds);
       } catch { /* ignore */ }
     }
     if (this.context) this.suspendWhenIdle();
