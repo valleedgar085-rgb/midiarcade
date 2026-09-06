@@ -3979,10 +3979,11 @@ function developDuplicateDrumBars(source, config, structure, settings, rng, groo
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
-function reinforceGrooveMemory(source, config, structure, songBlueprint) {
+function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveConductor) {
   if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
   const result = source.map((note) => ({ ...note }));
   const barBeats = beatsPerBar(config);
+  const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, 4);
   const sectionForBar = (bar) => structure.find((section) => (
     bar >= section.startBar && bar < section.startBar + section.bars
   )) ?? structure.at(-1);
@@ -4003,6 +4004,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
     const barNotes = notesForBar(bar);
     if (!section || bar <= 0 || bar >= config.bars - 1) return true;
     if (bar === section.startBar || transitionBars.has(bar)) return true;
+    if (mod(bar - section.startBar, phraseBars) === 0) return true;
     return barNotes.some((note) => (
       note.drumFillId
       || note.transitionFeature
@@ -4021,7 +4023,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
     if (isProtectedBar(bar)) continue;
     const targetSection = sectionForBar(bar);
     if (!targetSection) continue;
-    const targetRole = bar - targetSection.startBar;
+    const targetRole = mod(bar - targetSection.startBar, phraseBars);
     const previousSignature = drumBarSignature(result, bar - 1, barBeats);
 
     // Repeated sections should remember the same interior groove role. Use the
@@ -4037,7 +4039,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
       const sameSection = referenceSection.name === targetSection.name;
       const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
       if (!sameSection && referenceFamily !== targetFamily) continue;
-      const referenceRole = referenceBar - referenceSection.startBar;
+      const referenceRole = mod(referenceBar - referenceSection.startBar, phraseBars);
       if (referenceRole !== targetRole) continue;
       const referenceNotes = notesForBar(referenceBar);
       if (!referenceNotes.length) continue;
@@ -4052,6 +4054,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
     const referenceNotes = notesForBar(referenceBar);
     const targetNotes = notesForBar(bar);
     if (!referenceNotes.length || !targetNotes.length) continue;
+    const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
     const sourceStart = referenceBar * barBeats;
     const targetStart = bar * barBeats;
     const velocityRatio = clamp(
@@ -4062,6 +4065,9 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
     const replacement = referenceNotes.map((note) => {
       const {
         connectionId: _connectionId,
+        connectionRole: _connectionRole,
+        sectionPatternId: _sectionPatternId,
+        phraseRole: _phraseRole,
         transitionFeature: _transitionFeature,
         transitionHandoffRole: _transitionHandoffRole,
         transitionHandoffId: _transitionHandoffId,
@@ -4072,8 +4078,12 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
       return {
         ...rhythmicNote,
         start: round(targetStart + round(mod(note.start, barBeats))),
-        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 127),
+        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 120),
         sectionId: targetSection.id,
+        connectionId: targetConnectionNote?.connectionId ?? `interlock:${targetSection.id}`,
+        ...(targetConnectionNote?.connectionRole ? { connectionRole: targetConnectionNote.connectionRole } : {}),
+        ...(targetConnectionNote?.sectionPatternId ? { sectionPatternId: targetConnectionNote.sectionPatternId } : {}),
+        ...(targetConnectionNote?.phraseRole ? { phraseRole: targetConnectionNote.phraseRole } : {}),
         grooveMemoryRecall: true,
         grooveMemorySourceBar: referenceBar,
         grooveMemorySectionRole: targetRole,
@@ -4094,9 +4104,9 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint) {
   return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
-function applyFinalGrooveMemory(tracks, config, structure, songBlueprint) {
+function applyFinalGrooveMemory(tracks, config, structure, songBlueprint, grooveConductor) {
   return tracks.map((track) => track.id === "drums"
-    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint) }
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint, grooveConductor) }
     : track);
 }
 
@@ -4117,7 +4127,10 @@ function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, setting
       .map((note) => ({ note, desired: desiredForBass(note) }))
       .filter(({ desired }) => desired >= barStart - 1e-6 && desired < barEnd - 0.04)
       .sort((a, b) => b.note.velocity - a.note.velocity || a.desired - b.desired);
-    const maximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
+    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
+    const maximumAdditions = config.genre === "trap"
+      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))
+      : baseMaximumAdditions;
     let additions = 0;
     for (const { note, desired } of candidates) {
       if (additions >= maximumAdditions) break;
@@ -8214,12 +8227,15 @@ function compose(config, options = {}) {
   // has converged. It recalls matching interior roles from repeated sections,
   // never transition boundary bars. Bass is re-locked to the surviving kick
   // pattern, producer intent is re-audited, and final assembly gets the last word.
-  const finalGrooveMemoryTracks = applyFinalGrooveMemory(
-    finalProducerIntentAudit.tracks,
-    config,
-    structure,
-    songBlueprint,
-  );
+  const finalGrooveMemoryTracks = targetTrack
+    ? finalProducerIntentAudit.tracks
+    : applyFinalGrooveMemory(
+      finalProducerIntentAudit.tracks,
+      config,
+      structure,
+      songBlueprint,
+      grooveConductor,
+    );
   const finalGrooveRhythmLock = lockFinalBassToSurvivingKicks(
     finalGrooveMemoryTracks,
     config.genre,
@@ -8236,7 +8252,33 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  const tracks = finalGrooveAssembly.tracks;
+  let tracks = finalGrooveAssembly.tracks;
+  if (targetTrack === "drums" && contextTracks.bass?.length) {
+    const finalDrumTrack = tracks.find((track) => track.id === "drums");
+    if (finalDrumTrack) {
+      const fittedFinalDrums = fitDrumsToRetainedBass(
+        finalDrumTrack.notes,
+        contextTracks.bass,
+        config,
+        structure,
+        config.tracks.drums,
+        rootRng.fork("final-drums-retained-bass"),
+      );
+      const finalNotesById = Object.fromEntries(tracks.map((track) => [track.id, track.notes]));
+      finalNotesById.drums = fittedFinalDrums;
+      const reconnectedFinal = applyGenerationInterlocks(
+        finalNotesById,
+        generationInterlock,
+        structure,
+        config,
+        { adjustVelocity: false },
+      );
+      tracks = tracks.map((track) => ({
+        ...track,
+        notes: reconnectedFinal[track.id] ?? track.notes,
+      }));
+    }
+  }
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -9509,6 +9551,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
 
 function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
   const sourceSong = sourceCandidate.song;
+  const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;
+  const sourceContextTracks = sourceCandidate.contextTracks ?? {};
   const config = normalizeConfig({
     ...configFromSong(sourceSong),
     seed,
@@ -9534,7 +9578,10 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
     ...(performanceRepair || arrangementRepair ? {} : {
       performanceProfile: sourceSong.performanceProfile,
     }),
-    ...(harmonyRepair ? {
+    ...(sourceTargetTrack ? {
+      targetTrack: sourceTargetTrack,
+      contextTracks: sourceContextTracks,
+    } : harmonyRepair ? {
       targetTrack: "bass",
       contextTracks: {
         drums: sourceSong.tracks.find((track) => track.id === "drums"),
@@ -9544,7 +9591,19 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
   const variant = compose(config, options);
   let repaired;
 
-  if (arrangementRepair) {
+  if (sourceTargetTrack) {
+    repaired = clone(sourceSong);
+    repaired.id = variant.id;
+    repaired.seed = variant.seed;
+    repaired.settings = variant.settings;
+    repaired.compositionRoute = variant.compositionRoute;
+    repaired.grooveConductor = variant.grooveConductor;
+    repaired.tracks = replaceSongTracks(
+      sourceSong.tracks,
+      variant.tracks,
+      [sourceTargetTrack],
+    );
+  } else if (arrangementRepair) {
     repaired = variant;
   } else {
     repaired = clone(sourceSong);
@@ -9856,6 +9915,8 @@ function runTargetedCriticRepair(candidates, {
       evaluation,
       novelty,
       repair: song.criticRepair,
+      targetTrack: sourceCandidate.targetTrack ?? null,
+      contextTracks: sourceCandidate.contextTracks ?? null,
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
     };
     candidates.push(candidate);
@@ -9986,6 +10047,7 @@ export function generateSimilar(current, input = {}) {
     );
     const inheritedContext = normalizeContextTracks(current.tracks, config);
     const suppliedContext = normalizeContextTracks(input.contextTracks, config);
+    const targetContextTracks = { ...inheritedContext, ...suppliedContext };
 
     const candidateSong = compose(config, {
       generation: "similar",
@@ -9999,7 +10061,7 @@ export function generateSimilar(current, input = {}) {
       performanceProfile: current.performanceProfile,
       compositionRoute: routeId,
       targetTrack,
-      contextTracks: { ...inheritedContext, ...suppliedContext },
+      contextTracks: targetContextTracks,
     });
 
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
@@ -10010,6 +10072,8 @@ export function generateSimilar(current, input = {}) {
       song: candidateSong,
       evaluation,
       novelty,
+      targetTrack,
+      contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
     });
     if (
