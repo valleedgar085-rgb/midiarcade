@@ -9350,6 +9350,7 @@ function candidateSearchPlan(input = {}) {
     input.candidateCount ?? (thinkingDepth === "deep" ? DEEP_CANDIDATE_COUNT : DEFAULT_CANDIDATE_COUNT),
   );
   const adaptive = input.candidateCount == null && input.adaptiveCandidates !== false;
+  const weaknessAwareSearch = adaptive && input.weaknessAwareSearch !== false;
   const maxCandidateCount = adaptive
     ? Math.min(
       MAX_CANDIDATE_COUNT,
@@ -9367,6 +9368,7 @@ function candidateSearchPlan(input = {}) {
   return {
     thinkingDepth,
     adaptive,
+    weaknessAwareSearch,
     baseCandidateCount,
     maxCandidateCount,
     targetedRepair,
@@ -9385,6 +9387,37 @@ function candidateMeetsAdaptiveTarget(candidate, generation) {
 function candidateReleaseGate(candidate) {
   if (!candidate?.releaseGate) candidate.releaseGate = evaluateSongReleaseGate(candidate?.song, candidate?.evaluation);
   return candidate.releaseGate;
+}
+
+function updateCandidateSearchFocus(search, candidates, generation) {
+  if (!search?.weaknessAwareSearch || candidates.length < search.baseCandidateCount) return null;
+  if (candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation))) {
+    return search.weaknessFocus ?? null;
+  }
+  const sourceCandidate = rankCandidates(candidates)[0];
+  if (!sourceCandidate) return null;
+  const diagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation);
+  if (!diagnosis) return null;
+  const focus = {
+    version: 1,
+    ...diagnosis,
+    sourceCandidate: sourceCandidate.index,
+    observedAfterCandidates: candidates.length,
+  };
+  search.weaknessFocus = focus;
+  const history = Array.isArray(search.weaknessHistory) ? search.weaknessHistory : [];
+  const previous = history[history.length - 1];
+  if (
+    !previous
+    || previous.group !== focus.group
+    || previous.weakestDimension !== focus.weakestDimension
+    || previous.weakestScore !== focus.weakestScore
+    || previous.sourceCandidate !== focus.sourceCandidate
+  ) {
+    history.push(focus);
+  }
+  search.weaknessHistory = history.slice(-4);
+  return focus;
 }
 
 /**
@@ -9875,11 +9908,17 @@ function commitCandidate(candidates, search = {}) {
     candidateSearch: {
       thinkingDepth: search.thinkingDepth ?? "standard",
       adaptive: Boolean(search.adaptive),
+      weaknessAwareSearch: Boolean(search.weaknessAwareSearch),
       baseCandidateCount: finite(search.baseCandidateCount, candidates.length),
       maxCandidateCount: finite(search.maxCandidateCount, candidates.length),
       candidatesEvaluated: candidates.length,
       expandedBy: Math.max(0, composedCandidates - finite(search.baseCandidateCount, composedCandidates)),
       targetReached,
+      focusGroup: search.weaknessFocus?.group ?? null,
+      focusDimension: search.weaknessFocus?.weakestDimension ?? null,
+      focusRoute: search.weaknessFocus?.route ?? null,
+      focusScore: search.weaknessFocus?.weakestScore ?? null,
+      focusHistory: clone(search.weaknessHistory ?? []),
     },
     criticRepair: {
       ...criticRepair,
@@ -10068,10 +10107,10 @@ export function generateNew(input = {}) {
   const search = candidateSearchPlan(input);
   const recentSongs = normalizeRecentSongs(input.recentSongs);
   const candidates = [];
-  const composeCandidate = (index) => {
+  const composeCandidate = (index, preferredRoute = input.compositionRoute) => {
     const seed = candidateSeed(baseSeed, "new", index);
     const config = normalizeConfig({ ...input, seed });
-    const routeId = candidateCompositionRoute(baseSeed, index, input.compositionRoute);
+    const routeId = candidateCompositionRoute(baseSeed, index, preferredRoute);
     const candidateSong = compose(config, {
       generation: "new",
       revision: 0,
@@ -10090,11 +10129,15 @@ export function generateNew(input = {}) {
   };
 
   for (let index = 0; index < search.maxCandidateCount; index += 1) {
-    composeCandidate(index);
-    if (
-      candidates.length >= search.baseCandidateCount
-      && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "new")))
-    ) break;
+    const focus = index >= search.baseCandidateCount
+      ? updateCandidateSearchFocus(search, candidates, "new")
+      : null;
+    composeCandidate(index, input.compositionRoute ?? focus?.route ?? null);
+    if (candidates.length >= search.baseCandidateCount) {
+      const targetReached = candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "new"));
+      if (!search.adaptive || targetReached) break;
+      updateCandidateSearchFocus(search, candidates, "new");
+    }
   }
 
   // A fresh request must never settle for the immediately previous musical
@@ -10135,6 +10178,9 @@ export function generateSimilar(current, input = {}) {
   const candidates = [];
 
   for (let index = 0; index < search.maxCandidateCount; index += 1) {
+    const focus = index >= search.baseCandidateCount
+      ? updateCandidateSearchFocus(search, candidates, "similar")
+      : null;
     const seed = candidateSeed(baseSeed, "similar", index);
     const requestedKitId = input.oneShotKitId ?? input.soundKitId ?? null;
     const previousKitId = current.oneShotKit?.id;
@@ -10158,7 +10204,7 @@ export function generateSimilar(current, input = {}) {
     const routeId = candidateCompositionRoute(
       baseSeed,
       index,
-      input.compositionRoute ?? (targetTrack ? current.compositionRoute?.id : null),
+      input.compositionRoute ?? (targetTrack ? current.compositionRoute?.id : focus?.route ?? null),
     );
     const inheritedContext = normalizeContextTracks(current.tracks, config);
     const suppliedContext = normalizeContextTracks(input.contextTracks, config);
@@ -10191,10 +10237,11 @@ export function generateSimilar(current, input = {}) {
       contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
     });
-    if (
-      candidates.length >= search.baseCandidateCount
-      && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "similar")))
-    ) break;
+    if (candidates.length >= search.baseCandidateCount) {
+      const targetReached = candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "similar"));
+      if (!search.adaptive || targetReached) break;
+      updateCandidateSearchFocus(search, candidates, "similar");
+    }
   }
 
   runTargetedCriticRepair(candidates, {
