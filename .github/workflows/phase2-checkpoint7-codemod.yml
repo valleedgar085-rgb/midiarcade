@@ -1,0 +1,60 @@
+name: Phase 2 Checkpoint 7 Codemod
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - scripts/apply-phase2-checkpoint7.mjs
+      - .github/workflows/phase2-checkpoint7-codemod.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-calibrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply checkpoint 7 precision patch
+        run: node scripts/apply-phase2-checkpoint7.mjs
+      - name: Run focused Producer Brain tests
+        run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs
+      - name: Run expanded repair calibration
+        run: node scripts/benchmark-repair-effectiveness.mjs --seeds 4 --bars 8
+      - name: Enforce checkpoint 7 calibration floor
+        run: |
+          node --input-type=module <<'NODE'
+          import { runRepairEffectivenessBenchmark } from './src/repair-effectiveness-benchmark.js';
+          const seeds = Array.from({ length: 4 }, (_, index) => `repair-cal-${String(index + 1).padStart(2, '0')}`);
+          const report = runRepairEffectivenessBenchmark({ seeds, bars: 8 });
+          const dimension = (id) => report.byDimension.find((entry) => entry.id === id);
+          const phrase = dimension('phraseResolution');
+          const stage = dimension('stageInterlock');
+          if (!phrase || phrase.acceptanceRate < 0.39) throw new Error(`phraseResolution acceptance ${phrase?.acceptanceRate ?? 'missing'} is below 39%`);
+          if (!stage || stage.acceptanceRate < 0.67) throw new Error(`stageInterlock acceptance ${stage?.acceptanceRate ?? 'missing'} is below 67%`);
+          if (report.acceptanceRate < 0.8) throw new Error(`overall repair acceptance ${report.acceptanceRate} is below 80%`);
+          console.log(JSON.stringify({ overall: report.acceptanceRate, phrase, stage }, null, 2));
+          NODE
+      - name: Commit validated checkpoint 7 engine patch
+        run: |
+          if git diff --quiet -- src/music-engine.js; then
+            echo "No validated engine changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js
+          git commit -m "Phase 2: precision cadence and stage interlock repair"
+          git push origin HEAD:phase2/producer-brain-weakness-aware-search
