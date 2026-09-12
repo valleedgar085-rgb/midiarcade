@@ -25,26 +25,29 @@ const TASTE = {
   rejectionPressure: 0.18,
 };
 
-test("producer brain planning is deterministic and uses the deep audition budget", () => {
+test("producer brain planning is deterministic and uses weakness-aware deep audition", () => {
   const config = { seed: "phase8-brain", genre: "neoSoul", thinkingDepth: "deep" };
   const first = createProducerBrainPlan(config, { kind: "new", character: CHARACTER, taste: TASTE });
   const second = createProducerBrainPlan(config, { kind: "new", character: CHARACTER, taste: TASTE });
 
   assert.deepEqual(first, second);
-  assert.equal(first.version, 1);
-  assert.equal(first.id, "producer-brain-v1");
+  assert.equal(first.version, 2);
+  assert.equal(first.id, "producer-brain-v2");
   assert.equal(first.mode, "deep-audition");
   assert.equal(first.search.baseCandidateCount, 6);
   assert.equal(first.search.maxCandidateCount, 10);
   assert.equal(first.search.repairAttempts, 2);
   assert.equal(first.search.wholeSongAuditions, 12);
+  assert.equal(first.search.weaknessAwareSearch, true);
   assert.equal(first.qualityIntent.preserveKeySafety, true);
   assert.equal(first.qualityIntent.preserveCriticCalibration, true);
+  assert.equal(first.qualityIntent.diagnoseWeakestDimension, true);
+  assert.equal(first.qualityIntent.preferSurgicalRepair, true);
   assert.equal(first.qualityIntent.avoidBackToBackIdentity, true);
   assert.ok(first.priorities.length >= 5);
 });
 
-test("explicit candidate budgets remain authoritative and disable automatic expansion", () => {
+test("explicit candidate budgets remain authoritative and disable automatic weakness search", () => {
   const plan = createProducerBrainPlan(
     { candidateCount: 3, thinkingDepth: "deep" },
     { kind: "new", character: CHARACTER, taste: TASTE },
@@ -52,6 +55,7 @@ test("explicit candidate budgets remain authoritative and disable automatic expa
   assert.equal(plan.search.baseCandidateCount, 3);
   assert.equal(plan.search.maxCandidateCount, 3);
   assert.equal(plan.search.adaptive, false);
+  assert.equal(plan.search.weaknessAwareSearch, false);
   assert.equal(plan.search.targetedRepair, false);
   assert.equal(plan.search.repairAttempts, 0);
 });
@@ -71,6 +75,7 @@ test("producer brain config preserves explicit user search controls", () => {
     seed: "manual-budget",
     thinkingDepth: "standard",
     adaptiveCandidates: false,
+    weaknessAwareSearch: false,
     targetedRepair: false,
     repairAttempts: 0,
     candidatesPerVariation: 1,
@@ -78,13 +83,14 @@ test("producer brain config preserves explicit user search controls", () => {
   const result = applyProducerBrainConfig(input, { kind: "songVariations", character: CHARACTER, taste: TASTE });
   assert.equal(result.thinkingDepth, "standard");
   assert.equal(result.adaptiveCandidates, false);
+  assert.equal(result.weaknessAwareSearch, false);
   assert.equal(result.targetedRepair, false);
   assert.equal(result.repairAttempts, 0);
   assert.equal(result.candidatesPerVariation, 1);
   assert.equal(result.producerBrain.mode, "balanced-audition");
 });
 
-test("adaptive generation publishes the producer brain without mutating the caller", () => {
+test("adaptive generation publishes Producer Brain v2 without mutating the caller", () => {
   const input = {
     seed: "phase8-adaptive-integration",
     genre: "funk",
@@ -107,9 +113,11 @@ test("adaptive generation publishes the producer brain without mutating the call
   const result = adaptGenerationConfig(input, { kind: "new" });
 
   assert.deepEqual(input, before);
-  assert.equal(result.producerBrain.version, 1);
+  assert.equal(result.producerBrain.version, 2);
   assert.equal(result.producerBrain.search.baseCandidateCount, 6);
   assert.equal(result.producerBrain.search.maxCandidateCount, 10);
+  assert.equal(result.producerBrain.search.weaknessAwareSearch, true);
+  assert.equal(result.weaknessAwareSearch, true);
   assert.equal(result.producerBrain.qualityIntent.preserveDeterminism, true);
   assert.ok(result.producerBrain.taste.learnedVariation > 0);
 });
@@ -129,8 +137,9 @@ test("executor receives producer orchestration without changing its stable resul
   });
 
   assert.equal(result, expected, "executor must preserve the exact engine result object");
-  assert.equal(received.config.producerBrain.version, 1);
+  assert.equal(received.config.producerBrain.version, 2);
   assert.equal(received.config.producerBrain.search.baseCandidateCount, 6);
+  assert.equal(received.config.weaknessAwareSearch, true);
   assert.equal(received.config.targetedRepair, true);
 });
 
