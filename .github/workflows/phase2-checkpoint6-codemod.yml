@@ -7,6 +7,7 @@ on:
     paths:
       - scripts/apply-phase2-checkpoint6.mjs
       - scripts/fix-phase2-checkpoint6-contract.mjs
+      - scripts/fix-phase2-checkpoint6-harmony.mjs
       - .github/workflows/phase2-checkpoint6-codemod.yml
 
 permissions:
@@ -32,6 +33,7 @@ jobs:
         run: |
           node scripts/apply-phase2-checkpoint6.mjs
           node scripts/fix-phase2-checkpoint6-contract.mjs
+          node scripts/fix-phase2-checkpoint6-harmony.mjs
       - name: Run focused Producer Brain tests
         run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs
       - name: Benchmark repair effectiveness
@@ -45,5 +47,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/music-engine.js
-          git commit -m "Phase 2: localize arrangement harmony and density repair"
+          git commit -m "Phase 2: restore harmony fallback with surgical voicing"
           git push origin HEAD:phase2/producer-brain-weakness-aware-search
