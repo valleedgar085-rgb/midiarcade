@@ -89,6 +89,28 @@ test("precision repair routes transitions and performance while preserving caden
   assert.equal(observed.get("phraseResolution").surgicalAttempted, true);
 });
 
+test("phrase cadence precision preserves the source while whole repair remains a scored fallback", () => {
+  const song = generateNew({
+    genre: "jazz",
+    seed: "repair-cal-02:jazz:sparse",
+    bars: 8,
+    energy: 0.12,
+    complexity: 0.18,
+  });
+  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
+    ?.find((attempt) => attempt.dimension === "phraseResolution");
+
+  assert.ok(entry, "expected the verified seed to expose phrase-resolution repair");
+  assert.equal(entry.repairStrategyId, "phrase-cadence");
+  assert.equal(entry.surgicalAttempted, true);
+  assert.equal(entry.surgicalAccepted, true);
+  assert.equal(entry.wholeAccepted, false);
+  assert.equal(entry.selectedRepairMode, "surgical-window");
+  assert.equal(entry.selectionReason, "accepted-over-rejected");
+  assert.ok(entry.weaknessGain >= 0.5);
+  assert.ok(entry.surgicalWindow?.bars >= 2 && entry.surgicalWindow?.bars <= 8);
+});
+
 test("song-level statistical weaknesses do not consume local surgical repair attempts", () => {
   const globalDimensions = new Set(["memory", "repetition", "drumVariety"]);
   const inputs = [

@@ -9956,12 +9956,15 @@ function reinforceRepairMemory(song, config) {
 function reinforceRepairPhraseResolution(song, config, window) {
   const repaired = clone(song);
   const melodyTrack = repaired.tracks?.find((track) => track.id === "melody");
+  const counterTrack = repaired.tracks?.find((track) => track.id === "counterpoint");
   if (!melodyTrack) return repaired;
   const barBeats = beatsPerBar(config);
+  const tonic = finite(repaired.meta?.keyPc, config?.keyPc ?? 0);
   const sections = (repaired.structure ?? []).filter((section) => (
     !window
     || (section.endBeat > window.startBeat + 1e-6 && section.startBeat < window.endBeat - 1e-6)
   ));
+  let edits = 0;
   for (const section of sections) {
     if (window && window.endBeat < section.endBeat - 0.05) continue;
     const phraseNotes = melodyTrack.notes
@@ -9972,23 +9975,52 @@ function reinforceRepairPhraseResolution(song, config, window) {
     const chord = harmonyAt(repaired.harmony ?? [], landing.start);
     const plan = blueprintPlanForSection(repaired.songBlueprint, section);
     const finalSection = section.id === repaired.structure?.at(-1)?.id;
-    const forceTonic = finalSection || plan?.cadence === "resolve";
-    const pitchClasses = forceTonic
-      ? [finite(repaired.meta?.keyPc, config?.keyPc ?? 0)]
-      : chord?.tones?.length ? chord.tones : [finite(repaired.meta?.keyPc, config?.keyPc ?? 0)];
-    landing.pitch = nearestRepairPitch(landing.pitch, pitchClasses);
-    const minimumDuration = barBeats * 0.38;
-    if (landing.start + minimumDuration > section.endBeat) {
-      landing.start = round(Math.max(section.startBeat, section.endBeat - minimumDuration));
+    const preferTonic = finalSection || plan?.cadence === "resolve";
+    const chordTones = chord?.tones?.length ? chord.tones : [tonic];
+    const pitchClasses = [...new Set(preferTonic ? [tonic, ...chordTones] : [...chordTones, tonic])];
+    const currentDuration = Math.max(0.05, finite(landing.duration, 0.25));
+    const counterNotes = counterTrack?.notes ?? [];
+    const collisionCount = (pitch, duration) => counterNotes.filter((note) => {
+      if (note.start >= landing.start + duration - 1e-6 || landing.start >= note.start + note.duration - 1e-6) return false;
+      return [0, 1, 6, 11].includes(mod(Math.abs(pitch - note.pitch), 12));
+    }).length;
+    const candidates = pitchClasses.map((pitchClass, priority) => {
+      const pitch = nearestRepairPitch(landing.pitch, [pitchClass]);
+      return {
+        pitch,
+        priority,
+        collisions: collisionCount(pitch, currentDuration),
+        distance: Math.abs(pitch - landing.pitch),
+      };
+    }).sort((left, right) => (
+      left.collisions - right.collisions
+      || left.priority - right.priority
+      || left.distance - right.distance
+      || left.pitch - right.pitch
+    ));
+    const chosen = candidates[0];
+    if (chosen && chosen.pitch !== landing.pitch) {
+      landing.pitch = chosen.pitch;
+      edits += 1;
     }
-    landing.duration = round(Math.max(minimumDuration, Math.min(
-      landing.duration,
-      Math.max(minimumDuration, section.endBeat - landing.start),
-    )));
-    landing.resolutionRole = forceTonic ? "tonic-landing" : "chord-landing";
+    const minimumDuration = barBeats * 0.36;
+    const availableDuration = Math.max(0.05, section.endBeat - landing.start);
+    const desiredDuration = Math.max(currentDuration, Math.min(minimumDuration, availableDuration));
+    if (desiredDuration > currentDuration + 1e-6
+      && collisionCount(landing.pitch, desiredDuration) <= collisionCount(landing.pitch, currentDuration)) {
+      landing.duration = round(desiredDuration);
+      edits += 1;
+    }
+    const pitchClass = mod(landing.pitch, 12);
+    landing.resolutionRole = pitchClass === tonic ? "tonic-landing" : "chord-landing";
     landing.phraseBoundary = round(section.endBeat);
     landing.preserveTiming = true;
+    landing.producerRepair = "phrase-cadence-precision";
   }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    cadence: { version: 2, edits, windowId: window?.id ?? null },
+  };
   melodyTrack.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   return repaired;
 }
@@ -11119,10 +11151,22 @@ function runTargetedCriticRepair(candidates, {
       oneShotKitId: sourceCandidate.song.oneShotKit?.id ?? null,
     });
     const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null, surgicalWindow);
+    let surgicalRepairSource = wholeRepairSong;
+    if (surgicalWindow && diagnosis.weakestDimension === "phraseResolution") {
+      surgicalRepairSource = reinforceRepairPhraseResolution(
+        sourceCandidate.song,
+        repairConfig,
+        surgicalWindow,
+      );
+      surgicalRepairSource.id = wholeRepairSong.id;
+      surgicalRepairSource.seed = wholeRepairSong.seed;
+      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
+      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
+    }
     const surgicalSong = surgicalWindow
       ? applySurgicalRepairWindow(
         sourceCandidate.song,
-        wholeRepairSong,
+        surgicalRepairSource,
         repairConfig,
         diagnosis,
         sourceCandidate,
