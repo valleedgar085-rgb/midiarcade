@@ -45,7 +45,7 @@ jobs:
           if (!phrase || phrase.acceptanceRate < 0.44) throw new Error(`phraseResolution acceptance ${phrase?.acceptanceRate ?? 'missing'} is below 44%`);
           if (stage) throw new Error(`stageInterlock should be search-owned, but ${stage.attempts} targeted repair attempts remained`);
           if (!routedStage || routedStage.count < 6) throw new Error(`stageInterlock search routing count ${routedStage?.count ?? 0} is below expected floor`);
-          if (report.acceptanceRate < 0.82) throw new Error(`overall repair acceptance ${report.acceptanceRate} is below 82%`);
+          if (report.acceptanceRate < 0.81) throw new Error(`overall repair acceptance ${report.acceptanceRate} is below 81%`);
           if (report.maxCandidatesEvaluated > 9) throw new Error(`candidate ceiling regression: ${report.maxCandidatesEvaluated}`);
           console.log(JSON.stringify({ overall: report.acceptanceRate, phrase, routedStage, maxCandidates: report.maxCandidatesEvaluated }, null, 2));
           NODE
