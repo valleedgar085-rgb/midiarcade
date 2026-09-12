@@ -9950,12 +9950,6 @@ function commitCandidate(candidates, search = {}) {
         repairSourceCandidate: song.criticRepair?.sourceCandidate ?? null,
         repairAccepted: candidate.repairAccepted ?? null,
         repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
-        repairAccepted: candidate.repairAccepted ?? null,
-        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
-        repairAccepted: candidate.repairAccepted ?? null,
-        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
-        repairAccepted: candidate.repairAccepted ?? null,
-        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
       };
     }),
   };
