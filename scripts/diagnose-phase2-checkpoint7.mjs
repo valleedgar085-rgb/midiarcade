@@ -38,3 +38,9 @@ for (const dimension of focus) {
   console.log(`\n${dimension}: ${entries.filter((row) => row.accepted).length}/${entries.length} accepted`);
   for (const row of entries) console.log(JSON.stringify(row));
 }
+console.log("\nStage interlock routed diagnoses:");
+for (const song of report.songs) {
+  for (const skip of song.skippedGlobalDimensions ?? []) {
+    if (skip.dimension === "stageInterlock") console.log(JSON.stringify({ seed: song.generatedSeed, ...skip }));
+  }
+}
