@@ -9662,6 +9662,9 @@ function targetedRepairTrackIds(sourceCandidate, diagnosis) {
   if (["repetition", "phraseResolution", "registerHealth"].includes(dimension)) return ["melody"];
   if (dimension === "memory") return ["melody", "bass", "counterpoint"];
   if (["separation", "motif"].includes(dimension)) return ["melody", "counterpoint"];
+  if (dimension === "voiceLeading") return ["chords"];
+  if (["harmonic", "harmonicJourney"].includes(dimension)) return ["bass", "chords"];
+  if (dimension === "cadence") return ["bass", "chords", "melody"];
   if (diagnosis?.group === "harmony") return ["bass", "chords", "melody", "counterpoint", "pad"];
   if (diagnosis?.group === "groove") return ["drums", "bass"];
   if (diagnosis?.group === "motif") return ["melody", "counterpoint"];
@@ -9755,6 +9758,21 @@ function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, con
       });
     }
     configPatch.syncopation = clamp(finite(config?.syncopation, 0.5) + (direction > 0 ? 0.03 : -0.02), 0, 1);
+  } else if (["storyArc", "tensionFollow"].includes(dimension)) {
+    id = "arrangement-energy-arc";
+    trackIds = [...TRACK_IDS];
+  } else if (dimension === "voiceLeading") {
+    id = "harmony-voice-leading";
+    trackIds = ["chords"];
+  } else if (dimension === "harmonic") {
+    id = "harmony-foundation";
+    trackIds = ["bass", "chords"];
+  } else if (dimension === "harmonicJourney") {
+    id = "harmony-journey";
+    trackIds = ["bass", "chords"];
+  } else if (dimension === "cadence") {
+    id = "harmony-cadence";
+    trackIds = ["bass", "chords", "melody"];
   } else if (dimension === "groove") {
     const bassLock = clamp(finite(diagnostics.bassLock, 0.5), 0, 1);
     const tighten = bassLock < 0.72;
@@ -10135,10 +10153,215 @@ function rebalanceRepairPerformance(song) {
   return repaired;
 }
 
-function directSpecializedRepairSource(sourceSong, strategy, config) {
+function sectionRepairTarget(song, section, dimension) {
+  const plan = blueprintPlanForSection(song.songBlueprint, section);
+  if (dimension === "tensionFollow") {
+    return clamp(finite(
+      section.plannedTension
+        ?? section.tension
+        ?? section.intent?.tension
+        ?? plan?.tension
+        ?? section.energy,
+      0.5,
+    ), 0, 1);
+  }
+  return clamp(finite(plan?.energy ?? section.energy, 0.5), 0, 1);
+}
+
+function rebalanceRepairArrangementArc(song, dimension) {
+  const repaired = clone(song);
+  const sections = repaired.structure ?? [];
+  if (sections.length < 2) return repaired;
+  const targets = sections.map((section) => sectionRepairTarget(repaired, section, dimension));
+  const center = average(targets, 0.5);
+  let velocityEdits = 0;
+  let densityEdits = 0;
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex];
+    const target = targets[sectionIndex];
+    const notes = (repaired.tracks ?? []).flatMap((track) => (track.notes ?? [])
+      .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+      .map((note) => ({ track, note })));
+    if (!notes.length) continue;
+    const mean = average(notes.map(({ note }) => finite(note.velocity, 80)), 80);
+    const desired = clamp(52 + target * 62, 48, 114);
+    const shift = clamp((desired - mean) * 0.72, -18, 18);
+    for (const { note } of notes) {
+      const next = clamp(Math.round(finite(note.velocity, mean) + shift), 22, 124);
+      if (next !== note.velocity) velocityEdits += 1;
+      note.velocity = next;
+      note.producerRepair = "arrangement-energy-arc";
+    }
+
+    const supportTracks = (repaired.tracks ?? []).filter((track) => ["pad", "chords", "counterpoint"].includes(track.id));
+    if (target > center + 0.07) {
+      const candidates = supportTracks.flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= section.startBeat - 1e-6
+          && note.start < section.endBeat - 1e-6
+          && finite(note.duration, 0) >= 0.5)
+        .map((note) => ({ track, note })))
+        .sort((left, right) => finite(right.note.duration, 0) - finite(left.note.duration, 0));
+      for (const { track, note } of candidates.slice(0, 1)) {
+        const duration = finite(note.duration, 0);
+        const half = round(duration / 2);
+        if (half < 0.12) continue;
+        note.duration = half;
+        track.notes.push({
+          ...clone(note),
+          start: round(note.start + half),
+          duration: round(duration - half),
+          velocity: clamp(Math.round(finite(note.velocity, 80) - 2), 22, 124),
+          producerRepair: "arrangement-energy-arc",
+        });
+        densityEdits += 1;
+      }
+    } else if (target < center - 0.07) {
+      const candidates = supportTracks.flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= section.startBeat - 1e-6
+          && note.start < section.endBeat - 1e-6
+          && !note.resolutionRole
+          && !note.transitionFeature
+          && !note.memoryRole)
+        .map((note) => ({ track, note })))
+        .sort((left, right) => finite(left.note.velocity, 80) - finite(right.note.velocity, 80)
+          || finite(left.note.duration, 0) - finite(right.note.duration, 0));
+      const remove = candidates[0];
+      if (remove && (remove.track.notes?.length ?? 0) > 2) {
+        remove.track.notes = remove.track.notes.filter((note) => note !== remove.note);
+        densityEdits += 1;
+      }
+    }
+  }
+  for (const track of repaired.tracks ?? []) {
+    track.notes?.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    arrangementArc: { version: 1, dimension, velocityEdits, densityEdits },
+  };
+  return repaired;
+}
+
+function rebalanceRepairDensity(song, strategy, window) {
+  const repaired = clone(song);
+  const build = strategy?.id === "density-build";
+  const startBeat = Number.isFinite(Number(window?.startBeat)) ? Number(window.startBeat) : 0;
+  const endBeat = Number.isFinite(Number(window?.endBeat))
+    ? Number(window.endBeat)
+    : finite(repaired.meta?.bars, repaired.bars ?? 1) * finite(repaired.meta?.beatsPerBar, 4);
+  const allowed = new Set(strategy?.trackIds ?? ["chords", "pad", "counterpoint"]);
+  const barsInWindow = Math.max(1, (endBeat - startBeat) / Math.max(1, finite(repaired.meta?.beatsPerBar, 4)));
+  const editBudget = clamp(Math.ceil(barsInWindow * 2), 2, 6);
+  let edits = 0;
+  if (build) {
+    const candidates = (repaired.tracks ?? []).filter((track) => allowed.has(track.id) && track.id !== "bass")
+      .flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= startBeat - 1e-6
+          && note.start < endBeat - 1e-6
+          && finite(note.duration, 0) >= 0.28
+          && !note.transitionFeature)
+        .map((note) => ({ track, note })))
+      .sort((left, right) => finite(right.note.duration, 0) - finite(left.note.duration, 0)
+        || finite(right.note.velocity, 0) - finite(left.note.velocity, 0));
+    for (const { track, note } of candidates.slice(0, editBudget)) {
+      const duration = finite(note.duration, 0);
+      const first = round(duration / 2);
+      const second = round(duration - first);
+      if (first < 0.1 || second < 0.1) continue;
+      note.duration = first;
+      note.producerRepair = "density-precision";
+      track.notes.push({
+        ...clone(note),
+        start: round(note.start + first),
+        duration: second,
+        velocity: clamp(Math.round(finite(note.velocity, 80) - 3), 20, 124),
+        producerRepair: "density-precision",
+      });
+      edits += 1;
+    }
+  } else {
+    const candidates = (repaired.tracks ?? []).filter((track) => allowed.has(track.id) && track.id !== "bass")
+      .flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= startBeat - 1e-6
+          && note.start < endBeat - 1e-6
+          && !note.resolutionRole
+          && !note.transitionFeature
+          && !note.memoryRole)
+        .map((note) => ({ track, note })))
+      .sort((left, right) => finite(left.note.velocity, 80) - finite(right.note.velocity, 80)
+        || finite(left.note.duration, 0) - finite(right.note.duration, 0));
+    for (const { track, note } of candidates) {
+      if (edits >= editBudget) break;
+      if ((track.notes?.length ?? 0) <= 2) continue;
+      track.notes = track.notes.filter((candidate) => candidate !== note);
+      edits += 1;
+    }
+  }
+  for (const track of repaired.tracks ?? []) {
+    track.notes?.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    density: { version: 1, direction: build ? "build" : "thin", edits, startBeat: round(startBeat), endBeat: round(endBeat) },
+  };
+  return repaired;
+}
+
+function smoothRepairVoiceLeading(song, window) {
+  const repaired = clone(song);
+  const chordTrack = repaired.tracks?.find((track) => track.id === "chords");
+  if (!chordTrack?.notes?.length) return repaired;
+  const startBeat = Number.isFinite(Number(window?.startBeat)) ? Number(window.startBeat) : 0;
+  const endBeat = Number.isFinite(Number(window?.endBeat)) ? Number(window.endBeat) : Infinity;
+  const groups = new Map();
+  for (const note of chordTrack.notes) {
+    if (note.start < startBeat - 1e-6 || note.start >= endBeat - 1e-6) continue;
+    const key = round(note.start);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(note);
+  }
+  const ordered = [...groups.entries()].sort((left, right) => left[0] - right[0]);
+  let previous = null;
+  let edits = 0;
+  for (const [, notes] of ordered) {
+    notes.sort((left, right) => left.pitch - right.pitch);
+    if (previous?.length) {
+      for (const note of notes) {
+        const original = note.pitch;
+        const candidates = [-24, -12, 0, 12, 24]
+          .map((offset) => original + offset)
+          .filter((pitch) => pitch >= 36 && pitch <= 96)
+          .map((pitch) => ({
+            pitch,
+            distance: Math.min(...previous.map((prior) => Math.abs(pitch - prior))),
+            shift: Math.abs(pitch - original),
+          }))
+          .sort((left, right) => left.distance - right.distance || left.shift - right.shift || left.pitch - right.pitch);
+        const chosen = candidates[0]?.pitch ?? original;
+        if (chosen !== original) {
+          note.pitch = chosen;
+          note.producerRepair = "harmony-voice-leading";
+          edits += 1;
+        }
+      }
+    }
+    previous = notes.map((note) => note.pitch);
+  }
+  chordTrack.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    voiceLeading: { version: 1, edits, startBeat: round(startBeat), endBeat: Number.isFinite(endBeat) ? round(endBeat) : null },
+  };
+  return repaired;
+}
+
+function directSpecializedRepairSource(sourceSong, strategy, config, window = null) {
   const dimension = String(strategy?.dimension ?? "");
   if (dimension === "transitions") return reinforceRepairTransitions(sourceSong, config);
   if (dimension === "performance") return clone(sourceSong);
+  if (dimension === "density") return rebalanceRepairDensity(sourceSong, strategy, window);
+  if (["storyArc", "tensionFollow"].includes(dimension)) return rebalanceRepairArrangementArc(sourceSong, dimension);
+  if (dimension === "voiceLeading") return smoothRepairVoiceLeading(sourceSong, window);
   return null;
 }
 
@@ -10483,6 +10706,7 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgical
     sourceSong,
     repairStrategy,
     config,
+    strategyWindow,
   );
   if (directRepair) {
     directRepair.id = "song-" + hashSeed(String(sourceSong.id ?? sourceSong.seed) + "|" + seed + "|" + repairStrategy.id).toString(36);
