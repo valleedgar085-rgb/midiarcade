@@ -108,27 +108,44 @@ test("repair acceptance preserves an already-passing release contract", () => {
   assert.ok(result.reasons.includes("release-gate-regression"));
 });
 
-test("repair acceptance preserves lead and counterpoint dialogue geometry", () => {
+test("repair acceptance preserves clean lead and counterpoint dialogue without freezing a dirty source", () => {
   const sourceEvaluation = evaluation(88, { motif: 52 });
   const repairedEvaluation = evaluation(88.5, { motif: 58 });
-  const sourceSong = dialogueSong(1.4);
-  const repairedSong = dialogueSong(0.45);
-  const result = evaluateRepairAcceptance(
+  const cleanSourceSong = dialogueSong(1.4);
+  const crowdedRepairSong = dialogueSong(0.45);
+  const protectedResult = evaluateRepairAcceptance(
     sourceEvaluation,
     repairedEvaluation,
     { weakestDimension: "motif", weakestScore: 52 },
     {
       sourceReleasePassed: true,
       repairedReleasePassed: true,
-      sourceSong,
-      repairedSong,
+      sourceSong: cleanSourceSong,
+      repairedSong: crowdedRepairSong,
     },
   );
 
-  assert.equal(result.melodicDialoguePreserved, false);
-  assert.ok(result.melodicDialogue.repaired.underLeadRatio > result.melodicDialogue.thresholds.underLeadRatio);
-  assert.equal(result.accepted, false);
-  assert.ok(result.reasons.includes("melodic-dialogue-regression"));
+  assert.equal(protectedResult.melodicDialogue.sourceHealthy, true);
+  assert.equal(protectedResult.melodicDialogue.repairedHealthy, false);
+  assert.equal(protectedResult.melodicDialoguePreserved, false);
+  assert.equal(protectedResult.accepted, false);
+  assert.ok(protectedResult.reasons.includes("melodic-dialogue-regression"));
+
+  const rebuildResult = evaluateRepairAcceptance(
+    sourceEvaluation,
+    repairedEvaluation,
+    { weakestDimension: "motif", weakestScore: 52 },
+    {
+      sourceReleasePassed: true,
+      repairedReleasePassed: true,
+      sourceSong: dialogueSong(0.45),
+      repairedSong: dialogueSong(0.5),
+    },
+  );
+  assert.equal(rebuildResult.melodicDialogue.sourceHealthy, false);
+  assert.equal(rebuildResult.melodicDialoguePreserved, true);
+  assert.ok(!rebuildResult.reasons.includes("melodic-dialogue-regression"));
+  assert.equal(rebuildResult.accepted, true);
 });
 
 test("live Producer Brain repair auditing never commits a rejected targeted repair", () => {
