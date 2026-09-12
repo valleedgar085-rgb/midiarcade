@@ -18,6 +18,9 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
+import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
+import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.js";
+import { sanitizePersistedTrackSettings, sanitizeTasteProfile, validPersistedSong } from "./core/session-contract.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
@@ -190,50 +193,7 @@ export function shouldDisconnectStaleMidiConnection(connectedId, requestedId) {
 }
 
 export function getScaleChordGuide(song = state.song, startBeat = 0) {
-  const key = song?.global?.key || song?.key || song?.meta?.key || "C";
-  const mode = song?.global?.mode || song?.mode || song?.meta?.mode || "minor";
-  const harmony = Array.isArray(song?.harmony) ? song.harmony : [];
-  const currentHarmony = harmony.find((ev) => {
-    const s = Number(ev.startBeat ?? ev.start ?? 0);
-    const d = Number(ev.duration ?? ev.durationBeats ?? 4);
-    return startBeat >= s && startBeat < s + d;
-  }) || harmony[0];
-
-  const symbol = currentHarmony?.symbol || currentHarmony?.roman || currentHarmony?.chord?.symbol || currentHarmony?.chord?.roman || key;
-  const roman = currentHarmony?.roman || currentHarmony?.chord?.roman || "i";
-  const quality = currentHarmony?.quality || currentHarmony?.chord?.quality || "triad";
-  const notes = Array.isArray(currentHarmony?.notes)
-    ? currentHarmony.notes
-    : Array.isArray(currentHarmony?.chord?.notes)
-      ? currentHarmony.chord.notes
-      : [key];
-
-  const CHROMATIC = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-  const rootIndex = CHROMATIC.indexOf(key) >= 0 ? CHROMATIC.indexOf(key) : 0;
-  const MODE_INTERVALS = {
-    major: [0, 2, 4, 5, 7, 9, 11],
-    minor: [0, 2, 3, 5, 7, 8, 10],
-    dorian: [0, 2, 3, 5, 7, 9, 10],
-    mixolydian: [0, 2, 4, 5, 7, 9, 10],
-    lydian: [0, 2, 4, 6, 7, 9, 11],
-    phrygian: [0, 1, 3, 5, 7, 8, 10],
-    locrian: [0, 1, 3, 5, 6, 8, 10],
-    harmonicMinor: [0, 2, 3, 5, 7, 8, 11],
-  };
-  const intervals = MODE_INTERVALS[mode] || MODE_INTERVALS.minor;
-  const scaleNotes = intervals.map((i) => CHROMATIC[(rootIndex + i) % 12]);
-
-  return {
-    key,
-    mode,
-    scaleNotes,
-    chord: {
-      symbol,
-      roman,
-      quality,
-      notes,
-    },
-  };
+  return deriveScaleChordGuide(song, startBeat);
 }
 
 function handleMidiDevicesChanged(_devices = []) {
@@ -305,116 +265,6 @@ function discardPersistedSession() {
   sessionStorage.discard();
 }
 
-function isRecord(value) {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function validPersistedNote(note, totalBeats) {
-  if (!isRecord(note)) return false;
-  const pitch = Number(note.pitch);
-  const start = Number(note.start);
-  const duration = Number(note.duration);
-  const velocity = Number(note.velocity);
-  return Number.isFinite(pitch) && pitch >= 0 && pitch <= 127
-    && Number.isFinite(start) && start >= 0 && start <= totalBeats + 1
-    && Number.isFinite(duration) && duration > 0 && duration <= totalBeats + 1
-    && Number.isFinite(velocity) && velocity >= 0 && velocity <= 127;
-}
-
-function validPersistedSong(song) {
-  if (!isRecord(song) || !isRecord(song.meta) || !Array.isArray(song.tracks)) return false;
-  const totalBeats = Number(song.meta.totalBeats);
-  const tempo = Number(song.meta.tempo ?? song.bpm);
-  if (!Number.isFinite(totalBeats) || totalBeats <= 0 || totalBeats > 4096) return false;
-  if (!Number.isFinite(tempo) || tempo < 30 || tempo > 300) return false;
-  if (song.tracks.length !== TRACK_ORDER.length) return false;
-  const ids = new Set();
-  let noteCount = 0;
-  for (const track of song.tracks) {
-    if (!isRecord(track) || !TRACK_ORDER.includes(track.id) || ids.has(track.id) || !Array.isArray(track.notes)) return false;
-    if (track.settings != null && !isRecord(track.settings)) return false;
-    if (track.automation != null && (!Array.isArray(track.automation) || !track.automation.every(isRecord))) return false;
-    noteCount += track.notes.length;
-    if (noteCount > 100_000 || !track.notes.every((note) => validPersistedNote(note, totalBeats))) return false;
-    ids.add(track.id);
-  }
-  if (!TRACK_ORDER.every((id) => ids.has(id))) return false;
-  for (const key of ["sections", "structure", "form"]) {
-    const sections = song[key];
-    if (sections != null && (
-      !Array.isArray(sections)
-      || sections.length > 128
-      || !sections.every(isRecord)
-    )) return false;
-  }
-  if (song.idea != null && !isRecord(song.idea)) return false;
-  if (song.settings != null && !isRecord(song.settings)) return false;
-  return true;
-}
-
-function finiteSetting(value, fallback, min, max, { integer = false } = {}) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return fallback;
-  const bounded = clamp(numeric, min, max);
-  return integer ? Math.round(bounded) : bounded;
-}
-
-function sanitizePersistedTrackSettings(value) {
-  const source = isRecord(value) ? value : {};
-  const result = deepClone(DEFAULT_TRACK_SETTINGS);
-  for (const id of TRACK_ORDER) {
-    const saved = isRecord(source[id]) ? source[id] : {};
-    const fallback = result[id];
-    result[id] = {
-      density: finiteSetting(saved.density, fallback.density, 0, 100, { integer: true }),
-      variation: finiteSetting(saved.variation, fallback.variation, 0, 100, { integer: true }),
-      octave: finiteSetting(saved.octave, fallback.octave, -2, 2, { integer: true }),
-      program: finiteSetting(saved.program, fallback.program, 0, 127, { integer: true }),
-      volume: finiteSetting(saved.volume, fallback.volume, 0, 1),
-      velocity: finiteSetting(saved.velocity, fallback.velocity, 0.1, 1.5),
-      pan: finiteSetting(saved.pan, fallback.pan, -1, 1),
-      reverb: finiteSetting(saved.reverb, fallback.reverb, 0, 1),
-      cutoff: finiteSetting(saved.cutoff, fallback.cutoff, 1000, 14000),
-      resonance: finiteSetting(saved.resonance, fallback.resonance, 0, 1),
-      gate: finiteSetting(saved.gate, fallback.gate, 0.08, 1.5),
-      humanize: finiteSetting(saved.humanize, fallback.humanize, 0, 1),
-      feel: finiteSetting(saved.feel, fallback.feel, 0, 1),
-      waveform: ["sine", "triangle", "square", "sawtooth"].includes(saved.waveform) ? saved.waveform : (fallback.waveform ?? "triangle"),
-      synthCutoff: finiteSetting(saved.synthCutoff, fallback.synthCutoff ?? 3500, 150, 14000),
-      synthResonance: finiteSetting(saved.synthResonance, fallback.synthResonance ?? 1.2, 0.1, 14),
-      attack: finiteSetting(saved.attack, fallback.attack ?? 0.01, 0.002, 0.6),
-      release: finiteSetting(saved.release, fallback.release ?? 0.25, 0.04, 2.5),
-      detune: finiteSetting(saved.detune, fallback.detune ?? 0, -35, 35),
-      attitude: ["neutral", "power", "motion", "bloom", "hush"].includes(saved.attitude)
-        ? saved.attitude
-        : fallback.attitude,
-    };
-  }
-  return result;
-}
-
-
-
-function sanitizeTasteProfile(value) {
-  const source = isRecord(value) ? value : {};
-  const numeric = (key) => Math.max(0, Number(source[key]) || 0);
-  return {
-    ratings: numeric("ratings"),
-    likes: numeric("likes"),
-    rejects: numeric("rejects"),
-    favorites: numeric("favorites"),
-    energyTotal: numeric("energyTotal"),
-    complexityTotal: numeric("complexityTotal"),
-    variationTotal: numeric("variationTotal"),
-    genreVotes: isRecord(source.genreVotes) ? Object.fromEntries(
-      Object.entries(source.genreVotes).filter(([genre]) => GENRE_IDS.includes(genre)).map(([genre, vote]) => [genre, Number(vote) || 0]),
-    ) : {},
-    songRatings: isRecord(source.songRatings) ? Object.fromEntries(
-      Object.entries(source.songRatings).slice(-64).map(([id, rating]) => [String(id).slice(0, 96), String(rating).slice(0, 16)]),
-    ) : {},
-  };
-}
-
 export function restorePersistedSession() {
   rejectedPersistedSession = false;
   const stored = sessionStorage.load();
@@ -427,13 +277,13 @@ export function restorePersistedSession() {
   }
   try {
     const parsed = stored.value;
-    if (!parsed || parsed.schema !== SESSION_SCHEMA || !validPersistedSong(parsed.song)) {
+    if (!parsed || parsed.schema !== SESSION_SCHEMA || !validPersistedSong(parsed.song, { trackOrder: TRACK_ORDER })) {
       rejectedPersistedSession = true;
       discardPersistedSession();
       return false;
     }
     state.song = deepClone(parsed.song);
-    state.trackSettings = sanitizePersistedTrackSettings(parsed.trackSettings);
+    state.trackSettings = sanitizePersistedTrackSettings(parsed.trackSettings, { defaults: DEFAULT_TRACK_SETTINGS, trackOrder: TRACK_ORDER });
     state.muted = new Set(Array.isArray(parsed.muted) ? parsed.muted.filter((id) => TRACK_ORDER.includes(id)) : []);
     state.solo = new Set(Array.isArray(parsed.solo) ? parsed.solo.filter((id) => TRACK_ORDER.includes(id)) : []);
     state.locked = new Set(Array.isArray(parsed.locked) ? parsed.locked.filter((id) => TRACK_ORDER.includes(id)) : []);
@@ -446,7 +296,7 @@ export function restorePersistedSession() {
     state.guidedMode = parsed.guidedMode !== false;
     state.recipeIndex = clamp(Math.round(Number(parsed.recipeIndex) || 0), 0, RECIPES.length - 1);
     state.mixAssistant = { ...normalizeMixAssistant(parsed.mixAssistant) };
-    state.tasteProfile = sanitizeTasteProfile(parsed.tasteProfile);
+    state.tasteProfile = sanitizeTasteProfile(parsed.tasteProfile, { genreIds: GENRE_IDS });
     return true;
   } catch (error) {
     console.warn("Saved session was corrupt and has been ignored", error);
@@ -3401,24 +3251,7 @@ const generationRunner = createGenerationRunner({
 const generationExecutor = createGenerationExecutor({
   timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
-  fallback: (kind, payload) => {
-    if (kind === "sectionVariations") {
-      return Promise.resolve({
-        status: "committed",
-        options: generateSectionVariations(payload.sourceSong, payload.sectionId, payload.input),
-      });
-    }
-    if (kind === "songVariations") {
-      return Promise.resolve({
-        status: "committed",
-        variations: generateSongVariations(payload.sourceSong, payload.config ?? {}),
-      });
-    }
-    return generationRunner.generate(kind, {
-      sourceSong: payload.sourceSong,
-      config: payload.config,
-    });
-  },
+  fallback: createAppGenerationFallback({ generationRunner }),
 });
 
 function chooseNewGenrePrograms(seed) {
