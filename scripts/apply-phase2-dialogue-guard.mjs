@@ -34,10 +34,12 @@ const helper = `function melodicDialogueMetrics(song) {
   };
 }
 
-function evaluateMelodicDialoguePreservation(sourceSong, repairedSong) {
+function evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis = {}) {
   const thresholds = { simultaneousRatio: 0.1, underLeadRatio: 0.25 };
-  if (!sourceSong || !repairedSong) {
+  const applies = String(diagnosis?.weakestDimension ?? "") === "registerHealth";
+  if (!applies || !sourceSong || !repairedSong) {
     return {
+      applies,
       preserved: true,
       sourceHealthy: null,
       repairedHealthy: null,
@@ -55,10 +57,11 @@ function evaluateMelodicDialoguePreservation(sourceSong, repairedSong) {
   const sourceHealthy = healthy(sourceMetrics);
   const repairedHealthy = healthy(repairedMetrics);
   return {
-    // Preserve an already-clean call-and-response relationship. If the source
-    // itself needs interlock reconstruction, let the normal critic/release
-    // contracts decide whether that repair is useful instead of freezing the
-    // old collision geometry in place.
+    applies,
+    // A register-health repair may relocate pitch/register, but it must not turn
+    // an already-clean melodic conversation into stacked lead/counterpoint attacks.
+    // Other dimensions (notably phrase resolution) retain their own cadence and
+    // interlock acceptance contracts instead of being judged by this extra veto.
     preserved: !sourceHealthy || repairedHealthy,
     sourceHealthy,
     repairedHealthy,
@@ -83,7 +86,7 @@ replaceOnce(
 
 replaceOnce(
   "  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;\n  const thresholds = {",
-  "  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;\n  const melodicDialogue = evaluateMelodicDialoguePreservation(sourceSong, repairedSong);\n  const thresholds = {",
+  "  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;\n  const melodicDialogue = evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis);\n  const thresholds = {",
   "dialogue preservation evaluation",
 );
 
@@ -106,4 +109,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(path, source);
-console.log("Applied Phase 2 source-aware melodic dialogue repair acceptance guard.");
+console.log("Applied Phase 2 register-health melodic dialogue repair acceptance guard.");
