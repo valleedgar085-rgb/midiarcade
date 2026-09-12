@@ -9,7 +9,7 @@ if (!source.includes(windowsOld)) throw new Error("Missing surgical window scori
 source = source.replace(windowsOld, windowsNew);
 
 const interlockOld = `  } else {\n    song.harmony = clone(sourceSong.harmony ?? []);\n  }\n  song.meta = { ...sourceSong.meta, ideaFingerprint: null };`;
-const interlockNew = `  } else {\n    song.harmony = clone(sourceSong.harmony ?? []);\n  }\n  const sourceInterlock = clone(sourceSong.generationInterlock ?? repairedSong.generationInterlock ?? {});\n  song.generationInterlock = {\n    ...sourceInterlock,\n    version: 2,\n    reconciliation: {\n      phase: 40,\n      repairGroup: diagnosis.group,\n      source: "actual-repaired-song",\n    },\n  };\n  const surgicalNotesById = Object.fromEntries(\n    song.tracks.map((track) => [track.id, track.notes ?? []]),\n  );\n  const reconnected = applyGenerationInterlocks(\n    surgicalNotesById,\n    song.generationInterlock,\n    song.structure,\n    config,\n    { adjustVelocity: false },\n  );\n  song.tracks = song.tracks.map((track) => ({\n    ...track,\n    notes: reconnected[track.id] ?? track.notes,\n  }));\n  song.meta = { ...sourceSong.meta, ideaFingerprint: null };`;
+const interlockNew = `  } else {\n    song.harmony = clone(sourceSong.harmony ?? []);\n  }\n  const sourceInterlock = clone(sourceSong.generationInterlock ?? repairedSong.generationInterlock ?? {});\n  song.generationInterlock = {\n    ...sourceInterlock,\n    version: 2,\n    reconciliation: {\n      phase: 40,\n      repairGroup: diagnosis.group,\n      source: "actual-repaired-song",\n    },\n  };\n  const preInterlockTracks = song.tracks.map(clone);\n  const surgicalNotesById = Object.fromEntries(\n    preInterlockTracks.map((track) => [track.id, track.notes ?? []]),\n  );\n  const reconnected = applyGenerationInterlocks(\n    surgicalNotesById,\n    song.generationInterlock,\n    song.structure,\n    config,\n    { adjustVelocity: false },\n  );\n  const surgicalTrackSet = new Set(trackIds);\n  song.tracks = preInterlockTracks.map((track) => {\n    if (!surgicalTrackSet.has(track.id)) return track;\n    return {\n      ...track,\n      notes: spliceNotesInSurgicalWindow(\n        track.notes ?? [],\n        reconnected[track.id] ?? track.notes ?? [],\n        window,\n      ),\n    };\n  });\n  song.meta = { ...sourceSong.meta, ideaFingerprint: null };`;
 if (!source.includes(interlockOld)) throw new Error("Missing surgical interlock anchor.");
 source = source.replace(interlockOld, interlockNew);
 
@@ -24,4 +24,4 @@ if (!source.includes(historyOld)) throw new Error("Missing repair acceptance his
 source = source.replace(historyOld, historyNew);
 
 fs.writeFileSync(path, source);
-console.log("Fixed surgical window contracts and added quality-preserving whole-repair fallback.");
+console.log("Fixed surgical window contracts, outside-window identity, and whole-repair fallback.");
