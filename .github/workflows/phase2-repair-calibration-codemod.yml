@@ -6,7 +6,8 @@ on:
       - phase2/producer-brain-weakness-aware-search
     paths:
       - .github/workflows/phase2-repair-calibration-codemod.yml
-      - scripts/apply-phase2-direct-repair-material.mjs
+      - scripts/apply-phase2-repair-routing.mjs
+      - tests/producer-brain-specialized-repair.test.mjs
 
 permissions:
   contents: write
@@ -27,8 +28,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Apply direct repair material patch
-        run: node scripts/apply-phase2-direct-repair-material.mjs
+      - name: Apply calibrated repair routing
+        run: node scripts/apply-phase2-repair-routing.mjs
       - name: Run targeted repair tests
         run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/repair-effectiveness-benchmark.test.mjs
       - name: Measure calibrated repair effectiveness
@@ -42,5 +43,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/music-engine.js
-          git commit -m "Phase 2: add direct musical repair material"
+          git commit -m "Phase 2: route song-level weaknesses away from surgical repair"
           git push origin HEAD:phase2/producer-brain-weakness-aware-search
