@@ -9585,7 +9585,12 @@ export function diagnoseSurgicalRepairWindow(song, diagnosis = {}) {
     song.grooveConductor,
   );
   if (!windows.length) return null;
-  const scored = windows.map((window) => ({
+  const eligibleWindows = windows.filter((window) => (
+    window.endBar - window.startBar >= 2 - 1e-6
+    && window.endBar - window.startBar <= 8 + 1e-6
+  ));
+  if (!eligibleWindows.length) return null;
+  const scored = eligibleWindows.map((window) => ({
     ...window,
     focusScore: surgicalWindowDimensionScore(window, diagnosis),
   }));
@@ -9701,6 +9706,39 @@ function applySurgicalRepairWindow(sourceSong, repairedSong, config, diagnosis, 
   } else {
     song.harmony = clone(sourceSong.harmony ?? []);
   }
+  const sourceInterlock = clone(sourceSong.generationInterlock ?? repairedSong.generationInterlock ?? {});
+  song.generationInterlock = {
+    ...sourceInterlock,
+    version: 2,
+    reconciliation: {
+      phase: 40,
+      repairGroup: diagnosis.group,
+      source: "actual-repaired-song",
+    },
+  };
+  const preInterlockTracks = song.tracks.map(clone);
+  const surgicalNotesById = Object.fromEntries(
+    preInterlockTracks.map((track) => [track.id, track.notes ?? []]),
+  );
+  const reconnected = applyGenerationInterlocks(
+    surgicalNotesById,
+    song.generationInterlock,
+    song.structure,
+    config,
+    { adjustVelocity: false },
+  );
+  const surgicalTrackSet = new Set(trackIds);
+  song.tracks = preInterlockTracks.map((track) => {
+    if (!surgicalTrackSet.has(track.id)) return track;
+    return {
+      ...track,
+      notes: spliceNotesInSurgicalWindow(
+        track.notes ?? [],
+        reconnected[track.id] ?? track.notes ?? [],
+        window,
+      ),
+    };
+  });
   song.meta = { ...sourceSong.meta, ideaFingerprint: null };
   const rescoredWindows = evaluatePhraseWindows(
     song.tracks,
@@ -10369,31 +10407,66 @@ function runTargetedCriticRepair(candidates, {
     const surgicalWindow = diagnosis.group === "arrangement"
       ? null
       : diagnoseSurgicalRepairWindow(sourceCandidate.song, diagnosis);
-    const song = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow);
-    if (song.criticRepair?.surgicalWindow) {
+    const repairConfig = normalizeConfig({
+      ...configFromSong(sourceCandidate.song),
+      seed,
+      oneShotKitId: sourceCandidate.song.oneShotKit?.id ?? null,
+    });
+    const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null);
+    const surgicalSong = surgicalWindow
+      ? applySurgicalRepairWindow(
+        sourceCandidate.song,
+        wholeRepairSong,
+        repairConfig,
+        diagnosis,
+        sourceCandidate,
+        surgicalWindow,
+      )
+      : null;
+    if (surgicalSong?.criticRepair?.surgicalWindow) {
       summary.surgicalAttempts += 1;
-      summary.surgicalWindows.push(clone(song.criticRepair.surgicalWindow));
+      summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
     }
-    song.meta.ideaFingerprint = createSongFingerprint(song);
-    const evaluation = evaluateSongCandidate(song);
-    const novelty = evaluateSongNovelty(song, recentSongs, generation);
-    song.criticRepair.weakestScoreAfter = finite(
-      evaluation.subscores?.[diagnosis.weakestDimension],
-      diagnosis.weakestScore,
-    );
-    song.criticRepair.totalScoreBefore = sourceCandidate.evaluation.score;
-    song.criticRepair.totalScoreAfter = evaluation.score;
-    const repairedReleaseGate = evaluateSongReleaseGate(song, evaluation);
-    const acceptance = evaluateRepairAcceptance(
-      sourceCandidate.evaluation,
-      evaluation,
-      diagnosis,
-      {
-        sourceReleasePassed: candidateReleaseGate(sourceCandidate).passed,
-        repairedReleasePassed: repairedReleaseGate.passed,
-      },
-    );
-    song.criticRepair.acceptance = acceptance;
+    const assessRepair = (candidateSong) => {
+      candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
+      const evaluation = evaluateSongCandidate(candidateSong);
+      const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
+      candidateSong.criticRepair.weakestScoreAfter = finite(
+        evaluation.subscores?.[diagnosis.weakestDimension],
+        diagnosis.weakestScore,
+      );
+      candidateSong.criticRepair.totalScoreBefore = sourceCandidate.evaluation.score;
+      candidateSong.criticRepair.totalScoreAfter = evaluation.score;
+      const repairedReleaseGate = evaluateSongReleaseGate(candidateSong, evaluation);
+      const acceptance = evaluateRepairAcceptance(
+        sourceCandidate.evaluation,
+        evaluation,
+        diagnosis,
+        {
+          sourceReleasePassed: candidateReleaseGate(sourceCandidate).passed,
+          repairedReleasePassed: repairedReleaseGate.passed,
+        },
+      );
+      candidateSong.criticRepair.acceptance = acceptance;
+      return {
+        song: candidateSong,
+        evaluation,
+        novelty,
+        repairedReleaseGate,
+        acceptance,
+      };
+    };
+    const surgicalAssessment = surgicalSong ? assessRepair(surgicalSong) : null;
+    let assessment = surgicalAssessment ?? assessRepair(wholeRepairSong);
+    let wholeFallbackUsed = false;
+    if (surgicalAssessment && !surgicalAssessment.acceptance.accepted) {
+      const wholeAssessment = assessRepair(wholeRepairSong);
+      if (wholeAssessment.acceptance.accepted) {
+        assessment = wholeAssessment;
+        wholeFallbackUsed = true;
+      }
+    }
+    const { song, evaluation, novelty, repairedReleaseGate, acceptance } = assessment;
     const candidate = {
       index: candidates.length,
       song,
@@ -10405,6 +10478,11 @@ function runTargetedCriticRepair(candidates, {
       targetTrack: sourceCandidate.targetTrack ?? null,
       contextTracks: sourceCandidate.contextTracks ?? null,
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
+    };
+    candidate.repairFallback = {
+      surgicalAttempted: Boolean(surgicalAssessment),
+      surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeFallbackUsed,
     };
     candidates.push(candidate);
     summary.attempts += 1;
@@ -10421,8 +10499,11 @@ function runTargetedCriticRepair(candidates, {
       totalDelta: acceptance.totalDelta,
       maxCriticalRegression: acceptance.maxCriticalRegression,
       repairMode: song.criticRepair?.mode ?? "whole-candidate",
-      surgicalWindow: clone(song.criticRepair?.surgicalWindow ?? null),
-      surgicalTracks: clone(song.criticRepair?.surgicalTracks ?? []),
+      surgicalWindow: clone(song.criticRepair?.surgicalWindow ?? surgicalSong?.criticRepair?.surgicalWindow ?? null),
+      surgicalTracks: clone(song.criticRepair?.surgicalTracks ?? surgicalSong?.criticRepair?.surgicalTracks ?? []),
+      surgicalAttempted: Boolean(surgicalAssessment),
+      surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeFallbackUsed,
       reasons: clone(acceptance.reasons),
     });
     summary.targetReached = candidateMeetsAdaptiveTarget(candidate, generation);
