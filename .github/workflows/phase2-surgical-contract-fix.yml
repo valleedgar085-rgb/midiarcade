@@ -24,6 +24,8 @@ jobs:
           node-version: 22
       - name: Apply surgical contract fix
         run: node scripts/fix-phase2-surgical-contracts.mjs
+      - name: Find accepted surgical repair seed
+        run: node scripts/find-phase2-surgical-seed.mjs
       - name: Run targeted regression tests
         run: node --test tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs
       - name: Commit fixed engine
