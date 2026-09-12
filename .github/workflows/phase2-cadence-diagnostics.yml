@@ -1,0 +1,31 @@
+name: Phase 2 Cadence Diagnostics
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - scripts/diagnose-phase2-cadence.mjs
+      - .github/workflows/phase2-cadence-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  cadence-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Diagnose phrase cadence repairs
+        run: node scripts/diagnose-phase2-cadence.mjs
