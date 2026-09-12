@@ -9662,9 +9662,6 @@ function targetedRepairTrackIds(sourceCandidate, diagnosis) {
   if (["repetition", "phraseResolution", "registerHealth"].includes(dimension)) return ["melody"];
   if (dimension === "memory") return ["melody", "bass", "counterpoint"];
   if (["separation", "motif"].includes(dimension)) return ["melody", "counterpoint"];
-  if (dimension === "voiceLeading") return ["chords"];
-  if (["harmonic", "harmonicJourney"].includes(dimension)) return ["bass", "chords"];
-  if (dimension === "cadence") return ["bass", "chords", "melody"];
   if (diagnosis?.group === "harmony") return ["bass", "chords", "melody", "counterpoint", "pad"];
   if (diagnosis?.group === "groove") return ["drums", "bass"];
   if (diagnosis?.group === "motif") return ["melody", "counterpoint"];
@@ -9763,16 +9760,16 @@ function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, con
     trackIds = [...TRACK_IDS];
   } else if (dimension === "voiceLeading") {
     id = "harmony-voice-leading";
-    trackIds = ["chords"];
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
   } else if (dimension === "harmonic") {
     id = "harmony-foundation";
-    trackIds = ["bass", "chords"];
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
   } else if (dimension === "harmonicJourney") {
     id = "harmony-journey";
-    trackIds = ["bass", "chords"];
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
   } else if (dimension === "cadence") {
     id = "harmony-cadence";
-    trackIds = ["bass", "chords", "melody"];
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
   } else if (dimension === "groove") {
     const bassLock = clamp(finite(diagnostics.bassLock, 0.5), 0, 1);
     const tighten = bassLock < 0.72;
@@ -10361,7 +10358,6 @@ function directSpecializedRepairSource(sourceSong, strategy, config, window = nu
   if (dimension === "performance") return clone(sourceSong);
   if (dimension === "density") return rebalanceRepairDensity(sourceSong, strategy, window);
   if (["storyArc", "tensionFollow"].includes(dimension)) return rebalanceRepairArrangementArc(sourceSong, dimension);
-  if (dimension === "voiceLeading") return smoothRepairVoiceLeading(sourceSong, window);
   return null;
 }
 
@@ -11376,6 +11372,7 @@ function runTargetedCriticRepair(candidates, {
     });
     const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null, surgicalWindow);
     let surgicalRepairSource = wholeRepairSong;
+    let surgicalRepairStrategy = wholeRepairSong.criticRepair?.repairStrategy ?? null;
     if (surgicalWindow && diagnosis.weakestDimension === "phraseResolution") {
       surgicalRepairSource = reinforceRepairPhraseResolution(
         sourceCandidate.song,
@@ -11386,6 +11383,16 @@ function runTargetedCriticRepair(candidates, {
       surgicalRepairSource.seed = wholeRepairSong.seed;
       surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
       surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
+    } else if (surgicalWindow && diagnosis.weakestDimension === "voiceLeading") {
+      surgicalRepairSource = smoothRepairVoiceLeading(sourceCandidate.song, surgicalWindow);
+      surgicalRepairSource.id = wholeRepairSong.id;
+      surgicalRepairSource.seed = wholeRepairSong.seed;
+      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
+      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
+      surgicalRepairStrategy = {
+        ...(surgicalRepairStrategy ?? {}),
+        trackIds: ["chords"],
+      };
     }
     const surgicalSong = surgicalWindow
       ? applySurgicalRepairWindow(
@@ -11395,7 +11402,7 @@ function runTargetedCriticRepair(candidates, {
         diagnosis,
         sourceCandidate,
         surgicalWindow,
-        wholeRepairSong.criticRepair?.repairStrategy,
+        surgicalRepairStrategy,
       )
       : null;
     if (surgicalSong?.criticRepair?.surgicalWindow) {
