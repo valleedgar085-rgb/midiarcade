@@ -9732,7 +9732,13 @@ function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, con
     trackOverrides[trackId] = { ...(trackOverrides[trackId] ?? {}), ...patch };
   };
 
-  if (dimension === "density") {
+  if (dimension === "transitions") {
+    id = "transition-boundary";
+    trackIds = [...TRACK_IDS];
+  } else if (dimension === "performance") {
+    id = "performance-dynamics";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "density") {
     const localDelta = finite(diagnostics.densityDelta, repairDensityDelta(sourceSong));
     const globalDelta = repairDensityDelta(sourceSong);
     const densityDelta = average([localDelta, globalDelta], globalDelta);
@@ -9987,6 +9993,123 @@ function reinforceRepairPhraseResolution(song, config, window) {
   return repaired;
 }
 
+function reinforceRepairTransitions(song, config) {
+  const repaired = clone(song);
+  const transitions = repaired.arrangementTransitions ?? repaired.songBlueprint?.transitions ?? [];
+  const drums = repaired.tracks?.find((track) => track.id === "drums");
+  let edits = 0;
+  for (const transition of transitions) {
+    const from = repaired.structure?.find((section) => section.id === transition.fromSectionId);
+    if (!from) continue;
+    const boundary = finite(from.endBeat, 0);
+    const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, 2);
+    if (transition.type === "drop-out") {
+      const preserve = [];
+      for (const track of repaired.tracks ?? []) {
+        for (const note of track.notes ?? []) {
+          if (note.start >= boundary - pickup - 1e-6 && note.start < boundary - 1e-6 && note.resolutionRole) {
+            preserve.push({ track, note });
+          }
+        }
+      }
+      preserve.sort((left, right) => right.note.start - left.note.start || right.note.velocity - left.note.velocity);
+      const keep = preserve[0]?.note ?? null;
+      for (const track of repaired.tracks ?? []) {
+        const before = track.notes?.length ?? 0;
+        track.notes = (track.notes ?? []).filter((note) => (
+          note === keep
+          || note.start < boundary - pickup - 1e-6
+          || note.start >= boundary - 1e-6
+        ));
+        edits += before - track.notes.length;
+      }
+      continue;
+    }
+
+    const candidates = (repaired.tracks ?? []).flatMap((track) => (track.notes ?? [])
+      .filter((note) => note.start >= boundary - pickup - 0.08 && note.start <= boundary + 0.08)
+      .map((note) => ({ track, note })))
+      .sort((left, right) => (
+        Math.abs(left.note.start - boundary) - Math.abs(right.note.start - boundary)
+        || Number(right.track.id === "drums") - Number(left.track.id === "drums")
+        || finite(right.note.velocity, 0) - finite(left.note.velocity, 0)
+      ));
+    for (const entry of candidates.slice(0, 3)) {
+      entry.note.transitionFeature = transition.type;
+      edits += 1;
+    }
+    const hit = candidates.find((entry) => Math.abs(entry.note.start - boundary) <= 0.08);
+    if (hit) {
+      hit.note.velocity = Math.max(94, Math.round(finite(hit.note.velocity, 80)));
+      hit.note.transitionFeature = transition.type;
+      edits += 1;
+    } else if (drums) {
+      drums.notes.push({
+        start: round(boundary),
+        duration: round(Math.min(0.35, beatsPerBar(config) * 0.12)),
+        pitch: 49,
+        velocity: 96,
+        transitionFeature: transition.type,
+        producerRepair: "transition-boundary",
+      });
+      drums.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      edits += 1;
+    }
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    transitions: { version: 1, edits },
+  };
+  return repaired;
+}
+
+function rebalanceRepairPerformance(song) {
+  const repaired = clone(song);
+  const profile = clone(repaired.performanceProfile ?? {});
+  profile.timingJitter = Math.min(0.035, Math.abs(finite(profile.timingJitter, 0)));
+  profile.trackOffsets = Object.fromEntries(
+    Object.entries(profile.trackOffsets ?? {}).map(([id, offset]) => [id, clamp(finite(offset, 0), -0.045, 0.045)]),
+  );
+  repaired.performanceProfile = profile;
+
+  const pitchedTracks = (repaired.tracks ?? []).filter((track) => track.id !== "drums");
+  const notes = pitchedTracks.flatMap((track) => track.notes ?? []);
+  if (!notes.length) return repaired;
+  const velocities = notes.map((note) => finite(note.velocity, 80));
+  const mean = average(velocities, 80);
+  const variance = average(velocities.map((velocity) => (velocity - mean) ** 2), 0);
+  const spread = Math.sqrt(variance);
+  const target = clamp(10 + finite(profile.velocityVariance, 5) * 1.2, 8, 28);
+  let index = 0;
+  for (const track of pitchedTracks) {
+    for (const note of track.notes ?? []) {
+      const current = finite(note.velocity, mean);
+      const normalized = spread > 0.75
+        ? (current - mean) / spread
+        : (((index % 5) - 2) / 2);
+      note.velocity = clamp(Math.round(mean + normalized * target), 24, 124);
+      note.performanceRepair = "dynamic-spread";
+      index += 1;
+    }
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    performance: {
+      version: 1,
+      spreadBefore: round(spread),
+      targetSpread: round(target),
+    },
+  };
+  return repaired;
+}
+
+function directSpecializedRepairSource(sourceSong, strategy, config) {
+  const dimension = String(strategy?.dimension ?? "");
+  if (dimension === "transitions") return reinforceRepairTransitions(sourceSong, config);
+  if (dimension === "performance") return clone(sourceSong);
+  return null;
+}
+
 function applySpecializedRepairMaterial(song, strategy, config, window) {
   if (!song || !strategy) return song;
   if (strategy.dimension === "memory" && strategy.trackIds.some((id) => ["melody", "bass", "counterpoint"].includes(id))) {
@@ -10233,6 +10356,12 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.songBlueprint,
   );
   song.tracks = repairedFinalGrooveAssembly.tracks;
+  if (repairStrategy?.dimension === "performance") {
+    const performanceRepair = rebalanceRepairPerformance(song);
+    song.tracks = performanceRepair.tracks;
+    song.performanceProfile = performanceRepair.performanceProfile;
+    song.precisionRepair = performanceRepair.precisionRepair;
+  }
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
   song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
@@ -10318,6 +10447,37 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgical
   const harmonyRepair = diagnosis.group === "harmony";
   const motifRepair = diagnosis.group === "motif";
   const performanceRepair = diagnosis.group === "performance";
+  const directRepair = directSpecializedRepairSource(
+    sourceSong,
+    repairStrategy,
+    config,
+  );
+  if (directRepair) {
+    directRepair.id = "song-" + hashSeed(String(sourceSong.id ?? sourceSong.seed) + "|" + seed + "|" + repairStrategy.id).toString(36);
+    directRepair.seed = seed;
+    directRepair.settings = publicSettings(config);
+    directRepair.title = sourceSong.title;
+    directRepair.generationInterlock = clone(sourceSong.generationInterlock);
+    const finishedDirect = finishRepairedSong(
+      directRepair,
+      config,
+      diagnosis,
+      sourceCandidate,
+      attempt,
+      repairStrategy,
+    );
+    return surgicalWindow && !arrangementRepair
+      ? applySurgicalRepairWindow(
+        sourceSong,
+        finishedDirect,
+        config,
+        diagnosis,
+        sourceCandidate,
+        surgicalWindow,
+        repairStrategy,
+      )
+      : finishedDirect;
+  }
   const options = {
     generation: sourceSong.generation,
     revision: sourceSong.revision,

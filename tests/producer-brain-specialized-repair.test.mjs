@@ -46,6 +46,49 @@ test("specialized repair metadata is deterministic and remains bounded by the ex
   )));
 });
 
+test("precision repair routes transitions and performance while preserving cadence surgery", () => {
+  const targets = new Map([
+    ["transitions", "transition-boundary"],
+    ["performance", "performance-dynamics"],
+    ["phraseResolution", "phrase-cadence"],
+  ]);
+  const observed = new Map();
+  const genres = ["techno", "drumBass", "jazz", "hipHop", "trap", "popRadio", "house", "afrobeats"];
+  const profiles = [
+    ["sparse", 0.12, 0.18],
+    ["balanced", 0.55, 0.55],
+    ["dense", 0.88, 0.82],
+  ];
+
+  outer: for (const seedId of ["repair-cal-01", "repair-cal-02"]) {
+    for (const genre of genres) {
+      for (const [profile, energy, complexity] of profiles) {
+        const song = generateNew({
+          genre,
+          seed: seedId + ":" + genre + ":" + profile,
+          bars: 8,
+          energy,
+          complexity,
+        });
+        for (const entry of song.meta?.scoreDetails?.criticRepair?.acceptanceHistory ?? []) {
+          if (targets.has(entry.dimension) && !observed.has(entry.dimension)) observed.set(entry.dimension, entry);
+        }
+        if (observed.size === targets.size) break outer;
+      }
+    }
+  }
+
+  for (const [dimension, strategyId] of targets) {
+    const entry = observed.get(dimension);
+    assert.ok(entry, "expected calibration matrix to expose " + dimension);
+    assert.equal(entry.repairStrategyId, strategyId);
+    assert.ok(["improved-target", "improved-balance", "rejected-no-gain", "rejected-regression"].includes(entry.outcome));
+  }
+  assert.equal(observed.get("transitions").surgicalAttempted, false);
+  assert.equal(observed.get("performance").surgicalAttempted, true);
+  assert.equal(observed.get("phraseResolution").surgicalAttempted, true);
+});
+
 test("song-level statistical weaknesses do not consume local surgical repair attempts", () => {
   const globalDimensions = new Set(["memory", "repetition", "drumVariety"]);
   const inputs = [
