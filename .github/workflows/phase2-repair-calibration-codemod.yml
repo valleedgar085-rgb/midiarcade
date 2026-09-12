@@ -1,0 +1,46 @@
+name: Phase 2 Repair Calibration Codemod
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - .github/workflows/phase2-repair-calibration-codemod.yml
+      - scripts/apply-phase2-repair-calibration.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply critic-aligned repair patch
+        run: node scripts/apply-phase2-repair-calibration.mjs
+      - name: Run targeted repair tests
+        run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/repair-effectiveness-benchmark.test.mjs
+      - name: Measure calibrated repair effectiveness
+        run: npm run benchmark:repairs -- --seeds 2 --bars 8
+      - name: Commit engine patch
+        run: |
+          if git diff --quiet -- src/music-engine.js; then
+            echo "No engine changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js
+          git commit -m "Phase 2: align repairs with critic feedback"
+          git push origin HEAD:phase2/producer-brain-weakness-aware-search
