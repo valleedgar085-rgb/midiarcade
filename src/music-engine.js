@@ -9377,6 +9377,7 @@ function candidateSearchPlan(input = {}) {
 }
 
 function candidateMeetsAdaptiveTarget(candidate, generation) {
+  if (candidate?.repairAccepted === false) return false;
   const balance = evaluateCandidateBalance(candidate?.evaluation);
   const releaseReady = candidateReleaseGate(candidate).passed;
   const noveltyReady = !candidate?.novelty?.compared
@@ -9856,7 +9857,9 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
 }
 
 function rankCandidates(candidates) {
-  return [...candidates].sort(
+  return [...candidates]
+    .filter((candidate) => candidate?.repairAccepted !== false)
+    .sort(
     (left, right) =>
       Number(candidateReleaseGate(right).passed) - Number(candidateReleaseGate(left).passed)
       ||
@@ -9945,6 +9948,8 @@ function commitCandidate(candidates, search = {}) {
         passedReleaseGate: candidateReleaseGate(candidate).passed,
         repairGroup: song.criticRepair?.group ?? null,
         repairSourceCandidate: song.criticRepair?.sourceCandidate ?? null,
+        repairAccepted: candidate.repairAccepted ?? null,
+        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
       };
     }),
   };
@@ -9988,6 +9993,8 @@ function commitCandidate(candidates, search = {}) {
       phase: 20,
       status: repairStatus,
       attempts: criticRepair.attempts,
+      accepted: criticRepair.accepted ?? 0,
+      rejected: criticRepair.rejected ?? 0,
       groups: criticRepair.groups,
       selectedGroup: selected.repair?.group ?? null,
     },
@@ -10013,6 +10020,87 @@ function candidateSelectionScore(evaluation, novelty, generation) {
   );
 }
 
+export function evaluateRepairAcceptance(
+  sourceEvaluation = {},
+  repairedEvaluation = {},
+  diagnosis = {},
+  { sourceReleasePassed = null, repairedReleasePassed = null } = {},
+) {
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  const sourceSubscores = sourceEvaluation?.subscores ?? {};
+  const repairedSubscores = repairedEvaluation?.subscores ?? {};
+  const weakestScoreBefore = clamp(
+    finite(sourceSubscores[dimension], diagnosis?.weakestScore ?? 0),
+    0,
+    100,
+  );
+  const weakestScoreAfter = clamp(
+    finite(repairedSubscores[dimension], weakestScoreBefore),
+    0,
+    100,
+  );
+  const weaknessGain = round(weakestScoreAfter - weakestScoreBefore);
+  const totalDelta = round(
+    finite(repairedEvaluation?.score, 0) - finite(sourceEvaluation?.score, 0),
+  );
+  const sourceBalance = evaluateCandidateBalance(sourceEvaluation);
+  const repairedBalance = evaluateCandidateBalance(repairedEvaluation);
+  const balanceDelta = repairedBalance.balanceScore - sourceBalance.balanceScore;
+  const creativeFloorDelta = repairedBalance.creativeFloor - sourceBalance.creativeFloor;
+  const criticalDimensions = ["harmonic", "groove", "separation", "production", "genreAuthenticity"];
+  const criticalRegressions = Object.fromEntries(
+    criticalDimensions.map((name) => [
+      name,
+      round(Math.max(
+        0,
+        clamp(finite(sourceSubscores[name], 70), 0, 100)
+          - clamp(finite(repairedSubscores[name], 70), 0, 100),
+      )),
+    ]),
+  );
+  const maxCriticalRegression = Math.max(0, ...Object.values(criticalRegressions));
+  const sourceQuality = qualityGateForEvaluation(sourceEvaluation);
+  const repairedQuality = qualityGateForEvaluation(repairedEvaluation);
+  const scaleSafetyPreserved = !sourceQuality.scaleSafe || repairedQuality.scaleSafe;
+  const phase9Preserved = !sourceQuality.passed || repairedQuality.passed;
+  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;
+  const thresholds = {
+    minimumWeaknessGain: 0.5,
+    maximumTotalRegression: 1,
+    maximumBalanceRegression: 2,
+    maximumCreativeFloorRegression: 2,
+    maximumCriticalRegression: 3,
+  };
+  const reasons = [];
+  if (!dimension) reasons.push("missing-diagnosis");
+  if (weaknessGain < thresholds.minimumWeaknessGain) reasons.push("weakness-not-improved");
+  if (totalDelta < -thresholds.maximumTotalRegression) reasons.push("total-score-regression");
+  if (balanceDelta < -thresholds.maximumBalanceRegression) reasons.push("balance-regression");
+  if (creativeFloorDelta < -thresholds.maximumCreativeFloorRegression) reasons.push("creative-floor-regression");
+  if (maxCriticalRegression > thresholds.maximumCriticalRegression) reasons.push("critical-dimension-regression");
+  if (!scaleSafetyPreserved) reasons.push("scale-safety-regression");
+  if (!phase9Preserved) reasons.push("quality-gate-regression");
+  if (!releasePreserved) reasons.push("release-gate-regression");
+  return {
+    version: 1,
+    accepted: reasons.length === 0,
+    dimension: dimension || null,
+    weakestScoreBefore: round(weakestScoreBefore),
+    weakestScoreAfter: round(weakestScoreAfter),
+    weaknessGain,
+    totalDelta,
+    balanceDelta,
+    creativeFloorDelta,
+    maxCriticalRegression,
+    criticalRegressions,
+    scaleSafetyPreserved,
+    phase9Preserved,
+    releasePreserved,
+    thresholds,
+    reasons,
+  };
+}
+
 function runTargetedCriticRepair(candidates, {
   search,
   generation,
@@ -10024,7 +10112,10 @@ function runTargetedCriticRepair(candidates, {
     version: 1,
     enabled: Boolean(search?.targetedRepair),
     attempts: 0,
+    accepted: 0,
+    rejected: 0,
     groups: [],
+    acceptanceHistory: [],
     targetReached: candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation)),
     reason: null,
   };
@@ -10063,12 +10154,25 @@ function runTargetedCriticRepair(candidates, {
     );
     song.criticRepair.totalScoreBefore = sourceCandidate.evaluation.score;
     song.criticRepair.totalScoreAfter = evaluation.score;
+    const repairedReleaseGate = evaluateSongReleaseGate(song, evaluation);
+    const acceptance = evaluateRepairAcceptance(
+      sourceCandidate.evaluation,
+      evaluation,
+      diagnosis,
+      {
+        sourceReleasePassed: candidateReleaseGate(sourceCandidate).passed,
+        repairedReleasePassed: repairedReleaseGate.passed,
+      },
+    );
+    song.criticRepair.acceptance = acceptance;
     const candidate = {
       index: candidates.length,
       song,
       evaluation,
       novelty,
       repair: song.criticRepair,
+      repairAccepted: acceptance.accepted,
+      releaseGate: repairedReleaseGate,
       targetTrack: sourceCandidate.targetTrack ?? null,
       contextTracks: sourceCandidate.contextTracks ?? null,
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
@@ -10076,6 +10180,19 @@ function runTargetedCriticRepair(candidates, {
     candidates.push(candidate);
     summary.attempts += 1;
     summary.groups.push(diagnosis.group);
+    if (acceptance.accepted) summary.accepted += 1;
+    else summary.rejected += 1;
+    summary.acceptanceHistory.push({
+      attempt: attempt + 1,
+      group: diagnosis.group,
+      sourceCandidate: sourceCandidate.index,
+      accepted: acceptance.accepted,
+      dimension: acceptance.dimension,
+      weaknessGain: acceptance.weaknessGain,
+      totalDelta: acceptance.totalDelta,
+      maxCriticalRegression: acceptance.maxCriticalRegression,
+      reasons: clone(acceptance.reasons),
+    });
     summary.targetReached = candidateMeetsAdaptiveTarget(candidate, generation);
     if (summary.targetReached) {
       summary.reason = "repair-target-reached";
