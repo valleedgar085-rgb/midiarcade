@@ -28,6 +28,37 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Inspect baseline repair classes
+        run: |
+          node --input-type=module <<'NODE'
+          import { generateNew } from './src/music-engine.js';
+          const cases = [
+            ['phase40-jazz', { seed: 'repair-reconcile-3', bars: 8, genre: 'jazz', energy: 0.05, complexity: 0.05 }],
+            ['synthwave-dialogue', {
+              genre: 'synthwave', seed: 'interlaced-phrase-proof', bars: 24,
+              humanize: 0, swing: 0, tripletAmount: 0, rollAmount: 0,
+              tracks: {
+                melody: { density: 1, variation: 0.72, humanize: 0 },
+                counterpoint: { density: 1, variation: 0.72, humanize: 0 },
+              },
+            }],
+          ];
+          for (const [name, input] of cases) {
+            const song = generateNew(input);
+            const details = song.meta?.scoreDetails ?? {};
+            const selected = details.candidateScores?.find((row) => row.index === details.selectedCandidate);
+            console.log('REPAIR_CLASS', JSON.stringify({
+              name,
+              selectedFromRepair: details.criticRepair?.selectedFromRepair,
+              selectedGroup: details.criticRepair?.selectedGroup,
+              selectedStrategy: selected?.repairStrategyId,
+              selectedMode: selected?.repairMode,
+              focusGroup: details.candidateSearch?.focusGroup,
+              focusDimension: details.candidateSearch?.focusDimension,
+              history: details.criticRepair?.acceptanceHistory,
+            }));
+          }
+          NODE
       - name: Apply melodic dialogue acceptance guard
         run: node scripts/apply-phase2-dialogue-guard.mjs
       - name: Run repair and full music-engine regression tests
