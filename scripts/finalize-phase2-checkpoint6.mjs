@@ -13,7 +13,7 @@ if (smoothStart >= 0 && smoothEnd > smoothStart) {
   source = source.slice(0, smoothStart) + source.slice(smoothEnd + 1);
 }
 
-const voiceLeadingBranch = `    } else if (surgicalWindow && diagnosis.weakestDimension === "voiceLeading") {\n      surgicalRepairSource = smoothRepairVoiceLeading(sourceCandidate.song, surgicalWindow);\n      surgicalRepairSource.id = wholeRepairSong.id;\n      surgicalRepairSource.seed = wholeRepairSong.seed;\n      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);\n      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);\n      surgicalRepairStrategy = {\n        ...(surgicalRepairStrategy ?? {}),\n        trackIds: ["chords"],\n      };\n`;
+const voiceLeadingBranch = `    } else if (surgicalWindow && diagnosis.weakestDimension === "voiceLeading") {\n      surgicalRepairSource = smoothRepairVoiceLeading(sourceCandidate.song, surgicalWindow);\n      surgicalRepairSource.id = wholeRepairSong.id;\n      surgicalRepairSource.seed = wholeRepairSong.seed;\n      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);\n      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);\n      surgicalRepairStrategy = {\n        ...(surgicalRepairStrategy ?? {}),\n        trackIds: ["chords"],\n      };\n    }\n`;
 if (source.includes(voiceLeadingBranch)) {
   source = source.replace(voiceLeadingBranch, "    }\n");
 }
