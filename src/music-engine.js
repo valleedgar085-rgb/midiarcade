@@ -10076,7 +10076,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   return song;
 }
 
-function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow = null) {
+function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow = null, strategyWindow = surgicalWindow) {
   const sourceSong = sourceCandidate.song;
   const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;
   const sourceContextTracks = sourceCandidate.contextTracks ?? {};
@@ -10088,7 +10088,7 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgical
   const repairStrategy = createSpecializedRepairStrategy(
     sourceCandidate,
     diagnosis,
-    surgicalWindow,
+    strategyWindow,
     baseConfig,
   );
   const config = specializedRepairConfig(baseConfig, repairStrategy);
@@ -10554,7 +10554,7 @@ function runTargetedCriticRepair(candidates, {
       seed,
       oneShotKitId: sourceCandidate.song.oneShotKit?.id ?? null,
     });
-    const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null);
+    const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null, surgicalWindow);
     const surgicalSong = surgicalWindow
       ? applySurgicalRepairWindow(
         sourceCandidate.song,
