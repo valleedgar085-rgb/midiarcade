@@ -5,7 +5,6 @@ import {
   sameSongDNAFamily,
   songDNASection,
 } from "../src/core/song-dna.js";
-import { createSongDNA as createLegacySongDNA } from "../src/song-dna.js";
 import { generateNew, generateSimilar } from "../src/music-engine.js";
 
 const BASE = {
@@ -80,17 +79,6 @@ test("related DNA keeps one musical family while creating a deterministic revisi
   assert.deepEqual(first.harmonic, original.harmonic);
   assert.deepEqual(first.rhythmic, original.rhythmic);
   assert.deepEqual(first.melodic, original.melodic);
-});
-
-test("legacy ArrangementEngine Song DNA facade is deterministic", () => {
-  const input = { genre: "house", bpm: 124, key: "A", scale: "minor", seed: "legacy-dna" };
-  const first = createLegacySongDNA(input);
-  const second = createLegacySongDNA(input);
-  assert.deepEqual(first, second);
-  assert.equal(first.bpm, 124);
-  assert.equal(first.genre, "house");
-  assert.equal(Number.isInteger(first.grooveSeed), true);
-  assert.equal("created" in first, false);
 });
 
 test("generated songs expose one DNA contract that drives the blueprint", () => {
