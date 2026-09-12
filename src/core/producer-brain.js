@@ -1,3 +1,5 @@
+import { clampFinite as clamp, finite } from "../utils.js";
+
 const SUPPORTED_KINDS = Object.freeze(new Set(["new", "similar", "songVariations"]));
 const MAX_ENGINE_CANDIDATES = 12;
 const STANDARD_BASE_CANDIDATES = 4;
@@ -5,15 +7,6 @@ const DEEP_BASE_CANDIDATES = 6;
 const STANDARD_ADAPTIVE_CANDIDATES = 3;
 const DEEP_ADAPTIVE_CANDIDATES = 4;
 const MAX_REPAIR_ATTEMPTS = 2;
-
-function finite(value, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function clamp(value, min = 0, max = 1) {
-  return Math.min(max, Math.max(min, finite(value, min)));
-}
 
 function round(value, digits = 4) {
   const factor = 10 ** digits;
