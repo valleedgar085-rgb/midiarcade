@@ -3,7 +3,7 @@ import fs from "node:fs";
 import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
-const brandCss = fs.readFileSync(new URL("../src/ui/phase6-brand.css", import.meta.url), "utf8");
+const brandCss = fs.readFileSync(new URL("../src/ui/creator-brand.css", import.meta.url), "utf8");
 const buildSource = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
 
 test("creator identity remains visible and receives a dedicated branded card", () => {
@@ -13,8 +13,8 @@ test("creator identity remains visible and receives a dedicated branded card", (
   assert.match(brandCss, /var\(--accent\)/);
 });
 
-test("Phase 6 menu styling is included in both web and Android build output", () => {
-  assert.match(buildSource, /phase6-brand\.css/);
+test("creator menu styling is included in both web and Android build output", () => {
+  assert.match(buildSource, /creator-brand\.css/);
   assert.match(buildSource, /androidPublicDir/);
   assert.match(buildSource, /copyRecursiveSync\(path\.join\(wwwDir, 'styles\.css'\)/);
 });

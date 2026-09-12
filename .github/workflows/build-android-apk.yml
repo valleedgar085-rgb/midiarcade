@@ -3,6 +3,8 @@ name: Build MIDI Arcade APK
 on:
   push:
     branches: [main, 'phase-*']
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

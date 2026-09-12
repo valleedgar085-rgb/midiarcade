@@ -14,3 +14,7 @@ export function finite(value, fallback = 0) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : fallback;
 }
+
+export function clampFinite(value, min = 0, max = 1) {
+  return clamp(finite(value, min), min, max);
+}

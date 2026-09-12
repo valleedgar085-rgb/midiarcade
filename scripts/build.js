@@ -43,10 +43,10 @@ const stylesheet = await transform(
 );
 fs.writeFileSync(path.join(wwwDir, 'styles.css'), stylesheet.code);
 
-// Keep the global CSS performance budget unchanged: Phase 6 creator polish is
+// Keep the global CSS performance budget unchanged: creator branding stays in
 // a tiny page-scoped style block instead of expanding the already dense sheet.
 const creatorStyles = await transform(
-  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'phase6-brand.css'), 'utf8'),
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'creator-brand.css'), 'utf8'),
   transformOptions,
 );
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');

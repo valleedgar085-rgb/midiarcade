@@ -1,13 +1,5 @@
+import { clampFinite as clamp, finite } from "../utils.js";
 import { phraseLandingProfile } from "./phrase-architecture.js";
-
-function finite(value, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, finite(value, min)));
-}
 
 function round(value, digits = 3) {
   const factor = 10 ** digits;

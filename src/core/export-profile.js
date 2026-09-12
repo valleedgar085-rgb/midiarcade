@@ -1,3 +1,5 @@
+import { clamp, finite } from "../utils.js";
+
 const TRACK_GROUPS = Object.freeze({
   full: null,
   rhythm: Object.freeze(["drums", "bass"]),
@@ -12,15 +14,6 @@ const PROFILE_LABELS = Object.freeze({
   leads: "Lead voices",
   selected: "Selected instrument",
 });
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function finite(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
 
 function quantizeNotes(notes, totalBeats, step = 0.25) {
   const byOnset = new Map();
@@ -73,4 +66,3 @@ export function prepareMidiExport(song, { profile = "full", timing = "performanc
     },
   };
 }
-

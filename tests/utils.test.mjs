@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clamp, finite } from "../src/utils.js";
+import { clamp, clampFinite, finite } from "../src/utils.js";
 
 test("clamp returns value unchanged when within bounds", () => {
   assert.equal(clamp(5, 0, 10), 5);
@@ -47,4 +47,11 @@ test("finite uses 0 as default fallback", () => {
 test("finite coerces null to 0 (Number(null) === 0 is finite)", () => {
   assert.equal(finite(null), 0);
   assert.equal(finite(null, 99), 0);
+});
+
+test("clampFinite preserves finite coercion and fallback semantics", () => {
+  assert.equal(clampFinite("0.75"), 0.75);
+  assert.equal(clampFinite(undefined), 0);
+  assert.equal(clampFinite(undefined, -1, 1), -1);
+  assert.equal(clampFinite(4, -1, 1), 1);
 });
