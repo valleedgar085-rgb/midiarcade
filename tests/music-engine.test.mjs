@@ -412,7 +412,7 @@ test("phase 20 repairs only when needed and stays inside a bounded deterministic
 
 test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {
   const input = {
-    seed: "repair-reconcile-1",
+    seed: "repair-reconcile-3",
     bars: 8,
     genre: "jazz",
     energy: 0.05,
