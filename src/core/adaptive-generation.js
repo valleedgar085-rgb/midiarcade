@@ -1,3 +1,4 @@
+import { clampFinite as clamp, finite } from "../utils.js";
 import { applyProducerBrainConfig } from "./producer-brain.js";
 
 const TRACK_IDS = Object.freeze(["drums", "bass", "chords", "melody", "counterpoint", "pad"]);
@@ -37,15 +38,6 @@ const GENRE_CHARACTER = Object.freeze({
   synthwave: { grooveDepth: 0.82, bassMotion: 0.76, melodyMotion: 0.76, harmonicColor: 0.72, space: 0.54, syncopationDelta: 0.012, swingDelta: 0, humanizeDelta: -0.002, fillDelta: 0.016 },
   synthPopRadio: { grooveDepth: 0.82, bassMotion: 0.72, melodyMotion: 0.86, harmonicColor: 0.72, space: 0.54, syncopationDelta: 0.016, swingDelta: 0, humanizeDelta: -0.002, fillDelta: 0.016 },
 });
-
-function finite(value, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function clamp(value, min = 0, max = 1) {
-  return Math.min(max, Math.max(min, finite(value, min)));
-}
 
 function round(value, digits = 4) {
   const factor = 10 ** digits;
