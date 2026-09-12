@@ -10643,11 +10643,79 @@ function candidateSelectionScore(evaluation, novelty, generation) {
   );
 }
 
+function melodicDialogueMetrics(song) {
+  const melody = song?.tracks?.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = song?.tracks?.find((track) => track.id === "counterpoint")?.notes ?? [];
+  if (!counterpoint.length || !melody.length) {
+    return {
+      counterpointNotes: counterpoint.length,
+      simultaneousRatio: 0,
+      underLeadRatio: 0,
+    };
+  }
+  const simultaneous = counterpoint.filter((note) => (
+    melody.some((lead) => Math.abs(lead.start - note.start) < 0.00001)
+  )).length;
+  const underLead = counterpoint.filter((note) => (
+    melody.some((lead) => (
+      note.start > lead.start - 0.04
+      && note.start < lead.start + lead.duration + 0.08
+    ))
+  )).length;
+  return {
+    counterpointNotes: counterpoint.length,
+    simultaneousRatio: round(simultaneous / counterpoint.length, 4),
+    underLeadRatio: round(underLead / counterpoint.length, 4),
+  };
+}
+
+function evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis = {}) {
+  const thresholds = { simultaneousRatio: 0.1, underLeadRatio: 0.25 };
+  const applies = String(diagnosis?.weakestDimension ?? "") === "registerHealth";
+  if (!applies || !sourceSong || !repairedSong) {
+    return {
+      applies,
+      preserved: true,
+      sourceHealthy: null,
+      repairedHealthy: null,
+      source: null,
+      repaired: null,
+      thresholds,
+    };
+  }
+  const sourceMetrics = melodicDialogueMetrics(sourceSong);
+  const repairedMetrics = melodicDialogueMetrics(repairedSong);
+  const healthy = (metrics) => (
+    metrics.simultaneousRatio <= thresholds.simultaneousRatio + 1e-9
+    && metrics.underLeadRatio <= thresholds.underLeadRatio + 1e-9
+  );
+  const sourceHealthy = healthy(sourceMetrics);
+  const repairedHealthy = healthy(repairedMetrics);
+  return {
+    applies,
+    // A register-health repair may relocate pitch/register, but it must not turn
+    // an already-clean melodic conversation into stacked lead/counterpoint attacks.
+    // Other dimensions (notably phrase resolution) retain their own cadence and
+    // interlock acceptance contracts instead of being judged by this extra veto.
+    preserved: !sourceHealthy || repairedHealthy,
+    sourceHealthy,
+    repairedHealthy,
+    source: sourceMetrics,
+    repaired: repairedMetrics,
+    thresholds,
+  };
+}
+
 export function evaluateRepairAcceptance(
   sourceEvaluation = {},
   repairedEvaluation = {},
   diagnosis = {},
-  { sourceReleasePassed = null, repairedReleasePassed = null } = {},
+  {
+    sourceReleasePassed = null,
+    repairedReleasePassed = null,
+    sourceSong = null,
+    repairedSong = null,
+  } = {},
 ) {
   const dimension = String(diagnosis?.weakestDimension ?? "");
   const sourceSubscores = sourceEvaluation?.subscores ?? {};
@@ -10687,6 +10755,7 @@ export function evaluateRepairAcceptance(
   const scaleSafetyPreserved = !sourceQuality.scaleSafe || repairedQuality.scaleSafe;
   const phase9Preserved = !sourceQuality.passed || repairedQuality.passed;
   const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;
+  const melodicDialogue = evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis);
   const thresholds = {
     minimumWeaknessGain: 0.5,
     maximumTotalRegression: 1,
@@ -10704,6 +10773,7 @@ export function evaluateRepairAcceptance(
   if (!scaleSafetyPreserved) reasons.push("scale-safety-regression");
   if (!phase9Preserved) reasons.push("quality-gate-regression");
   if (!releasePreserved) reasons.push("release-gate-regression");
+  if (!melodicDialogue.preserved) reasons.push("melodic-dialogue-regression");
   return {
     version: 1,
     accepted: reasons.length === 0,
@@ -10719,6 +10789,8 @@ export function evaluateRepairAcceptance(
     scaleSafetyPreserved,
     phase9Preserved,
     releasePreserved,
+    melodicDialoguePreserved: melodicDialogue.preserved,
+    melodicDialogue,
     thresholds,
     reasons,
   };
@@ -10834,6 +10906,8 @@ function runTargetedCriticRepair(candidates, {
         {
           sourceReleasePassed: candidateReleaseGate(sourceCandidate).passed,
           repairedReleasePassed: repairedReleaseGate.passed,
+          sourceSong: sourceCandidate.song,
+          repairedSong: candidateSong,
         },
       );
       candidateSong.criticRepair.acceptance = acceptance;
