@@ -85,6 +85,27 @@ function aggregateAttempts(attempts, key) {
   ));
 }
 
+function summarizeSkips(songs = []) {
+  const skips = songs.flatMap((song) => (song.skippedGlobalDimensions ?? []).map((skip) => ({
+    genre: song.genre,
+    profile: song.profile,
+    dimension: String(skip?.dimension ?? "unknown"),
+    group: String(skip?.group ?? "unknown"),
+    score: round(skip?.score, 1),
+    reason: String(skip?.reason ?? "song-level-search-owned"),
+  })));
+  const counts = new Map();
+  for (const skip of skips) counts.set(skip.dimension, (counts.get(skip.dimension) ?? 0) + 1);
+  return {
+    globalRepairSkips: skips.length,
+    songsWithGlobalRepairSkips: songs.filter((song) => (song.skippedGlobalDimensions ?? []).length > 0).length,
+    skippedByDimension: [...counts.entries()]
+      .map(([dimension, count]) => ({ dimension, count }))
+      .sort((left, right) => right.count - left.count || left.dimension.localeCompare(right.dimension)),
+    skippedGlobalDimensions: skips,
+  };
+}
+
 function summarizeSongs(songs = []) {
   const candidates = songs.map((song) => finite(song.candidatesEvaluated, 0));
   return {
@@ -142,11 +163,13 @@ export function summarizeRepairEffectiveness({ attempts = [], songs = [] } = {})
   const byDimension = aggregateAttempts(normalizedAttempts, "dimension");
   const byGenre = aggregateAttempts(normalizedAttempts, "genre");
   const songSummary = summarizeSongs(songs);
+  const skipSummary = summarizeSkips(songs);
   const report = {
     phase: 20,
     version: 1,
-    labVersion: 1,
+    labVersion: 2,
     ...songSummary,
+    ...skipSummary,
     repairAttempts: normalizedAttempts.length,
     acceptedRepairs: normalizedAttempts.filter((attempt) => attempt.accepted).length,
     rejectedRepairs: normalizedAttempts.filter((attempt) => !attempt.accepted).length,
@@ -213,6 +236,12 @@ export function runRepairEffectivenessBenchmark({
           selectedStrategyId,
           focusDimension: details.candidateSearch?.focusDimension ?? null,
           focusGroup: details.candidateSearch?.focusGroup ?? null,
+          skippedGlobalDimensions: (repair.skippedGlobalDimensions ?? []).map((entry) => ({
+            group: entry.group ?? null,
+            dimension: entry.dimension ?? null,
+            score: round(entry.score, 1),
+            reason: entry.reason ?? "song-level-search-owned",
+          })),
         });
         for (const entry of repair.acceptanceHistory ?? []) {
           attempts.push({
