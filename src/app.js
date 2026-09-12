@@ -20,7 +20,7 @@ import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
 import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.js";
-import { sanitizePersistedTrackSettings, sanitizeTasteProfile, validPersistedSong } from "./core/session-contract.js";
+import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessionAutosaveController, decodePersistedSession } from "./core/session-runtime.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
@@ -212,98 +212,64 @@ export async function discoverMidiDevices(options) {
   return midiInput.refreshDevices(options);
 }
 
-let sessionSaveTimer = null;
 let midiConnectionRequestGeneration = 0;
 let latestMidiRequestedDeviceId = "onscreen";
 
-function persistedSession() {
-  return {
+const sessionRuntime = createSessionAutosaveController({
+  storage: sessionStorage,
+  snapshot: () => createPersistedSessionSnapshot(state, {
     schema: SESSION_SCHEMA,
-    savedAt: new Date().toISOString(),
-    song: state.song,
-    trackSettings: state.trackSettings,
-    muted: [...state.muted],
-    solo: [...state.solo],
-    locked: [...state.locked],
-    autoControls: [...state.autoControls],
-    selectedTrack: state.selectedTrack,
-    guidedMode: state.guidedMode,
-    recipeIndex: state.recipeIndex,
-    mixAssistant: normalizeMixAssistant(state.mixAssistant),
-    tasteProfile: state.tasteProfile,
-  };
-}
-
-export function saveSessionNow() {
-  clearTimeout(sessionSaveTimer);
-  sessionSaveTimer = null;
-  if (!state.song) return false;
-  const result = sessionStorage.save(persistedSession());
-  if (result.ok) {
+    normalizeMixAssistant,
+  }),
+  onSaved() {
     const status = $("#autosaveStatus");
     if (status) status.innerHTML = "<i></i> SAVED ON DEVICE";
-    return true;
-  }
-  if (result.error) console.warn("Session autosave was unavailable", result.error);
-  const status = $("#autosaveStatus");
-  if (status) status.textContent = "SESSION OPEN";
-  return false;
+  },
+  onUnavailable(result) {
+    if (result?.error) console.warn("Session autosave was unavailable", result.error);
+    const status = $("#autosaveStatus");
+    if (status) status.textContent = "SESSION OPEN";
+  },
+  defer(task) {
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+      window.requestIdleCallback(task, { timeout: 1000 });
+    } else {
+      task();
+    }
+  },
+});
+
+export function saveSessionNow() {
+  return sessionRuntime.saveNow();
 }
 
 function scheduleSessionSave() {
-  clearTimeout(sessionSaveTimer);
-  sessionSaveTimer = setTimeout(() => {
-    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(() => saveSessionNow(), { timeout: 1000 });
-    } else {
-      saveSessionNow();
-    }
-  }, 400);
+  return sessionRuntime.schedule();
 }
 
 function discardPersistedSession() {
-  sessionStorage.discard();
+  return sessionRuntime.discard();
 }
 
 export function restorePersistedSession() {
   rejectedPersistedSession = false;
-  const stored = sessionStorage.load();
-  if (stored.status === "empty" || stored.status === "unavailable") return false;
-  if (stored.status !== "ready") {
-    if (stored.error) console.warn("Saved session was corrupt and has been ignored", stored.error);
+  const restored = decodePersistedSession(sessionStorage.load(), {
+    schema: SESSION_SCHEMA,
+    trackOrder: TRACK_ORDER,
+    defaultTrackSettings: DEFAULT_TRACK_SETTINGS,
+    genreIds: GENRE_IDS,
+    recipeCount: RECIPES.length,
+    normalizeMixAssistant,
+  });
+  if (restored.status === "empty") return false;
+  if (restored.status !== "ready") {
+    if (restored.error) console.warn("Saved session was corrupt and has been ignored", restored.error);
     rejectedPersistedSession = true;
     discardPersistedSession();
     return false;
   }
-  try {
-    const parsed = stored.value;
-    if (!parsed || parsed.schema !== SESSION_SCHEMA || !validPersistedSong(parsed.song, { trackOrder: TRACK_ORDER })) {
-      rejectedPersistedSession = true;
-      discardPersistedSession();
-      return false;
-    }
-    state.song = deepClone(parsed.song);
-    state.trackSettings = sanitizePersistedTrackSettings(parsed.trackSettings, { defaults: DEFAULT_TRACK_SETTINGS, trackOrder: TRACK_ORDER });
-    state.muted = new Set(Array.isArray(parsed.muted) ? parsed.muted.filter((id) => TRACK_ORDER.includes(id)) : []);
-    state.solo = new Set(Array.isArray(parsed.solo) ? parsed.solo.filter((id) => TRACK_ORDER.includes(id)) : []);
-    state.locked = new Set(Array.isArray(parsed.locked) ? parsed.locked.filter((id) => TRACK_ORDER.includes(id)) : []);
-    state.autoControls = new Set(
-      Array.isArray(parsed.autoControls)
-        ? parsed.autoControls.filter((key) => typeof key === "string" && key.length <= 80).slice(0, 128)
-        : [],
-    );
-    state.selectedTrack = TRACK_ORDER.includes(parsed.selectedTrack) ? parsed.selectedTrack : "drums";
-    state.guidedMode = parsed.guidedMode !== false;
-    state.recipeIndex = clamp(Math.round(Number(parsed.recipeIndex) || 0), 0, RECIPES.length - 1);
-    state.mixAssistant = { ...normalizeMixAssistant(parsed.mixAssistant) };
-    state.tasteProfile = sanitizeTasteProfile(parsed.tasteProfile, { genreIds: GENRE_IDS });
-    return true;
-  } catch (error) {
-    console.warn("Saved session was corrupt and has been ignored", error);
-    rejectedPersistedSession = true;
-    discardPersistedSession();
-    return false;
-  }
+  applyPersistedSessionState(state, restored.value);
+  return true;
 }
 
 const editorNoteIds = new WeakMap();
