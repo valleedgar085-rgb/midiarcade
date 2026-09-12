@@ -37,6 +37,24 @@ function evaluation(score = 88, overrides = {}) {
   };
 }
 
+function dialogueSong(counterpointStart) {
+  return {
+    tracks: [
+      {
+        id: "melody",
+        notes: [
+          { start: 0, duration: 1, pitch: 72 },
+          { start: 2, duration: 0.75, pitch: 74 },
+        ],
+      },
+      {
+        id: "counterpoint",
+        notes: [{ start: counterpointStart, duration: 0.4, pitch: 67 }],
+      },
+    ],
+  };
+}
+
 test("repair acceptance keeps a measurable weakness improvement with stable critical quality", () => {
   const source = evaluation(88, { motif: 52 });
   const repaired = evaluation(88.5, { motif: 57 });
@@ -51,6 +69,7 @@ test("repair acceptance keeps a measurable weakness improvement with stable crit
   assert.equal(result.dimension, "motif");
   assert.equal(result.weaknessGain, 5);
   assert.equal(result.releasePreserved, true);
+  assert.equal(result.melodicDialoguePreserved, true);
   assert.deepEqual(result.reasons, []);
 });
 
@@ -87,6 +106,29 @@ test("repair acceptance preserves an already-passing release contract", () => {
   assert.equal(result.accepted, false);
   assert.equal(result.releasePreserved, false);
   assert.ok(result.reasons.includes("release-gate-regression"));
+});
+
+test("repair acceptance preserves lead and counterpoint dialogue geometry", () => {
+  const sourceEvaluation = evaluation(88, { motif: 52 });
+  const repairedEvaluation = evaluation(88.5, { motif: 58 });
+  const sourceSong = dialogueSong(1.4);
+  const repairedSong = dialogueSong(0.45);
+  const result = evaluateRepairAcceptance(
+    sourceEvaluation,
+    repairedEvaluation,
+    { weakestDimension: "motif", weakestScore: 52 },
+    {
+      sourceReleasePassed: true,
+      repairedReleasePassed: true,
+      sourceSong,
+      repairedSong,
+    },
+  );
+
+  assert.equal(result.melodicDialoguePreserved, false);
+  assert.ok(result.melodicDialogue.repaired.underLeadRatio > result.melodicDialogue.thresholds.underLeadRatio);
+  assert.equal(result.accepted, false);
+  assert.ok(result.reasons.includes("melodic-dialogue-regression"));
 });
 
 test("live Producer Brain repair auditing never commits a rejected targeted repair", () => {
