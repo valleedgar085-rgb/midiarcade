@@ -39,13 +39,15 @@ jobs:
           import { runRepairEffectivenessBenchmark } from './src/repair-effectiveness-benchmark.js';
           const seeds = Array.from({ length: 4 }, (_, index) => `repair-cal-${String(index + 1).padStart(2, '0')}`);
           const report = runRepairEffectivenessBenchmark({ seeds, bars: 8 });
-          const dimension = (id) => report.byDimension.find((entry) => entry.id === id);
-          const phrase = dimension('phraseResolution');
-          const stage = dimension('stageInterlock');
-          if (!phrase || phrase.acceptanceRate < 0.39) throw new Error(`phraseResolution acceptance ${phrase?.acceptanceRate ?? 'missing'} is below 39%`);
-          if (!stage || stage.acceptanceRate < 0.67) throw new Error(`stageInterlock acceptance ${stage?.acceptanceRate ?? 'missing'} is below 67%`);
-          if (report.acceptanceRate < 0.8) throw new Error(`overall repair acceptance ${report.acceptanceRate} is below 80%`);
-          console.log(JSON.stringify({ overall: report.acceptanceRate, phrase, stage }, null, 2));
+          const phrase = report.byDimension.find((entry) => entry.id === 'phraseResolution');
+          const stage = report.byDimension.find((entry) => entry.id === 'stageInterlock');
+          const routedStage = report.skippedByDimension.find((entry) => entry.dimension === 'stageInterlock');
+          if (!phrase || phrase.acceptanceRate < 0.44) throw new Error(`phraseResolution acceptance ${phrase?.acceptanceRate ?? 'missing'} is below 44%`);
+          if (stage) throw new Error(`stageInterlock should be search-owned, but ${stage.attempts} targeted repair attempts remained`);
+          if (!routedStage || routedStage.count < 6) throw new Error(`stageInterlock search routing count ${routedStage?.count ?? 0} is below expected floor`);
+          if (report.acceptanceRate < 0.82) throw new Error(`overall repair acceptance ${report.acceptanceRate} is below 82%`);
+          if (report.maxCandidatesEvaluated > 9) throw new Error(`candidate ceiling regression: ${report.maxCandidatesEvaluated}`);
+          console.log(JSON.stringify({ overall: report.acceptanceRate, phrase, routedStage, maxCandidates: report.maxCandidatesEvaluated }, null, 2));
           NODE
       - name: Commit validated checkpoint 7 engine patch
         run: |
@@ -56,5 +58,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/music-engine.js
-          git commit -m "Phase 2: precision cadence and stage interlock repair"
+          git commit -m "Phase 2: refine cadence and route global interlock diagnosis"
           git push origin HEAD:phase2/producer-brain-weakness-aware-search
