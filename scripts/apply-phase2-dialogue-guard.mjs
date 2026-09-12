@@ -35,25 +35,33 @@ const helper = `function melodicDialogueMetrics(song) {
 }
 
 function evaluateMelodicDialoguePreservation(sourceSong, repairedSong) {
+  const thresholds = { simultaneousRatio: 0.1, underLeadRatio: 0.25 };
   if (!sourceSong || !repairedSong) {
     return {
       preserved: true,
+      sourceHealthy: null,
+      repairedHealthy: null,
       source: null,
       repaired: null,
-      thresholds: { simultaneousRatio: 0.1, underLeadRatio: 0.25 },
+      thresholds,
     };
   }
   const sourceMetrics = melodicDialogueMetrics(sourceSong);
   const repairedMetrics = melodicDialogueMetrics(repairedSong);
-  const thresholds = {
-    simultaneousRatio: round(Math.max(0.1, sourceMetrics.simultaneousRatio + 0.03), 4),
-    underLeadRatio: round(Math.max(0.25, sourceMetrics.underLeadRatio + 0.05), 4),
-  };
+  const healthy = (metrics) => (
+    metrics.simultaneousRatio <= thresholds.simultaneousRatio + 1e-9
+    && metrics.underLeadRatio <= thresholds.underLeadRatio + 1e-9
+  );
+  const sourceHealthy = healthy(sourceMetrics);
+  const repairedHealthy = healthy(repairedMetrics);
   return {
-    preserved: (
-      repairedMetrics.simultaneousRatio <= thresholds.simultaneousRatio + 1e-9
-      && repairedMetrics.underLeadRatio <= thresholds.underLeadRatio + 1e-9
-    ),
+    // Preserve an already-clean call-and-response relationship. If the source
+    // itself needs interlock reconstruction, let the normal critic/release
+    // contracts decide whether that repair is useful instead of freezing the
+    // old collision geometry in place.
+    preserved: !sourceHealthy || repairedHealthy,
+    sourceHealthy,
+    repairedHealthy,
     source: sourceMetrics,
     repaired: repairedMetrics,
     thresholds,
@@ -98,4 +106,4 @@ replaceOnce(
 );
 
 fs.writeFileSync(path, source);
-console.log("Applied Phase 2 melodic dialogue repair acceptance guard.");
+console.log("Applied Phase 2 source-aware melodic dialogue repair acceptance guard.");
