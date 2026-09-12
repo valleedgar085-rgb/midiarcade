@@ -111,6 +111,70 @@ test("phrase cadence precision preserves the source while whole repair remains a
   assert.ok(entry.surgicalWindow?.bars >= 2 && entry.surgicalWindow?.bars <= 8);
 });
 
+test("checkpoint 6 precision arrangement arc improves tension without collateral regression", () => {
+  const song = generateNew({
+    genre: "trap",
+    seed: "repair-cal-02:trap:sparse",
+    bars: 8,
+    energy: 0.12,
+    complexity: 0.18,
+  });
+  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
+    ?.find((attempt) => attempt.repairStrategyId === "arrangement-energy-arc");
+
+  assert.ok(entry, "verified seed should expose arrangement-energy-arc repair");
+  assert.equal(entry.dimension, "tensionFollow");
+  assert.equal(entry.accepted, true);
+  assert.equal(entry.surgicalAttempted, false);
+  assert.ok(entry.weaknessGain >= 1);
+  assert.ok(entry.totalDelta >= 0);
+  assert.equal(entry.maxCriticalRegression, 0);
+});
+
+test("checkpoint 6 density repair wins surgically without broad fallback", () => {
+  const song = generateNew({
+    genre: "jazz",
+    seed: "repair-cal-02:jazz:balanced",
+    bars: 8,
+    energy: 0.55,
+    complexity: 0.55,
+  });
+  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
+    ?.find((attempt) => attempt.dimension === "density");
+
+  assert.ok(entry, "verified seed should expose density repair");
+  assert.equal(entry.repairStrategyId, "density-build");
+  assert.equal(entry.accepted, true);
+  assert.equal(entry.surgicalAttempted, true);
+  assert.equal(entry.surgicalAccepted, true);
+  assert.equal(entry.wholeFallbackUsed, false);
+  assert.equal(entry.selectedRepairMode, "surgical-window");
+  assert.ok(entry.weaknessGain >= 1);
+  assert.ok(entry.surgicalWindow?.bars >= 2 && entry.surgicalWindow?.bars <= 8);
+});
+
+test("checkpoint 6 harmony keeps the proven whole repair when surgery cannot improve the target", () => {
+  const song = generateNew({
+    genre: "drumBass",
+    seed: "repair-cal-01:drumBass:sparse",
+    bars: 8,
+    energy: 0.12,
+    complexity: 0.18,
+  });
+  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
+    ?.find((attempt) => attempt.repairStrategyId === "harmony-foundation");
+
+  assert.ok(entry, "verified seed should expose harmony foundation repair");
+  assert.equal(entry.dimension, "harmonic");
+  assert.equal(entry.accepted, true);
+  assert.equal(entry.surgicalAttempted, true);
+  assert.equal(entry.surgicalAccepted, false);
+  assert.equal(entry.wholeAccepted, true);
+  assert.equal(entry.wholeFallbackUsed, true);
+  assert.equal(entry.selectedRepairMode, "whole-candidate");
+  assert.ok(entry.weaknessGain >= 1);
+});
+
 test("song-level statistical weaknesses do not consume local surgical repair attempts", () => {
   const globalDimensions = new Set(["memory", "repetition", "drumVariety"]);
   const inputs = [

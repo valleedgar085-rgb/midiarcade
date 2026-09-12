@@ -10304,54 +10304,6 @@ function rebalanceRepairDensity(song, strategy, window) {
   return repaired;
 }
 
-function smoothRepairVoiceLeading(song, window) {
-  const repaired = clone(song);
-  const chordTrack = repaired.tracks?.find((track) => track.id === "chords");
-  if (!chordTrack?.notes?.length) return repaired;
-  const startBeat = Number.isFinite(Number(window?.startBeat)) ? Number(window.startBeat) : 0;
-  const endBeat = Number.isFinite(Number(window?.endBeat)) ? Number(window.endBeat) : Infinity;
-  const groups = new Map();
-  for (const note of chordTrack.notes) {
-    if (note.start < startBeat - 1e-6 || note.start >= endBeat - 1e-6) continue;
-    const key = round(note.start);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(note);
-  }
-  const ordered = [...groups.entries()].sort((left, right) => left[0] - right[0]);
-  let previous = null;
-  let edits = 0;
-  for (const [, notes] of ordered) {
-    notes.sort((left, right) => left.pitch - right.pitch);
-    if (previous?.length) {
-      for (const note of notes) {
-        const original = note.pitch;
-        const candidates = [-24, -12, 0, 12, 24]
-          .map((offset) => original + offset)
-          .filter((pitch) => pitch >= 36 && pitch <= 96)
-          .map((pitch) => ({
-            pitch,
-            distance: Math.min(...previous.map((prior) => Math.abs(pitch - prior))),
-            shift: Math.abs(pitch - original),
-          }))
-          .sort((left, right) => left.distance - right.distance || left.shift - right.shift || left.pitch - right.pitch);
-        const chosen = candidates[0]?.pitch ?? original;
-        if (chosen !== original) {
-          note.pitch = chosen;
-          note.producerRepair = "harmony-voice-leading";
-          edits += 1;
-        }
-      }
-    }
-    previous = notes.map((note) => note.pitch);
-  }
-  chordTrack.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-  repaired.precisionRepair = {
-    ...(repaired.precisionRepair ?? {}),
-    voiceLeading: { version: 1, edits, startBeat: round(startBeat), endBeat: Number.isFinite(endBeat) ? round(endBeat) : null },
-  };
-  return repaired;
-}
-
 function directSpecializedRepairSource(sourceSong, strategy, config, window = null) {
   const dimension = String(strategy?.dimension ?? "");
   if (dimension === "transitions") return reinforceRepairTransitions(sourceSong, config);
@@ -11383,16 +11335,6 @@ function runTargetedCriticRepair(candidates, {
       surgicalRepairSource.seed = wholeRepairSong.seed;
       surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
       surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
-    } else if (surgicalWindow && diagnosis.weakestDimension === "voiceLeading") {
-      surgicalRepairSource = smoothRepairVoiceLeading(sourceCandidate.song, surgicalWindow);
-      surgicalRepairSource.id = wholeRepairSong.id;
-      surgicalRepairSource.seed = wholeRepairSong.seed;
-      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
-      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
-      surgicalRepairStrategy = {
-        ...(surgicalRepairStrategy ?? {}),
-        trackIds: ["chords"],
-      };
     }
     const surgicalSong = surgicalWindow
       ? applySurgicalRepairWindow(
