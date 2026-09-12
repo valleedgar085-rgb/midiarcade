@@ -9544,6 +9544,219 @@ function replaceSongTracks(sourceTracks, replacementTracks, trackIds) {
   ));
 }
 
+function surgicalWindowDimensionScore(window, diagnosis = {}) {
+  const diagnostics = window?.diagnostics ?? {};
+  const unit = (name, fallback = 0.5) => clamp(finite(diagnostics[name], fallback), 0, 1);
+  const resolves = diagnostics.resolves ? 1 : 0;
+  const separation = 1 - unit("collisionRatio", 0);
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  if (dimension === "density") return round(unit("densityFit") * 100);
+  if (dimension === "groove" || dimension === "drumVariety") {
+    return round(average([unit("bassLock"), unit("densityFit"), unit("coverage")], 0.5) * 100);
+  }
+  if (dimension === "separation") return round(separation * 100);
+  if (["harmonic", "voiceLeading", "cadence", "harmonicJourney", "phraseResolution"].includes(dimension)) {
+    return round(average([unit("melodyFit"), resolves, separation], 0.5) * 100);
+  }
+  if (["motif", "repetition", "memory", "registerHealth"].includes(dimension)) {
+    return round(average([unit("melodyFit"), resolves, separation, unit("coverage")], 0.5) * 100);
+  }
+  if (dimension === "performance") {
+    return round(average([unit("coverage"), unit("densityFit"), resolves], 0.5) * 100);
+  }
+  return clamp(finite(window?.score, 70), 0, 100);
+}
+
+/**
+ * Pick the smallest deterministic phrase span that exposes the diagnosed weakness.
+ * Critic 7.0 supplies 2-4 bar windows; groove/motif/performance problems may join
+ * one contiguous phrase, keeping Producer Brain surgery strictly inside 2-8 bars.
+ */
+export function diagnoseSurgicalRepairWindow(song, diagnosis = {}) {
+  if (!song?.meta || !Array.isArray(song?.tracks) || !Array.isArray(song?.structure) || !song.structure.length) {
+    return null;
+  }
+  const config = normalizeConfig(configFromSong(song));
+  const windows = evaluatePhraseWindows(
+    song.tracks,
+    song.structure,
+    song.harmony ?? [],
+    config,
+    song.grooveConductor,
+  );
+  if (!windows.length) return null;
+  const scored = windows.map((window) => ({
+    ...window,
+    focusScore: surgicalWindowDimensionScore(window, diagnosis),
+  }));
+  scored.sort((left, right) => (
+    left.focusScore - right.focusScore
+    || left.score - right.score
+    || left.startBeat - right.startBeat
+  ));
+  const primary = scored[0];
+  const members = [primary];
+  const expand = ["groove", "motif", "performance"].includes(diagnosis?.group)
+    || ["density", "drumVariety", "repetition", "memory"].includes(diagnosis?.weakestDimension);
+  if (expand) {
+    const neighbors = scored
+      .filter((window) => (
+        window.id !== primary.id
+        && window.sectionId === primary.sectionId
+        && (Math.abs(window.endBar - primary.startBar) < 1e-6 || Math.abs(window.startBar - primary.endBar) < 1e-6)
+        && Math.max(window.endBar, primary.endBar) - Math.min(window.startBar, primary.startBar) <= 8
+      ))
+      .sort((left, right) => (
+        left.focusScore - right.focusScore
+        || left.score - right.score
+        || left.startBeat - right.startBeat
+      ));
+    if (neighbors[0]) members.push(neighbors[0]);
+  }
+  members.sort((left, right) => left.startBeat - right.startBeat);
+  const startBar = Math.min(...members.map((window) => window.startBar));
+  const endBar = Math.max(...members.map((window) => window.endBar));
+  const startBeat = Math.min(...members.map((window) => window.startBeat));
+  const endBeat = Math.max(...members.map((window) => window.endBeat));
+  return {
+    version: 1,
+    id: `${primary.sectionId}:${startBar}-${endBar}`,
+    sectionId: primary.sectionId,
+    startBar,
+    endBar,
+    startBeat: round(startBeat),
+    endBeat: round(endBeat),
+    bars: endBar - startBar,
+    focusDimension: diagnosis?.weakestDimension ?? null,
+    focusScore: round(average(members.map((window) => window.focusScore), primary.focusScore)),
+    scoreBefore: round(average(members.map((window) => window.score), primary.score)),
+    phraseWindowIds: members.map((window) => window.id),
+    diagnostics: clone(primary.diagnostics ?? {}),
+  };
+}
+
+function targetedRepairTrackIds(sourceCandidate, diagnosis) {
+  const targetTrack = TRACK_DEFINITIONS[sourceCandidate?.targetTrack] ? sourceCandidate.targetTrack : null;
+  if (targetTrack) return [targetTrack];
+  if (diagnosis?.group === "harmony") return ["bass", "chords", "melody", "counterpoint", "pad"];
+  if (diagnosis?.group === "groove") return ["drums", "bass"];
+  if (diagnosis?.group === "motif") return ["melody", "counterpoint"];
+  if (diagnosis?.group === "performance") return [...TRACK_IDS];
+  return [...TRACK_IDS];
+}
+
+function spliceNotesInSurgicalWindow(sourceNotes = [], repairedNotes = [], window = {}) {
+  const startBeat = finite(window.startBeat, 0);
+  const endBeat = Math.max(startBeat, finite(window.endBeat, startBeat));
+  const outside = sourceNotes.filter((note) => note.start < startBeat - 1e-6 || note.start >= endBeat - 1e-6);
+  const inside = repairedNotes.filter((note) => note.start >= startBeat - 1e-6 && note.start < endBeat - 1e-6);
+  return [...outside.map(clone), ...inside.map(clone)]
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+
+function timedEventBeat(event) {
+  const value = Number(event?.startBeat ?? event?.start);
+  return Number.isFinite(value) ? value : null;
+}
+
+function spliceTimedEventsInSurgicalWindow(sourceEvents = [], repairedEvents = [], window = {}) {
+  const startBeat = finite(window.startBeat, 0);
+  const endBeat = Math.max(startBeat, finite(window.endBeat, startBeat));
+  if (![...sourceEvents, ...repairedEvents].some((event) => timedEventBeat(event) != null)) {
+    return clone(sourceEvents);
+  }
+  const outside = sourceEvents.filter((event) => {
+    const beat = timedEventBeat(event);
+    return beat == null || beat < startBeat - 1e-6 || beat >= endBeat - 1e-6;
+  });
+  const inside = repairedEvents.filter((event) => {
+    const beat = timedEventBeat(event);
+    return beat != null && beat >= startBeat - 1e-6 && beat < endBeat - 1e-6;
+  });
+  return [...outside.map(clone), ...inside.map(clone)]
+    .sort((left, right) => finite(timedEventBeat(left), 0) - finite(timedEventBeat(right), 0));
+}
+
+function applySurgicalRepairWindow(sourceSong, repairedSong, config, diagnosis, sourceCandidate, window) {
+  const trackIds = targetedRepairTrackIds(sourceCandidate, diagnosis);
+  const repairedById = new Map((repairedSong.tracks ?? []).map((track) => [track.id, track]));
+  const song = clone(sourceSong);
+  song.id = repairedSong.id;
+  song.seed = repairedSong.seed;
+  song.settings = clone(repairedSong.settings ?? sourceSong.settings);
+  song.tracks = sourceSong.tracks.map((track) => {
+    if (!trackIds.includes(track.id)) return clone(track);
+    const repairedTrack = repairedById.get(track.id) ?? track;
+    return {
+      ...clone(track),
+      notes: spliceNotesInSurgicalWindow(track.notes ?? [], repairedTrack.notes ?? [], window),
+    };
+  });
+  if (diagnosis?.group === "harmony") {
+    song.harmony = spliceTimedEventsInSurgicalWindow(
+      sourceSong.harmony ?? [],
+      repairedSong.harmony ?? [],
+      window,
+    );
+  } else {
+    song.harmony = clone(sourceSong.harmony ?? []);
+  }
+  song.meta = { ...sourceSong.meta, ideaFingerprint: null };
+  const rescoredWindows = evaluatePhraseWindows(
+    song.tracks,
+    song.structure,
+    song.harmony,
+    config,
+    song.grooveConductor,
+  );
+  const affectedWindows = rescoredWindows.filter((candidate) => (
+    candidate.startBeat < window.endBeat - 1e-6 && candidate.endBeat > window.startBeat + 1e-6
+  ));
+  const scoreAfter = round(average(affectedWindows.map((candidate) => candidate.score), window.scoreBefore));
+  song.phraseCritic = {
+    ...(sourceSong.phraseCritic ?? {}),
+    phase: 41,
+    version: 1,
+    status: "complete",
+    analyzedWindows: rescoredWindows.length,
+    weakestScore: rescoredWindows.length ? Math.min(...rescoredWindows.map((candidate) => candidate.score)) : 100,
+    windows: rescoredWindows,
+    repairs: [
+      ...clone(sourceSong.phraseCritic?.repairs ?? []),
+      {
+        windowId: window.id,
+        scoreBefore: window.scoreBefore,
+        scoreAfter,
+        tracks: clone(trackIds),
+        actions: ["producer-brain-regeneration"],
+      },
+    ],
+  };
+  song.idea = createIdeaAnalysis(
+    config,
+    song.structure,
+    song.harmony,
+    song.style,
+    song.tracks,
+    song.oneShotKit,
+    song.songBlueprint,
+    song.performanceProfile,
+  );
+  song.idea.rhythmicFeatures.push(
+    `Producer Brain surgical repair · bars ${window.startBar + 1}-${window.endBar}`,
+  );
+  song.criticRepair = {
+    ...(repairedSong.criticRepair ?? {}),
+    mode: "surgical-window",
+    surgicalWindow: {
+      ...clone(window),
+      scoreAfter,
+    },
+    surgicalTracks: clone(trackIds),
+  };
+  return song;
+}
+
 function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   reconcileRepairedGenerationInterlock(song, config, diagnosis);
   const produced = runProducerPass(song.tracks, song.structure, song.songBlueprint);
@@ -9698,7 +9911,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
   return song;
 }
 
-function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
+function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow = null) {
   const sourceSong = sourceCandidate.song;
   const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;
   const sourceContextTracks = sourceCandidate.contextTracks ?? {};
@@ -9792,7 +10005,10 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
 
   repaired.generationInterlock = clone(variant.generationInterlock);
   repaired.title = sourceSong.title;
-  return finishRepairedSong(repaired, config, diagnosis, sourceCandidate, attempt);
+  const finished = finishRepairedSong(repaired, config, diagnosis, sourceCandidate, attempt);
+  return surgicalWindow && !arrangementRepair
+    ? applySurgicalRepairWindow(sourceSong, finished, config, diagnosis, sourceCandidate, surgicalWindow)
+    : finished;
 }
 
 function qualityGateForEvaluation(evaluation) {
@@ -9950,6 +10166,9 @@ function commitCandidate(candidates, search = {}) {
         repairSourceCandidate: song.criticRepair?.sourceCandidate ?? null,
         repairAccepted: candidate.repairAccepted ?? null,
         repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
+        repairMode: song.criticRepair?.mode ?? null,
+        repairWindowId: song.criticRepair?.surgicalWindow?.id ?? null,
+        repairWindowBars: song.criticRepair?.surgicalWindow?.bars ?? null,
       };
     }),
   };
@@ -9995,6 +10214,7 @@ function commitCandidate(candidates, search = {}) {
       attempts: criticRepair.attempts,
       accepted: criticRepair.accepted ?? 0,
       rejected: criticRepair.rejected ?? 0,
+      surgicalAttempts: criticRepair.surgicalAttempts ?? 0,
       groups: criticRepair.groups,
       selectedGroup: selected.repair?.group ?? null,
     },
@@ -10114,6 +10334,8 @@ function runTargetedCriticRepair(candidates, {
     attempts: 0,
     accepted: 0,
     rejected: 0,
+    surgicalAttempts: 0,
+    surgicalWindows: [],
     groups: [],
     acceptanceHistory: [],
     targetReached: candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation)),
@@ -10144,7 +10366,14 @@ function runTargetedCriticRepair(candidates, {
     }
     attemptedGroups.push(diagnosis.group);
     const seed = candidateSeed(baseSeed, `repair-${diagnosis.group}`, attempt);
-    const song = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt);
+    const surgicalWindow = diagnosis.group === "arrangement"
+      ? null
+      : diagnoseSurgicalRepairWindow(sourceCandidate.song, diagnosis);
+    const song = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow);
+    if (song.criticRepair?.surgicalWindow) {
+      summary.surgicalAttempts += 1;
+      summary.surgicalWindows.push(clone(song.criticRepair.surgicalWindow));
+    }
     song.meta.ideaFingerprint = createSongFingerprint(song);
     const evaluation = evaluateSongCandidate(song);
     const novelty = evaluateSongNovelty(song, recentSongs, generation);
@@ -10191,6 +10420,9 @@ function runTargetedCriticRepair(candidates, {
       weaknessGain: acceptance.weaknessGain,
       totalDelta: acceptance.totalDelta,
       maxCriticalRegression: acceptance.maxCriticalRegression,
+      repairMode: song.criticRepair?.mode ?? "whole-candidate",
+      surgicalWindow: clone(song.criticRepair?.surgicalWindow ?? null),
+      surgicalTracks: clone(song.criticRepair?.surgicalTracks ?? []),
       reasons: clone(acceptance.reasons),
     });
     summary.targetReached = candidateMeetsAdaptiveTarget(candidate, generation);
