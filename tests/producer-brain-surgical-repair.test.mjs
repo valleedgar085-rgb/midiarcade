@@ -44,7 +44,7 @@ test("Producer Brain chooses a deterministic 2-8 bar surgical repair window", ()
 
 test("a winning surgical repair preserves every event outside its diagnosed window", () => {
   const input = {
-    seed: "repair-reconcile-3",
+    seed: "surgical-accept-jazz-8-0",
     bars: 8,
     genre: "jazz",
     energy: 0.05,
@@ -61,7 +61,7 @@ test("a winning surgical repair preserves every event outside its diagnosed wind
   assert.equal(repair.surgicalWindows.length, repair.surgicalAttempts);
   assert.ok(repair.surgicalWindows.every((window) => window.bars >= 2 && window.bars <= 8));
   assert.ok(repair.acceptanceHistory.some((entry) => entry.repairMode === "surgical-window"));
-  assert.equal(repair.selectedFromRepair, true, "the reconciliation seed should still select its accepted repair");
+  assert.equal(repair.selectedFromRepair, true, "the verified surgical seed should select its accepted repair");
   assert.equal(repaired.criticRepair.mode, "surgical-window");
 
   const window = repaired.criticRepair.surgicalWindow;
