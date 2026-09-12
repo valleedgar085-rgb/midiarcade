@@ -10774,9 +10774,22 @@ export function evaluateRepairAcceptance(
   if (!phase9Preserved) reasons.push("quality-gate-regression");
   if (!releasePreserved) reasons.push("release-gate-regression");
   if (!melodicDialogue.preserved) reasons.push("melodic-dialogue-regression");
+  const regressionReasons = reasons.filter((reason) => reason.includes("regression"));
+  const supportingGains = Object.keys(repairedSubscores)
+    .filter((name) => name !== dimension)
+    .map((name) => round(
+      clamp(finite(repairedSubscores[name], 70), 0, 100)
+        - clamp(finite(sourceSubscores[name], 70), 0, 100),
+    ));
+  const bestSupportingGain = Math.max(0, ...supportingGains);
+  const outcome = reasons.length
+    ? regressionReasons.length ? "rejected-regression" : "rejected-no-gain"
+    : (bestSupportingGain >= 1 ? "improved-balance" : "improved-target");
   return {
-    version: 1,
+    version: 2,
     accepted: reasons.length === 0,
+    outcome,
+    bestSupportingGain: round(bestSupportingGain),
     dimension: dimension || null,
     weakestScoreBefore: round(weakestScoreBefore),
     weakestScoreAfter: round(weakestScoreAfter),
@@ -10793,6 +10806,79 @@ export function evaluateRepairAcceptance(
     melodicDialogue,
     thresholds,
     reasons,
+  };
+}
+
+function repairAssessmentUtility(assessment) {
+  if (!assessment) return -Infinity;
+  const acceptance = assessment.acceptance ?? {};
+  return round(
+    Number(Boolean(acceptance.accepted)) * 1000
+      + Number(Boolean(assessment.repairedReleaseGate?.passed)) * 100
+      + finite(acceptance.weaknessGain, 0) * 4
+      + finite(acceptance.totalDelta, 0) * 2
+      + finite(acceptance.balanceDelta, 0)
+      + finite(acceptance.creativeFloorDelta, 0) * 0.5
+      - finite(acceptance.maxCriticalRegression, 0) * 1.5,
+  );
+}
+
+/**
+ * Compare the already-generated surgical and whole-candidate repair options.
+ * Accepted repairs always beat rejected repairs. When both are acceptable,
+ * surgical locality wins close calls; a whole rewrite must be materially better
+ * to justify touching more of the song.
+ */
+export function selectPreferredRepairAssessment(surgicalAssessment = null, wholeAssessment = null) {
+  if (!surgicalAssessment && !wholeAssessment) {
+    return { assessment: null, mode: null, reason: "no-repair-assessment", utilityDelta: 0 };
+  }
+  if (!surgicalAssessment) {
+    return {
+      assessment: wholeAssessment,
+      mode: "whole-candidate",
+      reason: "whole-only",
+      utilityDelta: null,
+    };
+  }
+  if (!wholeAssessment) {
+    return {
+      assessment: surgicalAssessment,
+      mode: "surgical-window",
+      reason: "surgical-only",
+      utilityDelta: null,
+    };
+  }
+
+  const surgicalAccepted = Boolean(surgicalAssessment.acceptance?.accepted);
+  const wholeAccepted = Boolean(wholeAssessment.acceptance?.accepted);
+  if (surgicalAccepted !== wholeAccepted) {
+    const chooseWhole = wholeAccepted;
+    return {
+      assessment: chooseWhole ? wholeAssessment : surgicalAssessment,
+      mode: chooseWhole ? "whole-candidate" : "surgical-window",
+      reason: "accepted-over-rejected",
+      utilityDelta: round(repairAssessmentUtility(wholeAssessment) - repairAssessmentUtility(surgicalAssessment)),
+    };
+  }
+
+  const surgicalUtility = repairAssessmentUtility(surgicalAssessment);
+  const wholeUtility = repairAssessmentUtility(wholeAssessment);
+  const utilityDelta = round(wholeUtility - surgicalUtility);
+  const wholeMateriallyBetter = utilityDelta > 2;
+  if (wholeMateriallyBetter) {
+    return {
+      assessment: wholeAssessment,
+      mode: "whole-candidate",
+      reason: wholeAccepted ? "whole-materially-better" : "whole-less-regressive",
+      utilityDelta,
+    };
+  }
+  return {
+    assessment: surgicalAssessment,
+    mode: "surgical-window",
+    reason: surgicalAccepted ? "surgical-locality-tiebreak" : "surgical-less-regressive",
+    utilityDelta,
   };
 }
 
@@ -10920,15 +11006,15 @@ function runTargetedCriticRepair(candidates, {
       };
     };
     const surgicalAssessment = surgicalSong ? assessRepair(surgicalSong) : null;
-    let assessment = surgicalAssessment ?? assessRepair(wholeRepairSong);
-    let wholeFallbackUsed = false;
-    if (surgicalAssessment && !surgicalAssessment.acceptance.accepted) {
-      const wholeAssessment = assessRepair(wholeRepairSong);
-      if (wholeAssessment.acceptance.accepted) {
-        assessment = wholeAssessment;
-        wholeFallbackUsed = true;
-      }
-    }
+    const wholeAssessment = assessRepair(wholeRepairSong);
+    const repairSelection = selectPreferredRepairAssessment(surgicalAssessment, wholeAssessment);
+    const assessment = repairSelection.assessment ?? wholeAssessment;
+    const wholeFallbackUsed = Boolean(
+      surgicalAssessment
+      && !surgicalAssessment.acceptance.accepted
+      && wholeAssessment.acceptance.accepted
+      && assessment === wholeAssessment
+    );
     const { song, evaluation, novelty, repairedReleaseGate, acceptance } = assessment;
     const candidate = {
       index: candidates.length,
@@ -10945,7 +11031,13 @@ function runTargetedCriticRepair(candidates, {
     candidate.repairFallback = {
       surgicalAttempted: Boolean(surgicalAssessment),
       surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeAccepted: wholeAssessment.acceptance.accepted,
+      surgicalOutcome: surgicalAssessment?.acceptance.outcome ?? null,
+      wholeOutcome: wholeAssessment.acceptance.outcome ?? null,
       wholeFallbackUsed,
+      selectedMode: repairSelection.mode,
+      selectionReason: repairSelection.reason,
+      selectionUtilityDelta: repairSelection.utilityDelta,
     };
     candidates.push(candidate);
     summary.attempts += 1;
@@ -10957,6 +11049,7 @@ function runTargetedCriticRepair(candidates, {
       group: diagnosis.group,
       sourceCandidate: sourceCandidate.index,
       accepted: acceptance.accepted,
+      outcome: acceptance.outcome,
       dimension: acceptance.dimension,
       weaknessGain: acceptance.weaknessGain,
       totalDelta: acceptance.totalDelta,
@@ -10966,7 +11059,11 @@ function runTargetedCriticRepair(candidates, {
       surgicalTracks: clone(song.criticRepair?.surgicalTracks ?? surgicalSong?.criticRepair?.surgicalTracks ?? []),
       surgicalAttempted: Boolean(surgicalAssessment),
       surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeAccepted: wholeAssessment.acceptance.accepted,
       wholeFallbackUsed,
+      selectedRepairMode: repairSelection.mode,
+      selectionReason: repairSelection.reason,
+      selectionUtilityDelta: repairSelection.utilityDelta,
       repairStrategyId: song.criticRepair?.repairStrategy?.id
         ?? surgicalSong?.criticRepair?.repairStrategy?.id
         ?? null,
