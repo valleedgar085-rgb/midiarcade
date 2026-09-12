@@ -5,7 +5,7 @@ on:
     branches:
       - phase2/producer-brain-weakness-aware-search
     paths:
-      - scripts/apply-phase2-specialized-repairs.mjs
+      - scripts/run-phase2-specialized-repairs.mjs
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 22
       - name: Apply specialized repair patch
-        run: node scripts/apply-phase2-specialized-repairs.mjs
+        run: node scripts/run-phase2-specialized-repairs.mjs
       - name: Run targeted Producer Brain tests
         run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs
       - name: Commit engine patch
