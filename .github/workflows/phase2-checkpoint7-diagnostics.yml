@@ -1,0 +1,30 @@
+name: Phase 2 Checkpoint 7 Diagnostics
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - .github/workflows/phase2-checkpoint7-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  repair-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run expanded repair calibration
+        run: npm run benchmark:repairs -- --seeds 4 --bars 8
