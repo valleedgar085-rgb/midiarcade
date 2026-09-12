@@ -1,0 +1,35 @@
+name: Phase 2 Surgical Contract Fix
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+
+permissions:
+  contents: write
+
+jobs:
+  fix-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply surgical contract fix
+        run: node scripts/fix-phase2-surgical-contracts.mjs
+      - name: Run targeted regression tests
+        run: node --test tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs
+      - name: Commit fixed engine
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js
+          git commit -m "Phase 2: preserve surgical repair contracts"
+          git push origin HEAD:phase2/producer-brain-weakness-aware-search
