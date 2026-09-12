@@ -55,7 +55,7 @@ This document defines mandatory engineering guidelines, architectural constraint
 ### 4.1 Mandatory Quality Gate Execution
 - Before declaring ANY task complete, you MUST execute `npm run quality` via terminal command.
 - `npm run quality` MUST pass with:
-  1. **141/141 Unit Tests Passing** (`node --test`).
+  1. **All unit tests passing** (`node --test`).
   2. **Clean Web Asset Compilation** (`node scripts/build.js`).
   3. **Passed Quality Gate Metrics** (`node scripts/check-build-quality.js`).
 
