@@ -3,7 +3,8 @@ import fs from "node:fs";
 const enginePath = new URL("../src/music-engine.js", import.meta.url);
 let source = fs.readFileSync(enginePath, "utf8");
 
-if (source.includes('id = "stage-interlock-restore";')) {
+const routedMarker = 'const SONG_LEVEL_REPAIR_DIMENSIONS = new Set(["memory", "repetition", "drumVariety", "stageInterlock"]);';
+if (source.includes(routedMarker) && source.includes("resolutionValue: Number(chordTone) * 0.32")) {
   console.log("Phase 2 checkpoint 7 already applied.");
   process.exit(0);
 }
@@ -13,21 +14,9 @@ const cadenceNew = `    const candidates = pitchClasses.map((pitchClass, priorit
 if (!source.includes(cadenceOld)) throw new Error("checkpoint 7 cadence candidate anchor missing");
 source = source.replace(cadenceOld, cadenceNew);
 
-const strategyAnchor = `  } else if (["storyArc", "tensionFollow"].includes(dimension)) {\n    id = "arrangement-energy-arc";\n    trackIds = [...TRACK_IDS];`;
-const strategyReplacement = `  } else if (dimension === "stageInterlock") {\n    id = "stage-interlock-restore";\n    trackIds = [...TRACK_IDS];\n  } else if (["storyArc", "tensionFollow"].includes(dimension)) {\n    id = "arrangement-energy-arc";\n    trackIds = [...TRACK_IDS];`;
-if (!source.includes(strategyAnchor)) throw new Error("checkpoint 7 strategy anchor missing");
-source = source.replace(strategyAnchor, strategyReplacement);
-
-const directAnchor = `function directSpecializedRepairSource(sourceSong, strategy, config, window = null) {`;
-if (!source.includes(directAnchor)) throw new Error("checkpoint 7 direct repair anchor missing");
-
-const stageHelper = `function reinforceRepairStageInterlock(song) {\n  const repaired = clone(song);\n  const contracts = repaired.generationInterlock?.sectionContracts ?? [];\n  if (!contracts.length || !(repaired.structure ?? []).length) return repaired;\n  const barBeats = Math.max(1, finite(repaired.meta?.beatsPerBar, 4));\n  let connectionTagsAdded = 0;\n  let accentPairsAdded = 0;\n  let landingsReinforced = 0;\n\n  for (const contract of contracts) {\n    const section = repaired.structure.find((candidate) => candidate.id === contract.sectionId);\n    if (!section) continue;\n    const entries = (repaired.tracks ?? []).flatMap((track) => (track.notes ?? [])\n      .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)\n      .map((note) => ({ trackId: track.id, note })));\n\n    for (const entry of entries) {\n      if (entry.note.connectionId !== contract.id) {\n        entry.note.connectionId = contract.id;\n        connectionTagsAdded += 1;\n      }\n      if (!entry.note.connectionRole) entry.note.connectionRole = "section-contract";\n    }\n\n    const firstBar = Math.floor(section.startBeat / barBeats);\n    const lastBar = Math.max(firstBar, Math.ceil(section.endBeat / barBeats) - 1);\n    for (let bar = firstBar; bar <= lastBar; bar += 1) {\n      const barEntries = entries\n        .filter((entry) => Math.floor(entry.note.start / barBeats) === bar)\n        .sort((left, right) => left.note.start - right.note.start || left.trackId.localeCompare(right.trackId));\n      let pair = null;\n      for (let leftIndex = 0; leftIndex < barEntries.length && !pair; leftIndex += 1) {\n        for (let rightIndex = leftIndex + 1; rightIndex < barEntries.length; rightIndex += 1) {\n          const left = barEntries[leftIndex];\n          const right = barEntries[rightIndex];\n          if (left.trackId === right.trackId) continue;\n          if (Math.abs(left.note.start - right.note.start) > 0.08) continue;\n          pair = [left, right];\n          break;\n        }\n      }\n      if (!pair) continue;\n      let changed = false;\n      for (const entry of pair) {\n        if (!entry.note.ensembleAccent) changed = true;\n        entry.note.ensembleAccent = true;\n      }\n      if (changed) accentPairsAdded += 1;\n    }\n\n    const goals = new Set((contract.harmonicGoalPitchClasses ?? []).map((value) => mod(value, 12)));\n    const landing = entries\n      .filter((entry) => ["melody", "counterpoint"].includes(entry.trackId))\n      .filter((entry) => entry.note.start >= section.endBeat - barBeats * 1.35)\n      .filter((entry) => goals.has(mod(entry.note.pitch, 12)))\n      .sort((left, right) => right.note.start - left.note.start\n        || Number(right.trackId === "melody") - Number(left.trackId === "melody"))[0];\n    if (landing) {\n      if (!landing.note.resolutionRole) landingsReinforced += 1;\n      landing.note.resolutionRole = landing.note.resolutionRole ?? "interlock-landing";\n      landing.note.phraseBoundary = round(section.endBeat);\n      landing.note.preserveTiming = true;\n      landing.note.connectionId = contract.id;\n    }\n  }\n\n  repaired.precisionRepair = {\n    ...(repaired.precisionRepair ?? {}),\n    stageInterlock: {\n      version: 1,\n      connectionTagsAdded,\n      accentPairsAdded,\n      landingsReinforced,\n    },\n  };\n  return repaired;\n}\n\n`;
-source = source.replace(directAnchor, stageHelper + directAnchor);
-
-const directOld = `  if (dimension === "density") return rebalanceRepairDensity(sourceSong, strategy, window);\n  if (["storyArc", "tensionFollow"].includes(dimension)) return rebalanceRepairArrangementArc(sourceSong, dimension);`;
-const directNew = `  if (dimension === "density") return rebalanceRepairDensity(sourceSong, strategy, window);\n  if (dimension === "stageInterlock") return reinforceRepairStageInterlock(sourceSong);\n  if (["storyArc", "tensionFollow"].includes(dimension)) return rebalanceRepairArrangementArc(sourceSong, dimension);`;
-if (!source.includes(directOld)) throw new Error("checkpoint 7 direct stage routing anchor missing");
-source = source.replace(directOld, directNew);
+const routingOld = 'const SONG_LEVEL_REPAIR_DIMENSIONS = new Set(["memory", "repetition", "drumVariety"]);';
+if (!source.includes(routingOld)) throw new Error("checkpoint 7 song-level routing anchor missing");
+source = source.replace(routingOld, routedMarker);
 
 fs.writeFileSync(enginePath, source);
-console.log("Applied Phase 2 checkpoint 7 cadence scoring and stage-interlock precision repair.");
+console.log("Applied Phase 2 checkpoint 7 cadence scoring and stage-interlock search routing.");
