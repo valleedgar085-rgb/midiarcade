@@ -5,7 +5,7 @@ import {
   summarizeRepairEffectiveness,
 } from "../src/repair-effectiveness-benchmark.js";
 
-test("repair effectiveness summarizer reports deterministic strategy and rejection metrics", () => {
+test("repair effectiveness summarizer reports deterministic strategy, rejection, and routing metrics", () => {
   const input = {
     attempts: [
       {
@@ -50,20 +50,48 @@ test("repair effectiveness summarizer reports deterministic strategy and rejecti
       },
     ],
     songs: [
-      { candidatesEvaluated: 7, repairAttempts: 2, acceptedRepairs: 1, selectedFromRepair: true },
-      { candidatesEvaluated: 6, repairAttempts: 1, acceptedRepairs: 1, selectedFromRepair: false },
+      {
+        genre: "techno",
+        profile: "sparse",
+        candidatesEvaluated: 7,
+        repairAttempts: 2,
+        acceptedRepairs: 1,
+        selectedFromRepair: true,
+        skippedGlobalDimensions: [
+          { group: "motif", dimension: "repetition", score: 54, reason: "song-level-search-owned" },
+          { group: "arrangement", dimension: "drumVariety", score: 58, reason: "song-level-search-owned" },
+        ],
+      },
+      {
+        genre: "jazz",
+        profile: "balanced",
+        candidatesEvaluated: 6,
+        repairAttempts: 1,
+        acceptedRepairs: 1,
+        selectedFromRepair: false,
+        skippedGlobalDimensions: [
+          { group: "motif", dimension: "repetition", score: 64, reason: "song-level-search-owned" },
+        ],
+      },
     ],
   };
   const first = summarizeRepairEffectiveness(input);
   const second = summarizeRepairEffectiveness(input);
 
   assert.deepEqual(first, second);
+  assert.equal(first.labVersion, 2);
   assert.equal(first.repairAttempts, 3);
   assert.equal(first.acceptedRepairs, 2);
   assert.equal(first.byStrategy[0].id, "motif-evolution");
   assert.equal(first.byStrategy[0].acceptanceRate, 0.5);
   assert.equal(first.byStrategy[0].selectedWins, 1);
   assert.equal(first.rejectionReasons["weakness-not-improved"], 1);
+  assert.equal(first.globalRepairSkips, 3);
+  assert.equal(first.songsWithGlobalRepairSkips, 2);
+  assert.deepEqual(first.skippedByDimension, [
+    { dimension: "repetition", count: 2 },
+    { dimension: "drumVariety", count: 1 },
+  ]);
   assert.equal(first.maxCandidatesEvaluated, 7);
 });
 
@@ -80,4 +108,6 @@ test("live repair calibration stays deterministic in budget and uses public gene
   assert.ok(report.maxCandidatesEvaluated <= 12);
   assert.ok(report.byStrategy.every((strategy) => strategy.attempts > 0));
   assert.ok(report.attempts.every((attempt) => typeof attempt.strategyId === "string"));
+  assert.ok(report.globalRepairSkips >= 0);
+  assert.ok(report.skippedByDimension.every((entry) => entry.count > 0));
 });
