@@ -9952,6 +9952,8 @@ function commitCandidate(candidates, search = {}) {
         repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
         repairAccepted: candidate.repairAccepted ?? null,
         repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
+        repairAccepted: candidate.repairAccepted ?? null,
+        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
       };
     }),
   };
@@ -10020,6 +10022,87 @@ function candidateSelectionScore(evaluation, novelty, generation) {
     + novelty.score * weights.novelty
     - replayPenalty,
   );
+}
+
+export function evaluateRepairAcceptance(
+  sourceEvaluation = {},
+  repairedEvaluation = {},
+  diagnosis = {},
+  { sourceReleasePassed = null, repairedReleasePassed = null } = {},
+) {
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  const sourceSubscores = sourceEvaluation?.subscores ?? {};
+  const repairedSubscores = repairedEvaluation?.subscores ?? {};
+  const weakestScoreBefore = clamp(
+    finite(sourceSubscores[dimension], diagnosis?.weakestScore ?? 0),
+    0,
+    100,
+  );
+  const weakestScoreAfter = clamp(
+    finite(repairedSubscores[dimension], weakestScoreBefore),
+    0,
+    100,
+  );
+  const weaknessGain = round(weakestScoreAfter - weakestScoreBefore);
+  const totalDelta = round(
+    finite(repairedEvaluation?.score, 0) - finite(sourceEvaluation?.score, 0),
+  );
+  const sourceBalance = evaluateCandidateBalance(sourceEvaluation);
+  const repairedBalance = evaluateCandidateBalance(repairedEvaluation);
+  const balanceDelta = repairedBalance.balanceScore - sourceBalance.balanceScore;
+  const creativeFloorDelta = repairedBalance.creativeFloor - sourceBalance.creativeFloor;
+  const criticalDimensions = ["harmonic", "groove", "separation", "production", "genreAuthenticity"];
+  const criticalRegressions = Object.fromEntries(
+    criticalDimensions.map((name) => [
+      name,
+      round(Math.max(
+        0,
+        clamp(finite(sourceSubscores[name], 70), 0, 100)
+          - clamp(finite(repairedSubscores[name], 70), 0, 100),
+      )),
+    ]),
+  );
+  const maxCriticalRegression = Math.max(0, ...Object.values(criticalRegressions));
+  const sourceQuality = qualityGateForEvaluation(sourceEvaluation);
+  const repairedQuality = qualityGateForEvaluation(repairedEvaluation);
+  const scaleSafetyPreserved = !sourceQuality.scaleSafe || repairedQuality.scaleSafe;
+  const phase9Preserved = !sourceQuality.passed || repairedQuality.passed;
+  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;
+  const thresholds = {
+    minimumWeaknessGain: 0.5,
+    maximumTotalRegression: 1,
+    maximumBalanceRegression: 2,
+    maximumCreativeFloorRegression: 2,
+    maximumCriticalRegression: 3,
+  };
+  const reasons = [];
+  if (!dimension) reasons.push("missing-diagnosis");
+  if (weaknessGain < thresholds.minimumWeaknessGain) reasons.push("weakness-not-improved");
+  if (totalDelta < -thresholds.maximumTotalRegression) reasons.push("total-score-regression");
+  if (balanceDelta < -thresholds.maximumBalanceRegression) reasons.push("balance-regression");
+  if (creativeFloorDelta < -thresholds.maximumCreativeFloorRegression) reasons.push("creative-floor-regression");
+  if (maxCriticalRegression > thresholds.maximumCriticalRegression) reasons.push("critical-dimension-regression");
+  if (!scaleSafetyPreserved) reasons.push("scale-safety-regression");
+  if (!phase9Preserved) reasons.push("quality-gate-regression");
+  if (!releasePreserved) reasons.push("release-gate-regression");
+  return {
+    version: 1,
+    accepted: reasons.length === 0,
+    dimension: dimension || null,
+    weakestScoreBefore: round(weakestScoreBefore),
+    weakestScoreAfter: round(weakestScoreAfter),
+    weaknessGain,
+    totalDelta,
+    balanceDelta,
+    creativeFloorDelta,
+    maxCriticalRegression,
+    criticalRegressions,
+    scaleSafetyPreserved,
+    phase9Preserved,
+    releasePreserved,
+    thresholds,
+    reasons,
+  };
 }
 
 export function evaluateRepairAcceptance(
