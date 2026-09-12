@@ -1,7 +1,4 @@
-function finite(value, fallback = 0) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
+import { finite } from "../utils.js";
 
 function wrapDegree(value) {
   return ((Math.round(finite(value)) % 7) + 7) % 7;
