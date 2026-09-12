@@ -1,0 +1,36 @@
+name: Phase 2 Specialized Repair Codemod
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - scripts/apply-phase2-specialized-repairs.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply specialized repair patch
+        run: node scripts/apply-phase2-specialized-repairs.mjs
+      - name: Run targeted Producer Brain tests
+        run: node --test tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/producer-brain-repair-acceptance.test.mjs tests/music-engine.test.mjs tests/phrase-memory-intelligence.test.mjs
+      - name: Commit engine patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js
+          git commit -m "Phase 2: specialize surgical repair strategies"
+          git push origin HEAD:phase2/producer-brain-weakness-aware-search
