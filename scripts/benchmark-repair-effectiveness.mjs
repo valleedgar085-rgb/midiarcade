@@ -64,10 +64,18 @@ console.table(report.byGenre.map((genre) => ({
   selectedWins: genre.selectedWins,
 })));
 
+if (report.skippedByDimension.length) {
+  console.table(report.skippedByDimension.map((entry) => ({
+    routedToSearch: entry.dimension,
+    diagnoses: entry.count,
+  })));
+}
+
 console.log(
   `Repairs observed in ${report.songsWithRepair}/${report.totalSongs} songs`
   + ` · accepted in ${report.songsWithAcceptedRepair}`
   + ` · final selection came from repair in ${report.songsSelectedFromRepair}`
+  + ` · ${report.globalRepairSkips} song-level diagnoses routed to search across ${report.songsWithGlobalRepairSkips} songs`
   + ` · average candidates ${report.averageCandidatesEvaluated}`
   + ` · max candidates ${report.maxCandidatesEvaluated}`,
 );
