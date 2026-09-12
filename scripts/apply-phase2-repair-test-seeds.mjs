@@ -4,8 +4,8 @@ const updates = [
   {
     path: new URL("../tests/music-engine.test.mjs", import.meta.url),
     label: "phase 40 repair reconciliation seed",
-    before: `test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {\n  const song = engine.generateNew({\n    seed: "repair-reconcile-1",`,
-    after: `test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {\n  const song = engine.generateNew({\n    seed: "repair-reconcile-3",`,
+    before: `test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {\n  const input = {\n    seed: "repair-reconcile-1",`,
+    after: `test("phase 40 reconciles repaired tracks with the actual final interlock plan", () => {\n  const input = {\n    seed: "repair-reconcile-3",`,
   },
   {
     path: new URL("../tests/phrase-memory-intelligence.test.mjs", import.meta.url),
