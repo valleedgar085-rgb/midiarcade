@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { generateNew } from "../src/music-engine.js";
 
-test("density weakness uses a bass-focused surgical strategy with signed local diagnostics", () => {
+test("density weakness uses focused pitched support lanes with signed local diagnostics", () => {
   const song = generateNew({
     seed: "surgical-accept-jazz-8-0",
     bars: 8,
@@ -15,7 +15,10 @@ test("density weakness uses a bass-focused surgical strategy with signed local d
 
   assert.ok(densityAttempt, "expected the verified seed to expose a density repair attempt");
   assert.match(densityAttempt.repairStrategyId ?? "", /^density-(build|thin)$/);
-  assert.deepEqual(densityAttempt.surgicalTracks, ["bass"]);
+  assert.ok(densityAttempt.surgicalTracks.includes("bass"));
+  assert.ok(densityAttempt.surgicalTracks.length >= 2 && densityAttempt.surgicalTracks.length <= 4);
+  assert.ok(!densityAttempt.surgicalTracks.includes("drums"), "density critic measures pitched-note density, not drums");
+  assert.ok(!densityAttempt.surgicalTracks.includes("melody"), "density repair should preserve the hook lane");
   assert.ok(densityAttempt.surgicalWindow?.bars >= 2 && densityAttempt.surgicalWindow?.bars <= 8);
   assert.ok(Number.isFinite(densityAttempt.surgicalWindow?.diagnostics?.density));
   assert.ok(Number.isFinite(densityAttempt.surgicalWindow?.diagnostics?.densityTarget));
