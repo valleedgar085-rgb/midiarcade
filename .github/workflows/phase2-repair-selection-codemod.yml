@@ -1,0 +1,46 @@
+name: Phase 2 Repair Selection Codemod
+
+on:
+  push:
+    branches:
+      - phase2/producer-brain-weakness-aware-search
+    paths:
+      - .github/workflows/phase2-repair-selection-codemod.yml
+      - scripts/apply-phase2-repair-selection.mjs
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/producer-brain-weakness-aware-search
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply repair selection policy
+        run: node scripts/apply-phase2-repair-selection.mjs
+      - name: Run focused Producer Brain regressions
+        run: node --test tests/producer-brain-repair-acceptance.test.mjs tests/producer-brain-specialized-repair.test.mjs tests/producer-brain-surgical-repair.test.mjs tests/music-engine.test.mjs
+      - name: Measure repair effectiveness
+        run: npm run benchmark:repairs -- --seeds 2 --bars 8
+      - name: Commit validated engine and tests
+        run: |
+          if git diff --quiet -- src/music-engine.js tests/producer-brain-repair-acceptance.test.mjs; then
+            echo "No validated changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js tests/producer-brain-repair-acceptance.test.mjs
+          git commit -m "Phase 2: compare repair outcomes before selection"
+          git push origin HEAD:phase2/producer-brain-weakness-aware-search
