@@ -1,0 +1,107 @@
+/* Creator/menu branding kept page-scoped so the established studio layout stays intact. */
+.menu-dropdown{
+  padding:10px;
+  gap:3px;
+  border:1px solid color-mix(in srgb,var(--accent) 19%,rgba(255,255,255,.08));
+  background:
+    radial-gradient(circle at 82% 6%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 42%),
+    linear-gradient(155deg,color-mix(in srgb,var(--bg-2) 92%,#101018),color-mix(in srgb,var(--bg) 96%,#050507));
+  box-shadow:0 22px 60px rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.045);
+  backdrop-filter:blur(22px) saturate(1.16);
+}
+
+.menu-dropdown .menu-item{
+  min-height:43px;
+  border-radius:10px;
+  transition:background-color 140ms ease,border-color 140ms ease,transform 140ms ease;
+}
+
+.menu-dropdown button.menu-item:hover,
+.menu-dropdown a.menu-item:hover,
+.menu-dropdown button.menu-item:focus-visible,
+.menu-dropdown a.menu-item:focus-visible{
+  background:color-mix(in srgb,var(--accent) 10%,rgba(255,255,255,.035));
+  border-color:color-mix(in srgb,var(--accent) 20%,transparent);
+  transform:translateX(1px);
+}
+
+.menu-dropdown .menu-divider{
+  margin:7px 4px;
+  opacity:.62;
+}
+
+.menu-dropdown > .menu-item:last-child{
+  position:relative;
+  overflow:hidden;
+  display:grid;
+  grid-template-columns:36px minmax(0,1fr);
+  align-items:center;
+  min-height:64px;
+  margin-top:3px;
+  padding:11px 12px;
+  border:1px solid color-mix(in srgb,var(--accent) 28%,rgba(255,255,255,.08));
+  border-radius:13px;
+  background:
+    linear-gradient(120deg,color-mix(in srgb,var(--accent) 13%,transparent),color-mix(in srgb,var(--accent-2) 7%,transparent) 58%,transparent),
+    rgba(255,255,255,.025);
+  color:rgba(255,255,255,.9);
+  cursor:default;
+}
+
+.menu-dropdown > .menu-item:last-child::before{
+  content:"ORIGINAL CREATOR";
+  position:absolute;
+  left:52px;
+  top:10px;
+  font-size:9px;
+  line-height:1;
+  letter-spacing:.18em;
+  font-weight:750;
+  color:color-mix(in srgb,var(--accent) 78%,white);
+  opacity:.86;
+}
+
+.menu-dropdown > .menu-item:last-child::after{
+  content:"";
+  position:absolute;
+  inset:auto -30px -52px auto;
+  width:104px;
+  height:104px;
+  border-radius:50%;
+  background:radial-gradient(circle,color-mix(in srgb,var(--accent-2) 22%,transparent),transparent 68%);
+  pointer-events:none;
+}
+
+.menu-dropdown > .menu-item:last-child .menu-icon{
+  display:grid;
+  place-items:center;
+  width:32px;
+  height:32px;
+  border:1px solid color-mix(in srgb,var(--accent) 35%,rgba(255,255,255,.12));
+  border-radius:10px;
+  background:color-mix(in srgb,var(--accent) 12%,rgba(255,255,255,.025));
+  color:var(--accent);
+  box-shadow:0 0 24px color-mix(in srgb,var(--accent) 13%,transparent);
+}
+
+.menu-dropdown > .menu-item:last-child b{
+  align-self:end;
+  padding-top:14px;
+  font-family:"Outfit Variable","Outfit",sans-serif;
+  font-size:13px;
+  font-weight:670;
+  letter-spacing:.012em;
+}
+
+@media(max-width:600px){
+  .menu-dropdown{
+    padding:8px;
+    max-width:min(92vw,340px);
+  }
+  .menu-dropdown .menu-item{min-height:45px}
+  .menu-dropdown > .menu-item:last-child{min-height:62px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .menu-dropdown .menu-item{transition:none}
+}
