@@ -10001,14 +10001,19 @@ function reinforceRepairPhraseResolution(song, config, window) {
     }).length;
     const candidates = pitchClasses.map((pitchClass, priority) => {
       const pitch = nearestRepairPitch(landing.pitch, [pitchClass]);
+      const pitchClassAtLanding = mod(pitch, 12);
+      const chordTone = Boolean(chord?.tones?.includes(pitchClassAtLanding));
+      const tonicCandidate = pitchClassAtLanding === tonic;
       return {
         pitch,
         priority,
         collisions: collisionCount(pitch, currentDuration),
+        resolutionValue: Number(chordTone) * 0.32 + Number(tonicCandidate) * 0.18,
         distance: Math.abs(pitch - landing.pitch),
       };
     }).sort((left, right) => (
       left.collisions - right.collisions
+      || right.resolutionValue - left.resolutionValue
       || left.priority - right.priority
       || left.distance - right.distance
       || left.pitch - right.pitch
@@ -11250,6 +11255,7 @@ const SONG_LEVEL_REPAIR_DIMENSIONS = new Set([
   "memory",
   "repetition",
   "drumVariety",
+  "stageInterlock",
 ]);
 
 function localTargetedRepairEligible(diagnosis = {}) {
