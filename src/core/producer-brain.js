@@ -1,98 +1,12 @@
-import { clampFinite as clamp, finite } from "../utils.js";
-
-const SUPPORTED_KINDS = Object.freeze(new Set(["new", "similar", "songVariations"]));
-const MAX_ENGINE_CANDIDATES = 12;
-const STANDARD_BASE_CANDIDATES = 4;
-const DEEP_BASE_CANDIDATES = 6;
-const STANDARD_ADAPTIVE_CANDIDATES = 3;
-const DEEP_ADAPTIVE_CANDIDATES = 4;
-const MAX_REPAIR_ATTEMPTS = 2;
-
-function round(value, digits = 4) {
-  const factor = 10 ** digits;
-  return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function normalizeKind(kind) {
-  return SUPPORTED_KINDS.has(String(kind)) ? String(kind) : "new";
-}
-
-function normalizeDepth(value) {
-  return value === "standard" ? "standard" : "deep";
-}
-
-function normalizedCharacter(character = {}) {
-  return Object.freeze({
-    grooveDepth: clamp(character.grooveDepth, 0, 1),
-    bassMotion: clamp(character.bassMotion, 0, 1),
-    melodyMotion: clamp(character.melodyMotion, 0, 1),
-    harmonicColor: clamp(character.harmonicColor, 0, 1),
-    space: clamp(character.space, 0, 1),
-  });
-}
-
-function normalizedTaste(taste = {}) {
-  const nullable = (value) => Number.isFinite(Number(value)) ? clamp(value, 0, 1) : null;
-  return Object.freeze({
-    confidence: clamp(taste.confidence, 0, 1),
-    energy: nullable(taste.energy),
-    complexity: nullable(taste.complexity),
-    variation: nullable(taste.variation),
-    genreAffinity: clamp(taste.genreAffinity, -1, 1),
-    rejectionPressure: clamp(taste.rejectionPressure, 0, 1),
-  });
-}
-
-function searchPolicy(config, kind, depth) {
-  const explicitCandidateCount = Number.isFinite(Number(config.candidateCount));
-  const baseCandidateCount = explicitCandidateCount
-    ? clamp(Math.round(finite(config.candidateCount, 1)), 1, MAX_ENGINE_CANDIDATES)
-    : depth === "deep" ? DEEP_BASE_CANDIDATES : STANDARD_BASE_CANDIDATES;
-  const adaptive = !explicitCandidateCount && config.adaptiveCandidates !== false;
-  const adaptiveExpansion = adaptive
-    ? depth === "deep" ? DEEP_ADAPTIVE_CANDIDATES : STANDARD_ADAPTIVE_CANDIDATES
-    : 0;
-  const maxCandidateCount = Math.min(MAX_ENGINE_CANDIDATES, baseCandidateCount + adaptiveExpansion);
-  const targetedRepair = adaptive && config.targetedRepair !== false;
-  const repairAttempts = targetedRepair
-    ? clamp(Math.round(finite(config.repairAttempts, MAX_REPAIR_ATTEMPTS)), 0, MAX_REPAIR_ATTEMPTS)
-    : 0;
-  const candidatesPerVariation = kind === "songVariations"
-    ? clamp(Math.round(finite(config.candidatesPerVariation, depth === "deep" ? 3 : 2)), 1, 4)
-    : null;
-
-  return Object.freeze({
-    depth,
-    adaptive,
-    targetedRepair,
-    repairAttempts,
-    baseCandidateCount,
-    maxCandidateCount,
-    candidatesPerVariation,
-    wholeSongAuditions: kind === "songVariations" ? candidatesPerVariation * 3 : maxCandidateCount + repairAttempts,
-  });
-}
-
-function productionPriorities(character, taste, kind) {
-  const entries = [
-    ["groove", round(character.grooveDepth * 0.58 + character.bassMotion * 0.42)],
-    ["hook", round(character.melodyMotion)],
-    ["harmony", round(character.harmonicColor)],
-    ["space", round(character.space)],
-  ];
-  const confidence = taste.confidence;
-  const variationPreference = taste.variation == null ? 0.5 : taste.variation;
-  entries.push(["novelty", round(clamp(
-    (kind === "new" ? 0.72 : kind === "similar" ? 0.48 : 0.6)
-      + (variationPreference - 0.5) * confidence * 0.18
-      + taste.rejectionPressure * confidence * 0.08,
-    0.32,
-    0.92,
-  ))]);
-  return Object.freeze(entries
-    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-    .map(([id, weight]) => Object.freeze({ id, weight })));
-}
+import {
+  createProducerSearchPolicy,
+  createProductionPriorities,
+  normalizeProducerCharacter,
+  normalizeProducerKind,
+  normalizeProducerTaste,
+  normalizeThinkingDepth,
+  roundProducerValue,
+} from "./producer-policy.js";
 
 /**
  * Producer Brain is an orchestration layer, not a second composition engine.
@@ -105,12 +19,12 @@ export function createProducerBrainPlan(config = {}, {
   character = {},
   taste = {},
 } = {}) {
-  const normalizedKind = normalizeKind(kind);
-  const depth = normalizeDepth(config.thinkingDepth);
-  const resolvedCharacter = normalizedCharacter(character);
-  const resolvedTaste = normalizedTaste(taste);
-  const search = searchPolicy(config, normalizedKind, depth);
-  const priorities = productionPriorities(resolvedCharacter, resolvedTaste, normalizedKind);
+  const normalizedKind = normalizeProducerKind(kind);
+  const depth = normalizeThinkingDepth(config.thinkingDepth);
+  const resolvedCharacter = normalizeProducerCharacter(character);
+  const resolvedTaste = normalizeProducerTaste(taste);
+  const search = createProducerSearchPolicy(config, normalizedKind, depth);
+  const priorities = createProductionPriorities(resolvedCharacter, resolvedTaste, normalizedKind);
   const qualityIntent = Object.freeze({
     preserveKeySafety: true,
     preserveDeterminism: true,
@@ -127,12 +41,12 @@ export function createProducerBrainPlan(config = {}, {
     mode: depth === "deep" ? "deep-audition" : "balanced-audition",
     search,
     taste: Object.freeze({
-      confidence: round(resolvedTaste.confidence),
-      genreAffinity: round(resolvedTaste.genreAffinity),
-      rejectionPressure: round(resolvedTaste.rejectionPressure),
-      learnedEnergy: resolvedTaste.energy == null ? null : round(resolvedTaste.energy),
-      learnedComplexity: resolvedTaste.complexity == null ? null : round(resolvedTaste.complexity),
-      learnedVariation: resolvedTaste.variation == null ? null : round(resolvedTaste.variation),
+      confidence: roundProducerValue(resolvedTaste.confidence),
+      genreAffinity: roundProducerValue(resolvedTaste.genreAffinity),
+      rejectionPressure: roundProducerValue(resolvedTaste.rejectionPressure),
+      learnedEnergy: resolvedTaste.energy == null ? null : roundProducerValue(resolvedTaste.energy),
+      learnedComplexity: resolvedTaste.complexity == null ? null : roundProducerValue(resolvedTaste.complexity),
+      learnedVariation: resolvedTaste.variation == null ? null : roundProducerValue(resolvedTaste.variation),
     }),
     priorities,
     qualityIntent,
