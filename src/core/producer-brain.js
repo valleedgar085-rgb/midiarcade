@@ -30,13 +30,15 @@ export function createProducerBrainPlan(config = {}, {
     preserveDeterminism: true,
     preserveCriticCalibration: true,
     preferReleaseGatePass: true,
+    diagnoseWeakestDimension: search.weaknessAwareSearch,
+    preferSurgicalRepair: search.targetedRepair,
     avoidBackToBackIdentity: normalizedKind === "new",
     preserveSongFamily: normalizedKind !== "new",
   });
 
   return Object.freeze({
-    version: 1,
-    id: "producer-brain-v1",
+    version: 2,
+    id: "producer-brain-v2",
     kind: normalizedKind,
     mode: depth === "deep" ? "deep-audition" : "balanced-audition",
     search,
@@ -65,6 +67,7 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     ...source,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
+    weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
     targetedRepair: source.targetedRepair ?? plan.search.targetedRepair,
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,

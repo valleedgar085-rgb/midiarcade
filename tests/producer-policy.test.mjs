@@ -38,11 +38,12 @@ test("producer policy normalizes unsupported request shapes deterministically", 
   });
 });
 
-test("producer search policy preserves the existing deep and explicit candidate budgets", () => {
+test("producer search policy preserves deep budgets and enables weakness-aware expansion", () => {
   const deep = createProducerSearchPolicy({}, "new", "deep");
   assert.deepEqual(deep, {
     depth: "deep",
     adaptive: true,
+    weaknessAwareSearch: true,
     targetedRepair: true,
     repairAttempts: 2,
     baseCandidateCount: 6,
@@ -55,8 +56,14 @@ test("producer search policy preserves the existing deep and explicit candidate 
   assert.equal(explicit.baseCandidateCount, 3);
   assert.equal(explicit.maxCandidateCount, 3);
   assert.equal(explicit.adaptive, false);
+  assert.equal(explicit.weaknessAwareSearch, false);
   assert.equal(explicit.targetedRepair, false);
   assert.equal(explicit.repairAttempts, 0);
+
+  const optedOut = createProducerSearchPolicy({ weaknessAwareSearch: false }, "new", "deep");
+  assert.equal(optedOut.adaptive, true);
+  assert.equal(optedOut.weaknessAwareSearch, false);
+  assert.equal(optedOut.targetedRepair, true);
 
   const variations = createProducerSearchPolicy({}, "songVariations", "deep");
   assert.equal(variations.candidatesPerVariation, 3);

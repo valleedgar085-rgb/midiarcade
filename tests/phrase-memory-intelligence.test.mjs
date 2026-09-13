@@ -112,7 +112,7 @@ test("phrase metadata preserves composition identity while changing MIDI renderi
 
 test("Phrase Memory remains critic-neutral on the repair reconciliation seed", () => {
   const input = {
-    seed: "repair-reconcile-1",
+    seed: "repair-reconcile-3",
     bars: 8,
     genre: "jazz",
     energy: 0.05,

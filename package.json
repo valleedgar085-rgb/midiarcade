@@ -10,6 +10,7 @@
     "test:gauntlet": "node --test tests/song-quality-gauntlet.test.mjs",
     "test:coverage": "node --test --experimental-test-coverage",
     "benchmark:generation": "node scripts/benchmark-generation.mjs --seeds 2 --bars 8",
+    "benchmark:repairs": "node scripts/benchmark-repair-effectiveness.mjs --seeds 2 --bars 8",
     "quality:music": "node scripts/benchmark-generation.mjs --seeds 3 --bars 16",
     "quality:music:deep": "node scripts/benchmark-generation.mjs --seeds 8 --bars 24",
     "quality": "npm test && npm run build && node scripts/check-build-quality.js",

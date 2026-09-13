@@ -7837,6 +7837,9 @@ export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, 
           bassLock: round(bassLock),
           collisionRatio: round(collisionRatio),
           densityFit: round(densityFit),
+          density: round(density),
+          densityTarget: round(profile.density),
+          densityDelta: round(density - profile.density),
         },
       });
     }
@@ -9350,6 +9353,7 @@ function candidateSearchPlan(input = {}) {
     input.candidateCount ?? (thinkingDepth === "deep" ? DEEP_CANDIDATE_COUNT : DEFAULT_CANDIDATE_COUNT),
   );
   const adaptive = input.candidateCount == null && input.adaptiveCandidates !== false;
+  const weaknessAwareSearch = adaptive && input.weaknessAwareSearch !== false;
   const maxCandidateCount = adaptive
     ? Math.min(
       MAX_CANDIDATE_COUNT,
@@ -9367,6 +9371,7 @@ function candidateSearchPlan(input = {}) {
   return {
     thinkingDepth,
     adaptive,
+    weaknessAwareSearch,
     baseCandidateCount,
     maxCandidateCount,
     targetedRepair,
@@ -9375,6 +9380,7 @@ function candidateSearchPlan(input = {}) {
 }
 
 function candidateMeetsAdaptiveTarget(candidate, generation) {
+  if (candidate?.repairAccepted === false) return false;
   const balance = evaluateCandidateBalance(candidate?.evaluation);
   const releaseReady = candidateReleaseGate(candidate).passed;
   const noveltyReady = !candidate?.novelty?.compared
@@ -9385,6 +9391,37 @@ function candidateMeetsAdaptiveTarget(candidate, generation) {
 function candidateReleaseGate(candidate) {
   if (!candidate?.releaseGate) candidate.releaseGate = evaluateSongReleaseGate(candidate?.song, candidate?.evaluation);
   return candidate.releaseGate;
+}
+
+function updateCandidateSearchFocus(search, candidates, generation) {
+  if (!search?.weaknessAwareSearch || candidates.length < search.baseCandidateCount) return null;
+  if (candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation))) {
+    return search.weaknessFocus ?? null;
+  }
+  const sourceCandidate = rankCandidates(candidates)[0];
+  if (!sourceCandidate) return null;
+  const diagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation);
+  if (!diagnosis) return null;
+  const focus = {
+    version: 1,
+    ...diagnosis,
+    sourceCandidate: sourceCandidate.index,
+    observedAfterCandidates: candidates.length,
+  };
+  search.weaknessFocus = focus;
+  const history = Array.isArray(search.weaknessHistory) ? search.weaknessHistory : [];
+  const previous = history[history.length - 1];
+  if (
+    !previous
+    || previous.group !== focus.group
+    || previous.weakestDimension !== focus.weakestDimension
+    || previous.weakestScore !== focus.weakestScore
+    || previous.sourceCandidate !== focus.sourceCandidate
+  ) {
+    history.push(focus);
+  }
+  search.weaknessHistory = history.slice(-4);
+  return focus;
 }
 
 /**
@@ -9510,7 +9547,934 @@ function replaceSongTracks(sourceTracks, replacementTracks, trackIds) {
   ));
 }
 
-function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
+function surgicalWindowDimensionScore(window, diagnosis = {}, song = null) {
+  const diagnostics = window?.diagnostics ?? {};
+  const unit = (name, fallback = 0.5) => clamp(finite(diagnostics[name], fallback), 0, 1);
+  const resolves = diagnostics.resolves ? 1 : 0;
+  const separation = 1 - unit("collisionRatio", 0);
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  if (dimension === "density") return round(unit("densityFit") * 100);
+  if (dimension === "drumVariety") return repairWindowDrumVarietyScore(song, window);
+  if (dimension === "groove") {
+    return round(average([unit("bassLock"), unit("densityFit"), unit("coverage")], 0.5) * 100);
+  }
+  if (dimension === "memory") return repairWindowMemoryScore(song, window);
+  if (dimension === "repetition") return repairWindowRepetitionScore(song, window);
+  if (dimension === "phraseResolution") return repairWindowPhraseResolutionScore(song, window);
+  if (dimension === "registerHealth") {
+    const melody = (song?.tracks?.find((track) => track.id === "melody")?.notes ?? [])
+      .filter((note) => note.start >= window.startBeat - 1e-6 && note.start < window.endBeat - 1e-6);
+    return registerFatigueScoreForSong(melody);
+  }
+  if (dimension === "separation") return round(separation * 100);
+  if (["harmonic", "voiceLeading", "cadence", "harmonicJourney"].includes(dimension)) {
+    return round(average([unit("melodyFit"), resolves, separation], 0.5) * 100);
+  }
+  if (dimension === "motif") {
+    return round(average([unit("melodyFit"), resolves, separation, unit("coverage")], 0.5) * 100);
+  }
+  if (dimension === "performance") {
+    return round(average([unit("coverage"), unit("densityFit"), resolves], 0.5) * 100);
+  }
+  return clamp(finite(window?.score, 70), 0, 100);
+}
+
+/**
+ * Pick the smallest deterministic phrase span that exposes the diagnosed weakness.
+ * Critic 7.0 supplies 2-4 bar windows; groove/motif/performance problems may join
+ * one contiguous phrase, keeping Producer Brain surgery strictly inside 2-8 bars.
+ */
+export function diagnoseSurgicalRepairWindow(song, diagnosis = {}) {
+  if (!song?.meta || !Array.isArray(song?.tracks) || !Array.isArray(song?.structure) || !song.structure.length) {
+    return null;
+  }
+  const config = normalizeConfig(configFromSong(song));
+  const windows = evaluatePhraseWindows(
+    song.tracks,
+    song.structure,
+    song.harmony ?? [],
+    config,
+    song.grooveConductor,
+  );
+  if (!windows.length) return null;
+  const eligibleWindows = windows.filter((window) => (
+    window.endBar - window.startBar >= 2 - 1e-6
+    && window.endBar - window.startBar <= 8 + 1e-6
+  ));
+  if (!eligibleWindows.length) return null;
+  const scored = eligibleWindows.map((window) => ({
+    ...window,
+    focusScore: surgicalWindowDimensionScore(window, diagnosis, song),
+  }));
+  scored.sort((left, right) => (
+    left.focusScore - right.focusScore
+    || left.score - right.score
+    || left.startBeat - right.startBeat
+  ));
+  const primary = scored[0];
+  const members = [primary];
+  const expand = ["groove", "motif", "performance"].includes(diagnosis?.group)
+    || ["density", "drumVariety", "repetition", "memory"].includes(diagnosis?.weakestDimension);
+  if (expand) {
+    const neighbors = scored
+      .filter((window) => (
+        window.id !== primary.id
+        && window.sectionId === primary.sectionId
+        && (Math.abs(window.endBar - primary.startBar) < 1e-6 || Math.abs(window.startBar - primary.endBar) < 1e-6)
+        && Math.max(window.endBar, primary.endBar) - Math.min(window.startBar, primary.startBar) <= 8
+      ))
+      .sort((left, right) => (
+        left.focusScore - right.focusScore
+        || left.score - right.score
+        || left.startBeat - right.startBeat
+      ));
+    if (neighbors[0]) members.push(neighbors[0]);
+  }
+  members.sort((left, right) => left.startBeat - right.startBeat);
+  const startBar = Math.min(...members.map((window) => window.startBar));
+  const endBar = Math.max(...members.map((window) => window.endBar));
+  const startBeat = Math.min(...members.map((window) => window.startBeat));
+  const endBeat = Math.max(...members.map((window) => window.endBeat));
+  return {
+    version: 1,
+    id: `${primary.sectionId}:${startBar}-${endBar}`,
+    sectionId: primary.sectionId,
+    startBar,
+    endBar,
+    startBeat: round(startBeat),
+    endBeat: round(endBeat),
+    bars: endBar - startBar,
+    focusDimension: diagnosis?.weakestDimension ?? null,
+    focusScore: round(average(members.map((window) => window.focusScore), primary.focusScore)),
+    scoreBefore: round(average(members.map((window) => window.score), primary.score)),
+    phraseWindowIds: members.map((window) => window.id),
+    diagnostics: clone(primary.diagnostics ?? {}),
+  };
+}
+
+function targetedRepairTrackIds(sourceCandidate, diagnosis) {
+  const targetTrack = TRACK_DEFINITIONS[sourceCandidate?.targetTrack] ? sourceCandidate.targetTrack : null;
+  if (targetTrack) return [targetTrack];
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  if (dimension === "density") return ["bass", "chords", "counterpoint", "pad"];
+  if (dimension === "drumVariety") return ["drums"];
+  if (dimension === "groove") return ["drums", "bass"];
+  if (["repetition", "phraseResolution", "registerHealth"].includes(dimension)) return ["melody"];
+  if (dimension === "memory") return ["melody", "bass", "counterpoint"];
+  if (["separation", "motif"].includes(dimension)) return ["melody", "counterpoint"];
+  if (diagnosis?.group === "harmony") return ["bass", "chords", "melody", "counterpoint", "pad"];
+  if (diagnosis?.group === "groove") return ["drums", "bass"];
+  if (diagnosis?.group === "motif") return ["melody", "counterpoint"];
+  if (diagnosis?.group === "performance") return [...TRACK_IDS];
+  return [...TRACK_IDS];
+}
+
+function specializedRepairSetting(config, trackId, name) {
+  const tracks = trackInputMap(config?.tracks);
+  return clamp(
+    finite(tracks[trackId]?.[name], TRACK_DEFINITIONS[trackId]?.[name] ?? 0),
+    0,
+    1,
+  );
+}
+
+function repairDrumVarietyMetrics(song) {
+  const drumNotes = song?.tracks?.find((track) => track.id === "drums")?.notes ?? [];
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
+  const signatures = Array.from({ length: bars }, (_, bar) => drumNotes
+    .filter((note) => Math.floor(note.start / barBeats) === bar)
+    .map((note) => `${note.pitch}:${round(mod(note.start, barBeats))}`)
+    .join("|"));
+  const populated = signatures.filter(Boolean);
+  if (populated.length < 2) return { score: 58, uniqueRatio: 0, adjacentCopies: 0 };
+  const uniqueRatio = new Set(populated).size / populated.length;
+  const adjacentCopies = populated.slice(1)
+    .filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
+  const usefulVariation = 1 - Math.abs(uniqueRatio - 0.58) / 0.58;
+  return {
+    score: clamp(Math.round(48 + clamp(usefulVariation, 0, 1) * 34 + (1 - adjacentCopies) * 18), 25, 100),
+    uniqueRatio: round(uniqueRatio),
+    adjacentCopies: round(adjacentCopies),
+  };
+}
+
+function repairDensityDelta(song) {
+  const bars = Math.max(1, finite(song?.meta?.bars, song?.bars ?? 1));
+  const noteCount = (song?.tracks ?? [])
+    .filter((track) => track.id !== "drums")
+    .reduce((sum, track) => sum + (track.notes ?? []).length, 0);
+  const profile = GENRE_CRITIC_PROFILES[song?.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  return noteCount / bars - profile.density;
+}
+
+function repairRepetitionMetrics(song) {
+  const melody = [...(song?.tracks?.find((track) => track.id === "melody")?.notes ?? [])]
+    .sort((left, right) => left.start - right.start);
+  const profile = GENRE_CRITIC_PROFILES[song?.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  const actual = phraseRepetition(song, melody);
+  const target = average([
+    finite(song?.songBlueprint?.qualityTargets?.repetition, profile.repetition),
+    profile.repetition,
+  ], profile.repetition);
+  return { actual: round(actual), target: round(target), delta: round(actual - target) };
+}
+
+function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, config) {
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  let trackIds = targetedRepairTrackIds(sourceCandidate, diagnosis);
+  const trackOverrides = {};
+  const configPatch = {};
+  const diagnostics = window?.diagnostics ?? {};
+  const sourceSong = sourceCandidate?.song;
+  let id = String(diagnosis?.group ?? "general") + "-regenerate";
+  const setTrack = (trackId, patch) => {
+    trackOverrides[trackId] = { ...(trackOverrides[trackId] ?? {}), ...patch };
+  };
+
+  if (dimension === "transitions") {
+    id = "transition-boundary";
+    trackIds = [...TRACK_IDS];
+  } else if (dimension === "performance") {
+    id = "performance-dynamics";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "density") {
+    const localDelta = finite(diagnostics.densityDelta, repairDensityDelta(sourceSong));
+    const globalDelta = repairDensityDelta(sourceSong);
+    const densityDelta = average([localDelta, globalDelta], globalDelta);
+    const direction = densityDelta > 0 ? -1 : 1;
+    id = direction > 0 ? "density-build" : "density-thin";
+    trackIds = direction > 0
+      ? ["bass", "chords", "counterpoint"]
+      : ["bass", "counterpoint", "pad"];
+    const amount = direction > 0 ? 0.18 : -0.18;
+    for (const trackId of trackIds) {
+      setTrack(trackId, {
+        density: clamp(specializedRepairSetting(config, trackId, "density") + amount, 0.08, 0.96),
+        variation: clamp(specializedRepairSetting(config, trackId, "variation") + 0.04, 0, 1),
+      });
+    }
+    configPatch.syncopation = clamp(finite(config?.syncopation, 0.5) + (direction > 0 ? 0.03 : -0.02), 0, 1);
+  } else if (["storyArc", "tensionFollow"].includes(dimension)) {
+    id = "arrangement-energy-arc";
+    trackIds = [...TRACK_IDS];
+  } else if (dimension === "voiceLeading") {
+    id = "harmony-voice-leading";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "harmonic") {
+    id = "harmony-foundation";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "harmonicJourney") {
+    id = "harmony-journey";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "cadence") {
+    id = "harmony-cadence";
+    trackIds = ["bass", "chords", "melody", "counterpoint", "pad"];
+  } else if (dimension === "groove") {
+    const bassLock = clamp(finite(diagnostics.bassLock, 0.5), 0, 1);
+    const tighten = bassLock < 0.72;
+    id = tighten ? "groove-lock" : "groove-develop";
+    setTrack("drums", {
+      variation: clamp(specializedRepairSetting(config, "drums", "variation") + 0.08, 0, 1),
+      humanize: clamp(specializedRepairSetting(config, "drums", "humanize") + (tighten ? -0.05 : 0.02), 0, 1),
+    });
+    setTrack("bass", {
+      variation: clamp(specializedRepairSetting(config, "bass", "variation") + (tighten ? -0.06 : 0.08), 0, 1),
+      humanize: clamp(specializedRepairSetting(config, "bass", "humanize") + (tighten ? -0.1 : 0.02), 0, 1),
+      feel: clamp(specializedRepairSetting(config, "bass", "feel") + 0.08, 0, 1),
+    });
+  } else if (dimension === "drumVariety") {
+    const variety = repairDrumVarietyMetrics(sourceSong);
+    const stabilize = variety.uniqueRatio > 0.64 && variety.adjacentCopies < 0.22;
+    id = stabilize ? "drum-stabilize" : "drum-develop";
+    setTrack("drums", {
+      variation: clamp(specializedRepairSetting(config, "drums", "variation") + (stabilize ? -0.2 : 0.14), 0, 1),
+      density: clamp(specializedRepairSetting(config, "drums", "density") + (stabilize ? -0.03 : 0.03), 0, 1),
+    });
+    configPatch.variation = clamp(finite(config?.variation, 0.5) + (stabilize ? -0.12 : 0.08), 0, 1);
+  } else if (dimension === "repetition") {
+    const repetition = repairRepetitionMetrics(sourceSong);
+    const reinforce = repetition.actual < repetition.target;
+    id = reinforce ? "motif-reinforce" : "motif-evolution";
+    trackIds = ["melody"];
+    setTrack("melody", {
+      variation: clamp(specializedRepairSetting(config, "melody", "variation") + (reinforce ? -0.16 : 0.16), 0, 1),
+    });
+    configPatch.variation = clamp(finite(config?.variation, 0.5) + (reinforce ? -0.1 : 0.1), 0, 1);
+    configPatch.evolution = clamp(finite(config?.evolution, 0.5) + (reinforce ? -0.06 : 0.1), 0, 1);
+    configPatch.surprise = clamp(finite(config?.surprise, 0.5) + (reinforce ? -0.08 : 0.04), 0, 1);
+  } else if (dimension === "memory") {
+    id = "memory-recall";
+    trackIds = ["melody", "bass", "counterpoint"];
+    configPatch.variation = clamp(finite(config?.variation, 0.5) - 0.04, 0, 1);
+  } else if (dimension === "phraseResolution") {
+    id = "phrase-cadence";
+    trackIds = ["melody"];
+    setTrack("melody", {
+      variation: clamp(specializedRepairSetting(config, "melody", "variation") - 0.1, 0, 1),
+    });
+    configPatch.evolution = clamp(finite(config?.evolution, 0.5) + 0.04, 0, 1);
+    configPatch.surprise = clamp(finite(config?.surprise, 0.5) - 0.1, 0, 1);
+  } else if (dimension === "separation") {
+    id = "motif-space";
+    setTrack("melody", {
+      density: clamp(specializedRepairSetting(config, "melody", "density") - 0.08, 0.12, 1),
+    });
+    setTrack("counterpoint", {
+      density: clamp(specializedRepairSetting(config, "counterpoint", "density") - 0.12, 0.08, 1),
+    });
+  } else if (dimension === "registerHealth") {
+    id = "motif-register-refresh";
+    trackIds = ["melody"];
+    setTrack("melody", {
+      variation: clamp(specializedRepairSetting(config, "melody", "variation") + 0.08, 0, 1),
+    });
+  } else if (dimension === "motif") {
+    id = "motif-refresh";
+    setTrack("melody", {
+      variation: clamp(specializedRepairSetting(config, "melody", "variation") + 0.1, 0, 1),
+    });
+    setTrack("counterpoint", {
+      variation: clamp(specializedRepairSetting(config, "counterpoint", "variation") + 0.08, 0, 1),
+    });
+  }
+
+  return {
+    version: 2,
+    id,
+    dimension: dimension || null,
+    trackIds,
+    trackOverrides,
+    configPatch,
+  };
+}
+
+function specializedRepairConfig(config, strategy) {
+  return normalizeConfig({
+    ...config,
+    ...(strategy?.configPatch ?? {}),
+    tracks: mergeTrackInputs(config?.tracks, strategy?.trackOverrides ?? {}),
+  });
+}
+
+function specializedRepairSummary(strategy) {
+  if (!strategy) return null;
+  return {
+    version: strategy.version ?? 1,
+    id: strategy.id ?? null,
+    dimension: strategy.dimension ?? null,
+    tracks: clone(strategy.trackIds ?? []),
+    configPatch: clone(strategy.configPatch ?? {}),
+    trackOverrides: clone(strategy.trackOverrides ?? {}),
+  };
+}
+
+function repairWindowDrumVarietyScore(song, window) {
+  const drums = song?.tracks?.find((track) => track.id === "drums")?.notes ?? [];
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const signatures = [];
+  for (let bar = window.startBar; bar < window.endBar; bar += 1) {
+    signatures.push(drums
+      .filter((note) => Math.floor(note.start / barBeats) === bar)
+      .map((note) => `${note.pitch}:${round(mod(note.start, barBeats))}`)
+      .join("|"));
+  }
+  const populated = signatures.filter(Boolean);
+  if (populated.length < 2) return 58;
+  const uniqueRatio = new Set(populated).size / populated.length;
+  const adjacentCopies = populated.slice(1)
+    .filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
+  const usefulVariation = 1 - Math.abs(uniqueRatio - 0.58) / 0.58;
+  return clamp(Math.round(48 + clamp(usefulVariation, 0, 1) * 34 + (1 - adjacentCopies) * 18), 25, 100);
+}
+
+function repairWindowMemoryScore(song, window) {
+  const memory = song?.songBlueprint?.memoryMap?.find((entry) => (
+    entry.sectionId === window.sectionId
+    && !["introduction", "statement"].includes(entry.relationship)
+  ));
+  if (!memory) return 100;
+  const recalled = ["melody", "bass", "counterpoint"].map((trackId) => (
+    song?.tracks?.find((track) => track.id === trackId)?.notes?.some((note) => (
+      note.memoryRole === memory.relationship
+      && note.memoryOriginSectionId === memory.originSectionId
+      && note.start >= window.startBeat - 1e-6
+      && note.start < window.endBeat - 1e-6
+    ))
+  ));
+  if (memory.relationship === "contrast") return recalled[0] ? 100 : 50;
+  return round(recalled.filter(Boolean).length / recalled.length * 100);
+}
+
+function repairWindowPhraseResolutionScore(song, window) {
+  const section = song?.structure?.find((candidate) => candidate.id === window.sectionId);
+  if (!section || window.endBeat < section.endBeat - 0.05) return 100;
+  const melody = [...(song?.tracks?.find((track) => track.id === "melody")?.notes ?? [])]
+    .filter((note) => note.start < section.endBeat - 0.01 && note.start >= section.endBeat - finite(song?.meta?.beatsPerBar, 4) * 1.25)
+    .sort((left, right) => left.start - right.start);
+  const landing = melody.at(-1);
+  if (!landing) return 55;
+  const chord = harmonyAt(song?.harmony ?? [], landing.start);
+  const pitchClass = mod(landing.pitch, 12);
+  const chordTone = chord?.tones?.includes(pitchClass);
+  const tonicLanding = pitchClass === finite(song?.meta?.keyPc, 0);
+  const held = landing.duration >= finite(song?.meta?.beatsPerBar, 4) * 0.35;
+  return round(clamp(0.38 + Number(chordTone) * 0.32 + Number(tonicLanding) * 0.18 + Number(held) * 0.12, 0, 1) * 100);
+}
+
+function repairWindowRepetitionScore(song, window) {
+  const section = song?.structure?.find((candidate) => candidate.id === window.sectionId);
+  if (!section) return 70;
+  const melody = [...(song?.tracks?.find((track) => track.id === "melody")?.notes ?? [])]
+    .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+    .sort((left, right) => left.start - right.start);
+  const profile = GENRE_CRITIC_PROFILES[song?.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  const ratio = phraseRepetition({ ...song, structure: [section] }, melody);
+  const target = average([
+    finite(song?.songBlueprint?.qualityTargets?.repetition, profile.repetition),
+    profile.repetition,
+  ], profile.repetition);
+  return clamp(Math.round(100 - Math.abs(ratio - target) * 125), 30, 100);
+}
+
+function nearestRepairPitch(pitch, pitchClasses, minimum = 36, maximum = 108) {
+  const goals = new Set((pitchClasses ?? []).map((value) => mod(value, 12)));
+  if (!goals.size) return pitch;
+  const candidates = [];
+  for (let candidate = minimum; candidate <= maximum; candidate += 1) {
+    if (goals.has(mod(candidate, 12))) candidates.push(candidate);
+  }
+  return candidates.sort((left, right) => Math.abs(left - pitch) - Math.abs(right - pitch) || left - right)[0] ?? pitch;
+}
+
+function reinforceRepairMemory(song, config) {
+  const rawTracks = Object.fromEntries((song?.tracks ?? []).map((track) => [
+    track.id,
+    (track.notes ?? []).map((note) => ({ ...note })),
+  ]));
+  const remembered = applyMusicalMemory(
+    rawTracks,
+    song.structure ?? [],
+    song.harmony ?? [],
+    song.songBlueprint,
+    song.motifs?.melody?.lengthBeats,
+    finite(config?.bars, song?.meta?.bars ?? song?.bars ?? 1) * beatsPerBar(config),
+  );
+  const repaired = clone(song);
+  repaired.tracks = repaired.tracks.map((track) => ({
+    ...track,
+    notes: (remembered?.[track.id] ?? track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  return repaired;
+}
+
+function reinforceRepairPhraseResolution(song, config, window) {
+  const repaired = clone(song);
+  const melodyTrack = repaired.tracks?.find((track) => track.id === "melody");
+  const counterTrack = repaired.tracks?.find((track) => track.id === "counterpoint");
+  if (!melodyTrack) return repaired;
+  const barBeats = beatsPerBar(config);
+  const tonic = finite(repaired.meta?.keyPc, config?.keyPc ?? 0);
+  const sections = (repaired.structure ?? []).filter((section) => (
+    !window
+    || (section.endBeat > window.startBeat + 1e-6 && section.startBeat < window.endBeat - 1e-6)
+  ));
+  let edits = 0;
+  for (const section of sections) {
+    if (window && window.endBeat < section.endBeat - 0.05) continue;
+    const phraseNotes = melodyTrack.notes
+      .filter((note) => note.start < section.endBeat - 0.01 && note.start >= section.endBeat - barBeats * 1.25)
+      .sort((left, right) => left.start - right.start);
+    const landing = phraseNotes.at(-1);
+    if (!landing) continue;
+    const chord = harmonyAt(repaired.harmony ?? [], landing.start);
+    const plan = blueprintPlanForSection(repaired.songBlueprint, section);
+    const finalSection = section.id === repaired.structure?.at(-1)?.id;
+    const preferTonic = finalSection || plan?.cadence === "resolve";
+    const chordTones = chord?.tones?.length ? chord.tones : [tonic];
+    const pitchClasses = [...new Set(preferTonic ? [tonic, ...chordTones] : [...chordTones, tonic])];
+    const currentDuration = Math.max(0.05, finite(landing.duration, 0.25));
+    const counterNotes = counterTrack?.notes ?? [];
+    const collisionCount = (pitch, duration) => counterNotes.filter((note) => {
+      if (note.start >= landing.start + duration - 1e-6 || landing.start >= note.start + note.duration - 1e-6) return false;
+      return [0, 1, 6, 11].includes(mod(Math.abs(pitch - note.pitch), 12));
+    }).length;
+    const candidates = pitchClasses.map((pitchClass, priority) => {
+      const pitch = nearestRepairPitch(landing.pitch, [pitchClass]);
+      const pitchClassAtLanding = mod(pitch, 12);
+      const chordTone = Boolean(chord?.tones?.includes(pitchClassAtLanding));
+      const tonicCandidate = pitchClassAtLanding === tonic;
+      return {
+        pitch,
+        priority,
+        collisions: collisionCount(pitch, currentDuration),
+        resolutionValue: Number(chordTone) * 0.32 + Number(tonicCandidate) * 0.18,
+        distance: Math.abs(pitch - landing.pitch),
+      };
+    }).sort((left, right) => (
+      left.collisions - right.collisions
+      || right.resolutionValue - left.resolutionValue
+      || left.priority - right.priority
+      || left.distance - right.distance
+      || left.pitch - right.pitch
+    ));
+    const chosen = candidates[0];
+    if (chosen && chosen.pitch !== landing.pitch) {
+      landing.pitch = chosen.pitch;
+      edits += 1;
+    }
+    const minimumDuration = barBeats * 0.36;
+    const availableDuration = Math.max(0.05, section.endBeat - landing.start);
+    const desiredDuration = Math.max(currentDuration, Math.min(minimumDuration, availableDuration));
+    if (desiredDuration > currentDuration + 1e-6
+      && collisionCount(landing.pitch, desiredDuration) <= collisionCount(landing.pitch, currentDuration)) {
+      landing.duration = round(desiredDuration);
+      edits += 1;
+    }
+    const pitchClass = mod(landing.pitch, 12);
+    landing.resolutionRole = pitchClass === tonic ? "tonic-landing" : "chord-landing";
+    landing.phraseBoundary = round(section.endBeat);
+    landing.preserveTiming = true;
+    landing.producerRepair = "phrase-cadence-precision";
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    cadence: { version: 2, edits, windowId: window?.id ?? null },
+  };
+  melodyTrack.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return repaired;
+}
+
+function reinforceRepairTransitions(song, config) {
+  const repaired = clone(song);
+  const transitions = repaired.arrangementTransitions ?? repaired.songBlueprint?.transitions ?? [];
+  const drums = repaired.tracks?.find((track) => track.id === "drums");
+  let edits = 0;
+  for (const transition of transitions) {
+    const from = repaired.structure?.find((section) => section.id === transition.fromSectionId);
+    if (!from) continue;
+    const boundary = finite(from.endBeat, 0);
+    const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, 2);
+    if (transition.type === "drop-out") {
+      const preserve = [];
+      for (const track of repaired.tracks ?? []) {
+        for (const note of track.notes ?? []) {
+          if (note.start >= boundary - pickup - 1e-6 && note.start < boundary - 1e-6 && note.resolutionRole) {
+            preserve.push({ track, note });
+          }
+        }
+      }
+      preserve.sort((left, right) => right.note.start - left.note.start || right.note.velocity - left.note.velocity);
+      const keep = preserve[0]?.note ?? null;
+      for (const track of repaired.tracks ?? []) {
+        const before = track.notes?.length ?? 0;
+        track.notes = (track.notes ?? []).filter((note) => (
+          note === keep
+          || note.start < boundary - pickup - 1e-6
+          || note.start >= boundary - 1e-6
+        ));
+        edits += before - track.notes.length;
+      }
+      continue;
+    }
+
+    const candidates = (repaired.tracks ?? []).flatMap((track) => (track.notes ?? [])
+      .filter((note) => note.start >= boundary - pickup - 0.08 && note.start <= boundary + 0.08)
+      .map((note) => ({ track, note })))
+      .sort((left, right) => (
+        Math.abs(left.note.start - boundary) - Math.abs(right.note.start - boundary)
+        || Number(right.track.id === "drums") - Number(left.track.id === "drums")
+        || finite(right.note.velocity, 0) - finite(left.note.velocity, 0)
+      ));
+    for (const entry of candidates.slice(0, 3)) {
+      entry.note.transitionFeature = transition.type;
+      edits += 1;
+    }
+    const hit = candidates.find((entry) => Math.abs(entry.note.start - boundary) <= 0.08);
+    if (hit) {
+      hit.note.velocity = Math.max(94, Math.round(finite(hit.note.velocity, 80)));
+      hit.note.transitionFeature = transition.type;
+      edits += 1;
+    } else if (drums) {
+      drums.notes.push({
+        start: round(boundary),
+        duration: round(Math.min(0.35, beatsPerBar(config) * 0.12)),
+        pitch: 49,
+        velocity: 96,
+        transitionFeature: transition.type,
+        producerRepair: "transition-boundary",
+      });
+      drums.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      edits += 1;
+    }
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    transitions: { version: 1, edits },
+  };
+  return repaired;
+}
+
+function rebalanceRepairPerformance(song) {
+  const repaired = clone(song);
+  const profile = clone(repaired.performanceProfile ?? {});
+  profile.timingJitter = Math.min(0.035, Math.abs(finite(profile.timingJitter, 0)));
+  profile.trackOffsets = Object.fromEntries(
+    Object.entries(profile.trackOffsets ?? {}).map(([id, offset]) => [id, clamp(finite(offset, 0), -0.045, 0.045)]),
+  );
+  repaired.performanceProfile = profile;
+
+  const pitchedTracks = (repaired.tracks ?? []).filter((track) => track.id !== "drums");
+  const notes = pitchedTracks.flatMap((track) => track.notes ?? []);
+  if (!notes.length) return repaired;
+  const velocities = notes.map((note) => finite(note.velocity, 80));
+  const mean = average(velocities, 80);
+  const variance = average(velocities.map((velocity) => (velocity - mean) ** 2), 0);
+  const spread = Math.sqrt(variance);
+  const target = clamp(10 + finite(profile.velocityVariance, 5) * 1.2, 8, 28);
+  let index = 0;
+  for (const track of pitchedTracks) {
+    for (const note of track.notes ?? []) {
+      const current = finite(note.velocity, mean);
+      const normalized = spread > 0.75
+        ? (current - mean) / spread
+        : (((index % 5) - 2) / 2);
+      note.velocity = clamp(Math.round(mean + normalized * target), 24, 124);
+      note.performanceRepair = "dynamic-spread";
+      index += 1;
+    }
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    performance: {
+      version: 1,
+      spreadBefore: round(spread),
+      targetSpread: round(target),
+    },
+  };
+  return repaired;
+}
+
+function sectionRepairTarget(song, section, dimension) {
+  const plan = blueprintPlanForSection(song.songBlueprint, section);
+  if (dimension === "tensionFollow") {
+    return clamp(finite(
+      section.plannedTension
+        ?? section.tension
+        ?? section.intent?.tension
+        ?? plan?.tension
+        ?? section.energy,
+      0.5,
+    ), 0, 1);
+  }
+  return clamp(finite(plan?.energy ?? section.energy, 0.5), 0, 1);
+}
+
+function rebalanceRepairArrangementArc(song, dimension) {
+  const repaired = clone(song);
+  const sections = repaired.structure ?? [];
+  if (sections.length < 2) return repaired;
+  const targets = sections.map((section) => sectionRepairTarget(repaired, section, dimension));
+  const center = average(targets, 0.5);
+  let velocityEdits = 0;
+  let densityEdits = 0;
+  for (let sectionIndex = 0; sectionIndex < sections.length; sectionIndex += 1) {
+    const section = sections[sectionIndex];
+    const target = targets[sectionIndex];
+    const notes = (repaired.tracks ?? []).flatMap((track) => (track.notes ?? [])
+      .filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6)
+      .map((note) => ({ track, note })));
+    if (!notes.length) continue;
+    const mean = average(notes.map(({ note }) => finite(note.velocity, 80)), 80);
+    const desired = clamp(52 + target * 62, 48, 114);
+    const shift = clamp((desired - mean) * 0.72, -18, 18);
+    for (const { note } of notes) {
+      const next = clamp(Math.round(finite(note.velocity, mean) + shift), 22, 124);
+      if (next !== note.velocity) velocityEdits += 1;
+      note.velocity = next;
+      note.producerRepair = "arrangement-energy-arc";
+    }
+
+    const supportTracks = (repaired.tracks ?? []).filter((track) => ["pad", "chords", "counterpoint"].includes(track.id));
+    if (target > center + 0.07) {
+      const candidates = supportTracks.flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= section.startBeat - 1e-6
+          && note.start < section.endBeat - 1e-6
+          && finite(note.duration, 0) >= 0.5)
+        .map((note) => ({ track, note })))
+        .sort((left, right) => finite(right.note.duration, 0) - finite(left.note.duration, 0));
+      for (const { track, note } of candidates.slice(0, 1)) {
+        const duration = finite(note.duration, 0);
+        const half = round(duration / 2);
+        if (half < 0.12) continue;
+        note.duration = half;
+        track.notes.push({
+          ...clone(note),
+          start: round(note.start + half),
+          duration: round(duration - half),
+          velocity: clamp(Math.round(finite(note.velocity, 80) - 2), 22, 124),
+          producerRepair: "arrangement-energy-arc",
+        });
+        densityEdits += 1;
+      }
+    } else if (target < center - 0.07) {
+      const candidates = supportTracks.flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= section.startBeat - 1e-6
+          && note.start < section.endBeat - 1e-6
+          && !note.resolutionRole
+          && !note.transitionFeature
+          && !note.memoryRole)
+        .map((note) => ({ track, note })))
+        .sort((left, right) => finite(left.note.velocity, 80) - finite(right.note.velocity, 80)
+          || finite(left.note.duration, 0) - finite(right.note.duration, 0));
+      const remove = candidates[0];
+      if (remove && (remove.track.notes?.length ?? 0) > 2) {
+        remove.track.notes = remove.track.notes.filter((note) => note !== remove.note);
+        densityEdits += 1;
+      }
+    }
+  }
+  for (const track of repaired.tracks ?? []) {
+    track.notes?.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    arrangementArc: { version: 1, dimension, velocityEdits, densityEdits },
+  };
+  return repaired;
+}
+
+function rebalanceRepairDensity(song, strategy, window) {
+  const repaired = clone(song);
+  const build = strategy?.id === "density-build";
+  const startBeat = Number.isFinite(Number(window?.startBeat)) ? Number(window.startBeat) : 0;
+  const endBeat = Number.isFinite(Number(window?.endBeat))
+    ? Number(window.endBeat)
+    : finite(repaired.meta?.bars, repaired.bars ?? 1) * finite(repaired.meta?.beatsPerBar, 4);
+  const allowed = new Set(strategy?.trackIds ?? ["chords", "pad", "counterpoint"]);
+  const barsInWindow = Math.max(1, (endBeat - startBeat) / Math.max(1, finite(repaired.meta?.beatsPerBar, 4)));
+  const editBudget = clamp(Math.ceil(barsInWindow * 2), 2, 6);
+  let edits = 0;
+  if (build) {
+    const candidates = (repaired.tracks ?? []).filter((track) => allowed.has(track.id) && track.id !== "bass")
+      .flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= startBeat - 1e-6
+          && note.start < endBeat - 1e-6
+          && finite(note.duration, 0) >= 0.28
+          && !note.transitionFeature)
+        .map((note) => ({ track, note })))
+      .sort((left, right) => finite(right.note.duration, 0) - finite(left.note.duration, 0)
+        || finite(right.note.velocity, 0) - finite(left.note.velocity, 0));
+    for (const { track, note } of candidates.slice(0, editBudget)) {
+      const duration = finite(note.duration, 0);
+      const first = round(duration / 2);
+      const second = round(duration - first);
+      if (first < 0.1 || second < 0.1) continue;
+      note.duration = first;
+      note.producerRepair = "density-precision";
+      track.notes.push({
+        ...clone(note),
+        start: round(note.start + first),
+        duration: second,
+        velocity: clamp(Math.round(finite(note.velocity, 80) - 3), 20, 124),
+        producerRepair: "density-precision",
+      });
+      edits += 1;
+    }
+  } else {
+    const candidates = (repaired.tracks ?? []).filter((track) => allowed.has(track.id) && track.id !== "bass")
+      .flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.start >= startBeat - 1e-6
+          && note.start < endBeat - 1e-6
+          && !note.resolutionRole
+          && !note.transitionFeature
+          && !note.memoryRole)
+        .map((note) => ({ track, note })))
+      .sort((left, right) => finite(left.note.velocity, 80) - finite(right.note.velocity, 80)
+        || finite(left.note.duration, 0) - finite(right.note.duration, 0));
+    for (const { track, note } of candidates) {
+      if (edits >= editBudget) break;
+      if ((track.notes?.length ?? 0) <= 2) continue;
+      track.notes = track.notes.filter((candidate) => candidate !== note);
+      edits += 1;
+    }
+  }
+  for (const track of repaired.tracks ?? []) {
+    track.notes?.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  repaired.precisionRepair = {
+    ...(repaired.precisionRepair ?? {}),
+    density: { version: 1, direction: build ? "build" : "thin", edits, startBeat: round(startBeat), endBeat: round(endBeat) },
+  };
+  return repaired;
+}
+
+function directSpecializedRepairSource(sourceSong, strategy, config, window = null) {
+  const dimension = String(strategy?.dimension ?? "");
+  if (dimension === "transitions") return reinforceRepairTransitions(sourceSong, config);
+  if (dimension === "performance") return clone(sourceSong);
+  if (dimension === "density") return rebalanceRepairDensity(sourceSong, strategy, window);
+  if (["storyArc", "tensionFollow"].includes(dimension)) return rebalanceRepairArrangementArc(sourceSong, dimension);
+  return null;
+}
+
+function applySpecializedRepairMaterial(song, strategy, config, window) {
+  if (!song || !strategy) return song;
+  if (strategy.dimension === "memory" && strategy.trackIds.some((id) => ["melody", "bass", "counterpoint"].includes(id))) {
+    return reinforceRepairMemory(song, config);
+  }
+  if (strategy.dimension === "phraseResolution" && strategy.trackIds.includes("melody")) {
+    return reinforceRepairPhraseResolution(song, config, window);
+  }
+  return song;
+}
+
+function spliceNotesInSurgicalWindow(sourceNotes = [], repairedNotes = [], window = {}) {
+  const startBeat = finite(window.startBeat, 0);
+  const endBeat = Math.max(startBeat, finite(window.endBeat, startBeat));
+  const outside = sourceNotes.filter((note) => note.start < startBeat - 1e-6 || note.start >= endBeat - 1e-6);
+  const inside = repairedNotes.filter((note) => note.start >= startBeat - 1e-6 && note.start < endBeat - 1e-6);
+  return [...outside.map(clone), ...inside.map(clone)]
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+
+function timedEventBeat(event) {
+  const value = Number(event?.startBeat ?? event?.start);
+  return Number.isFinite(value) ? value : null;
+}
+
+function spliceTimedEventsInSurgicalWindow(sourceEvents = [], repairedEvents = [], window = {}) {
+  const startBeat = finite(window.startBeat, 0);
+  const endBeat = Math.max(startBeat, finite(window.endBeat, startBeat));
+  if (![...sourceEvents, ...repairedEvents].some((event) => timedEventBeat(event) != null)) {
+    return clone(sourceEvents);
+  }
+  const outside = sourceEvents.filter((event) => {
+    const beat = timedEventBeat(event);
+    return beat == null || beat < startBeat - 1e-6 || beat >= endBeat - 1e-6;
+  });
+  const inside = repairedEvents.filter((event) => {
+    const beat = timedEventBeat(event);
+    return beat != null && beat >= startBeat - 1e-6 && beat < endBeat - 1e-6;
+  });
+  return [...outside.map(clone), ...inside.map(clone)]
+    .sort((left, right) => finite(timedEventBeat(left), 0) - finite(timedEventBeat(right), 0));
+}
+
+function applySurgicalRepairWindow(sourceSong, repairedSong, config, diagnosis, sourceCandidate, window, repairStrategy = null) {
+  const trackIds = repairStrategy?.trackIds ?? repairStrategy?.tracks ?? targetedRepairTrackIds(sourceCandidate, diagnosis);
+  const repairedById = new Map((repairedSong.tracks ?? []).map((track) => [track.id, track]));
+  const song = clone(sourceSong);
+  song.id = repairedSong.id;
+  song.seed = repairedSong.seed;
+  song.settings = clone(repairedSong.settings ?? sourceSong.settings);
+  song.tracks = sourceSong.tracks.map((track) => {
+    if (!trackIds.includes(track.id)) return clone(track);
+    const repairedTrack = repairedById.get(track.id) ?? track;
+    return {
+      ...clone(track),
+      notes: spliceNotesInSurgicalWindow(track.notes ?? [], repairedTrack.notes ?? [], window),
+    };
+  });
+  if (diagnosis?.group === "harmony") {
+    song.harmony = spliceTimedEventsInSurgicalWindow(
+      sourceSong.harmony ?? [],
+      repairedSong.harmony ?? [],
+      window,
+    );
+  } else {
+    song.harmony = clone(sourceSong.harmony ?? []);
+  }
+  const sourceInterlock = clone(sourceSong.generationInterlock ?? repairedSong.generationInterlock ?? {});
+  song.generationInterlock = {
+    ...sourceInterlock,
+    version: 2,
+    reconciliation: {
+      phase: 40,
+      repairGroup: diagnosis.group,
+      source: "actual-repaired-song",
+    },
+  };
+  const preInterlockTracks = song.tracks.map(clone);
+  const surgicalNotesById = Object.fromEntries(
+    preInterlockTracks.map((track) => [track.id, track.notes ?? []]),
+  );
+  const reconnected = applyGenerationInterlocks(
+    surgicalNotesById,
+    song.generationInterlock,
+    song.structure,
+    config,
+    { adjustVelocity: false },
+  );
+  const surgicalTrackSet = new Set(trackIds);
+  song.tracks = preInterlockTracks.map((track) => {
+    if (!surgicalTrackSet.has(track.id)) return track;
+    return {
+      ...track,
+      notes: spliceNotesInSurgicalWindow(
+        track.notes ?? [],
+        reconnected[track.id] ?? track.notes ?? [],
+        window,
+      ),
+    };
+  });
+  song.meta = { ...sourceSong.meta, ideaFingerprint: null };
+  const rescoredWindows = evaluatePhraseWindows(
+    song.tracks,
+    song.structure,
+    song.harmony,
+    config,
+    song.grooveConductor,
+  );
+  const affectedWindows = rescoredWindows.filter((candidate) => (
+    candidate.startBeat < window.endBeat - 1e-6 && candidate.endBeat > window.startBeat + 1e-6
+  ));
+  const scoreAfter = round(average(affectedWindows.map((candidate) => candidate.score), window.scoreBefore));
+  song.phraseCritic = {
+    ...(sourceSong.phraseCritic ?? {}),
+    phase: 41,
+    version: 1,
+    status: "complete",
+    analyzedWindows: rescoredWindows.length,
+    weakestScore: rescoredWindows.length ? Math.min(...rescoredWindows.map((candidate) => candidate.score)) : 100,
+    windows: rescoredWindows,
+    repairs: [
+      ...clone(sourceSong.phraseCritic?.repairs ?? []),
+      {
+        windowId: window.id,
+        scoreBefore: window.scoreBefore,
+        scoreAfter,
+        tracks: clone(trackIds),
+        actions: ["producer-brain-regeneration"],
+      },
+    ],
+  };
+  song.idea = createIdeaAnalysis(
+    config,
+    song.structure,
+    song.harmony,
+    song.style,
+    song.tracks,
+    song.oneShotKit,
+    song.songBlueprint,
+    song.performanceProfile,
+  );
+  song.idea.rhythmicFeatures.push(
+    `Producer Brain surgical repair · bars ${window.startBar + 1}-${window.endBar}`,
+  );
+  song.criticRepair = {
+    ...(repairedSong.criticRepair ?? {}),
+    mode: "surgical-window",
+    surgicalWindow: {
+      ...clone(window),
+      scoreAfter,
+    },
+    surgicalTracks: clone(trackIds),
+  };
+  return song;
+}
+
+function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, repairStrategy = null) {
   reconcileRepairedGenerationInterlock(song, config, diagnosis);
   const produced = runProducerPass(song.tracks, song.structure, song.songBlueprint);
   const perceptualMix = runPerceptualMixPass(produced.tracks, song.structure);
@@ -9600,6 +10564,12 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
     song.songBlueprint,
   );
   song.tracks = repairedFinalGrooveAssembly.tracks;
+  if (repairStrategy?.dimension === "performance") {
+    const performanceRepair = rebalanceRepairPerformance(song);
+    song.tracks = performanceRepair.tracks;
+    song.performanceProfile = performanceRepair.performanceProfile;
+    song.precisionRepair = performanceRepair.precisionRepair;
+  }
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
   song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
@@ -9660,23 +10630,63 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt) {
     weakestDimension: diagnosis.weakestDimension,
     weakestScoreBefore: diagnosis.weakestScore,
     sourceCandidate: sourceCandidate.index,
+    repairStrategy: specializedRepairSummary(repairStrategy),
   };
   return song;
 }
 
-function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
+function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, surgicalWindow = null, strategyWindow = surgicalWindow) {
   const sourceSong = sourceCandidate.song;
   const sourceTargetTrack = TRACK_DEFINITIONS[sourceCandidate.targetTrack] ? sourceCandidate.targetTrack : null;
   const sourceContextTracks = sourceCandidate.contextTracks ?? {};
-  const config = normalizeConfig({
+  const baseConfig = normalizeConfig({
     ...configFromSong(sourceSong),
     seed,
     oneShotKitId: sourceSong.oneShotKit?.id ?? null,
   });
+  const repairStrategy = createSpecializedRepairStrategy(
+    sourceCandidate,
+    diagnosis,
+    strategyWindow,
+    baseConfig,
+  );
+  const config = specializedRepairConfig(baseConfig, repairStrategy);
   const arrangementRepair = diagnosis.group === "arrangement";
   const harmonyRepair = diagnosis.group === "harmony";
   const motifRepair = diagnosis.group === "motif";
   const performanceRepair = diagnosis.group === "performance";
+  const directRepair = directSpecializedRepairSource(
+    sourceSong,
+    repairStrategy,
+    config,
+    strategyWindow,
+  );
+  if (directRepair) {
+    directRepair.id = "song-" + hashSeed(String(sourceSong.id ?? sourceSong.seed) + "|" + seed + "|" + repairStrategy.id).toString(36);
+    directRepair.seed = seed;
+    directRepair.settings = publicSettings(config);
+    directRepair.title = sourceSong.title;
+    directRepair.generationInterlock = clone(sourceSong.generationInterlock);
+    const finishedDirect = finishRepairedSong(
+      directRepair,
+      config,
+      diagnosis,
+      sourceCandidate,
+      attempt,
+      repairStrategy,
+    );
+    return surgicalWindow && !arrangementRepair
+      ? applySurgicalRepairWindow(
+        sourceSong,
+        finishedDirect,
+        config,
+        diagnosis,
+        sourceCandidate,
+        surgicalWindow,
+        repairStrategy,
+      )
+      : finishedDirect;
+  }
   const options = {
     generation: sourceSong.generation,
     revision: sourceSong.revision,
@@ -9703,7 +10713,8 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
       },
     } : {}),
   };
-  const variant = compose(config, options);
+  let variant = compose(config, options);
+  variant = applySpecializedRepairMaterial(variant, repairStrategy, config, strategyWindow);
   let repaired;
 
   if (sourceTargetTrack) {
@@ -9716,7 +10727,7 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
     repaired.tracks = replaceSongTracks(
       sourceSong.tracks,
       variant.tracks,
-      [sourceTargetTrack],
+      repairStrategy.trackIds,
     );
   } else if (arrangementRepair) {
     repaired = variant;
@@ -9733,14 +10744,14 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
       repaired.tracks = replaceSongTracks(
         sourceSong.tracks,
         variant.tracks,
-        ["bass", "chords", "melody", "counterpoint", "pad"],
+        repairStrategy.trackIds,
       );
     } else if (diagnosis.group === "groove") {
       repaired.grooveConductor = variant.grooveConductor;
       repaired.tracks = replaceSongTracks(
         sourceSong.tracks,
         variant.tracks,
-        ["drums", "bass"],
+        repairStrategy.trackIds,
       );
     } else if (motifRepair) {
       repaired.motifs = variant.motifs;
@@ -9748,7 +10759,7 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
       repaired.tracks = replaceSongTracks(
         sourceSong.tracks,
         variant.tracks,
-        ["melody", "counterpoint"],
+        repairStrategy.trackIds,
       );
     } else {
       repaired.performanceProfile = variant.performanceProfile;
@@ -9758,7 +10769,17 @@ function repairCandidateSong(sourceCandidate, diagnosis, seed, attempt) {
 
   repaired.generationInterlock = clone(variant.generationInterlock);
   repaired.title = sourceSong.title;
-  return finishRepairedSong(repaired, config, diagnosis, sourceCandidate, attempt);
+  const finished = finishRepairedSong(
+    repaired,
+    config,
+    diagnosis,
+    sourceCandidate,
+    attempt,
+    repairStrategy,
+  );
+  return surgicalWindow && !arrangementRepair
+    ? applySurgicalRepairWindow(sourceSong, finished, config, diagnosis, sourceCandidate, surgicalWindow, repairStrategy)
+    : finished;
 }
 
 function qualityGateForEvaluation(evaluation) {
@@ -9823,7 +10844,9 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
 }
 
 function rankCandidates(candidates) {
-  return [...candidates].sort(
+  return [...candidates]
+    .filter((candidate) => candidate?.repairAccepted !== false)
+    .sort(
     (left, right) =>
       Number(candidateReleaseGate(right).passed) - Number(candidateReleaseGate(left).passed)
       ||
@@ -9875,11 +10898,17 @@ function commitCandidate(candidates, search = {}) {
     candidateSearch: {
       thinkingDepth: search.thinkingDepth ?? "standard",
       adaptive: Boolean(search.adaptive),
+      weaknessAwareSearch: Boolean(search.weaknessAwareSearch),
       baseCandidateCount: finite(search.baseCandidateCount, candidates.length),
       maxCandidateCount: finite(search.maxCandidateCount, candidates.length),
       candidatesEvaluated: candidates.length,
       expandedBy: Math.max(0, composedCandidates - finite(search.baseCandidateCount, composedCandidates)),
       targetReached,
+      focusGroup: search.weaknessFocus?.group ?? null,
+      focusDimension: search.weaknessFocus?.weakestDimension ?? null,
+      focusRoute: search.weaknessFocus?.route ?? null,
+      focusScore: search.weaknessFocus?.weakestScore ?? null,
+      focusHistory: clone(search.weaknessHistory ?? []),
     },
     criticRepair: {
       ...criticRepair,
@@ -9906,6 +10935,12 @@ function commitCandidate(candidates, search = {}) {
         passedReleaseGate: candidateReleaseGate(candidate).passed,
         repairGroup: song.criticRepair?.group ?? null,
         repairSourceCandidate: song.criticRepair?.sourceCandidate ?? null,
+        repairAccepted: candidate.repairAccepted ?? null,
+        repairAcceptanceReasons: clone(song.criticRepair?.acceptance?.reasons ?? []),
+        repairMode: song.criticRepair?.mode ?? null,
+        repairWindowId: song.criticRepair?.surgicalWindow?.id ?? null,
+        repairWindowBars: song.criticRepair?.surgicalWindow?.bars ?? null,
+        repairStrategyId: song.criticRepair?.repairStrategy?.id ?? null,
       };
     }),
   };
@@ -9949,6 +10984,9 @@ function commitCandidate(candidates, search = {}) {
       phase: 20,
       status: repairStatus,
       attempts: criticRepair.attempts,
+      accepted: criticRepair.accepted ?? 0,
+      rejected: criticRepair.rejected ?? 0,
+      surgicalAttempts: criticRepair.surgicalAttempts ?? 0,
       groups: criticRepair.groups,
       selectedGroup: selected.repair?.group ?? null,
     },
@@ -9974,6 +11012,256 @@ function candidateSelectionScore(evaluation, novelty, generation) {
   );
 }
 
+function melodicDialogueMetrics(song) {
+  const melody = song?.tracks?.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = song?.tracks?.find((track) => track.id === "counterpoint")?.notes ?? [];
+  if (!counterpoint.length || !melody.length) {
+    return {
+      counterpointNotes: counterpoint.length,
+      simultaneousRatio: 0,
+      underLeadRatio: 0,
+    };
+  }
+  const simultaneous = counterpoint.filter((note) => (
+    melody.some((lead) => Math.abs(lead.start - note.start) < 0.00001)
+  )).length;
+  const underLead = counterpoint.filter((note) => (
+    melody.some((lead) => (
+      note.start > lead.start - 0.04
+      && note.start < lead.start + lead.duration + 0.08
+    ))
+  )).length;
+  return {
+    counterpointNotes: counterpoint.length,
+    simultaneousRatio: round(simultaneous / counterpoint.length, 4),
+    underLeadRatio: round(underLead / counterpoint.length, 4),
+  };
+}
+
+function evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis = {}) {
+  const thresholds = { simultaneousRatio: 0.1, underLeadRatio: 0.25 };
+  const applies = String(diagnosis?.weakestDimension ?? "") === "registerHealth";
+  if (!applies || !sourceSong || !repairedSong) {
+    return {
+      applies,
+      preserved: true,
+      sourceHealthy: null,
+      repairedHealthy: null,
+      source: null,
+      repaired: null,
+      thresholds,
+    };
+  }
+  const sourceMetrics = melodicDialogueMetrics(sourceSong);
+  const repairedMetrics = melodicDialogueMetrics(repairedSong);
+  const healthy = (metrics) => (
+    metrics.simultaneousRatio <= thresholds.simultaneousRatio + 1e-9
+    && metrics.underLeadRatio <= thresholds.underLeadRatio + 1e-9
+  );
+  const sourceHealthy = healthy(sourceMetrics);
+  const repairedHealthy = healthy(repairedMetrics);
+  return {
+    applies,
+    // A register-health repair may relocate pitch/register, but it must not turn
+    // an already-clean melodic conversation into stacked lead/counterpoint attacks.
+    // Other dimensions (notably phrase resolution) retain their own cadence and
+    // interlock acceptance contracts instead of being judged by this extra veto.
+    preserved: !sourceHealthy || repairedHealthy,
+    sourceHealthy,
+    repairedHealthy,
+    source: sourceMetrics,
+    repaired: repairedMetrics,
+    thresholds,
+  };
+}
+
+export function evaluateRepairAcceptance(
+  sourceEvaluation = {},
+  repairedEvaluation = {},
+  diagnosis = {},
+  {
+    sourceReleasePassed = null,
+    repairedReleasePassed = null,
+    sourceSong = null,
+    repairedSong = null,
+  } = {},
+) {
+  const dimension = String(diagnosis?.weakestDimension ?? "");
+  const sourceSubscores = sourceEvaluation?.subscores ?? {};
+  const repairedSubscores = repairedEvaluation?.subscores ?? {};
+  const weakestScoreBefore = clamp(
+    finite(sourceSubscores[dimension], diagnosis?.weakestScore ?? 0),
+    0,
+    100,
+  );
+  const weakestScoreAfter = clamp(
+    finite(repairedSubscores[dimension], weakestScoreBefore),
+    0,
+    100,
+  );
+  const weaknessGain = round(weakestScoreAfter - weakestScoreBefore);
+  const totalDelta = round(
+    finite(repairedEvaluation?.score, 0) - finite(sourceEvaluation?.score, 0),
+  );
+  const sourceBalance = evaluateCandidateBalance(sourceEvaluation);
+  const repairedBalance = evaluateCandidateBalance(repairedEvaluation);
+  const balanceDelta = repairedBalance.balanceScore - sourceBalance.balanceScore;
+  const creativeFloorDelta = repairedBalance.creativeFloor - sourceBalance.creativeFloor;
+  const criticalDimensions = ["harmonic", "groove", "separation", "production", "genreAuthenticity"];
+  const criticalRegressions = Object.fromEntries(
+    criticalDimensions.map((name) => [
+      name,
+      round(Math.max(
+        0,
+        clamp(finite(sourceSubscores[name], 70), 0, 100)
+          - clamp(finite(repairedSubscores[name], 70), 0, 100),
+      )),
+    ]),
+  );
+  const maxCriticalRegression = Math.max(0, ...Object.values(criticalRegressions));
+  const sourceQuality = qualityGateForEvaluation(sourceEvaluation);
+  const repairedQuality = qualityGateForEvaluation(repairedEvaluation);
+  const scaleSafetyPreserved = !sourceQuality.scaleSafe || repairedQuality.scaleSafe;
+  const phase9Preserved = !sourceQuality.passed || repairedQuality.passed;
+  const releasePreserved = sourceReleasePassed !== true || repairedReleasePassed === true;
+  const melodicDialogue = evaluateMelodicDialoguePreservation(sourceSong, repairedSong, diagnosis);
+  const thresholds = {
+    minimumWeaknessGain: 0.5,
+    maximumTotalRegression: 1,
+    maximumBalanceRegression: 2,
+    maximumCreativeFloorRegression: 2,
+    maximumCriticalRegression: 3,
+  };
+  const reasons = [];
+  if (!dimension) reasons.push("missing-diagnosis");
+  if (weaknessGain < thresholds.minimumWeaknessGain) reasons.push("weakness-not-improved");
+  if (totalDelta < -thresholds.maximumTotalRegression) reasons.push("total-score-regression");
+  if (balanceDelta < -thresholds.maximumBalanceRegression) reasons.push("balance-regression");
+  if (creativeFloorDelta < -thresholds.maximumCreativeFloorRegression) reasons.push("creative-floor-regression");
+  if (maxCriticalRegression > thresholds.maximumCriticalRegression) reasons.push("critical-dimension-regression");
+  if (!scaleSafetyPreserved) reasons.push("scale-safety-regression");
+  if (!phase9Preserved) reasons.push("quality-gate-regression");
+  if (!releasePreserved) reasons.push("release-gate-regression");
+  if (!melodicDialogue.preserved) reasons.push("melodic-dialogue-regression");
+  const regressionReasons = reasons.filter((reason) => reason.includes("regression"));
+  const supportingGains = Object.keys(repairedSubscores)
+    .filter((name) => name !== dimension)
+    .map((name) => round(
+      clamp(finite(repairedSubscores[name], 70), 0, 100)
+        - clamp(finite(sourceSubscores[name], 70), 0, 100),
+    ));
+  const bestSupportingGain = Math.max(0, ...supportingGains);
+  const outcome = reasons.length
+    ? regressionReasons.length ? "rejected-regression" : "rejected-no-gain"
+    : (bestSupportingGain >= 1 ? "improved-balance" : "improved-target");
+  return {
+    version: 2,
+    accepted: reasons.length === 0,
+    outcome,
+    bestSupportingGain: round(bestSupportingGain),
+    dimension: dimension || null,
+    weakestScoreBefore: round(weakestScoreBefore),
+    weakestScoreAfter: round(weakestScoreAfter),
+    weaknessGain,
+    totalDelta,
+    balanceDelta,
+    creativeFloorDelta,
+    maxCriticalRegression,
+    criticalRegressions,
+    scaleSafetyPreserved,
+    phase9Preserved,
+    releasePreserved,
+    melodicDialoguePreserved: melodicDialogue.preserved,
+    melodicDialogue,
+    thresholds,
+    reasons,
+  };
+}
+
+function repairAssessmentUtility(assessment) {
+  if (!assessment) return -Infinity;
+  const acceptance = assessment.acceptance ?? {};
+  return round(
+    Number(Boolean(acceptance.accepted)) * 1000
+      + Number(Boolean(assessment.repairedReleaseGate?.passed)) * 100
+      + finite(acceptance.weaknessGain, 0) * 4
+      + finite(acceptance.totalDelta, 0) * 2
+      + finite(acceptance.balanceDelta, 0)
+      + finite(acceptance.creativeFloorDelta, 0) * 0.5
+      - finite(acceptance.maxCriticalRegression, 0) * 1.5,
+  );
+}
+
+/**
+ * Compare the already-generated surgical and whole-candidate repair options.
+ * Accepted repairs always beat rejected repairs. When both are acceptable,
+ * surgical locality wins close calls; a whole rewrite must be materially better
+ * to justify touching more of the song.
+ */
+export function selectPreferredRepairAssessment(surgicalAssessment = null, wholeAssessment = null) {
+  if (!surgicalAssessment && !wholeAssessment) {
+    return { assessment: null, mode: null, reason: "no-repair-assessment", utilityDelta: 0 };
+  }
+  if (!surgicalAssessment) {
+    return {
+      assessment: wholeAssessment,
+      mode: "whole-candidate",
+      reason: "whole-only",
+      utilityDelta: null,
+    };
+  }
+  if (!wholeAssessment) {
+    return {
+      assessment: surgicalAssessment,
+      mode: "surgical-window",
+      reason: "surgical-only",
+      utilityDelta: null,
+    };
+  }
+
+  const surgicalAccepted = Boolean(surgicalAssessment.acceptance?.accepted);
+  const wholeAccepted = Boolean(wholeAssessment.acceptance?.accepted);
+  if (surgicalAccepted !== wholeAccepted) {
+    const chooseWhole = wholeAccepted;
+    return {
+      assessment: chooseWhole ? wholeAssessment : surgicalAssessment,
+      mode: chooseWhole ? "whole-candidate" : "surgical-window",
+      reason: "accepted-over-rejected",
+      utilityDelta: round(repairAssessmentUtility(wholeAssessment) - repairAssessmentUtility(surgicalAssessment)),
+    };
+  }
+
+  const surgicalUtility = repairAssessmentUtility(surgicalAssessment);
+  const wholeUtility = repairAssessmentUtility(wholeAssessment);
+  const utilityDelta = round(wholeUtility - surgicalUtility);
+  const wholeMateriallyBetter = utilityDelta > 2;
+  if (wholeMateriallyBetter) {
+    return {
+      assessment: wholeAssessment,
+      mode: "whole-candidate",
+      reason: wholeAccepted ? "whole-materially-better" : "whole-less-regressive",
+      utilityDelta,
+    };
+  }
+  return {
+    assessment: surgicalAssessment,
+    mode: "surgical-window",
+    reason: surgicalAccepted ? "surgical-locality-tiebreak" : "surgical-less-regressive",
+    utilityDelta,
+  };
+}
+
+const SONG_LEVEL_REPAIR_DIMENSIONS = new Set([
+  "memory",
+  "repetition",
+  "drumVariety",
+  "stageInterlock",
+]);
+
+function localTargetedRepairEligible(diagnosis = {}) {
+  return !SONG_LEVEL_REPAIR_DIMENSIONS.has(String(diagnosis?.weakestDimension ?? ""));
+}
+
 function runTargetedCriticRepair(candidates, {
   search,
   generation,
@@ -9985,7 +11273,13 @@ function runTargetedCriticRepair(candidates, {
     version: 1,
     enabled: Boolean(search?.targetedRepair),
     attempts: 0,
+    accepted: 0,
+    rejected: 0,
+    surgicalAttempts: 0,
+    surgicalWindows: [],
     groups: [],
+    acceptanceHistory: [],
+    skippedGlobalDimensions: [],
     targetReached: candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation)),
     reason: null,
   };
@@ -10001,10 +11295,12 @@ function runTargetedCriticRepair(candidates, {
   }
 
   const attemptedGroups = [];
-  for (
-    let attempt = 0;
-    attempt < search.repairAttempts && candidates.length < MAX_CANDIDATE_COUNT;
-    attempt += 1
+  let attempt = 0;
+  let diagnosticPasses = 0;
+  while (
+    attempt < search.repairAttempts
+    && candidates.length < MAX_CANDIDATE_COUNT
+    && diagnosticPasses < 8
   ) {
     const sourceCandidate = rankCandidates(candidates)[0];
     const diagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation, attemptedGroups);
@@ -10012,31 +11308,151 @@ function runTargetedCriticRepair(candidates, {
       summary.reason = "no-repair-group";
       break;
     }
+    diagnosticPasses += 1;
     attemptedGroups.push(diagnosis.group);
+    if (!localTargetedRepairEligible(diagnosis)) {
+      summary.skippedGlobalDimensions.push({
+        group: diagnosis.group,
+        dimension: diagnosis.weakestDimension,
+        score: diagnosis.weakestScore,
+        reason: "song-level-search-owned",
+      });
+      continue;
+    }
     const seed = candidateSeed(baseSeed, `repair-${diagnosis.group}`, attempt);
-    const song = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt);
-    song.meta.ideaFingerprint = createSongFingerprint(song);
-    const evaluation = evaluateSongCandidate(song);
-    const novelty = evaluateSongNovelty(song, recentSongs, generation);
-    song.criticRepair.weakestScoreAfter = finite(
-      evaluation.subscores?.[diagnosis.weakestDimension],
-      diagnosis.weakestScore,
+    const surgicalWindow = diagnosis.group === "arrangement"
+      ? null
+      : diagnoseSurgicalRepairWindow(sourceCandidate.song, diagnosis);
+    const repairConfig = normalizeConfig({
+      ...configFromSong(sourceCandidate.song),
+      seed,
+      oneShotKitId: sourceCandidate.song.oneShotKit?.id ?? null,
+    });
+    const wholeRepairSong = repairCandidateSong(sourceCandidate, diagnosis, seed, attempt, null, surgicalWindow);
+    let surgicalRepairSource = wholeRepairSong;
+    let surgicalRepairStrategy = wholeRepairSong.criticRepair?.repairStrategy ?? null;
+    if (surgicalWindow && diagnosis.weakestDimension === "phraseResolution") {
+      surgicalRepairSource = reinforceRepairPhraseResolution(
+        sourceCandidate.song,
+        repairConfig,
+        surgicalWindow,
+      );
+      surgicalRepairSource.id = wholeRepairSong.id;
+      surgicalRepairSource.seed = wholeRepairSong.seed;
+      surgicalRepairSource.settings = clone(wholeRepairSong.settings ?? sourceCandidate.song.settings);
+      surgicalRepairSource.criticRepair = clone(wholeRepairSong.criticRepair);
+    }
+    const surgicalSong = surgicalWindow
+      ? applySurgicalRepairWindow(
+        sourceCandidate.song,
+        surgicalRepairSource,
+        repairConfig,
+        diagnosis,
+        sourceCandidate,
+        surgicalWindow,
+        surgicalRepairStrategy,
+      )
+      : null;
+    if (surgicalSong?.criticRepair?.surgicalWindow) {
+      summary.surgicalAttempts += 1;
+      summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
+    }
+    const assessRepair = (candidateSong) => {
+      candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
+      const evaluation = evaluateSongCandidate(candidateSong);
+      const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
+      candidateSong.criticRepair.weakestScoreAfter = finite(
+        evaluation.subscores?.[diagnosis.weakestDimension],
+        diagnosis.weakestScore,
+      );
+      candidateSong.criticRepair.totalScoreBefore = sourceCandidate.evaluation.score;
+      candidateSong.criticRepair.totalScoreAfter = evaluation.score;
+      const repairedReleaseGate = evaluateSongReleaseGate(candidateSong, evaluation);
+      const acceptance = evaluateRepairAcceptance(
+        sourceCandidate.evaluation,
+        evaluation,
+        diagnosis,
+        {
+          sourceReleasePassed: candidateReleaseGate(sourceCandidate).passed,
+          repairedReleasePassed: repairedReleaseGate.passed,
+          sourceSong: sourceCandidate.song,
+          repairedSong: candidateSong,
+        },
+      );
+      candidateSong.criticRepair.acceptance = acceptance;
+      return {
+        song: candidateSong,
+        evaluation,
+        novelty,
+        repairedReleaseGate,
+        acceptance,
+      };
+    };
+    const surgicalAssessment = surgicalSong ? assessRepair(surgicalSong) : null;
+    const wholeAssessment = assessRepair(wholeRepairSong);
+    const repairSelection = selectPreferredRepairAssessment(surgicalAssessment, wholeAssessment);
+    const assessment = repairSelection.assessment ?? wholeAssessment;
+    const wholeFallbackUsed = Boolean(
+      surgicalAssessment
+      && !surgicalAssessment.acceptance.accepted
+      && wholeAssessment.acceptance.accepted
+      && assessment === wholeAssessment
     );
-    song.criticRepair.totalScoreBefore = sourceCandidate.evaluation.score;
-    song.criticRepair.totalScoreAfter = evaluation.score;
+    const { song, evaluation, novelty, repairedReleaseGate, acceptance } = assessment;
     const candidate = {
       index: candidates.length,
       song,
       evaluation,
       novelty,
       repair: song.criticRepair,
+      repairAccepted: acceptance.accepted,
+      releaseGate: repairedReleaseGate,
       targetTrack: sourceCandidate.targetTrack ?? null,
       contextTracks: sourceCandidate.contextTracks ?? null,
       selectionScore: candidateSelectionScore(evaluation, novelty, generation),
     };
+    candidate.repairFallback = {
+      surgicalAttempted: Boolean(surgicalAssessment),
+      surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeAccepted: wholeAssessment.acceptance.accepted,
+      surgicalOutcome: surgicalAssessment?.acceptance.outcome ?? null,
+      wholeOutcome: wholeAssessment.acceptance.outcome ?? null,
+      wholeFallbackUsed,
+      selectedMode: repairSelection.mode,
+      selectionReason: repairSelection.reason,
+      selectionUtilityDelta: repairSelection.utilityDelta,
+    };
     candidates.push(candidate);
     summary.attempts += 1;
     summary.groups.push(diagnosis.group);
+    if (acceptance.accepted) summary.accepted += 1;
+    else summary.rejected += 1;
+    summary.acceptanceHistory.push({
+      attempt: attempt + 1,
+      group: diagnosis.group,
+      sourceCandidate: sourceCandidate.index,
+      accepted: acceptance.accepted,
+      outcome: acceptance.outcome,
+      dimension: acceptance.dimension,
+      weaknessGain: acceptance.weaknessGain,
+      totalDelta: acceptance.totalDelta,
+      maxCriticalRegression: acceptance.maxCriticalRegression,
+      repairMode: song.criticRepair?.mode ?? "whole-candidate",
+      surgicalWindow: clone(song.criticRepair?.surgicalWindow ?? surgicalSong?.criticRepair?.surgicalWindow ?? null),
+      surgicalTracks: clone(song.criticRepair?.surgicalTracks ?? surgicalSong?.criticRepair?.surgicalTracks ?? []),
+      surgicalAttempted: Boolean(surgicalAssessment),
+      surgicalAccepted: surgicalAssessment?.acceptance.accepted ?? null,
+      wholeAccepted: wholeAssessment.acceptance.accepted,
+      wholeFallbackUsed,
+      selectedRepairMode: repairSelection.mode,
+      selectionReason: repairSelection.reason,
+      selectionUtilityDelta: repairSelection.utilityDelta,
+      repairStrategyId: song.criticRepair?.repairStrategy?.id
+        ?? surgicalSong?.criticRepair?.repairStrategy?.id
+        ?? null,
+      reasons: clone(acceptance.reasons),
+    });
+    attempt += 1;
     summary.targetReached = candidateMeetsAdaptiveTarget(candidate, generation);
     if (summary.targetReached) {
       summary.reason = "repair-target-reached";
@@ -10047,7 +11463,11 @@ function runTargetedCriticRepair(candidates, {
   if (!summary.reason) {
     summary.reason = candidates.length >= MAX_CANDIDATE_COUNT
       ? "candidate-budget-reached"
-      : "repair-budget-reached";
+      : attempt >= search.repairAttempts
+        ? "repair-budget-reached"
+        : summary.skippedGlobalDimensions.length
+          ? "song-level-weakness-search-owned"
+          : "no-repair-group";
   }
   return summary;
 }
@@ -10068,10 +11488,10 @@ export function generateNew(input = {}) {
   const search = candidateSearchPlan(input);
   const recentSongs = normalizeRecentSongs(input.recentSongs);
   const candidates = [];
-  const composeCandidate = (index) => {
+  const composeCandidate = (index, preferredRoute = input.compositionRoute) => {
     const seed = candidateSeed(baseSeed, "new", index);
     const config = normalizeConfig({ ...input, seed });
-    const routeId = candidateCompositionRoute(baseSeed, index, input.compositionRoute);
+    const routeId = candidateCompositionRoute(baseSeed, index, preferredRoute);
     const candidateSong = compose(config, {
       generation: "new",
       revision: 0,
@@ -10090,11 +11510,15 @@ export function generateNew(input = {}) {
   };
 
   for (let index = 0; index < search.maxCandidateCount; index += 1) {
-    composeCandidate(index);
-    if (
-      candidates.length >= search.baseCandidateCount
-      && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "new")))
-    ) break;
+    const focus = index >= search.baseCandidateCount
+      ? updateCandidateSearchFocus(search, candidates, "new")
+      : null;
+    composeCandidate(index, input.compositionRoute ?? focus?.route ?? null);
+    if (candidates.length >= search.baseCandidateCount) {
+      const targetReached = candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "new"));
+      if (!search.adaptive || targetReached) break;
+      updateCandidateSearchFocus(search, candidates, "new");
+    }
   }
 
   // A fresh request must never settle for the immediately previous musical
@@ -10135,6 +11559,9 @@ export function generateSimilar(current, input = {}) {
   const candidates = [];
 
   for (let index = 0; index < search.maxCandidateCount; index += 1) {
+    const focus = index >= search.baseCandidateCount
+      ? updateCandidateSearchFocus(search, candidates, "similar")
+      : null;
     const seed = candidateSeed(baseSeed, "similar", index);
     const requestedKitId = input.oneShotKitId ?? input.soundKitId ?? null;
     const previousKitId = current.oneShotKit?.id;
@@ -10158,7 +11585,7 @@ export function generateSimilar(current, input = {}) {
     const routeId = candidateCompositionRoute(
       baseSeed,
       index,
-      input.compositionRoute ?? (targetTrack ? current.compositionRoute?.id : null),
+      input.compositionRoute ?? (targetTrack ? current.compositionRoute?.id : focus?.route ?? null),
     );
     const inheritedContext = normalizeContextTracks(current.tracks, config);
     const suppliedContext = normalizeContextTracks(input.contextTracks, config);
@@ -10191,10 +11618,11 @@ export function generateSimilar(current, input = {}) {
       contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
     });
-    if (
-      candidates.length >= search.baseCandidateCount
-      && (!search.adaptive || candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "similar")))
-    ) break;
+    if (candidates.length >= search.baseCandidateCount) {
+      const targetReached = candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, "similar"));
+      if (!search.adaptive || targetReached) break;
+      updateCandidateSearchFocus(search, candidates, "similar");
+    }
   }
 
   runTargetedCriticRepair(candidates, {

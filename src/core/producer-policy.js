@@ -49,6 +49,7 @@ export function createProducerSearchPolicy(config = {}, kind = "new", depth = "d
     ? clamp(Math.round(finite(config.candidateCount, 1)), 1, MAX_ENGINE_CANDIDATES)
     : depth === "deep" ? DEEP_BASE_CANDIDATES : STANDARD_BASE_CANDIDATES;
   const adaptive = !explicitCandidateCount && config.adaptiveCandidates !== false;
+  const weaknessAwareSearch = adaptive && config.weaknessAwareSearch !== false;
   const adaptiveExpansion = adaptive
     ? depth === "deep" ? DEEP_ADAPTIVE_CANDIDATES : STANDARD_ADAPTIVE_CANDIDATES
     : 0;
@@ -64,6 +65,7 @@ export function createProducerSearchPolicy(config = {}, kind = "new", depth = "d
   return Object.freeze({
     depth,
     adaptive,
+    weaknessAwareSearch,
     targetedRepair,
     repairAttempts,
     baseCandidateCount,
