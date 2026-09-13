@@ -38,9 +38,27 @@ jobs:
         run: node --test tests/elemental-program-policy.test.mjs tests/producer-variation-set.test.mjs tests/auto-control-policy.test.mjs
 
       - name: Verify complete quality gate
-        run: npm run quality
+        run: |
+          set +e
+          npm run quality > eps-quality.log 2>&1
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            tail -n 260 eps-quality.log > eps-quality-failure.txt
+            exit "$status"
+          fi
+
+      - name: Persist quality diagnostics
+        if: failure() && hashFiles('eps-quality-failure.txt') != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add eps-quality-failure.txt
+          git commit -m "Capture EPS quality failure [eps-diagnostics]"
+          git push origin HEAD:phase3/producer-brain-observability-loop
 
       - name: Commit verified runtime wiring
+        if: success()
         run: |
           if git diff --quiet -- src/app.js index.html; then
             echo "Expected runtime wiring changes were not produced."
