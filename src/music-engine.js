@@ -9400,11 +9400,31 @@ function updateCandidateSearchFocus(search, candidates, generation) {
   }
   const sourceCandidate = rankCandidates(candidates)[0];
   if (!sourceCandidate) return null;
-  const diagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation);
-  if (!diagnosis) return null;
+  const primaryDiagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation);
+  if (!primaryDiagnosis) return null;
+
+  let diagnosis = primaryDiagnosis;
+  const expansionCandidates = candidates.slice(search.baseCandidateCount);
+  const attemptedRoutes = new Set(
+    expansionCandidates.map((candidate) => candidate.song?.compositionRoute?.id).filter(Boolean),
+  );
+  const primaryIsSongLevel = SONG_LEVEL_REPAIR_DIMENSIONS.has(primaryDiagnosis.weakestDimension);
+  if (primaryIsSongLevel && primaryDiagnosis.route && attemptedRoutes.has(primaryDiagnosis.route)) {
+    const attemptedGroups = TARGETED_REPAIR_GROUPS
+      .filter((group) => group.route && attemptedRoutes.has(group.route))
+      .map((group) => group.id);
+    const alternate = diagnoseCandidateRepair(sourceCandidate.evaluation, attemptedGroups);
+    const alternateIsCompetitive = alternate?.route
+      && alternate.weakestScore <= primaryDiagnosis.weakestScore + 12;
+    if (alternateIsCompetitive) diagnosis = alternate;
+  }
+
   const focus = {
-    version: 1,
+    version: 2,
     ...diagnosis,
+    primaryGroup: primaryDiagnosis.group,
+    primaryDimension: primaryDiagnosis.weakestDimension,
+    diversified: diagnosis.group !== primaryDiagnosis.group,
     sourceCandidate: sourceCandidate.index,
     observedAfterCandidates: candidates.length,
   };
