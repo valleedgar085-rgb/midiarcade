@@ -47,6 +47,32 @@ function moveGenerationEssentials(rootDocument, createPanel) {
   creatorMain.insertBefore(controls, shapeControls);
 }
 
+function consolidateAdvancedDirection(rootDocument, createPanel) {
+  const creator = createPanel.querySelector("#preGenSection");
+  const creatorGrid = creator?.querySelector(".creator-grid");
+  const shapeControls = creator?.querySelector(".shape-controls");
+  const recipeControls = creator?.querySelector(".creator-recipe-side");
+  const generationActions = creator?.querySelector(".generation-actions-bar");
+  if (!creator || !creatorGrid || !shapeControls || !recipeControls || !generationActions) return;
+  if (creator.querySelector(".phase1-advanced-direction") || typeof rootDocument?.createElement !== "function") return;
+
+  const advanced = rootDocument.createElement("details");
+  advanced.className = "phase1-advanced-direction";
+  advanced.innerHTML = `
+    <summary>
+      <span><small>OPTIONAL</small><strong>Advanced direction</strong></span>
+      <span>Key, harmony, recipe &amp; fine tuning</span>
+    </summary>
+    <div class="phase1-advanced-direction-body"></div>
+  `;
+  const body = advanced.querySelector(".phase1-advanced-direction-body");
+  if (!body) return;
+
+  body.append(shapeControls, recipeControls);
+  generationActions.insertAdjacentElement("afterend", advanced);
+  creatorGrid.classList.add("phase1-essentials-grid");
+}
+
 function moveOptionalGuide(createPanel) {
   const workflow = createPanel.querySelector("#workflowPanel");
   const creator = createPanel.querySelector("#preGenSection");
@@ -89,6 +115,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   }
 
   moveGenerationEssentials(rootDocument, createPanel);
+  consolidateAdvancedDirection(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   return true;
 }
