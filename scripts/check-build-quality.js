@@ -7,6 +7,7 @@ const budgets = Object.freeze({
   "www/src/app.js": 360 * 1024,
   "www/src/generation-worker.js": 320 * 1024,
   "www/styles.css": 150 * 1024,
+  "www/generation-experience.css": 16 * 1024,
   "www/index.html": 80 * 1024,
   "www/privacy-policy.html": 40 * 1024,
 });
@@ -19,6 +20,7 @@ for (const [relativePath, maxBytes] of Object.entries(budgets)) {
 
 const html = await readFile(path.join(projectRoot, "www/index.html"), "utf8");
 const css = await readFile(path.join(projectRoot, "www/styles.css"), "utf8");
+const generationCss = await readFile(path.join(projectRoot, "www/generation-experience.css"), "utf8");
 const app = await readFile(path.join(projectRoot, "www/src/app.js"), "utf8");
 const generationWorker = await readFile(path.join(projectRoot, "www/src/generation-worker.js"), "utf8");
 const buttonCount = (html.match(/<button\b/g) || []).length;
@@ -28,9 +30,12 @@ const mojibake = /(?:â€”|â€“|â€™|â€œ|â€|âœ|â†|â‡|�
 if (buttonCount > 94) failures.push(`initial HTML exposes ${buttonCount} buttons; budget is 94`);
 if (transitionAllCount > 30) failures.push(`CSS contains ${transitionAllCount} transition:all declarations; budget is 30`);
 if (!css.includes("content-visibility:auto")) failures.push("offscreen rendering optimization is missing");
+if (!html.includes('href="./generation-experience.css"')) failures.push("generation experience stylesheet is not linked from the built app");
+if (!generationCss.includes("orientation:landscape")) failures.push("landscape generation stabilization is missing from the shipped stylesheet");
 for (const [relativePath, source] of [
   ["www/index.html", html],
   ["www/styles.css", css],
+  ["www/generation-experience.css", generationCss],
   ["www/src/app.js", app],
   ["www/src/generation-worker.js", generationWorker],
 ]) {
