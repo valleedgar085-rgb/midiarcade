@@ -1,3 +1,5 @@
+import "./create-workflow-phase1.js";
+
 const DEFAULT_STAGES = Object.freeze([
   Object.freeze({ id: "blueprint", label: "Song map", copy: "Planning section energy, contrast, and the return of the hook." }),
   Object.freeze({ id: "harmony", label: "Harmony", copy: "Testing chord colors, voice leading, and cadential direction." }),
