@@ -129,8 +129,9 @@
   font-size: clamp(1.55rem, 2.8vw, 2.4rem);
 }
 
-#preGenSection .creator-grid {
-  grid-template-columns: minmax(0, 1.5fr) minmax(260px, 0.7fr);
+#preGenSection .creator-grid,
+#preGenSection .creator-grid.phase1-essentials-grid {
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -196,17 +197,69 @@
   opacity: 0.78;
 }
 
-@media (max-width: 900px) {
-  #preGenSection .creator-grid {
-    grid-template-columns: 1fr;
-  }
+#preGenSection .phase1-advanced-direction {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.014);
+}
 
+#preGenSection .phase1-advanced-direction > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 54px;
+  padding: 10px 14px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+#preGenSection .phase1-advanced-direction > summary span:first-child small {
+  display: block;
+  color: var(--text-3);
+  font: 800 0.55rem var(--font-data);
+  letter-spacing: 0.13em;
+}
+
+#preGenSection .phase1-advanced-direction > summary strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+#preGenSection .phase1-advanced-direction > summary span:last-child {
+  color: var(--text-3);
+  font-size: 0.68rem;
+}
+
+#preGenSection .phase1-advanced-direction[open] > summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+#preGenSection .phase1-advanced-direction-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+#preGenSection .phase1-advanced-direction-body > details {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
   #tab-create .create-live-controls {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   #tab-create .create-live-control:first-child {
     grid-column: 1 / -1;
+  }
+
+  #preGenSection .phase1-advanced-direction-body {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -356,6 +409,14 @@
   #preGenSection .generation-new .action-copy em,
   #preGenSection .generation-similar .action-copy em {
     display: none;
+  }
+
+  #preGenSection .phase1-advanced-direction > summary span:last-child {
+    display: none;
+  }
+
+  #preGenSection .phase1-advanced-direction > summary {
+    min-height: 50px;
   }
 }
 
