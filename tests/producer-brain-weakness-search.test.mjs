@@ -15,6 +15,24 @@ const INPUT = {
   humanize: 0.25,
 };
 
+function composedExpansionCandidates(song) {
+  const search = song.meta.scoreDetails.candidateSearch;
+  const composed = song.meta.scoreDetails.candidateScores.filter(({ repairGroup }) => !repairGroup);
+  return composed.slice(search.baseCandidateCount, search.baseCandidateCount + search.expandedBy);
+}
+
+function assertRoutedExpansionMatchesFocus(song, label) {
+  const search = song.meta.scoreDetails.candidateSearch;
+  const focusedRoutes = new Set(search.focusHistory.map(({ route }) => route).filter(Boolean));
+  const expansionCandidates = composedExpansionCandidates(song);
+  assert.ok(focusedRoutes.size > 0, `${label} fixture must expose at least one routed focus`);
+  assert.ok(expansionCandidates.length > 0, `${label} fixture must expose adaptive expansion`);
+  assert.ok(
+    expansionCandidates.every(({ compositionRoute }) => focusedRoutes.has(compositionRoute)),
+    `${label} should route every post-base audition through a diagnosed focus route`,
+  );
+}
+
 test("Producer Brain v2 steers adaptive expansion toward the critic's current weakness", () => {
   const first = engine.generateNew(INPUT);
   const repeated = engine.generateNew(INPUT);
@@ -29,18 +47,7 @@ test("Producer Brain v2 steers adaptive expansion toward the critic's current we
   assert.ok(search.focusHistory.length >= 1, "expanded search should retain bounded focus diagnostics");
   assert.ok(search.focusHistory.length <= 4, "focus diagnostics must stay bounded");
 
-  const focusedRoutes = new Set(search.focusHistory.map(({ route }) => route).filter(Boolean));
-  const composedCandidates = first.meta.scoreDetails.candidateScores.filter(({ repairGroup }) => !repairGroup);
-  const expansionCandidates = composedCandidates.slice(
-    search.baseCandidateCount,
-    search.baseCandidateCount + search.expandedBy,
-  );
-  if (focusedRoutes.size) {
-    assert.ok(
-      expansionCandidates.some(({ compositionRoute }) => focusedRoutes.has(compositionRoute)),
-      "at least one extra audition should follow a critic-selected composition route",
-    );
-  }
+  assertRoutedExpansionMatchesFocus(first, "generateNew");
 });
 
 test("explicit composition routes and weakness-search opt-outs remain authoritative", () => {
@@ -64,59 +71,25 @@ test("generateSimilar preserves deterministic weakness-aware route steering and 
     adaptiveCandidates: false,
     targetedRepair: false,
   });
-  const seedCandidates = [
-    "adaptive-contract-3",
-    "weakness-similar-1",
-    "weakness-similar-2",
-    "weakness-similar-3",
-    "weakness-similar-4",
-    "weakness-similar-5",
-  ];
-
-  let selectedSeed = null;
-  let related = null;
-  for (const seed of seedCandidates) {
-    const candidate = engine.generateSimilar(source, {
-      ...INPUT,
-      seed,
-      similarity: 0.82,
-      targetedRepair: false,
-    });
-    const search = candidate.meta.scoreDetails.candidateSearch;
-    if (search.expandedBy > 0 && search.focusHistory.length > 0) {
-      selectedSeed = seed;
-      related = candidate;
-      break;
-    }
-  }
-
-  assert.ok(related, "deterministic fixture set must expose generateSimilar adaptive expansion");
-  const repeated = engine.generateSimilar(source, {
+  const relatedInput = {
     ...INPUT,
-    seed: selectedSeed,
+    seed: "adaptive-contract-3",
     similarity: 0.82,
     targetedRepair: false,
-  });
+  };
+  const related = engine.generateSimilar(source, relatedInput);
+  const repeated = engine.generateSimilar(source, relatedInput);
   const search = related.meta.scoreDetails.candidateSearch;
 
   assert.deepEqual(related, repeated, "generateSimilar weakness-aware expansion must remain deterministic");
   assert.equal(search.adaptive, true);
   assert.equal(search.weaknessAwareSearch, true);
-  assert.ok(search.expandedBy > 0);
+  assert.ok(search.expandedBy > 0, "pinned generateSimilar fixture must exercise adaptive expansion");
   assert.ok(search.focusGroup);
   assert.ok(search.focusDimension);
   assert.ok(search.focusHistory.length >= 1 && search.focusHistory.length <= 4);
 
-  const focusedRoutes = new Set(search.focusHistory.map(({ route }) => route).filter(Boolean));
-  const composedCandidates = related.meta.scoreDetails.candidateScores.filter(({ repairGroup }) => !repairGroup);
-  const expansionCandidates = composedCandidates.slice(
-    search.baseCandidateCount,
-    search.baseCandidateCount + search.expandedBy,
-  );
-  assert.ok(
-    expansionCandidates.some(({ compositionRoute }) => focusedRoutes.has(compositionRoute)),
-    "generateSimilar extra auditions should follow the diagnosed critic route",
-  );
+  assertRoutedExpansionMatchesFocus(related, "generateSimilar");
 });
 
 test("generateSimilar keeps explicit routes and weakness-search opt-outs authoritative", () => {
@@ -148,4 +121,27 @@ test("generateSimilar keeps explicit routes and weakness-search opt-outs authori
   assert.equal(search.weaknessAwareSearch, false);
   assert.equal(search.focusGroup, null);
   assert.deepEqual(search.focusHistory, []);
+});
+
+test("song-level weakness search diversifies repeated routes without increasing the candidate budget", () => {
+  const input = {
+    genre: "house",
+    seed: "global-search-02:house:balanced",
+    bars: 8,
+    energy: 0.55,
+    complexity: 0.55,
+    targetedRepair: false,
+  };
+  const first = engine.generateNew(input);
+  const repeated = engine.generateNew(input);
+  const search = first.meta.scoreDetails.candidateSearch;
+  const diversified = search.focusHistory.filter(({ diversified }) => diversified);
+
+  assert.deepEqual(first, repeated, "search diversification must remain deterministic");
+  assert.ok(search.expandedBy > 0, "fixture must exercise adaptive expansion");
+  assert.ok(diversified.length > 0, "fixture must exercise a diversified search focus");
+  assert.ok(diversified.every(({ primaryGroup, group }) => primaryGroup && primaryGroup !== group));
+  assert.ok(diversified.every(({ primaryDimension }) => typeof primaryDimension === "string" && primaryDimension.length > 0));
+  assert.ok(first.meta.scoreDetails.candidatesEvaluated <= 7, "default search diversity must not increase candidate count");
+  assertRoutedExpansionMatchesFocus(first, "diversified generateNew");
 });
