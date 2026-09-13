@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-// Temporary guarded codemod: it is removed once the verified runtime diff lands.
+// Temporary guarded codemod: remove after the verified runtime diff lands.
+// Re-run marker: standalone generation CSS now preserves the strict HTML budget.
 const appPath = new URL("../src/app.js", import.meta.url);
 const smokePath = new URL("../tests/app-smoke.test.mjs", import.meta.url);
 let source = await readFile(appPath, "utf8");
@@ -89,4 +90,4 @@ replaceSmokeOnce(
 );
 
 await writeFile(smokePath, smoke);
-console.log("Applied steady generation runtime wiring and state-based smoke synchronization.");
+console.log("Applied steady generation runtime wiring and state-based smoke synchronization with bounded CSS delivery.");
