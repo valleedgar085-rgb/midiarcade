@@ -350,7 +350,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
 
 test("every static button is either directly wired or owns a delegated action", async () => {
   const buttonTags = [...htmlSource.matchAll(/<button\b[^>]*>/g)].map((match) => match[0]);
-  const delegated = /\bdata-(?:workspace|workflow-step|bus|attitude|section-action|editor-action|song-variation)=/;
+  const delegated = /\bdata-(?:workspace|workflow-step|bus|attitude|section-action|editor-action|song-variation|shape-direction|shape-audition|shape-discard|shape-accept)(?:=|\b)/;
   const orphaned = [];
   for (const tag of buttonTags) {
     const id = tag.match(/\bid="([^"]+)"/)?.[1];
