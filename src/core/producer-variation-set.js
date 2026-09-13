@@ -127,7 +127,7 @@ export function generateProducerVariationSet(current, input = {}, {
   const count = Math.min(3, Math.max(1, Math.round(finite(input.count, 3))));
   const candidatesPerVariation = Math.min(4, Math.max(1, Math.round(finite(input.candidatesPerVariation, 2))));
   const sourceSeed = String(input.seed ?? current.seed ?? current.id ?? "song");
-  const moodIntent = resolveMoodIntent(input.moodIntent ?? current?.variationSet?.moodIntent ?? "balanced");
+  const moodIntent = resolveMoodIntent(input.moodIntent ?? current?.variationSet?.moodIntent ?? current?.elementLineage?.moodIntent ?? "balanced");
   const setId = `elemental-variation-${sourceSeed}`;
   const selected = [];
 
