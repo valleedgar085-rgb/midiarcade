@@ -44,7 +44,25 @@ jobs:
           status=$?
           set -e
           if [ "$status" -ne 0 ]; then
-            tail -n 260 eps-quality.log > eps-quality-failure.txt
+            python - <<'PY'
+          from pathlib import Path
+
+          lines = Path('eps-quality.log').read_text(errors='replace').splitlines()
+          needles = ('not ok ', 'failureType:', 'AssertionError', 'ERR_ASSERTION', 'ERR_TEST_FAILURE', 'actual:', 'expected:')
+          hits = [index for index, line in enumerate(lines) if any(needle in line for needle in needles)]
+          selected = set()
+          for hit in hits:
+              selected.update(range(max(0, hit - 30), min(len(lines), hit + 90)))
+          selected.update(range(max(0, len(lines) - 45), len(lines)))
+          output = []
+          previous = None
+          for index in sorted(selected):
+              if previous is not None and index > previous + 1:
+                  output.append('--- omitted ---')
+              output.append(f'{index + 1}: {lines[index]}')
+              previous = index
+          Path('eps-quality-failure.txt').write_text('\n'.join(output) + '\n')
+          PY
             exit "$status"
           fi
 
@@ -54,7 +72,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add eps-quality-failure.txt
-          git commit -m "Capture EPS quality failure [eps-diagnostics]"
+          git commit -m "Capture precise EPS quality failure [eps-diagnostics]"
           git push origin HEAD:phase3/producer-brain-observability-loop
 
       - name: Commit verified runtime wiring
