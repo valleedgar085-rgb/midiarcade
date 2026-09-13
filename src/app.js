@@ -42,7 +42,7 @@ import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
-import { generationStageState } from "./ui/generation-progress.js";
+import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
   nearestScalePitch,
@@ -3156,8 +3156,8 @@ function showToast(message) {
   return true;
 }
 
-function generationDelay() {
-  return new Promise((resolve) => setTimeout(resolve, 430));
+function generationDelay(kind = "new") {
+  return new Promise((resolve) => setTimeout(resolve, generationMinimumVisibleMs(kind)));
 }
 
 /**
@@ -3198,7 +3198,7 @@ function startGenerationProgress(kind) {
   clearGenerationProgressTimer();
   const startedAt = Date.now();
   renderGenerationProgress(kind, 0);
-  generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 410);
+  generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 160);
 }
 
 function armGenerationSafetyTimer() {
@@ -3305,7 +3305,7 @@ async function runGeneration(kind, options = {}) {
         : {}),
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
-    const [generated] = await Promise.all([work, generationDelay()]);
+    const [generated] = await Promise.all([work, generationDelay(kind)]);
     let variationSongs = kind === "songVariations" ? generated?.variations : null;
     if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
       variationSongs = generateSongVariations(sourceSong, config);
