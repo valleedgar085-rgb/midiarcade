@@ -36,12 +36,18 @@ function boundedIndex(value, maxExclusive) {
   return Math.max(0, Math.min(Math.max(0, maxExclusive - 1), rounded));
 }
 
-function captureGenerationPreferences() {
+function elementById(id) {
   const doc = globalThis?.document;
-  if (!doc?.getElementById) return {};
+  if (!doc) return null;
+  if (typeof doc.getElementById === "function") return doc.getElementById(id);
+  if (typeof doc.querySelector === "function") return doc.querySelector(`#${id}`);
+  return null;
+}
+
+function captureGenerationPreferences() {
   const preferences = {};
   for (const id of GENERATION_PREFERENCE_IDS) {
-    const control = doc.getElementById(id);
+    const control = elementById(id);
     if (!control || control.value == null) continue;
     preferences[id] = String(control.value).slice(0, 80);
   }
@@ -59,10 +65,8 @@ function sanitizeGenerationPreferences(value) {
 }
 
 function applyGenerationPreferences(preferences = {}) {
-  const doc = globalThis?.document;
-  if (!doc?.getElementById) return;
   for (const [id, value] of Object.entries(sanitizeGenerationPreferences(preferences))) {
-    const control = doc.getElementById(id);
+    const control = elementById(id);
     if (!control) continue;
     if (control.tagName === "SELECT") {
       const valid = [...(control.options ?? [])].some((option) => String(option.value) === value);
@@ -94,19 +98,17 @@ function syncAutoPresentation(autoControls = new Set()) {
 }
 
 function syncEmptyCanvasFacts() {
-  const doc = globalThis?.document;
-  if (!doc?.getElementById) return;
-  const tempo = Number(doc.getElementById("tempoControl")?.value);
-  const factTempo = doc.getElementById("factTempo");
+  const tempo = Number(elementById("tempoControl")?.value);
+  const factTempo = elementById("factTempo");
   if (factTempo && Number.isFinite(tempo)) factTempo.textContent = `${Math.round(tempo)} BPM`;
 
-  const bars = Number(doc.getElementById("barsControl")?.value);
-  const factBars = doc.getElementById("factBars");
+  const bars = Number(elementById("barsControl")?.value);
+  const factBars = elementById("factBars");
   if (factBars && Number.isFinite(bars) && bars > 0) factBars.textContent = `${Math.round(bars)} BARS`;
 
-  const key = String(doc.getElementById("keyControl")?.value ?? "");
-  const mode = String(doc.getElementById("modeControl")?.value ?? "");
-  const factKey = doc.getElementById("factKey");
+  const key = String(elementById("keyControl")?.value ?? "");
+  const mode = String(elementById("modeControl")?.value ?? "");
+  const factKey = elementById("factKey");
   if (factKey && key && key !== "auto" && mode && mode !== "auto") {
     factKey.textContent = `${key} ${mode.replace(/([a-z])([A-Z])/g, "$1 $2")}`.toUpperCase();
   }
