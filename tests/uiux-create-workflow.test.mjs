@@ -48,6 +48,15 @@ test("generation essentials move from Now Playing into Song Direction without du
   }
 });
 
+test("advanced direction moves optional controls below the primary generation actions", () => {
+  assert.match(presentation, /className = "phase1-advanced-direction"/);
+  assert.match(presentation, /body\.append\(shapeControls, recipeControls\)/);
+  assert.match(presentation, /generationActions\.insertAdjacentElement\("afterend", advanced\)/);
+  assert.match(presentation, /creatorGrid\.classList\.add\("phase1-essentials-grid"\)/);
+  assert.match(css, /#preGenSection \.phase1-advanced-direction-body\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /#preGenSection \.creator-grid\.phase1-essentials-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+});
+
 test("Create layout overrides inherited grid spans and restores full mobile facts", () => {
   assert.match(css, /#tab-create \.create-live-control,[\s\S]*?#tab-create \.create-live-select\s*\{[\s\S]*?grid-column:\s*span 1/);
   assert.match(css, /#tab-create #factBars,[\s\S]*?#tab-create #factDuration,[\s\S]*?#tab-create #factRhythm\s*\{[\s\S]*?display:\s*inline-flex/);
