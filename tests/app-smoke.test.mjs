@@ -900,12 +900,16 @@ test("browser app initializes against the engine contract", async () => {
   await new Promise((resolve) => setTimeout(resolve, 520));
   const newPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   assert.equal(Object.keys(newPrograms).length, 6);
+  assert.deepEqual(
+    newPrograms,
+    previousPrograms,
+    "manual instrument programs must remain pinned when New generates a different song",
+  );
   for (const id of Object.keys(newPrograms)) {
-    assert.notEqual(newPrograms[id], previousPrograms[id], `New Idea should change ${id}'s sound`);
-    assert.notEqual(
+    assert.equal(
       app.previewVoice(id, newPrograms[id]).character,
       app.previewVoice(id, previousPrograms[id]).character,
-      `New Idea should change ${id}'s audible character`,
+      `manual ${id} program must keep its audible character until Auto is restored`,
     );
   }
 
@@ -927,10 +931,28 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(Number(elementFor("#rollControl").value), Math.round(neoSoul.snareRollChance * 100));
   assert.equal(elementFor("#chordPathControl").value, "auto", "Reset must keep chord path in AUTO mode");
 
+  const programsBeforeAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
+    .map(([id, settings]) => [id, Number(settings.program)]));
+  elementFor("#generateNew").dispatch("click");
+  await new Promise((resolve) => setTimeout(resolve, 520));
+  const programsAfterAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
+    .map(([id, settings]) => [id, Number(settings.program)]));
+  assert.ok(
+    Object.keys(programsBeforeAutoNew).some((id) => programsAfterAutoNew[id] !== programsBeforeAutoNew[id]),
+    "Reset must restore Auto authority so New may rotate instrument programs",
+  );
+  for (const [id, program] of Object.entries(programsAfterAutoNew)) {
+    assert.ok(
+      GENRE_PROFILES.neoSoul.instrumentPrograms[id].includes(program),
+      `Auto ${id} program ${program} must remain inside the active genre palette`,
+    );
+  }
+
   assert.equal(app.saveSessionNow(), true, "a valid song session must save locally on demand");
   const savedSession = JSON.parse(storedValues.get("midi-arcade/session-v2"));
   assert.equal(savedSession.schema, 2);
   assert.ok(savedSession.autoControls.includes("chordPathControl"), "Reset must persist chord path auto selection");
+  assert.ok(savedSession.autoControls.includes("track:drums:program"), "Reset must persist instrument program Auto authority");
   assert.deepEqual(savedSession.song, app.getAppStateSnapshot().song);
   const restoredApp = await import(`../src/app.js?restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
