@@ -1,0 +1,53 @@
+name: Apply EPS Runtime Wiring
+
+on:
+  push:
+    branches:
+      - phase3/producer-brain-observability-loop
+    paths:
+      - scripts/apply-eps-runtime-wiring.mjs
+      - .github/workflows/apply-eps-runtime-wiring.yml
+
+permissions:
+  contents: write
+
+jobs:
+  wire-runtime:
+    if: ${{ !contains(github.event.head_commit.message, '[eps-runtime-wired]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Phase 3 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase3/producer-brain-observability-loop
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply asserted EPS runtime patch
+        run: node scripts/apply-eps-runtime-wiring.mjs
+
+      - name: Verify elemental program policy
+        run: node --test tests/elemental-program-policy.test.mjs tests/producer-variation-set.test.mjs tests/auto-control-policy.test.mjs
+
+      - name: Verify complete quality gate
+        run: npm run quality
+
+      - name: Commit verified runtime wiring
+        run: |
+          if git diff --quiet -- src/app.js index.html; then
+            echo "Expected runtime wiring changes were not produced."
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app.js index.html
+          git commit -m "Wire elemental program authority and variation UI [eps-runtime-wired]"
+          git push origin HEAD:phase3/producer-brain-observability-loop
