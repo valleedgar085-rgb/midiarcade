@@ -1,3 +1,5 @@
+import { createDefaultAutoControls } from "./auto-control-policy.js";
+
 function isObject(value) {
   return Boolean(value && typeof value === "object");
 }
@@ -11,7 +13,7 @@ export function createInitialAppState() {
     muted: new Set(),
     solo: new Set(),
     locked: new Set(),
-    autoControls: new Set(),
+    autoControls: createDefaultAutoControls(),
     focusedSection: null,
     recipeIndex: 0,
     generationCount: 0,
