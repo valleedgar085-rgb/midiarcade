@@ -1,5 +1,5 @@
-function setCopy(selector, text) {
-  const element = document.querySelector(selector);
+function setCopy(rootDocument, selector, text) {
+  const element = rootDocument?.querySelector?.(selector);
   if (element) element.textContent = text;
 }
 
@@ -20,11 +20,12 @@ function updateCreatePath(createPanel) {
   });
 }
 
-function moveGenerationEssentials(createPanel) {
+function moveGenerationEssentials(rootDocument, createPanel) {
   const controls = createPanel.querySelector(".create-live-controls");
   const creatorMain = createPanel.querySelector(".creator-main-controls");
   const shapeControls = creatorMain?.querySelector(".shape-controls");
   if (!controls || !creatorMain || !shapeControls || creatorMain.querySelector(".direction-essentials-heading")) return;
+  if (typeof rootDocument?.createElement !== "function") return;
 
   controls.setAttribute("aria-label", "Generation essentials");
   const notes = controls.querySelectorAll(".create-live-control small");
@@ -32,7 +33,7 @@ function moveGenerationEssentials(createPanel) {
   if (notes[1]) notes[1].textContent = "Sets the intensity of the next generation";
   if (notes[2]) notes[2].textContent = "Sets how busy the next generation becomes";
 
-  const heading = document.createElement("div");
+  const heading = rootDocument.createElement("div");
   heading.className = "direction-essentials-heading section-heading";
   heading.innerHTML = `
     <div>
@@ -53,14 +54,16 @@ function moveOptionalGuide(createPanel) {
   creator.insertAdjacentElement("afterend", workflow);
 }
 
-export function applyCreateWorkflowPhase1() {
-  const createPanel = document.querySelector("#tab-create");
-  if (!createPanel || createPanel.dataset.uiuxPhase1 === "ready") return;
+export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
+  if (!rootDocument?.querySelector) return false;
+  const createPanel = rootDocument.querySelector("#tab-create");
+  if (!createPanel?.dataset || typeof createPanel.querySelector !== "function" || typeof createPanel.querySelectorAll !== "function") return false;
+  if (createPanel.dataset.uiuxPhase1 === "ready") return true;
 
   createPanel.dataset.uiuxPhase1 = "ready";
-  document.documentElement.dataset.uiuxPhase1Create = "true";
+  if (rootDocument.documentElement?.dataset) rootDocument.documentElement.dataset.uiuxPhase1Create = "true";
 
-  setCopy("#homeCommandTitle", "Listen. Direct. Generate.");
+  setCopy(rootDocument, "#homeCommandTitle", "Listen. Direct. Generate.");
   const intro = createPanel.querySelector(".home-command>div>p:not(.eyebrow)");
   if (intro) intro.textContent = "Hear what you have, change only what matters, then ask the Producer Brain for the next direction.";
   updateCreatePath(createPanel);
@@ -68,7 +71,7 @@ export function applyCreateWorkflowPhase1() {
   const nowPlayingLabel = createPanel.querySelector(".song-showcase .showcase-copy>.eyebrow");
   if (nowPlayingLabel) nowPlayingLabel.innerHTML = '<span></span> NOW PLAYING';
 
-  setCopy("#directionTitle", "Direct the next idea");
+  setCopy(rootDocument, "#directionTitle", "Direct the next idea");
   const directionCopy = createPanel.querySelector("#preGenSection .section-description");
   if (directionCopy) directionCopy.textContent = "Choose a genre and shape the essentials. Everything deeper is optional.";
 
@@ -85,8 +88,9 @@ export function applyCreateWorkflowPhase1() {
     if (small) small.textContent = "FROM CURRENT SONG";
   }
 
-  moveGenerationEssentials(createPanel);
+  moveGenerationEssentials(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
+  return true;
 }
 
-applyCreateWorkflowPhase1();
+if (typeof document !== "undefined") applyCreateWorkflowPhase1(document);
