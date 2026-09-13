@@ -1,0 +1,428 @@
+/* UI/UX Phase 1: Create workspace hierarchy
+   Keep this page-scoped sheet small. It is inlined by scripts/build.js so the
+   protected global styles.css budget stays unchanged. */
+
+#tab-create {
+  --create-gap: 18px;
+  gap: var(--create-gap);
+}
+
+#tab-create > .home-command {
+  min-height: 0;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  background: linear-gradient(120deg, rgba(157, 111, 255, 0.07), rgba(255, 255, 255, 0.018));
+}
+
+#tab-create > .home-command h2 {
+  margin-top: 3px;
+  font-size: clamp(1.35rem, 2.2vw, 2rem);
+}
+
+#tab-create > .home-command > div > p:last-child {
+  max-width: 62ch;
+  color: var(--text-2);
+  font-size: 0.82rem;
+}
+
+#tab-create > .home-command .home-path {
+  opacity: 0.72;
+}
+
+#tab-create > .home-command .home-path li {
+  border-color: rgba(255, 255, 255, 0.07);
+  background: transparent;
+}
+
+.create-console {
+  gap: 18px;
+}
+
+#tab-create .song-showcase {
+  border-color: rgba(157, 111, 255, 0.22);
+  background: linear-gradient(135deg, rgba(157, 111, 255, 0.08), rgba(10, 10, 15, 0.94) 42%, rgba(34, 211, 238, 0.035));
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.28);
+}
+
+#tab-create .song-showcase .showcase-copy {
+  min-width: 0;
+}
+
+#tab-create .song-showcase .title-row h1 {
+  font-size: clamp(2rem, 4.8vw, 4rem);
+}
+
+#tab-create .song-showcase #songSummary {
+  color: var(--text-2);
+  font-size: 0.92rem;
+}
+
+#tab-create .song-facts {
+  gap: 7px;
+  margin-top: 10px;
+}
+
+#tab-create .song-facts span {
+  border-color: rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+#tab-create .create-live-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: rgba(4, 4, 8, 0.28);
+}
+
+#tab-create .create-live-control,
+#tab-create .create-live-select {
+  min-width: 0;
+  grid-column: span 1;
+}
+
+#tab-create .create-live-control:first-child {
+  grid-column: span 1;
+}
+
+#tab-create .create-live-control small {
+  color: var(--text-3);
+  font-size: 0.64rem;
+  line-height: 1.35;
+}
+
+#tab-create .showcase-actions {
+  margin-top: 14px;
+}
+
+#tab-create .taste-actions {
+  max-width: 320px;
+  margin-top: 10px;
+  opacity: 0.72;
+}
+
+#tab-create .showcase-arc-wrap {
+  margin-top: 14px;
+}
+
+#tab-create .dna-integrated-card {
+  margin-top: 12px;
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+#preGenSection {
+  position: relative;
+  border-color: rgba(34, 211, 238, 0.16);
+  background: linear-gradient(180deg, rgba(34, 211, 238, 0.035), rgba(8, 8, 12, 0.94) 34%);
+}
+
+#preGenSection .creator-heading {
+  margin-bottom: 16px;
+}
+
+#preGenSection .creator-heading h2 {
+  font-size: clamp(1.55rem, 2.8vw, 2.4rem);
+}
+
+#preGenSection .creator-grid,
+#preGenSection .creator-grid.phase1-essentials-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+#preGenSection .creator-main-controls {
+  min-width: 0;
+}
+
+#preGenSection .direction-essentials-heading {
+  margin: 16px 0 8px;
+  padding: 0 2px;
+}
+
+#preGenSection .direction-essentials-heading h3 {
+  font-size: 1rem;
+}
+
+#preGenSection .direction-essentials-heading .section-description {
+  margin-top: 3px;
+  font-size: 0.72rem;
+}
+
+#preGenSection .genre-direction {
+  padding: 16px;
+  border: 1px solid rgba(157, 111, 255, 0.18);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(157, 111, 255, 0.08), rgba(255, 255, 255, 0.018));
+}
+
+#preGenSection .shape-controls,
+#preGenSection .creator-recipe-side {
+  border-color: rgba(255, 255, 255, 0.075);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+#preGenSection .generation-intent {
+  margin-top: 14px;
+  border-color: rgba(34, 211, 238, 0.2);
+  background: rgba(34, 211, 238, 0.045);
+}
+
+#preGenSection .generation-actions-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+#preGenSection .generation-new {
+  min-height: 88px;
+  border-color: rgba(157, 111, 255, 0.52);
+  box-shadow: 0 16px 34px rgba(80, 42, 160, 0.18);
+}
+
+#preGenSection .generation-similar {
+  min-height: 88px;
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+#preGenSection .generation-similar .action-icon {
+  opacity: 0.78;
+}
+
+#preGenSection .phase1-advanced-direction {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.014);
+}
+
+#preGenSection .phase1-advanced-direction > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 54px;
+  padding: 10px 14px;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+#preGenSection .phase1-advanced-direction > summary span:first-child small {
+  display: block;
+  color: var(--text-3);
+  font: 800 0.55rem var(--font-data);
+  letter-spacing: 0.13em;
+}
+
+#preGenSection .phase1-advanced-direction > summary strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+#preGenSection .phase1-advanced-direction > summary span:last-child {
+  color: var(--text-3);
+  font-size: 0.68rem;
+}
+
+#preGenSection .phase1-advanced-direction[open] > summary {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+}
+
+#preGenSection .phase1-advanced-direction-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 10px;
+}
+
+#preGenSection .phase1-advanced-direction-body > details {
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  #tab-create .create-live-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #tab-create .create-live-control:first-child {
+    grid-column: 1 / -1;
+  }
+
+  #preGenSection .phase1-advanced-direction-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  body:has(#tab-create.is-active) .topbar {
+    height: 52px;
+    padding-inline: 12px;
+  }
+
+  body:has(#tab-create.is-active) .topbar .session-status,
+  body:has(#tab-create.is-active) .topbar #undoButton,
+  body:has(#tab-create.is-active) .topbar #redoButton,
+  body:has(#tab-create.is-active) .topbar .guide-button,
+  body:has(#tab-create.is-active) .topbar .version-chip {
+    display: none;
+  }
+
+  body:has(#tab-create.is-active) .topbar .brand small,
+  body:has(#tab-create.is-active) .topbar .menu-button b {
+    display: none;
+  }
+
+  body:has(#tab-create.is-active) .topbar .topbar-actions {
+    margin-left: auto;
+  }
+
+  #tab-create {
+    gap: 12px;
+  }
+
+  #tab-create > .home-command {
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+
+  #tab-create > .home-command .home-path,
+  #tab-create > .home-command .eyebrow {
+    display: none;
+  }
+
+  #tab-create > .home-command h2 {
+    margin: 0;
+    font-size: 1.12rem;
+  }
+
+  #tab-create > .home-command > div > p:last-child {
+    margin-top: 3px;
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+
+  #tab-create .song-showcase {
+    padding: 14px;
+  }
+
+  #tab-create .showcase-art {
+    max-width: 190px;
+    margin: 0 auto 8px;
+  }
+
+  #tab-create .song-showcase .title-row h1 {
+    font-size: clamp(1.65rem, 8vw, 2.3rem);
+  }
+
+  #tab-create .song-showcase #songSummary {
+    font-size: 0.78rem;
+  }
+
+  #tab-create .song-facts {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+
+  #tab-create .song-facts::-webkit-scrollbar {
+    display: none;
+  }
+
+  #tab-create .song-facts span {
+    flex: 0 0 auto;
+  }
+
+  #tab-create #factBars,
+  #tab-create #factDuration,
+  #tab-create #factRhythm {
+    display: inline-flex;
+  }
+
+  #tab-create .create-live-controls {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  #tab-create .create-live-control:first-child {
+    grid-column: 1 / -1;
+  }
+
+  #tab-create .create-live-control small,
+  #tab-create .taste-actions {
+    display: none;
+  }
+
+  #tab-create .dna-integrated-card {
+    margin-top: 8px;
+  }
+
+  #preGenSection {
+    padding: 14px;
+  }
+
+  #preGenSection .creator-heading {
+    margin-bottom: 10px;
+  }
+
+  #preGenSection .creator-heading .eyebrow {
+    font-size: 0.58rem;
+  }
+
+  #preGenSection .creator-heading h2 {
+    font-size: 1.35rem;
+  }
+
+  #preGenSection .genre-direction {
+    padding: 12px;
+  }
+
+  #preGenSection .generation-intent {
+    padding: 10px 11px;
+  }
+
+  #preGenSection .generation-intent p {
+    font-size: 0.7rem;
+  }
+
+  #preGenSection .generation-actions-bar {
+    grid-template-columns: 1fr;
+  }
+
+  #preGenSection .generation-new,
+  #preGenSection .generation-similar {
+    min-height: 74px;
+  }
+
+  #preGenSection .generation-new .action-copy em,
+  #preGenSection .generation-similar .action-copy em {
+    display: none;
+  }
+
+  #preGenSection .phase1-advanced-direction > summary span:last-child {
+    display: none;
+  }
+
+  #preGenSection .phase1-advanced-direction > summary {
+    min-height: 50px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tab-create .song-showcase,
+  #preGenSection .generation-new {
+    box-shadow: none;
+  }
+}
