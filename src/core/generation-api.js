@@ -2,9 +2,13 @@ import {
   generateNew,
   generateSectionVariations,
   generateSimilar,
-  generateSongVariations,
 } from "../music-engine.js";
 import { dispatchGenerationRequest } from "./generation-dispatch.js";
+import { generateProducerVariationSet } from "./producer-variation-set.js";
+
+function generateSongVariations(sourceSong, config = {}) {
+  return generateProducerVariationSet(sourceSong, config, { generateSimilar });
+}
 
 const ENGINE_API = Object.freeze({
   generateNew,
