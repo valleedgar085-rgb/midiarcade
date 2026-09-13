@@ -1,12 +1,20 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
+import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
+import {
+  createSelfCorrectionPayload,
+  diagnoseGenerationOutcome,
+  selectSelfCorrectedResult,
+} from "./generation-self-correction.js";
 
 export function createGenerationExecutor({
   fallback,
   workerFactory = null,
   timeoutMs = 60000,
+  recorder = null,
 } = {}) {
   if (typeof fallback !== "function") throw new TypeError("generation executor requires a fallback");
 
+  const flightRecorder = recorder ?? createGenerationFlightRecorder();
   let worker = null;
   let workerUnavailable = typeof workerFactory !== "function";
   let requestId = 0;
@@ -80,10 +88,9 @@ export function createGenerationExecutor({
     }
   }
 
-  async function run(kind, payload = {}) {
-    const adaptedPayload = adaptGenerationRequest(kind, payload);
+  function executeAdapted(kind, adaptedPayload) {
     const activeWorker = ensureWorker();
-    if (!activeWorker) return fallback(kind, adaptedPayload);
+    if (!activeWorker) return Promise.resolve().then(() => fallback(kind, adaptedPayload));
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -105,8 +112,75 @@ export function createGenerationExecutor({
     });
   }
 
+  async function run(kind, payload = {}) {
+    const adaptedPayload = adaptGenerationRequest(kind, payload);
+    const config = adaptedPayload?.config ?? {};
+    const flightId = flightRecorder.begin(kind, {
+      sourceSong: adaptedPayload?.sourceSong,
+      config,
+    });
+    flightRecorder.mark(flightId, "plan", {
+      producerBrain: config?.producerBrain?.id ?? null,
+      blueprint: config?.producerBrain?.blueprint?.id ?? null,
+    });
+
+    try {
+      flightRecorder.mark(flightId, "compose", { pass: 0 });
+      const originalResult = await executeAdapted(kind, adaptedPayload);
+      const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
+      flightRecorder.mark(flightId, "diagnose", {
+        shouldRetry: diagnosis.shouldRetry,
+        reason: diagnosis.reason,
+        focusRoute: diagnosis.focusRoute,
+        focusDimension: diagnosis.focusDimension,
+        focusGroup: diagnosis.focusGroup,
+        totalScore: diagnosis.totalScore,
+        creativeFloor: diagnosis.creativeFloor,
+      });
+
+      let selectedResult = originalResult;
+      if (diagnosis.shouldRetry) {
+        const correctionPayload = createSelfCorrectionPayload(adaptedPayload, diagnosis);
+        flightRecorder.mark(flightId, "repair", {
+          pass: 1,
+          focusRoute: diagnosis.focusRoute,
+          focusDimension: diagnosis.focusDimension,
+          focusGroup: diagnosis.focusGroup,
+        });
+        const correctedResult = await executeAdapted(kind, correctionPayload);
+        const comparison = selectSelfCorrectedResult(originalResult, correctedResult);
+        selectedResult = comparison.result;
+        flightRecorder.mark(flightId, "compare", {
+          selected: comparison.selected,
+          reason: comparison.reason,
+          scoreDelta: comparison.scoreDelta,
+          creativeFloorDelta: comparison.creativeFloorDelta,
+        });
+      } else {
+        flightRecorder.mark(flightId, "compare", {
+          selected: "original",
+          reason: diagnosis.reason,
+          skipped: true,
+        });
+      }
+
+      flightRecorder.mark(flightId, "finalize");
+      flightRecorder.complete(flightId, selectedResult?.song);
+      return selectedResult;
+    } catch (error) {
+      flightRecorder.fail(flightId, error);
+      throw error;
+    }
+  }
+
   return Object.freeze({
     run,
+    diagnosticsSnapshot() {
+      return flightRecorder.snapshot();
+    },
+    clearDiagnostics() {
+      flightRecorder.clear();
+    },
     dispose() {
       disposeWorker(new Error("Background generation was canceled."));
     },
