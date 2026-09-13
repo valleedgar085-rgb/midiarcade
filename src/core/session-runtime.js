@@ -93,6 +93,31 @@ function syncAutoPresentation(autoControls = new Set()) {
   }
 }
 
+function syncEmptyCanvasFacts() {
+  const doc = globalThis?.document;
+  if (!doc?.getElementById) return;
+  const tempo = Number(doc.getElementById("tempoControl")?.value);
+  const factTempo = doc.getElementById("factTempo");
+  if (factTempo && Number.isFinite(tempo)) factTempo.textContent = `${Math.round(tempo)} BPM`;
+
+  const bars = Number(doc.getElementById("barsControl")?.value);
+  const factBars = doc.getElementById("factBars");
+  if (factBars && Number.isFinite(bars) && bars > 0) factBars.textContent = `${Math.round(bars)} BARS`;
+
+  const key = String(doc.getElementById("keyControl")?.value ?? "");
+  const mode = String(doc.getElementById("modeControl")?.value ?? "");
+  const factKey = doc.getElementById("factKey");
+  if (factKey && key && key !== "auto" && mode && mode !== "auto") {
+    factKey.textContent = `${key} ${mode.replace(/([a-z])([A-Z])/g, "$1 $2")}`.toUpperCase();
+  }
+}
+
+function deferEmptyCanvasFacts() {
+  const task = () => syncEmptyCanvasFacts();
+  if (typeof globalThis?.queueMicrotask === "function") globalThis.queueMicrotask(task);
+  else Promise.resolve().then(task);
+}
+
 function restoredPreferenceState({
   parsed = {},
   trackOrder = [],
@@ -206,6 +231,7 @@ export function applyPersistedSessionState(state, restored) {
   Object.assign(state, restored);
   applyGenerationPreferences(restored.generationPreferences);
   syncAutoPresentation(restored.autoControls);
+  if (restored.song == null) deferEmptyCanvasFacts();
   return true;
 }
 
