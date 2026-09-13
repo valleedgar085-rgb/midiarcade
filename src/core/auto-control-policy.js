@@ -32,6 +32,10 @@ export const AUTO_TRACK_RANGE_KEYS = Object.freeze([
   "resonance",
 ]);
 
+export const AUTO_TRACK_SELECT_KEYS = Object.freeze([
+  "program",
+]);
+
 export const DEFAULT_AUTO_TRACK_IDS = Object.freeze([
   "drums",
   "bass",
@@ -41,12 +45,26 @@ export const DEFAULT_AUTO_TRACK_IDS = Object.freeze([
   "pad",
 ]);
 
+export function trackAutoControlKey(trackId, key) {
+  const id = String(trackId || "");
+  const control = String(key || "");
+  if (!id || !control) return null;
+  return `track:${id}:${control}`;
+}
+
+export function isAutoTrackControl(autoControls, trackId, key) {
+  const token = trackAutoControlKey(trackId, key);
+  return Boolean(token && autoControls?.has?.(token));
+}
+
 export function createDefaultAutoControls(trackIds = DEFAULT_AUTO_TRACK_IDS) {
   const keys = new Set([...AUTO_GENERATION_RANGE_IDS, ...AUTO_SELECT_IDS]);
   for (const trackId of trackIds) {
     const id = String(trackId || "");
     if (!id) continue;
-    for (const key of AUTO_TRACK_RANGE_KEYS) keys.add(`track:${id}:${key}`);
+    for (const key of [...AUTO_TRACK_RANGE_KEYS, ...AUTO_TRACK_SELECT_KEYS]) {
+      keys.add(`track:${id}:${key}`);
+    }
   }
   return keys;
 }
