@@ -116,8 +116,15 @@ function syncEmptyCanvasFacts() {
 
 function deferEmptyCanvasFacts() {
   const task = () => syncEmptyCanvasFacts();
+  // Initial app hydration can render once after session restore. Reconcile the
+  // staged empty-canvas facts both immediately and after that first render so
+  // a placeholder song fallback never overwrites the user's staged settings.
   if (typeof globalThis?.queueMicrotask === "function") globalThis.queueMicrotask(task);
   else Promise.resolve().then(task);
+  if (typeof globalThis?.setTimeout === "function") {
+    globalThis.setTimeout(task, 0);
+    globalThis.setTimeout(task, 20);
+  }
 }
 
 function restoredPreferenceState({
