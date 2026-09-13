@@ -41,7 +41,9 @@ const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
   preserveSnareSnap: false,
   filterMotion: false,
   sendFloor: 0.045,
-  masterFadeSeconds: 0.028,
+  // Android audio drivers are less forgiving of abrupt Web Audio graph stops.
+  // Keep the master fade aligned with the click-safe per-voice release window.
+  masterFadeSeconds: 0.04,
 });
 
 const RICH_TRACKS = new Set(["bass", "melody"]);
