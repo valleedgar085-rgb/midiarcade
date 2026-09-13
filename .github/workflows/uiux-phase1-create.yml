@@ -1,0 +1,46 @@
+name: UIUX Phase 1 Create
+
+on:
+  push:
+    branches:
+      - uiux/phase1-create-workflow
+    paths:
+      - scripts/apply-uiux-phase1-create.mjs
+      - .github/workflows/uiux-phase1-create.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out UI branch
+        uses: actions/checkout@v4
+        with:
+          ref: uiux/phase1-create-workflow
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply Create hierarchy pass
+        run: node scripts/apply-uiux-phase1-create.mjs
+      - name: Run Create UI regressions
+        run: node --test tests/uiux-create-workflow.test.mjs tests/app-smoke.test.mjs
+      - name: Run web build quality gate
+        run: npm run quality
+      - name: Commit validated UI pass
+        run: |
+          if git diff --quiet -- styles.css tests/uiux-create-workflow.test.mjs; then
+            echo "No validated UI changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add styles.css tests/uiux-create-workflow.test.mjs
+          git commit -m "UIUX: simplify Create workspace hierarchy"
+          git push origin HEAD:uiux/phase1-create-workflow
