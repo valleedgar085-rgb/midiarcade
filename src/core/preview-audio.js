@@ -19,9 +19,11 @@ const SPOTLIGHT_BY_GENRE = Object.freeze({
 });
 
 export const PREVIEW_TRANSITION = Object.freeze({
-  startSeconds: 0.005,
-  stopSeconds: 0.026,
-  sourceTailSeconds: 0.012,
+  // Mobile Web Audio needs a little more time than desktop to cross zero
+  // cleanly when oscillators start/stop or voices are stolen under load.
+  startSeconds: 0.01,
+  stopSeconds: 0.04,
+  sourceTailSeconds: 0.018,
 });
 
 const NOTE_ENVELOPE_LIMITS = Object.freeze({
@@ -95,9 +97,9 @@ export function previewSidechain(song = {}, assistant = {}) {
   return Object.freeze({
     enabled: strength > 0,
     depth: 0.08 + 0.12 * strength,
-    attackSeconds: 0.004,
+    attackSeconds: 0.006,
     holdSeconds: Math.min(0.04, (60 / bpm) * 0.06),
-    releaseSeconds: Math.min(0.16, Math.max(0.07, (60 / bpm) * 0.22)),
+    releaseSeconds: Math.min(0.18, Math.max(0.09, (60 / bpm) * 0.24)),
   });
 }
 
