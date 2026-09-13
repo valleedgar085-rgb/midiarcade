@@ -7,6 +7,7 @@ import {
   normalizeThinkingDepth,
   roundProducerValue,
 } from "./producer-policy.js";
+import { createSongBlueprint } from "./producer-blueprint.js";
 
 /**
  * Producer Brain is an orchestration layer, not a second composition engine.
@@ -25,6 +26,12 @@ export function createProducerBrainPlan(config = {}, {
   const resolvedTaste = normalizeProducerTaste(taste);
   const search = createProducerSearchPolicy(config, normalizedKind, depth);
   const priorities = createProductionPriorities(resolvedCharacter, resolvedTaste, normalizedKind);
+  const blueprint = createSongBlueprint(config, {
+    kind: normalizedKind,
+    character: resolvedCharacter,
+    taste: resolvedTaste,
+    priorities,
+  });
   const qualityIntent = Object.freeze({
     preserveKeySafety: true,
     preserveDeterminism: true,
@@ -34,6 +41,14 @@ export function createProducerBrainPlan(config = {}, {
     preferSurgicalRepair: search.targetedRepair,
     avoidBackToBackIdentity: normalizedKind === "new",
     preserveSongFamily: normalizedKind !== "new",
+  });
+  const adaptiveLoop = Object.freeze({
+    enabled: search.adaptive,
+    stages: Object.freeze(["plan", "compose", "diagnose", "repair", "compare", "finalize"]),
+    diagnoseWeakestDimension: search.weaknessAwareSearch,
+    targetedRepair: search.targetedRepair,
+    maxRepairPasses: search.repairAttempts,
+    compareBeforeCommit: true,
   });
 
   return Object.freeze({
@@ -51,6 +66,8 @@ export function createProducerBrainPlan(config = {}, {
       learnedVariation: resolvedTaste.variation == null ? null : roundProducerValue(resolvedTaste.variation),
     }),
     priorities,
+    blueprint,
+    adaptiveLoop,
     qualityIntent,
   });
 }
