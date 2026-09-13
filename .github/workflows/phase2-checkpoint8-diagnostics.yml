@@ -1,0 +1,31 @@
+name: Phase 2 Checkpoint 8 Diagnostics
+
+on:
+  push:
+    branches:
+      - phase2/checkpoint8-generate-similar-parity
+    paths:
+      - scripts/diagnose-adaptive-global-search.mjs
+      - .github/workflows/phase2-checkpoint8-diagnostics.yml
+
+permissions:
+  contents: read
+
+jobs:
+  adaptive-search-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/checkpoint8-generate-similar-parity
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run adaptive global-search diagnostic
+        run: node scripts/diagnose-adaptive-global-search.mjs
