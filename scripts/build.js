@@ -43,9 +43,9 @@ const stylesheet = await transform(
 );
 fs.writeFileSync(path.join(wwwDir, 'styles.css'), stylesheet.code);
 
-// Keep the global CSS performance budget unchanged. Small Create-only sheets
-// remain inline, while the larger generation/landscape layer ships separately
-// so the initial HTML stays inside its strict 80 KiB budget.
+// Keep the global CSS and initial HTML budgets unchanged. Workspace-specific
+// presentation that is large enough to matter ships as a separately bounded
+// stylesheet and is copied into the Android public asset directory as well.
 const creatorStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'creator-brand.css'), 'utf8'),
   transformOptions,
@@ -58,9 +58,17 @@ const generationExperienceStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'generation-experience.css'), 'utf8'),
   transformOptions,
 );
+const shapeDirectorStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'shape-director.css'), 'utf8'),
+  transformOptions,
+);
 fs.writeFileSync(
   path.join(wwwDir, 'generation-experience.css'),
   generationExperienceStyles.code,
+);
+fs.writeFileSync(
+  path.join(wwwDir, 'shape-director.css'),
+  shapeDirectorStyles.code,
 );
 
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
@@ -68,7 +76,7 @@ fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
   indexSource.replace(
     '</head>',
-    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"></head>`,
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"></head>`,
   ),
 );
 
@@ -97,6 +105,7 @@ if (fs.existsSync(androidPublicDir)) {
   copyRecursiveSync(path.join(wwwDir, 'privacy-policy.html'), path.join(androidPublicDir, 'privacy-policy.html'));
   copyRecursiveSync(path.join(wwwDir, 'styles.css'), path.join(androidPublicDir, 'styles.css'));
   copyRecursiveSync(path.join(wwwDir, 'generation-experience.css'), path.join(androidPublicDir, 'generation-experience.css'));
+  copyRecursiveSync(path.join(wwwDir, 'shape-director.css'), path.join(androidPublicDir, 'shape-director.css'));
   copyRecursiveSync(path.join(wwwDir, 'manifest.webmanifest'), path.join(androidPublicDir, 'manifest.webmanifest'));
   copyRecursiveSync(path.join(wwwDir, 'assets'), path.join(androidPublicDir, 'assets'));
   copyRecursiveSync(path.join(wwwDir, 'src'), path.join(androidPublicDir, 'src'));
