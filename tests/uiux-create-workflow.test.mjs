@@ -7,6 +7,7 @@ const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
 const build = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
+const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 test("Create workspace keeps the production flow intact", () => {
   const hero = html.indexOf('id="heroPanel"');
@@ -33,15 +34,27 @@ test("generation essentials move from Now Playing into Song Direction without du
   }
 });
 
+test("Create layout overrides inherited grid spans and restores full mobile facts", () => {
+  assert.match(css, /#tab-create \.create-live-control,[\s\S]*?#tab-create \.create-live-select\s*\{[\s\S]*?grid-column:\s*span 1/);
+  assert.match(css, /#tab-create #factBars,[\s\S]*?#tab-create #factDuration,[\s\S]*?#tab-create #factRhythm\s*\{[\s\S]*?display:\s*inline-flex/);
+});
+
+test("Create-only mobile header changes do not leak into Shape, Mix, or Finish", () => {
+  assert.match(css, /body:has\(#tab-create\.is-active\) \.topbar/);
+  assert.doesNotMatch(css, /\n\s*\.topbar \.session-status,[\s\S]*?display:\s*none/);
+});
+
 test("Phase 1 gives Create a clear desktop and mobile hierarchy", () => {
   assert.match(css, /#preGenSection \.generation-actions-bar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.3fr\) minmax\(0, 0\.9fr\)/);
-  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?\.topbar \.session-status[\s\S]*?display:\s*none/);
+  assert.match(css, /@media \(max-width: 600px\)[\s\S]*?body:has\(#tab-create\.is-active\) \.topbar \.session-status[\s\S]*?display:\s*none/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?#tab-create \.create-live-controls\s*\{[\s\S]*?grid-template-columns:\s*1fr 1fr/);
   assert.match(css, /#tab-create \.taste-actions\s*\{[\s\S]*?opacity:\s*0\.72/);
 });
 
-test("Create-specific CSS stays outside the protected global stylesheet budget", () => {
+test("Create-specific CSS stays outside the protected global stylesheet budget and dev serves the built UI", () => {
   assert.match(build, /src', 'ui', 'create-workflow\.css'/);
   assert.match(build, /createWorkflowStyles/);
   assert.match(build, /<style>\$\{creatorStyles\.code\}<\/style><style>\$\{createWorkflowStyles\.code\}<\/style>/);
+  assert.match(pkg.scripts.dev, /npm run build/);
+  assert.match(pkg.scripts.dev, /--directory www/);
 });
