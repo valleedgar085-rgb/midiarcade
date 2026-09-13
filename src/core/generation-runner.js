@@ -1,3 +1,5 @@
+import { continueElementLineage } from "./elemental-lineage.js";
+
 export function createGenerationRunner({
   generateNew,
   generateSimilar,
@@ -30,11 +32,14 @@ export function createGenerationRunner({
 
       try {
         recorder?.mark?.(flightId, "compose");
-        const song = await Promise.resolve(
+        const generated = await Promise.resolve(
           kind === "new"
             ? generateNew(config)
             : generateSimilar(sourceSong, config),
         );
+        const song = kind === "similar"
+          ? continueElementLineage(sourceSong, generated)
+          : generated;
         recorder?.mark?.(flightId, "diagnose", {
           candidateSearch: Boolean(song?.meta?.scoreDetails?.candidateSearch),
         });
