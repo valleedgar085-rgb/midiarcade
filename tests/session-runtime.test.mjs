@@ -43,34 +43,62 @@ function song() {
   };
 }
 
-test("session snapshots preserve the app persistence contract", () => {
-  const snapshot = createPersistedSessionSnapshot({
-    song: song(),
-    trackSettings: DEFAULTS,
-    muted: new Set(["drums"]),
-    solo: new Set(),
-    locked: new Set(["drums"]),
-    autoControls: new Set(["energy"]),
-    selectedTrack: "drums",
-    guidedMode: true,
-    recipeIndex: 2,
-    mixAssistant: { enabled: true },
-    tasteProfile: { likes: 3 },
-  }, {
-    schema: 2,
-    now: () => new Date("2026-09-12T03:00:00.000Z"),
-    normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled), normalized: true }),
-  });
+test("session snapshots preserve preferences even before a song exists", () => {
+  const previousDocument = globalThis.document;
+  globalThis.document = {
+    getElementById(id) {
+      return ({
+        tempoControl: { value: "102" },
+        keyControl: { value: "F#" },
+      })[id] ?? null;
+    },
+  };
+  try {
+    const snapshot = createPersistedSessionSnapshot({
+      song: null,
+      trackSettings: DEFAULTS,
+      muted: new Set(["drums"]),
+      solo: new Set(),
+      locked: new Set(["drums"]),
+      autoControls: new Set(["energyControl"]),
+      selectedTrack: "drums",
+      guidedMode: true,
+      recipeIndex: 2,
+      mixAssistant: { enabled: true },
+      tasteProfile: { likes: 3 },
+    }, {
+      schema: 2,
+      now: () => new Date("2026-09-12T03:00:00.000Z"),
+      normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled), normalized: true }),
+    });
 
-  assert.equal(snapshot.schema, 2);
-  assert.equal(snapshot.savedAt, "2026-09-12T03:00:00.000Z");
-  assert.deepEqual(snapshot.muted, ["drums"]);
-  assert.deepEqual(snapshot.locked, ["drums"]);
-  assert.deepEqual(snapshot.mixAssistant, { enabled: true, normalized: true });
+    assert.equal(snapshot.schema, 2);
+    assert.equal(snapshot.savedAt, "2026-09-12T03:00:00.000Z");
+    assert.deepEqual(snapshot.muted, ["drums"]);
+    assert.deepEqual(snapshot.locked, ["drums"]);
+    assert.deepEqual(snapshot.mixAssistant, { enabled: true, normalized: true });
+    assert.equal(snapshot.generationPreferences.tempoControl, "102");
+    assert.equal(snapshot.generationPreferences.keyControl, "F#");
+  } finally {
+    globalThis.document = previousDocument;
+  }
 });
 
-test("session decode rejects corruption and sanitizes restored state", () => {
-  const invalid = decodePersistedSession({ status: "ready", value: { schema: 2, song: null } }, {
+test("first-run decode starts empty with supported controls automatic", () => {
+  const decoded = decodePersistedSession({ status: "empty", value: null }, {
+    schema: 2,
+    trackOrder: TRACK_ORDER,
+    defaultTrackSettings: DEFAULTS,
+    genreIds: ["hipHop"],
+  });
+  assert.equal(decoded.status, "ready");
+  assert.equal(decoded.value.song, null);
+  assert.ok(decoded.value.autoControls.has("tempoControl"));
+  assert.ok(decoded.value.autoControls.has("track:drums:density"));
+});
+
+test("session decode rejects corruption, sanitizes preferences, and never auto-restores the last song", () => {
+  const invalid = decodePersistedSession({ status: "ready", value: { schema: 999, song: null } }, {
     schema: 2,
     trackOrder: TRACK_ORDER,
     defaultTrackSettings: DEFAULTS,
@@ -87,12 +115,13 @@ test("session decode rejects corruption and sanitizes restored state", () => {
       muted: ["drums", "ghost"],
       solo: ["ghost"],
       locked: ["drums"],
-      autoControls: ["energy", 12, "x".repeat(90)],
+      autoControls: ["energyControl", 12, "x".repeat(90)],
       selectedTrack: "ghost",
       guidedMode: false,
       recipeIndex: 99,
       mixAssistant: { enabled: 1 },
       tasteProfile: { likes: 2, genreVotes: { hipHop: 3, fake: 7 } },
+      generationPreferences: { tempoControl: "101", keyControl: "G", unknown: "ignore" },
     },
   }, {
     schema: 2,
@@ -104,6 +133,7 @@ test("session decode rejects corruption and sanitizes restored state", () => {
   });
 
   assert.equal(decoded.status, "ready");
+  assert.equal(decoded.value.song, null, "relaunch should start with an empty plate");
   assert.deepEqual([...decoded.value.muted], ["drums"]);
   assert.deepEqual([...decoded.value.solo], []);
   assert.equal(decoded.value.selectedTrack, "drums");
@@ -112,19 +142,22 @@ test("session decode rejects corruption and sanitizes restored state", () => {
   assert.equal(decoded.value.trackSettings.drums.density, 100);
   assert.equal(decoded.value.trackSettings.drums.program, 0);
   assert.deepEqual(decoded.value.tasteProfile.genreVotes, { hipHop: 3 });
+  assert.equal(decoded.value.generationPreferences.tempoControl, "101");
+  assert.equal(decoded.value.generationPreferences.keyControl, "G");
+  assert.equal(decoded.value.generationPreferences.unknown, undefined);
 
   const target = {};
   assert.equal(applyPersistedSessionState(target, decoded.value), true);
-  assert.equal(target.song.meta.tempo, 96);
+  assert.equal(target.song, null);
 });
 
-test("autosave controller coalesces pending saves and reports device persistence", () => {
+test("autosave controller persists preferences even when the song plate is empty", () => {
   const calls = [];
   let pending;
   let timerId = 0;
   const storage = {
     save(value) {
-      calls.push(["save", value.schema]);
+      calls.push(["save", value.schema, value.song]);
       return { ok: true };
     },
     discard() {
@@ -134,7 +167,7 @@ test("autosave controller coalesces pending saves and reports device persistence
   };
   const controller = createSessionAutosaveController({
     storage,
-    snapshot: () => ({ schema: 2, song: song() }),
+    snapshot: () => ({ schema: 2, song: null, generationPreferences: { tempoControl: "104" } }),
     onSaved: () => calls.push(["saved"]),
     defer: (task) => task(),
     setTimer(task, delay) {
@@ -151,7 +184,7 @@ test("autosave controller coalesces pending saves and reports device persistence
   controller.schedule();
   assert.deepEqual(calls.slice(0, 3), [["timer", 400], ["clear", 1], ["timer", 400]]);
   pending();
-  assert.deepEqual(calls.slice(-2), [["save", 2], ["saved"]]);
+  assert.deepEqual(calls.slice(-2), [["save", 2, null], ["saved"]]);
   assert.equal(controller.discard(), true);
   assert.deepEqual(calls.at(-1), ["discard"]);
 });
