@@ -82,6 +82,7 @@
 #tab-create .create-live-control,
 #tab-create .create-live-select {
   min-width: 0;
+  grid-column: span 1;
 }
 
 #tab-create .create-live-control:first-child {
@@ -135,6 +136,20 @@
 
 #preGenSection .creator-main-controls {
   min-width: 0;
+}
+
+#preGenSection .direction-essentials-heading {
+  margin: 16px 0 8px;
+  padding: 0 2px;
+}
+
+#preGenSection .direction-essentials-heading h3 {
+  font-size: 1rem;
+}
+
+#preGenSection .direction-essentials-heading .section-description {
+  margin-top: 3px;
+  font-size: 0.72rem;
 }
 
 #preGenSection .genre-direction {
@@ -196,25 +211,25 @@
 }
 
 @media (max-width: 600px) {
-  .topbar {
+  body:has(#tab-create.is-active) .topbar {
     height: 52px;
     padding-inline: 12px;
   }
 
-  .topbar .session-status,
-  .topbar #undoButton,
-  .topbar #redoButton,
-  .topbar .guide-button,
-  .topbar .version-chip {
+  body:has(#tab-create.is-active) .topbar .session-status,
+  body:has(#tab-create.is-active) .topbar #undoButton,
+  body:has(#tab-create.is-active) .topbar #redoButton,
+  body:has(#tab-create.is-active) .topbar .guide-button,
+  body:has(#tab-create.is-active) .topbar .version-chip {
     display: none;
   }
 
-  .topbar .brand small,
-  .topbar .menu-button b {
+  body:has(#tab-create.is-active) .topbar .brand small,
+  body:has(#tab-create.is-active) .topbar .menu-button b {
     display: none;
   }
 
-  .topbar .topbar-actions {
+  body:has(#tab-create.is-active) .topbar .topbar-actions {
     margin-left: auto;
   }
 
@@ -274,6 +289,12 @@
 
   #tab-create .song-facts span {
     flex: 0 0 auto;
+  }
+
+  #tab-create #factBars,
+  #tab-create #factDuration,
+  #tab-create #factRhythm {
+    display: inline-flex;
   }
 
   #tab-create .create-live-controls {
