@@ -43,16 +43,23 @@ const stylesheet = await transform(
 );
 fs.writeFileSync(path.join(wwwDir, 'styles.css'), stylesheet.code);
 
-// Keep the global CSS performance budget unchanged: creator branding stays in
-// a tiny page-scoped style block instead of expanding the already dense sheet.
+// Keep the global CSS performance budget unchanged: focused page-level polish
+// is inlined into the built document instead of expanding the dense core sheet.
 const creatorStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'creator-brand.css'), 'utf8'),
+  transformOptions,
+);
+const createWorkflowStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-workflow.css'), 'utf8'),
   transformOptions,
 );
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
 fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
-  indexSource.replace('</head>', `<style>${creatorStyles.code}</style></head>`),
+  indexSource.replace(
+    '</head>',
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style></head>`,
+  ),
 );
 
 await build({
