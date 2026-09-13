@@ -20,8 +20,22 @@ test("Create workspace keeps the production flow intact", () => {
 
 test("Phase 1 presentation mounts through the existing generation UI boundary", () => {
   assert.match(progress, /import "\.\/create-workflow-phase1\.js";/);
-  assert.match(presentation, /applyCreateWorkflowPhase1\(\);/);
+  assert.match(presentation, /typeof document !== "undefined"/);
+  assert.match(presentation, /applyCreateWorkflowPhase1\(document\)/);
   assert.doesNotMatch(presentation, /music-engine|generateNew\(|generateSimilar\(/);
+});
+
+test("Phase 1 presentation can be imported without browser globals", async () => {
+  const previousDocument = globalThis.document;
+  try {
+    delete globalThis.document;
+    const module = await import(`../src/ui/create-workflow-phase1.js?importSafe=${Date.now()}`);
+    assert.equal(typeof module.applyCreateWorkflowPhase1, "function");
+    assert.equal(module.applyCreateWorkflowPhase1(undefined), false);
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document;
+    else globalThis.document = previousDocument;
+  }
 });
 
 test("generation essentials move from Now Playing into Song Direction without duplicating controls", () => {
