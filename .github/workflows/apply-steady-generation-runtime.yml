@@ -32,6 +32,7 @@ jobs:
         run: node scripts/apply-steady-generation-runtime.mjs
       - name: Verify steady generation contracts
         run: |
+          # Final guarded pass after correcting the standalone stylesheet assertion.
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           import assert from 'node:assert/strict';
