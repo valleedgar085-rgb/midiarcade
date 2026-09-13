@@ -34,6 +34,54 @@ replaceOnce(
   "dynamic audition host",
 );
 
+// Keep first-paint HTML below the long-standing 80 KiB budget. The omitted
+// helper copy is redundant with the visible values and the live status line.
+replaceOnce(
+  `                      <em>Non-destructive until Accept</em>\n`,
+  ``,
+  "redundant candidate helper copy",
+);
+replaceOnce(
+  `<label><span>SCOPE <small>Where the change is allowed</small></span>`,
+  `<label><span>SCOPE</span>`,
+  "compact scope label",
+);
+replaceOnce(
+  `<option value="track">Current instrument</option>`,
+  `<option value="track">Instrument</option>`,
+  "compact track scope option",
+);
+replaceOnce(
+  `<span class="shape-director-current"><small>CURRENT INSTRUMENT</small><strong id="shapeDirectorTrackName">Melody</strong><em id="shapeDirectorNoteCount">0 selected notes</em></span>`,
+  `<span class="shape-director-current"><small>INSTRUMENT</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>`,
+  "compact current instrument placeholder",
+);
+replaceOnce(
+  `<label><span>CHANGE SIZE <small>How far MIDI Arcade may rewrite</small></span>`,
+  `<label><span>CHANGE SIZE</span>`,
+  "compact change size label",
+);
+replaceOnce(
+  `<option value="touchUp">Touch Up · subtle</option>`,
+  `<option value="touchUp">Touch Up</option>`,
+  "compact Touch Up option",
+);
+replaceOnce(
+  `<option value="reshape">Reshape · meaningful</option>`,
+  `<option value="reshape">Reshape</option>`,
+  "compact Reshape option",
+);
+replaceOnce(
+  `<option value="transform">Transform · large</option>`,
+  `<option value="transform">Transform</option>`,
+  "compact Transform option",
+);
+replaceOnce(
+  `<p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite">Choose a musical direction to prepare a local candidate.</p>`,
+  `<p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>`,
+  "dynamic status placeholder",
+);
+
 const cssStart = source.indexOf('let css = await readFile(cssPath, "utf8");');
 const cssEndMarker = 'await writeFile(cssPath, css);';
 const cssEnd = source.indexOf(cssEndMarker, cssStart);
@@ -61,4 +109,4 @@ replaceOnce(
 );
 
 await writeFile(path, source);
-console.log("Optimized Shape Director startup DOM and moved presentation out of global CSS.");
+console.log("Optimized Shape Director startup DOM, copy, and presentation delivery within protected budgets.");
