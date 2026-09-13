@@ -6,6 +6,7 @@ on:
       - phase4/shape-director
     paths:
       - scripts/apply-shape-director-ui.mjs
+      - scripts/fix-shape-director-ui-harness.mjs
       - .github/workflows/apply-shape-director-ui.yml
 
 permissions:
@@ -28,6 +29,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Repair temporary UI harness
+        run: node scripts/fix-shape-director-ui-harness.mjs
       - name: Apply Shape Director UI patch
         run: node scripts/apply-shape-director-ui.mjs
       - name: Verify focused Shape Director contracts
