@@ -1,5 +1,6 @@
 import { readFile, writeFile } from "node:fs/promises";
 
+// Temporary guarded codemod: it is removed once the verified runtime diff lands.
 const path = new URL("../src/app.js", import.meta.url);
 let source = await readFile(path, "utf8");
 
