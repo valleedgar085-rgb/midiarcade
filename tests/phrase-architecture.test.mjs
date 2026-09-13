@@ -7,17 +7,24 @@ import {
   phraseLandingProfile,
   phraseLandingRole,
 } from "../src/core/phrase-architecture.js";
-import { generationStages, generationStageState } from "../src/ui/generation-progress.js";
+import {
+  generationMinimumVisibleMs,
+  generationStages,
+  generationStageState,
+} from "../src/ui/generation-progress.js";
 
-test("loading producer passes are informative, ordered, and bounded", () => {
+test("loading producer passes are informative, ordered, steady, and bounded", () => {
   const stages = generationStages("new");
   assert.equal(stages.length, 6);
   assert.deepEqual(stages.map(({ id }) => id), ["blueprint", "harmony", "phrases", "groove", "audition", "master"]);
   assert.match(generationStages("similar")[2].copy, /familiar motif/i);
   assert.match(generationStages("songVariations")[4].copy, /six complete candidates/i);
+  assert.ok(generationMinimumVisibleMs("new") >= 3000, "New should remain readable long enough to show Producer Brain work");
+  assert.ok(generationMinimumVisibleMs("songVariations") >= 4000, "three-way elemental generation deserves a longer visible thinking pass");
   assert.equal(generationStageState("new", -50).stageIndex, 0);
   assert.equal(generationStageState("new", 999999).stageIndex, 5);
-  assert.equal(generationStageState("new", 999999).progress, 1);
+  assert.equal(generationStageState("new", 999999).progress, 0.96, "live progress reserves 100% for the completion/fade frame");
+  assert.ok(generationStageState("new", 1600).progress > generationStageState("new", 200).progress);
 });
 
 test("harmonic phrases form preparation, approach, and resolution paths", () => {
