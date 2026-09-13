@@ -22,6 +22,16 @@ const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", im
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
 
+async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs = 12000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const snapshot = app.getAppStateSnapshot();
+    if (!snapshot.isGenerating && snapshot.generationCount > previousGenerationCount) return snapshot;
+    await new Promise((resolve) => setTimeout(resolve, 80));
+  }
+  throw new Error(`Generation did not settle after generationCount ${previousGenerationCount}.`);
+}
+
 test("Create unifies now playing with the essential song controls", () => {
   assert.match(htmlSource, /class="create-console"[\s\S]*?id="heroPanel"[\s\S]*?id="preGenSection"/);
   assert.match(htmlSource, /NOW PLAYING &amp; CREATING/);
@@ -410,8 +420,49 @@ test("browser app initializes against the engine contract", async () => {
     createElement() { return new MockElement(); },
   };
 
+  // This fixture intentionally opts out of Auto so the legacy interaction checks below
+  // can keep exercising exact manual values. Dedicated auto-policy/session tests verify
+  // that a real first run starts empty with every supported control in Auto.
+  storedValues.set("midi-arcade/session-v2", JSON.stringify({
+    schema: 2,
+    song: null,
+    trackSettings: {},
+    muted: [],
+    solo: [],
+    locked: [],
+    autoControls: [],
+    selectedTrack: "drums",
+    guidedMode: true,
+    recipeIndex: 0,
+    mixAssistant: { enabled: true, spotlightTrack: "auto", spotlightIntensity: 68 },
+    tasteProfile: {},
+    generationPreferences: {
+      genreControl: "neoSoul",
+      keyControl: "C",
+      modeControl: "dorian",
+      tempoControl: "84",
+      barsControl: "32",
+      grooveControl: "straight",
+      energyControl: "68",
+      complexityControl: "54",
+      swingControl: "14",
+      humanizeControl: "9",
+      tripletControl: "16",
+      rollControl: "12",
+      variationControl: "42",
+      evolutionControl: "58",
+      surpriseControl: "28",
+    },
+  }));
+
   const app = await import(`../src/app.js?smoke=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
+
+  assert.equal(app.getAppStateSnapshot().song, null, "reopening the studio must begin with an empty song plate");
+  const firstGenerationCount = app.getAppStateSnapshot().generationCount;
+  elementFor("#generateNew").dispatch("click");
+  const firstGeneratedSnapshot = await waitForGenerationCommit(app, firstGenerationCount);
+  assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
@@ -609,15 +660,13 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(elementFor("#threadSongName").textContent, elementFor("#songTitle").textContent);
   assert.equal(elementFor("#threadSectionName").textContent, "Full song");
   assert.equal(elementFor("#threadTrackName").textContent, "Drums");
-  assert.equal(elementFor("#workflowProgress").textContent, "STEP 1 OF 4");
-  assert.match(elementFor("#workflowCoachTitle").textContent, /musical direction/i);
+  assert.equal(elementFor("#workflowProgress").textContent, "STEP 2 OF 4");
 
   const initialGeneration = app.getAppStateSnapshot();
   elementFor("#generateNew").dispatch("click");
   elementFor("#generateNew").dispatch("click");
   assert.equal(app.getAppStateSnapshot().isGenerating, true);
-  await new Promise((resolve) => setTimeout(resolve, 560));
-  const freshGeneration = app.getAppStateSnapshot();
+  const freshGeneration = await waitForGenerationCommit(app, initialGeneration.generationCount);
   assert.equal(freshGeneration.generationCount, initialGeneration.generationCount + 1, "rapid taps must commit exactly one generation");
   assert.notEqual(freshGeneration.song.seed, initialGeneration.song.seed, "New must advance to a fresh seed");
   assert.notEqual(freshGeneration.song.id, initialGeneration.song.id, "New must replace the arrangement");
@@ -628,8 +677,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(freshGeneration.song.producerPass.phase, 9, "New must complete the phase 9 producer pass");
 
   elementFor("#generateSimilar").dispatch("click");
-  await new Promise((resolve) => setTimeout(resolve, 560));
-  const relatedGeneration = app.getAppStateSnapshot();
+  const relatedGeneration = await waitForGenerationCommit(app, freshGeneration.generationCount);
   assert.equal(relatedGeneration.generationCount, freshGeneration.generationCount + 1);
   assert.equal(relatedGeneration.songVariationCount, 3, "Similar must prepare three complete full-song directions");
   assert.equal(relatedGeneration.activeSongVariation, 0);
@@ -857,21 +905,27 @@ test("browser app initializes against the engine contract", async () => {
   const selectedPrograms = (markup) => Object.fromEntries([...markup.matchAll(/<article[^>]+data-track="([^"]+)"[\s\S]*?<select[^>]*>[\s\S]*?<option value="(\d+)" selected/g)]
     .map((match) => [match[1], Number(match[2])]));
   const previousPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
+  const manualNewGenerationCount = app.getAppStateSnapshot().generationCount;
   elementFor("#generateNew").dispatch("click");
-  await new Promise((resolve) => setTimeout(resolve, 520));
+  await waitForGenerationCommit(app, manualNewGenerationCount);
   const newPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   assert.equal(Object.keys(newPrograms).length, 6);
+  assert.deepEqual(
+    newPrograms,
+    previousPrograms,
+    "manual instrument programs must remain pinned when New generates a different song",
+  );
   for (const id of Object.keys(newPrograms)) {
-    assert.notEqual(newPrograms[id], previousPrograms[id], `New Idea should change ${id}'s sound`);
-    assert.notEqual(
+    assert.equal(
       app.previewVoice(id, newPrograms[id]).character,
       app.previewVoice(id, previousPrograms[id]).character,
-      `New Idea should change ${id}'s audible character`,
+      `manual ${id} program must keep its audible character until Auto is restored`,
     );
   }
 
+  const manualSimilarGenerationCount = app.getAppStateSnapshot().generationCount;
   elementFor("#generateSimilar").dispatch("click");
-  await new Promise((resolve) => setTimeout(resolve, 520));
+  await waitForGenerationCommit(app, manualSimilarGenerationCount);
   const similarPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   assert.deepEqual(similarPrograms, newPrograms, "More Like This must preserve every instrument program");
   assert.equal(Number(elementFor("#tripletControl").value), Math.round(GENRE_PROFILES.trap.tripletChance * 100));
@@ -888,14 +942,33 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(Number(elementFor("#rollControl").value), Math.round(neoSoul.snareRollChance * 100));
   assert.equal(elementFor("#chordPathControl").value, "auto", "Reset must keep chord path in AUTO mode");
 
+  const programsBeforeAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
+    .map(([id, settings]) => [id, Number(settings.program)]));
+  const autoNewGenerationCount = app.getAppStateSnapshot().generationCount;
+  elementFor("#generateNew").dispatch("click");
+  await waitForGenerationCommit(app, autoNewGenerationCount);
+  const programsAfterAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
+    .map(([id, settings]) => [id, Number(settings.program)]));
+  assert.ok(
+    Object.keys(programsBeforeAutoNew).some((id) => programsAfterAutoNew[id] !== programsBeforeAutoNew[id]),
+    "Reset must restore Auto authority so New may rotate instrument programs",
+  );
+  for (const [id, program] of Object.entries(programsAfterAutoNew)) {
+    assert.ok(
+      GENRE_PROFILES.neoSoul.instrumentPrograms[id].includes(program),
+      `Auto ${id} program ${program} must remain inside the active genre palette`,
+    );
+  }
+
   assert.equal(app.saveSessionNow(), true, "a valid song session must save locally on demand");
   const savedSession = JSON.parse(storedValues.get("midi-arcade/session-v2"));
   assert.equal(savedSession.schema, 2);
   assert.ok(savedSession.autoControls.includes("chordPathControl"), "Reset must persist chord path auto selection");
+  assert.ok(savedSession.autoControls.includes("track:drums:program"), "Reset must persist instrument program Auto authority");
   assert.deepEqual(savedSession.song, app.getAppStateSnapshot().song);
   const restoredApp = await import(`../src/app.js?restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
-  assert.deepEqual(restoredApp.getAppStateSnapshot().song, savedSession.song, "a fresh app boot must restore the autosaved song");
+  assert.equal(restoredApp.getAppStateSnapshot().song, null, "a fresh app boot must restore preferences but open on an empty plate");
 
   const damagedSession = structuredClone(savedSession);
   damagedSession.song.sections = [null];

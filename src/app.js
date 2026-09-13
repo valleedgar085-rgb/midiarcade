@@ -14,6 +14,8 @@ import { clamp } from "./utils.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
+import { createDefaultAutoControls } from "./core/auto-control-policy.js";
+import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
@@ -40,7 +42,7 @@ import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from
 import { createWorkspaceController } from "./ui/workspace-controller.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
-import { generationStageState } from "./ui/generation-progress.js";
+import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
   nearestScalePitch,
@@ -651,6 +653,14 @@ const AUTO_TRACK_RANGE_KEYS = new Set([
 ]);
 const AUTO_SELECT_IDS = new Set(["keyControl", "modeControl", "barsControl", "grooveControl", "chordPathControl"]);
 
+function trackProgramAutoKey(trackId) {
+  return `track:${trackId}:program`;
+}
+
+function isTrackProgramAuto(trackId) {
+  return state.autoControls.has(trackProgramAutoKey(trackId));
+}
+
 function autoKeyForRange(input) {
   if (input.id && AUTO_GENERATION_RANGE_IDS.has(input.id)) return input.id;
   const trackId = input.closest?.(".track-card")?.dataset.track;
@@ -832,7 +842,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
       density: trackValue("density") / 100,
       variation: trackValue("variation") / 100,
       octave: clamp((TRACK_DEFINITIONS[id]?.octave || 0) + trackValue("octave"), 0, 8),
-      ...(isNew ? {} : { program: settings.program }),
+      ...(!isTrackProgramAuto(id) ? { program: settings.program } : {}),
       volume: clamp(trackValue("volume"), 0, 1),
       velocity: clamp(trackValue("velocity"), 0.1, 1.5),
       pan: clamp(trackValue("pan"), -1, 1),
@@ -1558,24 +1568,32 @@ function refreshSongIdea(song) {
   return song;
 }
 
+function generatedOrManualTrackSetting(id, key, generatedValue, manualValue) {
+  const numeric = Number(generatedValue);
+  if (state.autoControls.has(`track:${id}:${key}`) && Number.isFinite(numeric)) return numeric;
+  return manualValue;
+}
+
 function applyTrackSettingsToSong(song) {
   for (const [index, track] of songTracks(song).entries()) {
     const id = trackId(track, index);
     const settings = state.trackSettings[id];
     if (!settings) continue;
-    track.program = settings.program;
+    const generated = track.settings || track.controls || {};
+    if (!isTrackProgramAuto(id) || !Number.isFinite(Number(track.program))) track.program = settings.program;
     track.settings = {
-      ...(track.settings || {}),
-      density: settings.density / 100,
-      variation: settings.variation / 100,
-      octave: clamp((TRACK_DEFINITIONS[id]?.octave || 0) + settings.octave, 0, 8),
-      volume: clamp(settings.volume, 0, 1),
-      velocity: clamp(settings.velocity, 0.1, 1.5),
-      pan: clamp(settings.pan, -1, 1),
-      reverb: clamp(settings.reverb, 0, 1),
-      cutoff: clamp(settings.cutoff, 1000, 14000),
-      resonance: clamp(settings.resonance, 0, 1),
-      gate: clamp(settings.gate, 0.08, 1.5),
+      ...generated,
+      program: track.program,
+      density: clamp(generatedOrManualTrackSetting(id, "density", generated.density, settings.density / 100), 0, 1),
+      variation: clamp(generatedOrManualTrackSetting(id, "variation", generated.variation, settings.variation / 100), 0, 1),
+      octave: clamp(generatedOrManualTrackSetting(id, "octave", generated.octave, (TRACK_DEFINITIONS[id]?.octave || 0) + settings.octave), 0, 8),
+      volume: clamp(generatedOrManualTrackSetting(id, "volume", generated.volume, settings.volume), 0, 1),
+      velocity: clamp(generatedOrManualTrackSetting(id, "velocity", generated.velocity, settings.velocity), 0.1, 1.5),
+      pan: clamp(generatedOrManualTrackSetting(id, "pan", generated.pan, settings.pan), -1, 1),
+      reverb: clamp(generatedOrManualTrackSetting(id, "reverb", generated.reverb, settings.reverb), 0, 1),
+      cutoff: clamp(generatedOrManualTrackSetting(id, "cutoff", generated.cutoff, settings.cutoff), 1000, 14000),
+      resonance: clamp(generatedOrManualTrackSetting(id, "resonance", generated.resonance, settings.resonance), 0, 1),
+      gate: clamp(generatedOrManualTrackSetting(id, "gate", generated.gate, settings.gate), 0.08, 1.5),
       humanize: clamp(settings.humanize, 0, 1),
       feel: clamp(settings.feel, 0, 1),
       attitude: settings.attitude || "neutral",
@@ -1583,7 +1601,7 @@ function applyTrackSettingsToSong(song) {
       solo: state.solo.has(id),
     };
   }
-  return refreshSongIdea(song);
+  return song;
 }
 
 function captureResolvedAutoTrackSettings(song) {
@@ -1592,6 +1610,10 @@ function captureResolvedAutoTrackSettings(song) {
     const controls = track.settings ?? {};
     const settings = state.trackSettings[id];
     if (!settings) continue;
+    if (isTrackProgramAuto(id)) {
+      const resolvedProgram = Number(track.program ?? controls.program);
+      if (Number.isFinite(resolvedProgram)) settings.program = resolvedProgram;
+    }
     for (const key of AUTO_TRACK_RANGE_KEYS) {
       if (!state.autoControls.has(`track:${id}:${key}`) || controls[key] == null) continue;
       const value = Number(controls[key]);
@@ -1964,14 +1986,19 @@ function renderSongVariationTray() {
     const index = Number(button.dataset.songVariation);
     const song = variations[index];
     const direction = song?.variationSet?.direction;
+    const element = song?.variationSet?.element;
+    const meter = element?.meter;
     const score = Math.round(Number(song?.meta?.scoreDetails?.totalScore) || 0);
     const active = index === state.activeSongVariation;
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-checked", String(active));
+    button.dataset.element = element?.id ?? direction?.id ?? "";
     const title = $("b", button);
     const detail = $("small", button);
-    if (title) title.textContent = `${String.fromCharCode(65 + index)} · ${direction?.label ?? `Version ${index + 1}`}`;
-    if (detail) detail.textContent = `${score ? `${score} quality · ` : ""}${direction?.description ?? "Related arrangement"}`;
+    if (title) title.textContent = element ? `${element.symbol || ""} ${element.label}`.trim() : (direction?.label ?? `Version ${index + 1}`);
+    const meterText = meter ? `${meter.label} ${Number(meter.value).toLocaleString()} ${meter.unit}` : "Elemental producer pass";
+    if (detail) detail.textContent = score > 0 ? `${meterText} · Q${score}` : meterText;
+    button.title = element?.description ?? direction?.description ?? "Switch to this full-song interpretation";
   });
 }
 
@@ -1991,8 +2018,10 @@ export function selectSongVariation(index) {
   syncControlsFromSong();
   renderAll();
   scheduleSessionSave();
-  const direction = variation.variationSet?.direction?.label ?? `Version ${safeIndex + 1}`;
-  showToast(`${direction} variation selected.`);
+  const element = variation.variationSet?.element;
+  const direction = element?.label ?? variation.variationSet?.direction?.label ?? `Version ${safeIndex + 1}`;
+  const reading = element?.meter;
+  showToast(`${element?.symbol ? `${element.symbol} ` : ""}${direction} selected${reading ? ` · ${reading.label} ${reading.value} ${reading.unit}` : ""}.`);
   return true;
 }
 
@@ -2470,11 +2499,14 @@ function patchOptions(id, selectedProgram) {
   const profileChoices = profilePrograms(id);
   const baseChoices = (PATCHES[id] || []).map(([program]) => Number(program));
   const programs = [...new Set([...profileChoices, ...baseChoices, Number(selectedProgram)].filter(Number.isFinite))];
-  return programs.map((program) => {
+  const auto = isTrackProgramAuto(id);
+  const autoOption = `<option value="auto" ${auto ? "selected" : ""}>AUTO · Element decides</option>`;
+  const manualOptions = programs.map((program) => {
     const profilePick = profileChoices.includes(program);
     const name = programName(id, program);
-    return `<option value="${program}" ${program === Number(selectedProgram) ? "selected" : ""}>${profilePick ? "✦ " : ""}${name}</option>`;
+    return `<option value="${program}" ${!auto && program === Number(selectedProgram) ? "selected" : ""}>${profilePick ? "✦ " : ""}${name}</option>`;
   }).join("");
+  return `${autoOption}${manualOptions}`;
 }
 
 function renderAttitudeStrip(message = "") {
@@ -2855,7 +2887,7 @@ function renderTrackRack() {
       <details class="track-expression track-shaping">
         <summary><span><b>SHAPE INSTRUMENT</b><small>Sound · performance · space</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
-          <label class="track-patch"><span><b>SOUND</b><em>${profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
+          <label class="track-patch"><span><b>SOUND</b><em>${isTrackProgramAuto(id) ? "AUTO" : profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
           <div class="track-secondary-actions">
             <button class="track-toggle target-toggle" data-action="target" type="button" aria-label="Target ${meta.name} character" aria-pressed="${targeted}" title="Select for Character Shaper">◎ Character</button>
             <button class="track-toggle" data-action="lock" type="button" aria-label="Preserve ${meta.name} in similar ideas" aria-pressed="${locked}" title="Preserve in similar ideas">${locked ? "◆ Preserved" : "◇ Preserve"}</button>
@@ -3124,8 +3156,8 @@ function showToast(message) {
   return true;
 }
 
-function generationDelay() {
-  return new Promise((resolve) => setTimeout(resolve, 430));
+function generationDelay(kind = "new") {
+  return new Promise((resolve) => setTimeout(resolve, generationMinimumVisibleMs(kind)));
 }
 
 /**
@@ -3166,7 +3198,7 @@ function startGenerationProgress(kind) {
   clearGenerationProgressTimer();
   const startedAt = Date.now();
   renderGenerationProgress(kind, 0);
-  generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 410);
+  generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 160);
 }
 
 function armGenerationSafetyTimer() {
@@ -3223,6 +3255,7 @@ const generationExecutor = createGenerationExecutor({
 function chooseNewGenrePrograms(seed) {
   const profile = genreProfile();
   for (const id of TRACK_ORDER) {
+    if (!isTrackProgramAuto(id)) continue;
     const currentProgram = Number(state.trackSettings[id].program);
     const genreChoices = profilePrograms(id, profile);
     const fallbackChoices = (PATCHES[id] || []).map(([program]) => Number(program));
@@ -3272,13 +3305,16 @@ async function runGeneration(kind, options = {}) {
         : {}),
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
-    const [generated] = await Promise.all([work, generationDelay()]);
+    const [generated] = await Promise.all([work, generationDelay(kind)]);
     let variationSongs = kind === "songVariations" ? generated?.variations : null;
     if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
       variationSongs = generateSongVariations(sourceSong, config);
     }
     if (kind === "songVariations") {
-      variationSongs = variationSongs.map((song) => preserveLockedTracks(sourceSong, song));
+      variationSongs = variationSongs.map((song, index) => applyElementAutoPrograms(
+        preserveLockedTracks(sourceSong, song),
+        `${config.seed}:element-program:${index}`,
+      ));
     }
     let candidateSong = kind === "songVariations" ? variationSongs[0] : generated?.song;
     if (!candidateSong) {
@@ -3323,6 +3359,38 @@ async function runGeneration(kind, options = {}) {
   }
 }
 
+function applyElementAutoPrograms(song, seed) {
+  const element = song?.variationSet?.element;
+  if (!song || !element?.id) return song;
+  const profile = genreProfile();
+  for (const [index, track] of songTracks(song).entries()) {
+    const id = trackId(track, index);
+    const settings = state.trackSettings[id];
+    if (!settings) continue;
+    const pinned = state.locked.has(id) || !isTrackProgramAuto(id);
+    if (pinned) {
+      const program = Number(settings.program);
+      if (Number.isFinite(program)) {
+        track.program = program;
+        track.settings = { ...(track.settings ?? {}), program };
+      }
+      continue;
+    }
+    const program = chooseElementProgram({
+      trackId: id,
+      elementId: element.id,
+      intensity: element.intensity,
+      palette: profilePrograms(id, profile),
+      seed: `${seed}:${id}`,
+      currentProgram: track.program,
+    });
+    if (!Number.isFinite(Number(program))) continue;
+    track.program = Number(program);
+    track.settings = { ...(track.settings ?? {}), program: Number(program) };
+  }
+  return refreshSongIdea(song);
+}
+
 function handleTrackAction(id, action) {
   if (action === "target") {
     selectAttitudeTrack(id);
@@ -3356,6 +3424,7 @@ function handleTrackAction(id, action) {
 
 function handleTrackControl(id, control) {
   const key = control.dataset.control;
+  if (key === "program" && control.value === "auto") return;
   state.trackSettings[id][key] = Number(control.value);
   const output = control.closest("label")?.querySelector("output");
   if (output) {
@@ -3381,8 +3450,17 @@ function handleTrackControl(id, control) {
 
 async function handleTrackControlCommit(id, control) {
   const key = control.dataset.control;
+  if (key === "program" && control.value === "auto") {
+    state.autoControls.add(trackProgramAutoKey(id));
+    renderTrackRack();
+    renderMixOverview();
+    scheduleSessionSave();
+    showToast(`${TRACK_META[id]?.name || "Instrument"} sound returned to Auto. Fire, Electric and Drip may choose it on the next generation.`);
+    return;
+  }
   state.trackSettings[id][key] = Number(control.value);
   if (key === "program") {
+    state.autoControls.delete(trackProgramAutoKey(id));
     const track = songTracks().find((candidate, index) => trackId(candidate, index) === id);
     if (track) track.program = Number(control.value);
     refreshSongIdea(state.song);
@@ -3859,7 +3937,16 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     if (muted.has(id) || (activeSolo && !solo.has(id)) || (backingOnly && ["melody", "counterpoint"].includes(id))) return [];
     const defaults = TRACK_DEFINITIONS[id] || {};
     const uiSettings = settingsById?.[id] || {};
-    const settings = { ...defaults, ...(track.settings || track.controls || {}), ...uiSettings };
+        const generatedSettings = track.settings || track.controls || {};
+        const useRuntimeAuthority = settingsById === state.trackSettings;
+        const effectiveUiSettings = useRuntimeAuthority ? { ...uiSettings } : uiSettings;
+        if (useRuntimeAuthority) {
+          for (const key of AUTO_TRACK_RANGE_KEYS) {
+            if (state.autoControls.has(`track:${id}:${key}`)) delete effectiveUiSettings[key];
+          }
+          if (isTrackProgramAuto(id)) delete effectiveUiSettings.program;
+        }
+        const settings = { ...defaults, ...generatedSettings, ...effectiveUiSettings };
     const spotlight = previewSpotlight(song, id, mixAssistant);
     const velocityScale = Math.sqrt(clamp(Number(settings.velocity ?? defaults.velocity ?? 1), 0.1, 1.5)
       / Math.max(0.1, Number(defaults.velocity ?? 1)));
@@ -5520,6 +5607,7 @@ function toggleFullscreen() {
   });
   $("#resetControlsButton").addEventListener("click", () => {
     state.autoControls.clear();
+    for (const key of createDefaultAutoControls(TRACK_ORDER)) state.autoControls.add(key);
     $("#genreControl").value = "neoSoul";
     applyGenreDefaultsToControls("neoSoul");
     $("#chordPathControl").value = "auto";

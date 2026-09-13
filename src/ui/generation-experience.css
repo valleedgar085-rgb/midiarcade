@@ -1,0 +1,224 @@
+/* Producer Brain loading + Android landscape stabilization.
+   Kept separate from global styles so this can be tuned without growing the
+   protected core stylesheet or disturbing unrelated workspaces. */
+
+.generation-wash {
+  --generation-progress: 5%;
+  padding: 18px;
+  background: rgba(7, 7, 11, 0.94);
+  transition: opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+  contain: paint;
+  overscroll-behavior: none;
+}
+
+.generation-wash:not([aria-hidden="true"]) .generation-message {
+  animation: generation-settle-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.generation-message {
+  width: min(560px, calc(100vw - 36px));
+  padding: 26px;
+  border-color: rgba(157, 111, 255, 0.24);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(157, 111, 255, 0.09), transparent 42%),
+    rgba(14, 14, 20, 0.98);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.generation-orbit {
+  margin-bottom: 15px;
+}
+
+.generation-orbit i,
+.generation-stages i {
+  animation-duration: 1.8s;
+}
+
+.generation-orbit i:nth-child(2) { animation-delay: 0.12s; }
+.generation-orbit i:nth-child(3) { animation-delay: 0.24s; }
+.generation-orbit i:nth-child(4) { animation-delay: 0.36s; }
+.generation-orbit i:nth-child(5) { animation-delay: 0.48s; }
+.generation-orbit i:nth-child(6) { animation-delay: 0.6s; }
+
+.generation-message > p:first-of-type {
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-data);
+  letter-spacing: 0.08em;
+}
+
+.generation-message h2 {
+  min-height: 1.15em;
+  margin: 15px 0 13px;
+  text-wrap: balance;
+}
+
+.generation-meter {
+  height: 5px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.075);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.generation-meter i {
+  display: block;
+  width: var(--generation-progress);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-3), var(--gold));
+  box-shadow: 0 0 16px rgba(157, 111, 255, 0.38);
+  transition: width 0.3s linear;
+}
+
+/* Give the final frame a visible sense of completion while the overlay fades. */
+.generation-wash[aria-hidden="true"] .generation-meter i {
+  width: 100% !important;
+}
+
+.generation-stage-copy {
+  min-height: 2.7em;
+  max-width: 48ch;
+  margin-inline: auto;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.generation-stages {
+  margin-top: 16px;
+}
+
+.generation-stages span {
+  transition: color 0.28s ease, border-color 0.28s ease, background-color 0.28s ease, opacity 0.28s ease;
+}
+
+.generation-stages [data-state="waiting"] {
+  opacity: 0.42;
+}
+
+.generation-stages [data-state="active"] {
+  opacity: 1;
+}
+
+.generation-stages [data-state="done"] {
+  opacity: 0.72;
+}
+
+/* Heavy blur + animated fixed layers are expensive on Android WebView while a
+   full-screen overlay is compositing. Freeze them during generation. */
+body[aria-busy="true"] .ambient {
+  animation-play-state: paused !important;
+  opacity: 0.07;
+  filter: blur(64px);
+}
+
+body[aria-busy="true"]::before {
+  opacity: 0.36;
+}
+
+@keyframes generation-settle-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Android landscape: prioritize a stable compositor over decorative effects.
+   Large animated blurred circles and repeated radial patterns are intentionally
+   removed here because viewport-height changes during rotation can force full
+   background repaints in WebView. */
+@media (orientation: landscape) and (max-height: 720px) {
+  html,
+  body {
+    min-height: 100%;
+    background: #08080b;
+  }
+
+  body::before,
+  :root[data-generation-pattern="prism"] body::before,
+  :root[data-generation-pattern="waves"] body::before,
+  :root[data-generation-pattern="constellation"] body::before,
+  :root[data-generation-pattern="horizon"] body::before,
+  :root[data-generation-pattern="pulse"] body::before {
+    opacity: 0.42;
+    background:
+      radial-gradient(ellipse at 20% 18%, hsl(var(--generation-hue, 268) 82% 55% / 0.11), transparent 42%),
+      radial-gradient(ellipse at 82% 78%, hsl(var(--generation-hue-2, 193) 82% 55% / 0.08), transparent 44%),
+      #08080b;
+  }
+
+  .ambient {
+    display: none !important;
+    animation: none !important;
+    filter: none !important;
+  }
+
+  .app-shell {
+    min-height: 100svh;
+  }
+
+  .generation-wash {
+    padding: 10px 18px;
+  }
+
+  .generation-message {
+    width: min(720px, calc(100vw - 40px));
+    max-height: calc(100svh - 20px);
+    padding: 14px 20px 13px;
+    border-radius: 18px;
+    overflow: hidden;
+  }
+
+  .generation-orbit {
+    margin-bottom: 7px;
+  }
+
+  .generation-message > p:first-of-type {
+    font-size: 0.68rem;
+  }
+
+  .generation-message h2 {
+    min-height: 0;
+    margin: 7px 0 8px;
+    font-size: clamp(1.05rem, 3.1vw, 1.55rem);
+  }
+
+  .generation-stage-copy {
+    min-height: 0;
+    max-width: 62ch;
+    margin-top: 7px;
+    font-size: 0.7rem;
+    line-height: 1.38;
+  }
+
+  .generation-stages {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 9px;
+  }
+
+  .generation-stages span {
+    min-width: 0;
+    padding: 5px 3px;
+    font-size: 0.54rem;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  .generation-message > small:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-wash,
+  .generation-meter i,
+  .generation-stages span {
+    transition-duration: 0.01ms !important;
+  }
+
+  .generation-wash:not([aria-hidden="true"]) .generation-message,
+  .generation-orbit i,
+  .generation-stages i,
+  .ambient {
+    animation: none !important;
+  }
+}
