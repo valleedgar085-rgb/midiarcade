@@ -4,15 +4,20 @@ import {
   generateSimilar,
 } from "../music-engine.js";
 import { dispatchGenerationRequest } from "./generation-dispatch.js";
+import { continueElementLineage } from "./elemental-lineage.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
 
 function generateSongVariations(sourceSong, config = {}) {
   return generateProducerVariationSet(sourceSong, config, { generateSimilar });
 }
 
+function generateSimilarWithElementLineage(sourceSong, config = {}) {
+  return continueElementLineage(sourceSong, generateSimilar(sourceSong, config));
+}
+
 const ENGINE_API = Object.freeze({
   generateNew,
-  generateSimilar,
+  generateSimilar: generateSimilarWithElementLineage,
   generateSectionVariations,
   generateSongVariations,
 });
