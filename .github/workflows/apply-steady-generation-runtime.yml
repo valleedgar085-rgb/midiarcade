@@ -37,10 +37,13 @@ jobs:
           import assert from 'node:assert/strict';
           import { generationMinimumVisibleMs, generationStageState } from './src/ui/generation-progress.js';
           const app = fs.readFileSync('./src/app.js', 'utf8');
+          const smoke = fs.readFileSync('./tests/app-smoke.test.mjs', 'utf8');
           assert.match(app, /generationDelay\(kind = "new"\)/);
           assert.match(app, /generationMinimumVisibleMs\(kind\)/);
           assert.match(app, /generationDelay\(kind\)/);
           assert.match(app, /Date\.now\(\) - startedAt\), 160\)/);
+          assert.match(smoke, /generationDeadline = Date\.now\(\) \+ 10000/);
+          assert.match(smoke, /while \(!app\.getAppStateSnapshot\(\)\.song/);
           assert.ok(generationMinimumVisibleMs('new') >= 3000);
           assert.ok(generationMinimumVisibleMs('songVariations') >= 4000);
           const early = generationStageState('new', 200);
@@ -54,12 +57,12 @@ jobs:
           npm run quality:music
       - name: Commit verified runtime wiring
         run: |
-          if git diff --quiet -- src/app.js; then
+          if git diff --quiet -- src/app.js tests/app-smoke.test.mjs; then
             echo "No runtime changes to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app.js
+          git add src/app.js tests/app-smoke.test.mjs
           git commit -m "Steady Producer Brain loading runtime"
           git push origin HEAD:phase3/producer-brain-observability-loop
