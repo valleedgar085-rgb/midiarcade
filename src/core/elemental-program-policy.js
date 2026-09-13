@@ -20,27 +20,27 @@ function uniquePrograms(values = []) {
 
 export const ELEMENT_PROGRAM_PRIORITIES = Object.freeze({
   fire: Object.freeze({
-    drums: Object.freeze([16, 24, 25, 8, 0]),
-    bass: Object.freeze([38, 39, 36, 37, 34, 33, 87]),
-    chords: Object.freeze([61, 62, 81, 17, 7, 29, 30, 4, 5]),
-    melody: Object.freeze([81, 86, 84, 29, 30, 56, 65, 80]),
-    counterpoint: Object.freeze([81, 84, 86, 56, 29, 65, 80, 98]),
+    drums: Object.freeze([16, 25, 24, 8, 0]),
+    bass: Object.freeze([38, 36, 37, 34, 33, 39, 87]),
+    chords: Object.freeze([61, 62, 29, 30, 81, 17, 7, 4, 5]),
+    melody: Object.freeze([81, 86, 29, 30, 56, 65, 80, 84]),
+    counterpoint: Object.freeze([81, 86, 56, 29, 65, 80, 84, 98]),
     pad: Object.freeze([90, 93, 95, 94, 89, 92]),
   }),
   electric: Object.freeze({
     drums: Object.freeze([24, 25, 16, 0, 8]),
-    bass: Object.freeze([39, 38, 87, 36, 33, 34]),
-    chords: Object.freeze([90, 81, 95, 5, 17, 7, 62, 4]),
-    melody: Object.freeze([82, 84, 85, 86, 81, 80, 87]),
-    counterpoint: Object.freeze([82, 84, 85, 98, 81, 80, 86]),
-    pad: Object.freeze([93, 94, 95, 90, 92, 88, 99]),
+    bass: Object.freeze([39, 87, 38, 36, 33, 34]),
+    chords: Object.freeze([90, 95, 81, 17, 7, 62, 5, 4]),
+    melody: Object.freeze([82, 84, 85, 87, 80, 81, 86]),
+    counterpoint: Object.freeze([82, 84, 98, 85, 80, 81, 86]),
+    pad: Object.freeze([94, 95, 93, 99, 90, 92, 88]),
   }),
   drip: Object.freeze({
     drums: Object.freeze([8, 0, 24, 25, 16]),
-    bass: Object.freeze([35, 33, 38, 43, 88, 39, 34]),
+    bass: Object.freeze([35, 43, 88, 33, 34, 38, 39]),
     chords: Object.freeze([4, 5, 89, 48, 24, 11, 52, 16]),
-    melody: Object.freeze([73, 85, 24, 26, 40, 65, 80, 71]),
-    counterpoint: Object.freeze([10, 11, 73, 85, 53, 48, 98, 71]),
+    melody: Object.freeze([73, 24, 26, 40, 65, 71, 85, 80]),
+    counterpoint: Object.freeze([10, 11, 73, 53, 48, 71, 85, 98]),
     pad: Object.freeze([88, 89, 91, 92, 96, 99, 94, 95]),
   }),
 });
@@ -56,9 +56,10 @@ export function elementProgramCandidates(trackId, elementId, palette = []) {
 
 /**
  * Deterministically chooses a role-safe instrument program for one elemental
- * interpretation. Intensity only changes how tightly the chooser stays near
- * the element's preferred timbres; it never expands beyond the supplied
- * genre/role palette.
+ * interpretation. Strong elements intentionally lock near the top of their
+ * own timbral lane so Fire/Electric/Drip remain audibly recognizable instead
+ * of randomly collapsing onto the same patch. The chooser never expands
+ * beyond the supplied genre/role palette.
  */
 export function chooseElementProgram({
   trackId,
@@ -76,7 +77,9 @@ export function chooseElementProgram({
   if (alternatives.length) candidates = alternatives;
 
   const strength = clamp01(intensity);
-  const focusRatio = strength >= 0.82 ? 0.42 : strength >= 0.62 ? 0.68 : 1;
+  if (strength >= 0.8) return candidates[0];
+
+  const focusRatio = strength >= 0.62 ? 0.5 : 0.72;
   const focusCount = Math.max(1, Math.ceil(candidates.length * focusRatio));
   const focused = candidates.slice(0, focusCount);
   return focused[hashNumber(`${seed}:${elementId}:${trackId}:${strength.toFixed(4)}`) % focused.length];
