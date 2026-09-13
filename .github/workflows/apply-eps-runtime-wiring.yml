@@ -5,7 +5,7 @@ on:
     branches:
       - phase3/producer-brain-observability-loop
     paths:
-      - scripts/apply-eps-runtime-wiring.mjs
+      - scripts/apply-eps-runtime-wiring-v2.mjs
       - .github/workflows/apply-eps-runtime-wiring.yml
 
 permissions:
@@ -31,8 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply asserted EPS runtime patch
-        run: node scripts/apply-eps-runtime-wiring.mjs
+      - name: Apply asserted EPS runtime patch v2
+        run: node scripts/apply-eps-runtime-wiring-v2.mjs
 
       - name: Verify elemental program policy
         run: node --test tests/elemental-program-policy.test.mjs tests/producer-variation-set.test.mjs tests/auto-control-policy.test.mjs
