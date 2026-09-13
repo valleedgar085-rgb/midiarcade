@@ -4,6 +4,8 @@ import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta.url), "utf8");
+const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
 const build = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
 
 test("Create workspace keeps the production flow intact", () => {
@@ -12,6 +14,22 @@ test("Create workspace keeps the production flow intact", () => {
   assert.ok(hero > 0 && direction > hero, "Now Playing should remain before Song Direction");
   for (const id of ["tempoControl", "energyControl", "complexityControl", "genreControl", "generateNew", "generateSimilar"]) {
     assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${id} must remain unique`);
+  }
+});
+
+test("Phase 1 presentation mounts through the existing generation UI boundary", () => {
+  assert.match(progress, /import "\.\/create-workflow-phase1\.js";/);
+  assert.match(presentation, /applyCreateWorkflowPhase1\(\);/);
+  assert.doesNotMatch(presentation, /music-engine|generateNew\(|generateSimilar\(/);
+});
+
+test("generation essentials move from Now Playing into Song Direction without duplicating controls", () => {
+  assert.match(presentation, /querySelector\("\.create-live-controls"\)/);
+  assert.match(presentation, /className = "direction-essentials-heading section-heading"/);
+  assert.match(presentation, /creatorMain\.insertBefore\(controls, shapeControls\)/);
+  assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
+  for (const id of ["tempoControl", "energyControl", "complexityControl", "barsControl", "grooveControl"]) {
+    assert.doesNotMatch(presentation, new RegExp(`id=["']${id}["']`), `${id} must be moved, not recreated`);
   }
 });
 
