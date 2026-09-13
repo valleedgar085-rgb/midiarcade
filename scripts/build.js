@@ -53,12 +53,16 @@ const createWorkflowStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-workflow.css'), 'utf8'),
   transformOptions,
 );
+const generationExperienceStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'generation-experience.css'), 'utf8'),
+  transformOptions,
+);
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
 fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
   indexSource.replace(
     '</head>',
-    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style></head>`,
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><style>${generationExperienceStyles.code}</style></head>`,
   ),
 );
 
