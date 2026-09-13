@@ -6,6 +6,7 @@ on:
       - phase3/producer-brain-observability-loop
     paths:
       - scripts/apply-eps-runtime-wiring-v2.mjs
+      - scripts/apply-eps-runtime-test-contract.mjs
       - .github/workflows/apply-eps-runtime-wiring.yml
 
 permissions:
@@ -33,6 +34,9 @@ jobs:
 
       - name: Apply asserted EPS runtime patch v2
         run: node scripts/apply-eps-runtime-wiring-v2.mjs
+
+      - name: Update EPS runtime smoke contract
+        run: node scripts/apply-eps-runtime-test-contract.mjs
 
       - name: Verify elemental program policy
         run: node --test tests/elemental-program-policy.test.mjs tests/producer-variation-set.test.mjs tests/auto-control-policy.test.mjs
@@ -78,12 +82,12 @@ jobs:
       - name: Commit verified runtime wiring
         if: success()
         run: |
-          if git diff --quiet -- src/app.js index.html; then
+          if git diff --quiet -- src/app.js index.html tests/app-smoke.test.mjs; then
             echo "Expected runtime wiring changes were not produced."
             exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/app.js index.html
+          git add src/app.js index.html tests/app-smoke.test.mjs
           git commit -m "Wire elemental program authority and variation UI [eps-runtime-wired]"
           git push origin HEAD:phase3/producer-brain-observability-loop
