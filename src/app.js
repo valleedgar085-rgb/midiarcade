@@ -1568,24 +1568,32 @@ function refreshSongIdea(song) {
   return song;
 }
 
+function generatedOrManualTrackSetting(id, key, generatedValue, manualValue) {
+  const numeric = Number(generatedValue);
+  if (state.autoControls.has(`track:${id}:${key}`) && Number.isFinite(numeric)) return numeric;
+  return manualValue;
+}
+
 function applyTrackSettingsToSong(song) {
   for (const [index, track] of songTracks(song).entries()) {
     const id = trackId(track, index);
     const settings = state.trackSettings[id];
     if (!settings) continue;
-    track.program = settings.program;
+    const generated = track.settings || track.controls || {};
+    if (!isTrackProgramAuto(id) || !Number.isFinite(Number(track.program))) track.program = settings.program;
     track.settings = {
-      ...(track.settings || {}),
-      density: settings.density / 100,
-      variation: settings.variation / 100,
-      octave: clamp((TRACK_DEFINITIONS[id]?.octave || 0) + settings.octave, 0, 8),
-      volume: clamp(settings.volume, 0, 1),
-      velocity: clamp(settings.velocity, 0.1, 1.5),
-      pan: clamp(settings.pan, -1, 1),
-      reverb: clamp(settings.reverb, 0, 1),
-      cutoff: clamp(settings.cutoff, 1000, 14000),
-      resonance: clamp(settings.resonance, 0, 1),
-      gate: clamp(settings.gate, 0.08, 1.5),
+      ...generated,
+      program: track.program,
+      density: clamp(generatedOrManualTrackSetting(id, "density", generated.density, settings.density / 100), 0, 1),
+      variation: clamp(generatedOrManualTrackSetting(id, "variation", generated.variation, settings.variation / 100), 0, 1),
+      octave: clamp(generatedOrManualTrackSetting(id, "octave", generated.octave, (TRACK_DEFINITIONS[id]?.octave || 0) + settings.octave), 0, 8),
+      volume: clamp(generatedOrManualTrackSetting(id, "volume", generated.volume, settings.volume), 0, 1),
+      velocity: clamp(generatedOrManualTrackSetting(id, "velocity", generated.velocity, settings.velocity), 0.1, 1.5),
+      pan: clamp(generatedOrManualTrackSetting(id, "pan", generated.pan, settings.pan), -1, 1),
+      reverb: clamp(generatedOrManualTrackSetting(id, "reverb", generated.reverb, settings.reverb), 0, 1),
+      cutoff: clamp(generatedOrManualTrackSetting(id, "cutoff", generated.cutoff, settings.cutoff), 1000, 14000),
+      resonance: clamp(generatedOrManualTrackSetting(id, "resonance", generated.resonance, settings.resonance), 0, 1),
+      gate: clamp(generatedOrManualTrackSetting(id, "gate", generated.gate, settings.gate), 0.08, 1.5),
       humanize: clamp(settings.humanize, 0, 1),
       feel: clamp(settings.feel, 0, 1),
       attitude: settings.attitude || "neutral",
@@ -1593,7 +1601,7 @@ function applyTrackSettingsToSong(song) {
       solo: state.solo.has(id),
     };
   }
-  return refreshSongIdea(song);
+  return song;
 }
 
 function captureResolvedAutoTrackSettings(song) {
@@ -3929,7 +3937,16 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     if (muted.has(id) || (activeSolo && !solo.has(id)) || (backingOnly && ["melody", "counterpoint"].includes(id))) return [];
     const defaults = TRACK_DEFINITIONS[id] || {};
     const uiSettings = settingsById?.[id] || {};
-    const settings = { ...defaults, ...(track.settings || track.controls || {}), ...uiSettings };
+        const generatedSettings = track.settings || track.controls || {};
+        const useRuntimeAuthority = settingsById === state.trackSettings;
+        const effectiveUiSettings = useRuntimeAuthority ? { ...uiSettings } : uiSettings;
+        if (useRuntimeAuthority) {
+          for (const key of AUTO_TRACK_RANGE_KEYS) {
+            if (state.autoControls.has(`track:${id}:${key}`)) delete effectiveUiSettings[key];
+          }
+          if (isTrackProgramAuto(id)) delete effectiveUiSettings.program;
+        }
+        const settings = { ...defaults, ...generatedSettings, ...effectiveUiSettings };
     const spotlight = previewSpotlight(song, id, mixAssistant);
     const velocityScale = Math.sqrt(clamp(Number(settings.velocity ?? defaults.velocity ?? 1), 0.1, 1.5)
       / Math.max(0.1, Number(defaults.velocity ?? 1)));

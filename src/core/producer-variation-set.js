@@ -5,6 +5,7 @@ import {
   resolveElementIntensity,
   resolveMoodIntent,
 } from "./elemental-producer-system.js";
+import { applyElementSoundProfile } from "./elemental-sound-profile.js";
 
 function clamp(value, min = 0, max = 1) {
   const numeric = Number(value);
@@ -145,7 +146,7 @@ export function generateProducerVariationSet(current, input = {}, {
         current?.oneShotKit?.id,
         ...selected.map((song) => song?.oneShotKit?.id),
       ].filter(Boolean);
-      const song = generateSimilar(current, config);
+      const song = applyElementSoundProfile(generateSimilar(current, config), direction.id, intensity);
       auditions.push({
         song,
         score: producerVariationDirectionScore(song, direction),
