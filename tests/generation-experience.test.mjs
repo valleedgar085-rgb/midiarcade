@@ -10,6 +10,8 @@ import {
 const css = fs.readFileSync(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
 const build = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
 const quality = fs.readFileSync(new URL("../scripts/check-build-quality.js", import.meta.url), "utf8");
+const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const smoke = fs.readFileSync(new URL("./app-smoke.test.mjs", import.meta.url), "utf8");
 
 test("Producer Brain loading uses a readable steady timing contract", () => {
   assert.ok(generationMinimumVisibleMs("new") >= 3000);
@@ -20,6 +22,17 @@ test("Producer Brain loading uses a readable steady timing contract", () => {
   const late = generationStageState("new", 999999);
   assert.ok(middle.progress > early.progress);
   assert.equal(late.progress, 0.96, "live progress must reserve 100% for the completion/fade frame");
+});
+
+test("runtime keeps generation visible and refreshes progress smoothly", () => {
+  assert.match(app, /generationMinimumVisibleMs, generationStageState/);
+  assert.match(app, /function generationDelay\(kind = "new"\)/);
+  assert.match(app, /setTimeout\(resolve, generationMinimumVisibleMs\(kind\)\)/);
+  assert.match(app, /Date\.now\(\) - startedAt\), 160\)/);
+  assert.match(app, /Promise\.all\(\[work, generationDelay\(kind\)\]\)/);
+  assert.match(smoke, /waitForGenerationCommit\(app, previousGenerationCount, timeoutMs = 12000\)/);
+  assert.match(smoke, /!snapshot\.isGenerating && snapshot\.generationCount > previousGenerationCount/);
+  assert.doesNotMatch(smoke, /setTimeout\(resolve,\s*(?:520|560)\)/);
 });
 
 test("generation overlay freezes expensive ambience and landscape removes unstable blur layers", () => {
