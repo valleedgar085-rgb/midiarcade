@@ -1,8 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 
 // Temporary guarded codemod: it is removed once the verified runtime diff lands.
-const path = new URL("../src/app.js", import.meta.url);
-let source = await readFile(path, "utf8");
+const appPath = new URL("../src/app.js", import.meta.url);
+const smokePath = new URL("../tests/app-smoke.test.mjs", import.meta.url);
+let source = await readFile(appPath, "utf8");
 
 function replaceOnce(before, after, label) {
   const first = source.indexOf(before);
@@ -35,5 +36,15 @@ replaceOnce(
   "generation delay call",
 );
 
-await writeFile(path, source);
-console.log("Applied steady generation runtime wiring.");
+await writeFile(appPath, source);
+
+let smoke = await readFile(smokePath, "utf8");
+const oldSmokeWait = `  elementFor("#generateNew").dispatch("click");\n  await new Promise((resolve) => setTimeout(resolve, 560));\n  assert.ok(app.getAppStateSnapshot().song, "the first explicit Generate action must create the song");`;
+const newSmokeWait = `  elementFor("#generateNew").dispatch("click");\n  const generationDeadline = Date.now() + 10000;\n  while (!app.getAppStateSnapshot().song && Date.now() < generationDeadline) {\n    await new Promise((resolve) => setTimeout(resolve, 80));\n  }\n  assert.ok(app.getAppStateSnapshot().song, "the first explicit Generate action must create the song");`;
+const smokeIndex = smoke.indexOf(oldSmokeWait);
+if (smokeIndex < 0) throw new Error("Missing browser smoke generation wait");
+if (smoke.indexOf(oldSmokeWait, smokeIndex + oldSmokeWait.length) >= 0) throw new Error("Ambiguous browser smoke generation wait");
+smoke = smoke.slice(0, smokeIndex) + newSmokeWait + smoke.slice(smokeIndex + oldSmokeWait.length);
+await writeFile(smokePath, smoke);
+
+console.log("Applied steady generation runtime wiring and completion-aware smoke wait.");
