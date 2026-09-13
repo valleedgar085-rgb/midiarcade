@@ -35,8 +35,8 @@ test("generation overlay freezes expensive ambience and landscape removes unstab
 test("generation experience ships as a bounded standalone asset to web and Android", () => {
   assert.match(build, /generation-experience\.css/);
   assert.match(build, /writeFileSync\([\s\S]*?generation-experience\.css/);
-  assert.match(build, /href=\\"\.\/generation-experience\.css\\"/);
+  assert.match(build, /<link rel="stylesheet" href="\.\/generation-experience\.css">/);
   assert.match(build, /androidPublicDir[\s\S]*?generation-experience\.css/);
   assert.match(quality, /"www\/generation-experience\.css":\s*16 \* 1024/);
-  assert.match(quality, /href=\"\.\/generation-experience\.css\"/);
+  assert.match(quality, /href="\.\/generation-experience\.css"/);
 });
