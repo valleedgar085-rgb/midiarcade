@@ -3,6 +3,26 @@ import {
   sanitizeTasteProfile,
   validPersistedSong,
 } from "./session-contract.js";
+import { createDefaultAutoControls, sanitizeAutoControls } from "./auto-control-policy.js";
+
+const GENERATION_PREFERENCE_IDS = Object.freeze([
+  "genreControl",
+  "keyControl",
+  "modeControl",
+  "tempoControl",
+  "barsControl",
+  "grooveControl",
+  "chordPathControl",
+  "energyControl",
+  "complexityControl",
+  "swingControl",
+  "humanizeControl",
+  "tripletControl",
+  "rollControl",
+  "variationControl",
+  "evolutionControl",
+  "surpriseControl",
+]);
 
 function clone(value) {
   return typeof structuredClone === "function"
@@ -14,6 +34,97 @@ function boundedIndex(value, maxExclusive) {
   const numeric = Number(value);
   const rounded = Number.isFinite(numeric) ? Math.round(numeric) : 0;
   return Math.max(0, Math.min(Math.max(0, maxExclusive - 1), rounded));
+}
+
+function captureGenerationPreferences() {
+  const doc = globalThis?.document;
+  if (!doc?.getElementById) return {};
+  const preferences = {};
+  for (const id of GENERATION_PREFERENCE_IDS) {
+    const control = doc.getElementById(id);
+    if (!control || control.value == null) continue;
+    preferences[id] = String(control.value).slice(0, 80);
+  }
+  return preferences;
+}
+
+function sanitizeGenerationPreferences(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const preferences = {};
+  for (const id of GENERATION_PREFERENCE_IDS) {
+    if (typeof value[id] !== "string") continue;
+    preferences[id] = value[id].slice(0, 80);
+  }
+  return preferences;
+}
+
+function applyGenerationPreferences(preferences = {}) {
+  const doc = globalThis?.document;
+  if (!doc?.getElementById) return;
+  for (const [id, value] of Object.entries(sanitizeGenerationPreferences(preferences))) {
+    const control = doc.getElementById(id);
+    if (!control) continue;
+    if (control.tagName === "SELECT") {
+      const valid = [...(control.options ?? [])].some((option) => String(option.value) === value);
+      if (!valid) continue;
+    }
+    control.value = value;
+  }
+}
+
+function syncAutoPresentation(autoControls = new Set()) {
+  const doc = globalThis?.document;
+  if (!doc?.querySelectorAll) return;
+  for (const button of doc.querySelectorAll("[data-auto-key]")) {
+    const key = String(button.dataset?.autoKey ?? "");
+    const active = autoControls.has(key);
+    button.classList?.toggle?.("is-active", active);
+    button.setAttribute?.("aria-pressed", String(active));
+    button.textContent = active ? "AUTO ✓" : "AUTO";
+    const label = button.closest?.("label");
+    const input = label?.querySelector?.('input[type="range"]');
+    if (!input) continue;
+    input.disabled = active;
+    input.classList?.toggle?.("is-auto", active);
+    if (active) {
+      const output = label.querySelector?.("output");
+      if (output) output.textContent = "AUTO";
+    }
+  }
+}
+
+function restoredPreferenceState({
+  parsed = {},
+  trackOrder = [],
+  defaultTrackSettings = {},
+  genreIds = [],
+  recipeCount = 1,
+  normalizeMixAssistant = (value) => value,
+  defaultToAuto = false,
+} = {}) {
+  return {
+    // Reopening the studio intentionally starts with an empty plate. The last
+    // song can remain in persisted storage for migration/debug context, but it
+    // is never silently restored into the active workspace.
+    song: null,
+    trackSettings: sanitizePersistedTrackSettings(parsed.trackSettings, {
+      defaults: defaultTrackSettings,
+      trackOrder,
+    }),
+    muted: new Set(Array.isArray(parsed.muted) ? parsed.muted.filter((id) => trackOrder.includes(id)) : []),
+    solo: new Set(Array.isArray(parsed.solo) ? parsed.solo.filter((id) => trackOrder.includes(id)) : []),
+    locked: new Set(Array.isArray(parsed.locked) ? parsed.locked.filter((id) => trackOrder.includes(id)) : []),
+    autoControls: sanitizeAutoControls(parsed.autoControls, {
+      trackIds: trackOrder,
+      defaultToAuto,
+    }),
+    selectedTrack: trackOrder.includes(parsed.selectedTrack) ? parsed.selectedTrack : (trackOrder[0] ?? "drums"),
+    guidedMode: parsed.guidedMode !== false,
+    recipeIndex: boundedIndex(parsed.recipeIndex, recipeCount),
+    mixAssistant: { ...normalizeMixAssistant(parsed.mixAssistant) },
+    tasteProfile: sanitizeTasteProfile(parsed.tasteProfile, { genreIds }),
+    generationPreferences: sanitizeGenerationPreferences(parsed.generationPreferences),
+  };
 }
 
 export function createPersistedSessionSnapshot(state = {}, {
@@ -38,6 +149,7 @@ export function createPersistedSessionSnapshot(state = {}, {
     recipeIndex: state.recipeIndex,
     mixAssistant: normalizeMixAssistant(state.mixAssistant),
     tasteProfile: state.tasteProfile,
+    generationPreferences: captureGenerationPreferences(),
   };
 }
 
@@ -50,45 +162,50 @@ export function decodePersistedSession(stored, {
   normalizeMixAssistant = (value) => value,
 } = {}) {
   if (stored?.status === "empty" || stored?.status === "unavailable") {
-    return { status: "empty", value: null };
+    return {
+      status: "ready",
+      value: restoredPreferenceState({
+        parsed: { autoControls: [...createDefaultAutoControls(trackOrder)] },
+        trackOrder,
+        defaultTrackSettings,
+        genreIds,
+        recipeCount,
+        normalizeMixAssistant,
+        defaultToAuto: true,
+      }),
+    };
   }
   if (stored?.status !== "ready") {
     return { status: "rejected", value: null, error: stored?.error ?? null };
   }
 
   const parsed = stored.value;
-  if (!parsed || parsed.schema !== schema || !validPersistedSong(parsed.song, { trackOrder })) {
+  if (!parsed || parsed.schema !== schema) {
+    return { status: "rejected", value: null };
+  }
+  if (parsed.song != null && !validPersistedSong(parsed.song, { trackOrder })) {
     return { status: "rejected", value: null };
   }
 
   return {
     status: "ready",
-    value: {
-      song: clone(parsed.song),
-      trackSettings: sanitizePersistedTrackSettings(parsed.trackSettings, {
-        defaults: defaultTrackSettings,
-        trackOrder,
-      }),
-      muted: new Set(Array.isArray(parsed.muted) ? parsed.muted.filter((id) => trackOrder.includes(id)) : []),
-      solo: new Set(Array.isArray(parsed.solo) ? parsed.solo.filter((id) => trackOrder.includes(id)) : []),
-      locked: new Set(Array.isArray(parsed.locked) ? parsed.locked.filter((id) => trackOrder.includes(id)) : []),
-      autoControls: new Set(
-        Array.isArray(parsed.autoControls)
-          ? parsed.autoControls.filter((key) => typeof key === "string" && key.length <= 80).slice(0, 128)
-          : [],
-      ),
-      selectedTrack: trackOrder.includes(parsed.selectedTrack) ? parsed.selectedTrack : (trackOrder[0] ?? "drums"),
-      guidedMode: parsed.guidedMode !== false,
-      recipeIndex: boundedIndex(parsed.recipeIndex, recipeCount),
-      mixAssistant: { ...normalizeMixAssistant(parsed.mixAssistant) },
-      tasteProfile: sanitizeTasteProfile(parsed.tasteProfile, { genreIds }),
-    },
+    value: restoredPreferenceState({
+      parsed,
+      trackOrder,
+      defaultTrackSettings,
+      genreIds,
+      recipeCount,
+      normalizeMixAssistant,
+      defaultToAuto: !Array.isArray(parsed.autoControls),
+    }),
   };
 }
 
 export function applyPersistedSessionState(state, restored) {
   if (!state || !restored || typeof restored !== "object") return false;
   Object.assign(state, restored);
+  applyGenerationPreferences(restored.generationPreferences);
+  syncAutoPresentation(restored.autoControls);
   return true;
 }
 
@@ -113,7 +230,7 @@ export function createSessionAutosaveController({
     if (timer != null) clearTimer(timer);
     timer = null;
     const value = snapshot();
-    if (!value?.song) return false;
+    if (!value || typeof value !== "object") return false;
     const result = storage.save(value);
     if (result?.ok) {
       onSaved(result);
