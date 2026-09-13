@@ -410,8 +410,48 @@ test("browser app initializes against the engine contract", async () => {
     createElement() { return new MockElement(); },
   };
 
+  // This fixture intentionally opts out of Auto so the legacy interaction checks below
+  // can keep exercising exact manual values. Dedicated auto-policy/session tests verify
+  // that a real first run starts empty with every supported control in Auto.
+  storedValues.set("midi-arcade/session-v2", JSON.stringify({
+    schema: 2,
+    song: null,
+    trackSettings: {},
+    muted: [],
+    solo: [],
+    locked: [],
+    autoControls: [],
+    selectedTrack: "drums",
+    guidedMode: true,
+    recipeIndex: 0,
+    mixAssistant: { enabled: true, spotlightTrack: "auto", spotlightIntensity: 68 },
+    tasteProfile: {},
+    generationPreferences: {
+      genreControl: "neoSoul",
+      keyControl: "C",
+      modeControl: "dorian",
+      tempoControl: "84",
+      barsControl: "32",
+      grooveControl: "straight",
+      energyControl: "68",
+      complexityControl: "54",
+      swingControl: "14",
+      humanizeControl: "9",
+      tripletControl: "16",
+      rollControl: "12",
+      variationControl: "42",
+      evolutionControl: "58",
+      surpriseControl: "28",
+    },
+  }));
+
   const app = await import(`../src/app.js?smoke=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
+
+  assert.equal(app.getAppStateSnapshot().song, null, "reopening the studio must begin with an empty song plate");
+  elementFor("#generateNew").dispatch("click");
+  await new Promise((resolve) => setTimeout(resolve, 560));
+  assert.ok(app.getAppStateSnapshot().song, "the first explicit Generate action must create the song");
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
@@ -609,8 +649,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(elementFor("#threadSongName").textContent, elementFor("#songTitle").textContent);
   assert.equal(elementFor("#threadSectionName").textContent, "Full song");
   assert.equal(elementFor("#threadTrackName").textContent, "Drums");
-  assert.equal(elementFor("#workflowProgress").textContent, "STEP 1 OF 4");
-  assert.match(elementFor("#workflowCoachTitle").textContent, /musical direction/i);
+  assert.equal(elementFor("#workflowProgress").textContent, "STEP 2 OF 4");
 
   const initialGeneration = app.getAppStateSnapshot();
   elementFor("#generateNew").dispatch("click");
@@ -895,7 +934,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.deepEqual(savedSession.song, app.getAppStateSnapshot().song);
   const restoredApp = await import(`../src/app.js?restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
-  assert.deepEqual(restoredApp.getAppStateSnapshot().song, savedSession.song, "a fresh app boot must restore the autosaved song");
+  assert.equal(restoredApp.getAppStateSnapshot().song, null, "a fresh app boot must restore preferences but open on an empty plate");
 
   const damagedSession = structuredClone(savedSession);
   damagedSession.song.sections = [null];
