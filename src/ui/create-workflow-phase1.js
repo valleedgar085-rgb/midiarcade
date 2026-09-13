@@ -24,7 +24,7 @@ function moveGenerationEssentials(createPanel) {
   const controls = createPanel.querySelector(".create-live-controls");
   const creatorMain = createPanel.querySelector(".creator-main-controls");
   const shapeControls = creatorMain?.querySelector(".shape-controls");
-  if (!controls || !creatorMain || !shapeControls || creatorMain.querySelector(".direction-essentials")) return;
+  if (!controls || !creatorMain || !shapeControls || creatorMain.querySelector(".direction-essentials-heading")) return;
 
   controls.setAttribute("aria-label", "Generation essentials");
   const notes = controls.querySelectorAll(".create-live-control small");
@@ -32,17 +32,18 @@ function moveGenerationEssentials(createPanel) {
   if (notes[1]) notes[1].textContent = "Sets the intensity of the next generation";
   if (notes[2]) notes[2].textContent = "Sets how busy the next generation becomes";
 
-  const section = document.createElement("section");
-  section.className = "direction-essentials";
-  section.setAttribute("aria-labelledby", "directionEssentialsTitle");
-  section.innerHTML = `
-    <header class="direction-essentials-heading">
-      <span><small>ESSENTIALS</small><strong id="directionEssentialsTitle">Feel &amp; length</strong></span>
-      <p>These settings shape the next generation. The song playing above stays your reference.</p>
-    </header>
+  const heading = document.createElement("div");
+  heading.className = "direction-essentials-heading section-heading";
+  heading.innerHTML = `
+    <div>
+      <p class="eyebrow">ESSENTIALS</p>
+      <h3 id="directionEssentialsTitle">Feel &amp; length</h3>
+      <p class="section-description">These settings shape the next generation. The song playing above stays your reference.</p>
+    </div>
   `;
-  section.append(controls);
-  creatorMain.insertBefore(section, shapeControls);
+  controls.setAttribute("aria-labelledby", "directionEssentialsTitle");
+  creatorMain.insertBefore(heading, shapeControls);
+  creatorMain.insertBefore(controls, shapeControls);
 }
 
 function moveOptionalGuide(createPanel) {
