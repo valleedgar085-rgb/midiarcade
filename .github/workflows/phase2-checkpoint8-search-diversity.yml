@@ -1,0 +1,79 @@
+name: Phase 2 Checkpoint 8 Search Diversity
+
+on:
+  push:
+    branches:
+      - phase2/checkpoint8-generate-similar-parity
+    paths:
+      - scripts/apply-phase2-checkpoint8-search-diversity.mjs
+      - .github/workflows/phase2-checkpoint8-search-diversity.yml
+
+permissions:
+  contents: write
+
+jobs:
+  experiment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase2/checkpoint8-generate-similar-parity
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply bounded search diversity
+        run: node scripts/apply-phase2-checkpoint8-search-diversity.mjs
+      - name: Run focused weakness-aware tests
+        run: node --test tests/producer-brain-weakness-search.test.mjs tests/producer-brain.test.mjs tests/producer-policy.test.mjs tests/music-engine.test.mjs
+      - name: Run adaptive search diagnostic
+        run: node scripts/diagnose-adaptive-global-search.mjs
+      - name: Enforce search-diversity safety floor
+        run: |
+          node --input-type=module <<'NODE'
+          import { evaluateSongCandidate, generateNew } from './src/music-engine.js';
+          const genres = ['techno','drumBass','jazz','hipHop','house','trap'];
+          const profiles = [
+            { id:'balanced', energy:.55, complexity:.55 },
+            { id:'dense', energy:.86, complexity:.82 },
+          ];
+          const seeds = ['global-search-01','global-search-02','global-search-03'];
+          const rows = [];
+          for (const genre of genres) for (const profile of profiles) for (const seed of seeds) {
+            const input = { genre, seed:`${seed}:${genre}:${profile.id}`, bars:8, energy:profile.energy, complexity:profile.complexity, targetedRepair:false };
+            const raw = generateNew({ ...input, candidateCount:1 });
+            const adaptive = generateNew(input);
+            const rawEval = evaluateSongCandidate(raw);
+            const adaptiveEval = evaluateSongCandidate(adaptive);
+            rows.push({ genre, raw:rawEval, adaptive:adaptiveEval, search:adaptive.meta.scoreDetails.candidateSearch, count:adaptive.meta.scoreDetails.candidatesEvaluated });
+          }
+          const mean = (values) => values.reduce((a,b)=>a+b,0)/Math.max(1,values.length);
+          const genreRows = (genre) => rows.filter((row)=>row.genre===genre);
+          const delta = (genre, dim) => mean(genreRows(genre).map((row)=>(row.adaptive.subscores[dim]??0)-(row.raw.subscores[dim]??0)));
+          const avg = (genre, dim) => mean(genreRows(genre).map((row)=>row.adaptive.subscores[dim]??0));
+          const scoreDelta = mean(rows.map((row)=>row.adaptive.score-row.raw.score));
+          const diversified = rows.flatMap((row)=>row.search.focusHistory ?? []).filter((focus)=>focus.diversified).length;
+          const maxCandidates = Math.max(...rows.map((row)=>row.count));
+          if (scoreDelta < 1.5) throw new Error(`adaptive score delta regressed: ${scoreDelta}`);
+          if (avg('techno','repetition') < 88 || delta('techno','repetition') < 20) throw new Error('Techno repetition improvement regressed');
+          if (avg('jazz','density') < 75 || avg('drumBass','density') < 77) throw new Error('density floor regressed');
+          if (maxCandidates > 7) throw new Error(`default candidate budget increased: ${maxCandidates}`);
+          if (diversified < 1) throw new Error('experiment never diversified a focus route');
+          console.log(JSON.stringify({ scoreDelta, technoRepetition:avg('techno','repetition'), jazzDensity:avg('jazz','density'), drumBassDensity:avg('drumBass','density'), diversified, maxCandidates }, null, 2));
+          NODE
+      - name: Commit validated engine change
+        run: |
+          if git diff --quiet -- src/music-engine.js; then
+            echo "No engine change to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/music-engine.js
+          git commit -m "Phase 2: diversify repeated song-level search focus"
+          git push origin HEAD:phase2/checkpoint8-generate-similar-parity
