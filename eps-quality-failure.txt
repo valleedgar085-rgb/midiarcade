@@ -1,0 +1,260 @@
+ok 254 - production build has explicit size, UI-density, and CSS performance budgets
+  ---
+  duration_ms: 2.869351
+  type: 'test'
+  ...
+# Subtest: repair effectiveness summarizer reports deterministic strategy, rejection, and routing metrics
+ok 255 - repair effectiveness summarizer reports deterministic strategy, rejection, and routing metrics
+  ---
+  duration_ms: 3.115931
+  type: 'test'
+  ...
+# Subtest: live repair calibration stays deterministic in budget and uses public generation metadata
+ok 256 - live repair calibration stays deterministic in budget and uses public generation metadata
+  ---
+  duration_ms: 435.180563
+  type: 'test'
+  ...
+# Subtest: scale guide resolves active harmony and mode-safe scale notes
+ok 257 - scale guide resolves active harmony and mode-safe scale notes
+  ---
+  duration_ms: 2.185703
+  type: 'test'
+  ...
+# Subtest: scale guide preserves legacy fallbacks for sparse songs
+ok 258 - scale guide preserves legacy fallbacks for sparse songs
+  ---
+  duration_ms: 0.398234
+  type: 'test'
+  ...
+# Subtest: persisted song validation enforces track identity and MIDI bounds
+ok 259 - persisted song validation enforces track identity and MIDI bounds
+  ---
+  duration_ms: 1.508187
+  type: 'test'
+  ...
+# Subtest: persisted track settings clamp unsafe values without mutating defaults
+ok 260 - persisted track settings clamp unsafe values without mutating defaults
+  ---
+  duration_ms: 1.65434
+  type: 'test'
+  ...
+# Subtest: taste sanitization filters unknown genres and bounds retained history
+ok 261 - taste sanitization filters unknown genres and bounds retained history
+  ---
+  duration_ms: 1.775537
+  type: 'test'
+  ...
+# Subtest: session snapshots preserve preferences even before a song exists
+ok 262 - session snapshots preserve preferences even before a song exists
+  ---
+  duration_ms: 3.97162
+  type: 'test'
+  ...
+# Subtest: first-run decode starts empty with supported controls automatic
+ok 263 - first-run decode starts empty with supported controls automatic
+  ---
+  duration_ms: 1.492799
+  type: 'test'
+  ...
+# Subtest: session decode rejects corruption, sanitizes preferences, and never auto-restores the last song
+ok 264 - session decode rejects corruption, sanitizes preferences, and never auto-restores the last song
+  ---
+  duration_ms: 1.501886
+  type: 'test'
+  ...
+# Subtest: autosave controller persists preferences even when the song plate is empty
+ok 265 - autosave controller persists preferences even when the song plate is empty
+  ---
+  duration_ms: 0.810444
+  type: 'test'
+  ...
+# Subtest: discarding a corrupt session invalidates older pending autosaves
+ok 266 - discarding a corrupt session invalidates older pending autosaves
+  ---
+  duration_ms: 2.339039
+  type: 'test'
+  ...
+# Subtest: scale-safe drawing snaps chromatic pitches deterministically without leaving MIDI bounds
+ok 267 - scale-safe drawing snaps chromatic pitches deterministically without leaving MIDI bounds
+  ---
+  duration_ms: 0.928354
+  type: 'test'
+  ...
+# Subtest: piano-roll arrows travel by scale degree and remain safe at register boundaries
+ok 268 - piano-roll arrows travel by scale degree and remain safe at register boundaries
+  ---
+  duration_ms: 0.420085
+  type: 'test'
+  ...
+# Subtest: relationship analysis distinguishes locked attacks from breathing space and rejects malformed input
+ok 269 - relationship analysis distinguishes locked attacks from breathing space and rejects malformed input
+  ---
+  duration_ms: 1.038611
+  type: 'test'
+  ...
+# Subtest: Song DNA preserves New-idea replay rejection while remaining deterministic
+ok 270 - Song DNA preserves New-idea replay rejection while remaining deterministic
+  ---
+  duration_ms: 509.527503
+  type: 'test'
+  ...
+# Subtest: Song DNA v2 is pure and deterministic
+ok 271 - Song DNA v2 is pure and deterministic
+  ---
+  duration_ms: 4.634969
+  type: 'test'
+  ...
+# Subtest: Song DNA records an upstream deterministic melodic direction
+ok 272 - Song DNA records an upstream deterministic melodic direction
+  ---
+  duration_ms: 0.815033
+  type: 'test'
+  ...
+# Subtest: Song DNA splits deterministic domain seeds and section memories
+ok 273 - Song DNA splits deterministic domain seeds and section memories
+  ---
+  duration_ms: 1.286774
+  type: 'test'
+  ...
+# Subtest: related DNA keeps one musical family while creating a deterministic revision
+ok 274 - related DNA keeps one musical family while creating a deterministic revision
+  ---
+  duration_ms: 0.959673
+  type: 'test'
+  ...
+# Subtest: generated songs expose one DNA contract that drives the blueprint
+ok 275 - generated songs expose one DNA contract that drives the blueprint
+  ---
+  duration_ms: 273.226476
+  type: 'test'
+  ...
+# Subtest: More like this stays in the same DNA family without cloning the instance
+ok 276 - More like this stays in the same DNA family without cloning the instance
+  ---
+  duration_ms: 254.111467
+  type: 'test'
+  ...
+# Subtest: release gauntlet holds every genre above musical and export quality floors
+ok 277 - release gauntlet holds every genre above musical and export quality floors
+  ---
+  duration_ms: 22454.167136
+  type: 'test'
+  ...
+# Subtest: Create workspace keeps the production flow intact
+ok 278 - Create workspace keeps the production flow intact
+  ---
+  duration_ms: 1.666363
+  type: 'test'
+  ...
+# Subtest: Phase 1 presentation mounts through the existing generation UI boundary
+ok 279 - Phase 1 presentation mounts through the existing generation UI boundary
+  ---
+  duration_ms: 0.49271
+  type: 'test'
+  ...
+# Subtest: Phase 1 presentation can be imported without browser globals
+ok 280 - Phase 1 presentation can be imported without browser globals
+  ---
+  duration_ms: 1.274921
+  type: 'test'
+  ...
+# Subtest: generation essentials move from Now Playing into Song Direction without duplicating controls
+ok 281 - generation essentials move from Now Playing into Song Direction without duplicating controls
+  ---
+  duration_ms: 0.462784
+  type: 'test'
+  ...
+# Subtest: advanced direction moves optional controls below the primary generation actions
+ok 282 - advanced direction moves optional controls below the primary generation actions
+  ---
+  duration_ms: 0.381943
+  type: 'test'
+  ...
+# Subtest: Create layout overrides inherited grid spans and restores full mobile facts
+ok 283 - Create layout overrides inherited grid spans and restores full mobile facts
+  ---
+  duration_ms: 0.287668
+  type: 'test'
+  ...
+# Subtest: Create-only mobile header changes do not leak into Shape, Mix, or Finish
+ok 284 - Create-only mobile header changes do not leak into Shape, Mix, or Finish
+  ---
+  duration_ms: 0.366505
+  type: 'test'
+  ...
+# Subtest: Phase 1 gives Create a clear desktop and mobile hierarchy
+ok 285 - Phase 1 gives Create a clear desktop and mobile hierarchy
+  ---
+  duration_ms: 0.373658
+  type: 'test'
+  ...
+# Subtest: Create-specific CSS stays outside the protected global stylesheet budget and dev serves the built UI
+ok 286 - Create-specific CSS stays outside the protected global stylesheet budget and dev serves the built UI
+  ---
+  duration_ms: 0.558173
+  type: 'test'
+  ...
+# Subtest: clamp returns value unchanged when within bounds
+ok 287 - clamp returns value unchanged when within bounds
+  ---
+  duration_ms: 1.529637
+  type: 'test'
+  ...
+# Subtest: clamp clamps to min when value is below range
+ok 288 - clamp clamps to min when value is below range
+  ---
+  duration_ms: 0.277488
+  type: 'test'
+  ...
+# Subtest: clamp clamps to max when value is above range
+ok 289 - clamp clamps to max when value is above range
+  ---
+  duration_ms: 0.237494
+  type: 'test'
+  ...
+# Subtest: clamp handles fractional values correctly
+ok 290 - clamp handles fractional values correctly
+  ---
+  duration_ms: 1.601252
+  type: 'test'
+  ...
+# Subtest: finite returns the numeric value for valid numbers
+ok 291 - finite returns the numeric value for valid numbers
+  ---
+  duration_ms: 0.36918
+  type: 'test'
+  ...
+# Subtest: finite returns fallback for non-finite inputs
+ok 292 - finite returns fallback for non-finite inputs
+  ---
+  duration_ms: 0.193602
+  type: 'test'
+  ...
+# Subtest: finite uses 0 as default fallback
+ok 293 - finite uses 0 as default fallback
+  ---
+  duration_ms: 0.254746
+  type: 'test'
+  ...
+# Subtest: finite coerces null to 0 (Number(null) === 0 is finite)
+ok 294 - finite coerces null to 0 (Number(null) === 0 is finite)
+  ---
+  duration_ms: 0.19302
+  type: 'test'
+  ...
+# Subtest: clampFinite preserves finite coercion and fallback semantics
+ok 295 - clampFinite preserves finite coercion and fallback semantics
+  ---
+  duration_ms: 0.480617
+  type: 'test'
+  ...
+1..295
+# tests 295
+# suites 0
+# pass 294
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 70549.143479
