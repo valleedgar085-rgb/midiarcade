@@ -42,8 +42,9 @@ jobs:
           assert.match(app, /generationMinimumVisibleMs\(kind\)/);
           assert.match(app, /generationDelay\(kind\)/);
           assert.match(app, /Date\.now\(\) - startedAt\), 160\)/);
-          assert.match(smoke, /generationDeadline = Date\.now\(\) \+ 10000/);
-          assert.match(smoke, /while \(!app\.getAppStateSnapshot\(\)\.song/);
+          assert.match(smoke, /waitForGenerationCommit\(app, previousGenerationCount, timeoutMs = 12000\)/);
+          assert.match(smoke, /!snapshot\.isGenerating && snapshot\.generationCount > previousGenerationCount/);
+          assert.doesNotMatch(smoke, /setTimeout\(resolve,\s*(?:520|560)\)/);
           assert.ok(generationMinimumVisibleMs('new') >= 3000);
           assert.ok(generationMinimumVisibleMs('songVariations') >= 4000);
           const early = generationStageState('new', 200);
