@@ -15,6 +15,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const bridgeSource = fs.readFileSync(path.join(root, "src/ui/create-shape-bridge.js"), "utf8");
+const createWorkflowSource = fs.readFileSync(path.join(root, "src/ui/create-workflow-phase1.js"), "utf8");
+const generationProgressSource = fs.readFileSync(path.join(root, "src/ui/generation-progress.js"), "utf8");
 const buildSource = fs.readFileSync(path.join(root, "scripts/build.js"), "utf8");
 
 test("creative context keeps current song facts separate from staged direction", () => {
@@ -110,8 +112,10 @@ test("bridge reads authoritative current-song facts and preserves staged Create 
   }
 });
 
-test("production build bundles and loads the bridge for web and Android assets", () => {
-  assert.match(buildSource, /path\.join\(projectRoot, 'src', 'ui', 'create-shape-bridge\.js'\)/);
-  assert.match(buildSource, /src\/create-shape-bridge\.js\?v=20260914-1/);
+test("production app bundle loads the bridge without increasing the protected initial HTML", () => {
+  assert.match(createWorkflowSource, /import "\.\/create-shape-bridge\.js";/);
+  assert.match(generationProgressSource, /import "\.\/create-workflow-phase1\.js";/);
+  assert.doesNotMatch(buildSource, /create-shape-bridge\.js/);
+  assert.doesNotMatch(buildSource, /replace\(\s*['"]<\/body>/);
   assert.match(buildSource, /copyRecursiveSync\(path\.join\(wwwDir, 'src'\), path\.join\(androidPublicDir, 'src'\)\)/);
 });
