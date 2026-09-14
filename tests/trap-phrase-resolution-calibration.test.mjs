@@ -136,4 +136,13 @@ test("Trap fixed seeds expose the exact Quality Lab cadence-refinement bottlenec
 
   console.log("TRAP_PHRASE_RESOLUTION_EXACT_CALIBRATION", JSON.stringify(results));
   assert.equal(results.length, 3);
+  assert.ok(
+    results[0].afterPhraseResolution > results[0].beforePhraseResolution,
+    "quality-lab-01 must now use its actionable held cadence instead of returning no opportunity",
+  );
+  assert.equal(results[0].phraseRefinement?.accepted, true);
+  assert.equal(results[0].phraseRefinement?.id, "held-cadence");
+  assert.ok(results.every(({ afterPhraseResolution, beforePhraseResolution }) => (
+    afterPhraseResolution >= beforePhraseResolution
+  )), "no fixed Trap seed may regress phrase resolution");
 });
