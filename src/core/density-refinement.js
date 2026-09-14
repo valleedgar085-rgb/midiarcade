@@ -1,5 +1,5 @@
-const SUPPORT_TRACK_PRIORITY = Object.freeze(["chords", "counterpoint", "pad"]);
-const SPLITS_PER_BAR = Object.freeze([0.25, 0.5, 1]);
+const SUPPORT_TRACK_PRIORITY = ["chords", "counterpoint", "pad"];
+const SPLITS_PER_BAR = [0.25, 0.5, 1];
 
 export const MAX_DENSITY_REFINEMENT_CANDIDATES = SPLITS_PER_BAR.length;
 
@@ -66,7 +66,7 @@ function eligibleSplitNotes(song) {
     });
 }
 
-function splitSupportNote(note, splitIndex, parts = 2) {
+function splitSupportNote(note, splitIndex, parts) {
   const sourceDuration = finite(note.duration);
   const sourceStart = finite(note.start);
   const sourceId = String(note.id ?? `support-${sourceStart}-${finite(note.pitch)}`);
@@ -114,19 +114,19 @@ export function createDensityRefinementCandidates(song, {
   const target = Math.max(0, finite(densityTarget));
   const deficitNotes = Math.max(0, Math.ceil((target - beforeNotesPerBar) * bars));
   const eligibleCount = eligibleSplitNotes(song).length;
-  if (deficitNotes <= 0 || eligibleCount <= 0) return [];
+  if (!deficitNotes || !eligibleCount) return [];
 
   const seenBudgets = new Set();
   return SPLITS_PER_BAR
     .slice(0, Math.max(0, Math.min(MAX_DENSITY_REFINEMENT_CANDIDATES, Math.floor(maxCandidates))))
     .map((splitsPerBar, candidateIndex) => {
-      const parts = target >= 30 && candidateIndex > 0 ? 3 : 2;
+      const parts = target >= 30 && candidateIndex ? 3 : 2;
       const splitCount = Math.min(
         Math.floor(deficitNotes / (parts - 1)),
         eligibleCount,
         Math.max(1, Math.ceil(bars * splitsPerBar)),
       );
-      const budgetKey = `${parts}:${splitCount}`;
+      const budgetKey = splitCount * 4 + parts;
       if (!splitCount || seenBudgets.has(budgetKey)) return null;
       seenBudgets.add(budgetKey);
       const articulated = articulateSupport(song, splitCount, parts);
