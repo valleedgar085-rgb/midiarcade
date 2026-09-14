@@ -15,6 +15,22 @@ const PROFILE_LABELS = Object.freeze({
   selected: "Selected instrument",
 });
 
+// DAW export deliberately uses a tighter articulation envelope than preview
+// playback. Preview is free to use longer release/gate behavior for feel, but a
+// .mid file should never create painfully long or overlapping note releases.
+const EXPORT_DURATION_LIMITS = Object.freeze({
+  drums: 0.45,
+  bass: 1.5,
+  chords: 2.5,
+  melody: 1.5,
+  counterpoint: 1.25,
+  pad: 3,
+});
+
+const GENERATED_TRACK_IDS = new Set(Object.keys(EXPORT_DURATION_LIMITS));
+const EXPORT_RELEASE_GAP = 0.04;
+const EXPORT_MIN_DURATION = 0.05;
+
 function quantizeNotes(notes, totalBeats, step = 0.25) {
   const byOnset = new Map();
   for (const source of notes ?? []) {
@@ -27,6 +43,76 @@ function quantizeNotes(notes, totalBeats, step = 0.25) {
     if (!existing || finite(note.velocity) > finite(existing.velocity)) byOnset.set(identity, note);
   }
   return [...byOnset.values()].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+
+function sectionEndForBeat(structure, beat, totalBeats) {
+  const section = (structure ?? []).find((candidate) => (
+    beat >= finite(candidate.startBeat, 0) - 1e-6
+    && beat < finite(candidate.endBeat, totalBeats) - 1e-6
+  ));
+  return clamp(finite(section?.endBeat, totalBeats), beat + EXPORT_MIN_DURATION, totalBeats);
+}
+
+function sanitizeExportNotes(track, structure, totalBeats) {
+  const id = String(track?.id ?? "");
+  const roleLimit = finite(EXPORT_DURATION_LIMITS[id], 2);
+  const source = [...(track?.notes ?? [])]
+    .map((note) => ({ ...note }))
+    .sort((left, right) => finite(left.start, 0) - finite(right.start, 0) || finite(left.pitch, 60) - finite(right.pitch, 60));
+
+  return source.map((note, index) => {
+    const start = clamp(finite(note.start, 0), 0, Math.max(0, totalBeats - EXPORT_MIN_DURATION));
+    const sourceDuration = Math.max(EXPORT_MIN_DURATION, finite(note.duration, 0.25));
+    const pitch = Math.round(finite(note.pitch, 60));
+    const nextSamePitch = source.slice(index + 1).find((candidate) => (
+      Math.round(finite(candidate.pitch, 60)) === pitch
+      && finite(candidate.start, totalBeats) > start + 1e-6
+    ));
+    const retriggerLimit = nextSamePitch
+      ? Math.max(EXPORT_MIN_DURATION, finite(nextSamePitch.start, totalBeats) - start - EXPORT_RELEASE_GAP)
+      : roleLimit;
+    const boundaryLimit = Math.max(
+      EXPORT_MIN_DURATION,
+      sectionEndForBeat(structure, start, totalBeats) - start - EXPORT_RELEASE_GAP,
+    );
+    const endOfSongLimit = Math.max(EXPORT_MIN_DURATION, totalBeats - start);
+    const duration = Math.min(sourceDuration, roleLimit, retriggerLimit, boundaryLimit, endOfSongLimit);
+    return {
+      ...note,
+      start,
+      duration: Number(Math.max(EXPORT_MIN_DURATION, duration).toFixed(6)),
+    };
+  });
+}
+
+function sanitizeGeneratedSustain(track, preserveSustain) {
+  if (preserveSustain || !GENERATED_TRACK_IDS.has(String(track?.id ?? ""))) return track;
+  return {
+    ...track,
+    automation: (track.automation ?? []).filter((event) => !(
+      event?.type === "cc" && Math.round(finite(event.controller, -1)) === 64
+    )),
+  };
+}
+
+function applySafeExportArticulation(song, { preserveSustain = false } = {}) {
+  const totalBeats = Math.max(EXPORT_MIN_DURATION, finite(song?.meta?.totalBeats, 0));
+  song.tracks = (song.tracks ?? []).map((sourceTrack) => {
+    const track = sanitizeGeneratedSustain(sourceTrack, preserveSustain);
+    return {
+      ...track,
+      notes: sanitizeExportNotes(track, song.structure ?? song.sections ?? [], totalBeats),
+    };
+  });
+  song.meta = {
+    ...song.meta,
+    exportArticulation: {
+      version: 1,
+      safeNoteLengths: true,
+      generatedSustainNormalized: !preserveSustain,
+    },
+  };
+  return song;
 }
 
 export function resolveMidiExportProfile(profile = "full", selectedTrackId = null) {
@@ -42,7 +128,12 @@ export function resolveMidiExportProfile(profile = "full", selectedTrackId = nul
   };
 }
 
-export function prepareMidiExport(song, { profile = "full", timing = "performance", selectedTrackId = null } = {}) {
+export function prepareMidiExport(song, {
+  profile = "full",
+  timing = "performance",
+  selectedTrackId = null,
+  preserveSustain = false,
+} = {}) {
   if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("prepareMidiExport requires a song JSON object");
   const resolved = resolveMidiExportProfile(profile, selectedTrackId);
   const available = new Set(song.tracks.map((track) => String(track.id)));
@@ -56,6 +147,7 @@ export function prepareMidiExport(song, { profile = "full", timing = "performanc
       notes: quantizeNotes(track.notes, totalBeats),
     }));
   }
+  applySafeExportArticulation(prepared, { preserveSustain });
   return {
     song: prepared,
     profile: resolved,
