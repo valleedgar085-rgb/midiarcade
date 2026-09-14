@@ -36,9 +36,19 @@ jobs:
           text = path.read_text()
           old = '}, { seed: `element-shape-${provenance}` });'
           new = '}, { seed: "element-shape-" + provenance });'
-          if old not in text:
-              raise SystemExit('Element harness repair target not found')
-          path.write_text(text.replace(old, new, 1))
+          if old in text:
+              text = text.replace(old, new, 1)
+          start_marker = 'const trayBlock = `'
+          end_marker = '\n\nexport function selectSongVariation`;'
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Element tray template repair target not found')
+          body_start = start + len(start_marker)
+          body = text[body_start:end]
+          body = body.replace('${', r'\${')
+          text = text[:body_start] + body + text[end:]
+          path.write_text(text)
           PY
       - name: Apply first-class Elements patch
         run: node scripts/apply-element-workflow-v4.mjs
