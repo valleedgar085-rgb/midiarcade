@@ -1,10 +1,19 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
+import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
+
+function evolveGenerationPayload(kind, payload = {}) {
+  if (!["new", "similar", "songVariations"].includes(kind)) return payload;
+  return {
+    ...payload,
+    config: applyOutputQualityEvolution(payload?.config ?? {}, { kind }),
+  };
+}
 
 export function createGenerationExecutor({
   fallback,
@@ -113,7 +122,7 @@ export function createGenerationExecutor({
   }
 
   async function run(kind, payload = {}) {
-    const adaptedPayload = adaptGenerationRequest(kind, payload);
+    const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
@@ -122,6 +131,7 @@ export function createGenerationExecutor({
     flightRecorder.mark(flightId, "plan", {
       producerBrain: config?.producerBrain?.id ?? null,
       blueprint: config?.producerBrain?.blueprint?.id ?? null,
+      outputQuality: config?.outputQuality?.seedSignature ?? null,
     });
 
     try {
