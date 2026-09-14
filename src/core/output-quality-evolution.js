@@ -1,4 +1,5 @@
 import { clampFinite as clamp, finite } from "../utils.js";
+import { fusionDevelopment, popHipHopRapFusionContext } from "./genre-fusion-steering.js";
 
 const DEFAULT_DEVELOPMENT = Object.freeze({
   grooveEvolution: 0.62,
@@ -69,7 +70,8 @@ export function outputQualityDevelopment(genre = "") {
 
 export function createOutputQualityProfile(config = {}, { kind = "new" } = {}) {
   const genre = String(config.genre ?? "pop");
-  const development = outputQualityDevelopment(genre);
+  const fusion = popHipHopRapFusionContext(config);
+  const development = fusionDevelopment(config, outputQualityDevelopment, { kind }) ?? outputQualityDevelopment(genre);
   const seed = String(config.seed ?? `${genre}:default`);
   const relatedScale = kind === "similar" ? 0.58 : kind === "songVariations" ? 0.82 : 1;
   const grooveJitter = centeredSeedUnit(seed, "groove") * 0.012 * relatedScale;
@@ -80,6 +82,7 @@ export function createOutputQualityProfile(config = {}, { kind = "new" } = {}) {
   return Object.freeze({
     version: 1,
     genre,
+    fusion: fusion ? { ...fusion } : null,
     kind,
     grooveEvolution: unit(development.grooveEvolution + grooveJitter, development.grooveEvolution),
     phraseDevelopment: unit(development.phraseDevelopment + phraseJitter, development.phraseDevelopment),
@@ -87,7 +90,7 @@ export function createOutputQualityProfile(config = {}, { kind = "new" } = {}) {
     sectionMotion: unit(development.sectionMotion + sectionJitter, development.sectionMotion),
     repetitionGuard: unit(development.repetitionGuard - phraseJitter * 0.4, development.repetitionGuard),
     breathingRoom: unit(development.breathingRoom - melodyJitter * 0.25, development.breathingRoom),
-    seedSignature: hash32(`${genre}:${seed}:${kind}`).toString(16).padStart(8, "0"),
+    seedSignature: hash32(`${genre}:${config.secondaryGenre ?? ""}:${config.fusionBlend ?? ""}:${seed}:${kind}`).toString(16).padStart(8, "0"),
   });
 }
 
