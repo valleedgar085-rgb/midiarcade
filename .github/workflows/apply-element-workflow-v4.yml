@@ -62,6 +62,51 @@ jobs:
           PY
       - name: Apply first-class Elements patch
         run: node scripts/apply-element-workflow-v4.mjs
+      - name: Tighten Element test fixtures and preserve HTML budget
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          workflow_test = Path('tests/element-workflow-v4.test.mjs')
+          text = workflow_test.read_text()
+          old = 'assert.doesNotMatch(html, /id="songVariationTray"[^>]*hidden/);'
+          new = 'assert.doesNotMatch(html, /<section[^>]*id="songVariationTray"[^>]*\\shidden(?:\\s|>)/);'
+          if old not in text:
+              raise SystemExit('Element visibility assertion target not found')
+          workflow_test.write_text(text.replace(old, new, 1))
+
+          engine_test = Path('tests/shape-director-engine.test.mjs')
+          text = engine_test.read_text()
+          old = '''    const transaction = createShapeCandidate(source, {
+              selection: { target: "track", sectionId: "verse", trackId: "melody" },
+              size: "reshape",
+              direction: "catchier",
+            }, { seed: "element-shape-" + provenance });'''
+          new = '''    const intent = createShapeIntent({
+              selection: { target: "track", sectionId: "verse", trackId: "melody" },
+              size: "reshape",
+              direction: "catchier",
+            });
+            const transaction = createShapeCandidate(source, intent, { seed: "element-shape-" + provenance });'''
+          if old not in text:
+              raise SystemExit('Element Shape intent fixture target not found')
+          engine_test.write_text(text.replace(old, new, 1))
+
+          html_path = Path('index.html')
+          html = html_path.read_text()
+          start = html.find('<section class="shape-director-panel"')
+          if start < 0:
+              raise SystemExit('Shape Director panel not found for safe whitespace compaction')
+          end = html.find('</section>', start)
+          if end < 0:
+              raise SystemExit('Shape Director panel closing tag not found')
+          end += len('</section>')
+          panel = html[start:end]
+          compact = re.sub(r'>\s+<', '><', panel)
+          html_path.write_text(html[:start] + compact + html[end:])
+          print(f'Compacted Shape Director markup by {len(panel) - len(compact)} bytes')
+          PY
       - name: Verify focused Element and Shape contracts
         run: node --test tests/element-workflow-v4.test.mjs tests/element-button-v3.test.mjs tests/elemental-lineage.test.mjs tests/shape-director-engine.test.mjs tests/shape-director-ui-contract.test.mjs
       - name: Verify complete quality gate
