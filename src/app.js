@@ -221,7 +221,7 @@ let latestMidiRequestedDeviceId = "onscreen";
 
 const sessionRuntime = createSessionAutosaveController({
   storage: sessionStorage,
-  snapshot: () => createPersistedSessionSnapshot(state, {
+  snapshot: () => createPersistedSessionSnapshot(shapeDirectorPersistenceState(), {
     schema: SESSION_SCHEMA,
     normalizeMixAssistant,
   }),
@@ -1645,7 +1645,7 @@ function preserveLockedTracks(previous, next) {
 function createHistorySnapshot() {
   if (!state.song) return null;
   return {
-    song: deepClone(state.song),
+    song: deepClone(shapeDirectorPersistenceState().song),
     trackSettings: deepClone(state.trackSettings),
     muted: [...state.muted],
     solo: [...state.solo],
@@ -1718,6 +1718,7 @@ function applyHistorySnapshot(snapshot) {
 }
 
 function restoreHistory({ captureFuture = true, announce = true } = {}) {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const snapshot = state.history.pop();
   if (!snapshot) return;
   const current = captureFuture ? createHistorySnapshot() : null;
@@ -1730,6 +1731,7 @@ function restoreHistory({ captureFuture = true, announce = true } = {}) {
 }
 
 function redoHistory() {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const snapshot = state.future.pop();
   if (!snapshot) return;
   pushHistory(createHistorySnapshot(), { preserveFuture: true });
@@ -2008,6 +2010,7 @@ export function selectSongVariation(index) {
   const safeIndex = Math.round(Number(index));
   const variation = state.songVariations?.[safeIndex];
   if (!variation) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   player.stop();
   appStore.transaction("generation:variation-select", (draft) => {
     draft.song = variation;
@@ -2343,6 +2346,20 @@ function shapeDirectorSelection(section = editorSection()) {
   return { target: "section", sectionId: section.id };
 }
 
+function shapeDirectorPersistenceState() {
+  const director = state.shapeDirector;
+  if (director?.transaction && director.audition === "after") {
+    return { ...state, song: director.transaction.before };
+  }
+  return state;
+}
+
+function resolvePendingShapeDirectorCandidate({ rerender = false } = {}) {
+  if (!state.shapeDirector?.transaction) return false;
+  clearShapeDirectorCandidate({ restore: true, rerender });
+  return true;
+}
+
 function clearShapeDirectorCandidate({ restore = true, rerender = true } = {}) {
   const director = shapeDirectorState();
   const transaction = director.transaction;
@@ -2660,6 +2677,7 @@ function moveFocusedSectionToIndex(targetIndex) {
 export function focusSongSection(sectionId, track = state.editorTrack, { openEditor = false, scroll = false } = {}) {
   const section = normalizeSections().find((candidate) => candidate.id === sectionId);
   if (!section) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   state.focusedSection = section.id;
   if (TRACK_ORDER.includes(track)) {
     state.editorTrack = track;
@@ -3186,6 +3204,7 @@ const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
   onChange(workspace) {
+    resolvePendingShapeDirectorCandidate({ rerender: true });
     appStore.transaction("workspace:activate", (draft) => {
       draft.activeWorkspace = workspace;
     });
@@ -3481,6 +3500,7 @@ function chooseNewGenrePrograms(seed) {
 
 async function runGeneration(kind, options = {}) {
   if (state.isGenerating) return;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const copy = GENERATION_STATUS_COPY[kind] ?? GENERATION_STATUS_COPY.new;
   appStore.transaction("generation:start", (draft) => {
     draft.isGenerating = true;
@@ -3969,6 +3989,7 @@ export function buildExportSongSnapshot(song = state.song, { includeLiveTake = t
 
 async function exportSong() {
   if (!state.song) return;
+  resolvePendingShapeDirectorCandidate({ rerender: true });
   let isNative = false;
   try {
     const clone = buildExportSongSnapshot();
@@ -5848,6 +5869,7 @@ function toggleFullscreen() {
     showToast(active ? "Advanced song-shaping controls are open." : "Back to the focused essentials.");
   });
   $("#resetControlsButton").addEventListener("click", () => {
+    resolvePendingShapeDirectorCandidate({ rerender: true });
     state.autoControls.clear();
     for (const key of createDefaultAutoControls(TRACK_ORDER)) state.autoControls.add(key);
     $("#genreControl").value = "neoSoul";
@@ -6035,6 +6057,7 @@ function toggleFullscreen() {
 }
 
 function resetSessionStateForFreshStart() {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   clearTimeout(sessionSaveTimer);
   sessionSaveTimer = null;
   state.song = null;
@@ -6064,6 +6087,7 @@ function resetSessionStateForFreshStart() {
   state.songVariations = [];
   state.activeSongVariation = -1;
   state.sectionMacroValues = {};
+  state.shapeDirector = null;
   midiConnectionRequestGeneration += 1;
   latestMidiRequestedDeviceId = "onscreen";
   player.cancelPendingPlay();
