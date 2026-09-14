@@ -22,7 +22,14 @@ function sourceSong() {
       surprise: 0.28,
       syncopation: 0.4,
     },
-    tracks: [{ id: "drums", notes: [] }],
+    tracks: [
+      { id: "drums", settings: { density: 0.72, variation: 0.58, humanize: 0.65 }, notes: [] },
+      { id: "bass", settings: { density: 0.62, variation: 0.4, humanize: 0.5 }, notes: [] },
+      { id: "chords", settings: { density: 0.58, variation: 0.38, humanize: 0.42 }, notes: [] },
+      { id: "melody", settings: { density: 0.64, variation: 0.5, humanize: 0.55 }, notes: [] },
+      { id: "counterpoint", settings: { density: 0.38, variation: 0.55, humanize: 0.5 }, notes: [] },
+      { id: "pad", settings: { density: 0.82, variation: 0.28, humanize: 0.24 }, notes: [] },
+    ],
     oneShotKit: { id: "kit-source" },
   };
 }
@@ -60,7 +67,7 @@ function candidateFrom(config, calls) {
         releaseGate: { passed: true },
       },
     },
-    tracks: [{ id: "drums", notes: [] }],
+    tracks: sourceSong().tracks,
     oneShotKit: { id: `kit-${element}-${candidateIndex}` },
   };
 }
@@ -88,9 +95,14 @@ test("producer variations are Fire, Electric and Drip interpretations of one son
   assert.ok(variations.every((song) => song.variationSet.identityLocked.chordPath));
   assert.ok(variations.every((song) => song.id.endsWith("-1")), "element-specific critic scoring should choose the stronger audition");
   assert.equal(new Set(variations.map((song) => song.variationSet.familyFingerprint)).size, 1);
+  assert.deepEqual(
+    variations.map((song) => song.variationSet.direction.route),
+    ["groove-first", "hook-first", "harmony-first"],
+    "each Element must retain a distinct musical route",
+  );
 });
 
-test("element meters are deterministic and actually drive generation parameters", () => {
+test("element meters are deterministic and drive clearly separated generation parameters", () => {
   const firstCalls = [];
   const secondCalls = [];
   const source = sourceSong();
@@ -114,11 +126,16 @@ test("element meters are deterministic and actually drive generation parameters"
   );
   assert.deepEqual(first.map((song) => song.variationSet.element.meter.value), [3000, 1500, 750]);
   assert.deepEqual(first.map((song) => song.variationSet.element.meter.unit), ["°F", "V", "mL/min"]);
+  assert.deepEqual(first.map((song) => song.variationSet.element.meter.label), ["Heat", "Voltage", "Flow"]);
   assert.ok(firstCalls.every((config) => config.key === "A"));
   assert.ok(firstCalls.every((config) => config.tempo === 96));
   assert.ok(firstCalls.every((config) => config.chordPath === "i-VI-III-VII"));
   assert.ok(firstCalls.every((config) => config.moodIntent === "romantic"));
-  assert.ok(firstCalls.every((config) => config.compositionRoute === "harmony-first"));
+  assert.deepEqual(firstCalls.map((config) => config.compositionRoute), ["groove-first", "hook-first", "harmony-first"]);
   assert.ok(firstCalls[0].energy > firstCalls[2].energy, "full-strength Fire should push more energy than low-strength Drip");
   assert.ok(firstCalls[1].syncopation > firstCalls[2].syncopation, "Electric should add more rhythmic motion than Drip");
+  assert.ok(firstCalls[0].tracks.drums.density > firstCalls[2].tracks.drums.density, "Fire should hit more densely than Drip");
+  assert.ok(firstCalls[1].tracks.melody.variation > firstCalls[0].tracks.melody.variation, "Electric should animate melody more than Fire");
+  assert.ok(firstCalls[2].tracks.pad.density > firstCalls[0].tracks.pad.density, "Drip should favor a wider pad bed than Fire");
+  assert.ok(new Set(firstCalls.map((config) => config.similarity)).size === 3, "Element similarity targets should be intentionally separated");
 });
