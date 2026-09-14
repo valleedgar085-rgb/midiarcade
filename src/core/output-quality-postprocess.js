@@ -8,6 +8,10 @@ import {
   MAX_ARRANGEMENT_CANDIDATES,
 } from "./arrangement-candidates.js";
 import { createArrangementEvolution } from "./arrangement-evolution.js";
+import {
+  createReturnDevelopmentCandidates,
+  MAX_RETURN_DEVELOPMENT_CANDIDATES,
+} from "./return-development.js";
 
 const ARRANGEMENT_DIMENSIONS = Object.freeze([
   "storyArc",
@@ -16,6 +20,12 @@ const ARRANGEMENT_DIMENSIONS = Object.freeze([
   "tensionFollow",
   "stageInterlock",
 ]);
+
+const RETURN_DIMENSIONS = Object.freeze({
+  "cadence-payoff": Object.freeze(["phraseResolution"]),
+  "rhythmic-recall": Object.freeze(["repetition", "motif"]),
+  "groove-lock": Object.freeze(["groove"]),
+});
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -29,6 +39,13 @@ function arrangementScore(evaluation) {
   return average(ARRANGEMENT_DIMENSIONS.map((key) => evaluation?.subscores?.[key]));
 }
 
+function returnTargetScore(evaluation, id) {
+  const dimensions = RETURN_DIMENSIONS[id] ?? [];
+  return dimensions.length
+    ? average(dimensions.map((key) => evaluation?.subscores?.[key]))
+    : finite(evaluation?.score);
+}
+
 function creativeFloor(evaluation) {
   const values = Object.values(evaluation?.subscores ?? {}).filter((value) => Number.isFinite(Number(value)));
   return values.length ? Math.min(...values.map(Number)) : 0;
@@ -39,7 +56,7 @@ function round(value, digits = 2) {
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
 }
 
-function acceptedSongMetadata(song, evaluation, releaseGate, diagnostics) {
+function acceptedSongMetadata(song, evaluation, releaseGate, diagnosticsPatch = {}) {
   const scoreDetails = song?.meta?.scoreDetails ?? {};
   return {
     ...(song.meta ?? {}),
@@ -51,13 +68,13 @@ function acceptedSongMetadata(song, evaluation, releaseGate, diagnostics) {
       releaseGate,
       outputQualityPostprocess: {
         ...(scoreDetails.outputQualityPostprocess ?? {}),
-        arrangement: diagnostics,
+        ...diagnosticsPatch,
       },
     },
   };
 }
 
-function candidateAssessment(candidate, before, beforeArrangement, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+function arrangementCandidateAssessment(candidate, before, beforeArrangement, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
   const after = evaluateCandidate(candidate.song);
   const release = evaluateReleaseGate(candidate.song, after);
   const afterArrangement = arrangementScore(after);
@@ -86,7 +103,38 @@ function candidateAssessment(candidate, before, beforeArrangement, beforeFloor, 
   };
 }
 
-function compareAssessments(left, right) {
+function returnCandidateAssessment(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const beforeTarget = returnTargetScore(before, candidate.id);
+  const afterTarget = returnTargetScore(after, candidate.id);
+  const afterFloor = creativeFloor(after);
+  const scoreDelta = finite(after.score) - finite(before.score);
+  const targetDelta = afterTarget - beforeTarget;
+  const floorDelta = afterFloor - beforeFloor;
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const qualityImproved = scoreDelta >= 0.05 && targetDelta >= -0.1 && floorDelta >= -0.5;
+  const targetImproved = targetDelta >= 0.75 && scoreDelta >= -0.25 && floorDelta >= -0.75;
+  const accepted = Boolean(release?.passed && scaleSafe && (qualityImproved || targetImproved));
+
+  return {
+    ...candidate,
+    after,
+    release,
+    beforeTarget,
+    afterTarget,
+    afterFloor,
+    scoreDelta,
+    targetDelta,
+    floorDelta,
+    accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : accepted ? "quality-win" : "critic-regression",
+  };
+}
+
+function compareArrangementAssessments(left, right) {
   const scoreDelta = finite(right.after?.score) - finite(left.after?.score);
   if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
   const arrangementDelta = right.afterArrangement - left.afterArrangement;
@@ -96,7 +144,17 @@ function compareAssessments(left, right) {
   return left.candidateIndex - right.candidateIndex;
 }
 
-function diagnosticsFor(assessment, {
+function compareReturnAssessments(left, right) {
+  const scoreDelta = finite(right.after?.score) - finite(left.after?.score);
+  if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+  const targetDelta = right.targetDelta - left.targetDelta;
+  if (Math.abs(targetDelta) > 1e-9) return targetDelta;
+  const floorDelta = right.afterFloor - left.afterFloor;
+  if (Math.abs(floorDelta) > 1e-9) return floorDelta;
+  return String(left.id).localeCompare(String(right.id));
+}
+
+function arrangementDiagnosticsFor(assessment, {
   before,
   beforeArrangement,
   candidatesEvaluated,
@@ -125,16 +183,34 @@ function diagnosticsFor(assessment, {
   });
 }
 
-/**
- * Phase 6B is candidate-first: structural evolution is never committed merely
- * because it is different. Up to three deterministic whole-section candidates
- * are auditioned, every one must clear the unchanged release/scale contracts,
- * and only the strongest measurable critic win may replace the source song.
- */
-export function applySongOutputQualityPostprocess(song, config = {}, {
-  evaluateCandidate = evaluateSongCandidate,
-  evaluateReleaseGate = evaluateSongReleaseGate,
+function returnDiagnosticsFor(assessment, {
+  before,
+  candidatesEvaluated,
+  candidateIds,
 } = {}) {
+  return Object.freeze({
+    attempted: true,
+    accepted: Boolean(assessment?.accepted),
+    changed: true,
+    reason: assessment?.reason ?? "critic-regression",
+    id: assessment?.id ?? null,
+    changedNotes: finite(assessment?.changedNotes),
+    returnSections: finite(assessment?.returnSections),
+    candidatesEvaluated,
+    candidateLimit: MAX_RETURN_DEVELOPMENT_CANDIDATES,
+    candidateIds,
+    targetDimensions: [...(RETURN_DIMENSIONS[assessment?.id] ?? [])],
+    beforeScore: round(before?.score),
+    afterScore: round(assessment?.after?.score),
+    scoreDelta: round(assessment?.scoreDelta),
+    beforeTarget: round(assessment?.beforeTarget),
+    afterTarget: round(assessment?.afterTarget),
+    targetDelta: round(assessment?.targetDelta),
+    floorDelta: round(assessment?.floorDelta),
+  });
+}
+
+function applyArrangementPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
   const evolution = createArrangementEvolution(config);
   if (!evolution.enabled) {
     return {
@@ -176,7 +252,7 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
   const before = evaluateCandidate(song);
   const beforeArrangement = arrangementScore(before);
   const beforeFloor = creativeFloor(before);
-  const assessments = candidates.map((candidate) => candidateAssessment(
+  const assessments = candidates.map((candidate) => arrangementCandidateAssessment(
     candidate,
     before,
     beforeArrangement,
@@ -185,10 +261,10 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
     evaluateReleaseGate,
   ));
   const candidateFamilies = assessments.map(({ evolution: candidateEvolution }) => candidateEvolution.family);
-  const accepted = assessments.filter((assessment) => assessment.accepted).sort(compareAssessments);
-  const ranked = [...assessments].sort(compareAssessments);
+  const accepted = assessments.filter((assessment) => assessment.accepted).sort(compareArrangementAssessments);
+  const ranked = [...assessments].sort(compareArrangementAssessments);
   const selected = accepted[0] ?? ranked[0];
-  const diagnostics = diagnosticsFor(selected, {
+  const diagnostics = arrangementDiagnosticsFor(selected, {
     before,
     beforeArrangement,
     candidatesEvaluated: assessments.length,
@@ -207,26 +283,124 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
   };
-  selected.song.meta = acceptedSongMetadata(selected.song, selected.after, selected.release, diagnostics);
+  selected.song.meta = acceptedSongMetadata(selected.song, selected.after, selected.release, {
+    arrangement: diagnostics,
+  });
+  return { song: selected.song, diagnostics };
+}
+
+function applyReturnDevelopmentPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
+  if (config.returnDevelopment !== true) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: false,
+        accepted: false,
+        changed: false,
+        reason: "disabled",
+        candidatesEvaluated: 0,
+        candidateLimit: MAX_RETURN_DEVELOPMENT_CANDIDATES,
+        candidateIds: [],
+      }),
+    };
+  }
+
+  const candidates = createReturnDevelopmentCandidates(song, config);
+  if (!candidates.length) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: true,
+        accepted: false,
+        changed: false,
+        reason: "no-return-development",
+        candidatesEvaluated: 0,
+        candidateLimit: MAX_RETURN_DEVELOPMENT_CANDIDATES,
+        candidateIds: [],
+      }),
+    };
+  }
+
+  const before = evaluateCandidate(song);
+  const beforeFloor = creativeFloor(before);
+  const assessments = candidates.map((candidate) => returnCandidateAssessment(
+    candidate,
+    before,
+    beforeFloor,
+    evaluateCandidate,
+    evaluateReleaseGate,
+  ));
+  const candidateIds = assessments.map(({ id }) => id);
+  const accepted = assessments.filter((assessment) => assessment.accepted).sort(compareReturnAssessments);
+  const ranked = [...assessments].sort(compareReturnAssessments);
+  const selected = accepted[0] ?? ranked[0];
+  const diagnostics = returnDiagnosticsFor(selected, {
+    before,
+    candidatesEvaluated: assessments.length,
+    candidateIds,
+  });
+
+  if (!accepted.length) return { song, diagnostics };
+
+  selected.song.outputQualityEvolution = {
+    ...(selected.song.outputQualityEvolution ?? {}),
+    returnDevelopment: {
+      ...(selected.song.outputQualityEvolution?.returnDevelopment ?? {}),
+      accepted: true,
+      scoreDelta: diagnostics.scoreDelta,
+      targetDelta: diagnostics.targetDelta,
+      candidatesEvaluated: diagnostics.candidatesEvaluated,
+    },
+  };
+  selected.song.meta = acceptedSongMetadata(selected.song, selected.after, selected.release, {
+    returnDevelopment: diagnostics,
+  });
   return { song: selected.song, diagnostics };
 }
 
 /**
+ * Phase 6B stays candidate-first at both structural levels. Macro-arrangement
+ * candidates are auditioned first; the selected song then receives at most
+ * three focused return-section candidates. Every candidate must clear the
+ * unchanged release and scale contracts before it can replace its source.
+ */
+export function applySongOutputQualityPostprocess(song, config = {}, {
+  evaluateCandidate = evaluateSongCandidate,
+  evaluateReleaseGate = evaluateSongReleaseGate,
+} = {}) {
+  const arrangement = applyArrangementPostprocess(song, config, evaluateCandidate, evaluateReleaseGate);
+  const returnDevelopment = applyReturnDevelopmentPostprocess(
+    arrangement.song,
+    config,
+    evaluateCandidate,
+    evaluateReleaseGate,
+  );
+  return {
+    song: returnDevelopment.song,
+    diagnostics: arrangement.diagnostics,
+    returnDiagnostics: returnDevelopment.diagnostics,
+  };
+}
+
+/**
  * Keep the executor's public result contract reference-stable unless Phase 6B
- * actually commits a quality-gated arrangement candidate. Rejected/no-op
+ * actually commits a quality-gated postprocess candidate. Rejected/no-op
  * diagnostics remain available to direct benchmark callers without leaking a
  * new result shape into worker/fallback/self-correction contracts.
  */
 export function applyResultOutputQualityPostprocess(result, config = {}, evaluators = {}) {
-  if (!result?.song || config.arrangementEvolution !== true) return result;
+  if (!result?.song || (config.arrangementEvolution !== true && config.returnDevelopment !== true)) return result;
   const processed = applySongOutputQualityPostprocess(result.song, config, evaluators);
-  if (!processed.diagnostics?.accepted || processed.song === result.song) return result;
+  const arrangementAccepted = Boolean(processed.diagnostics?.accepted);
+  const returnAccepted = Boolean(processed.returnDiagnostics?.accepted);
+  if ((!arrangementAccepted && !returnAccepted) || processed.song === result.song) return result;
   return {
     ...result,
     song: processed.song,
     outputQualityDiagnostics: {
       ...(result.outputQualityDiagnostics ?? {}),
       arrangement: processed.diagnostics,
+      returnDevelopment: processed.returnDiagnostics,
     },
   };
 }
