@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
+import { adaptGenerationConfig } from "../src/core/adaptive-generation.js";
+import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
+import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
 
 const GENRES = ["pop", "hipHop", "rap"];
 const PAIRS = [
@@ -40,8 +43,8 @@ function qualityRow(song) {
   };
 }
 
-function generate(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
-  return engine.generateNew({
+function generationConfig(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
+  const adapted = adaptGenerationConfig({
     genre,
     ...(secondaryGenre ? { secondaryGenre, fusionBlend } : {}),
     seed,
@@ -52,7 +55,14 @@ function generate(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
     variation: 0.52,
     evolution: 0.58,
     surprise: 0.28,
-  });
+  }, { kind: "new" });
+  return applyOutputQualityEvolution(adapted, { kind: "new" });
+}
+
+function generate(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
+  const config = generationConfig(genre, seed, secondaryGenre, fusionBlend);
+  const generated = engine.generateNew(config);
+  return applySongOutputQualityPipeline(generated, config).song;
 }
 
 test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical quality", { timeout: 120_000 }, () => {
