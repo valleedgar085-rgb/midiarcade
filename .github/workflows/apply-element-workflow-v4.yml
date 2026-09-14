@@ -1,0 +1,49 @@
+name: Apply Element Workflow V4
+
+on:
+  push:
+    branches:
+      - phase4/shape-director
+    paths:
+      - scripts/apply-element-workflow-v4.mjs
+      - .github/workflows/apply-element-workflow-v4.yml
+
+permissions:
+  contents: write
+
+jobs:
+  guard-element-workflow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Phase 4 branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase4/shape-director
+          fetch-depth: 0
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply first-class Elements patch
+        run: node scripts/apply-element-workflow-v4.mjs
+      - name: Verify focused Element and Shape contracts
+        run: node --test tests/element-workflow-v4.test.mjs tests/element-button-v3.test.mjs tests/elemental-lineage.test.mjs tests/shape-director-engine.test.mjs tests/shape-director-ui-contract.test.mjs
+      - name: Verify complete quality gate
+        run: |
+          npm run quality
+          npm run quality:music
+      - name: Commit verified Elements workflow
+        run: |
+          if git diff --quiet -- index.html src/app.js src/core/shape-director-engine.js src/ui/element-button-v3.js src/ui/shape-director.css tests/shape-director-engine.test.mjs tests/element-workflow-v4.test.mjs; then
+            echo "No Element workflow changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html src/app.js src/core/shape-director-engine.js src/ui/element-button-v3.js src/ui/shape-director.css tests/shape-director-engine.test.mjs tests/element-workflow-v4.test.mjs
+          git commit -m "Make Elements first-class across Create and Shape"
+          git push origin HEAD:phase4/shape-director
