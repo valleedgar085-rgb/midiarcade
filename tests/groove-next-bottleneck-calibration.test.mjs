@@ -34,6 +34,7 @@ function generationConfig(genre, seed) {
     }, { kind: "new" }),
     phraseResolutionRefinement: true,
     registerHealthRefinement: true,
+    genreIdentityRefinement: false,
   };
 }
 
