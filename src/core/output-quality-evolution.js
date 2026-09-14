@@ -133,9 +133,9 @@ function adjustTrack(trackId, input, profile) {
 /**
  * Phase 6A uses only controls the existing engine and Producer Brain already
  * understand. Later Phase 6 checkpoints opt fresh generation into bounded
- * candidate-first arrangement and return gates. Bass-pocket refinement remains
- * available as an explicit diagnostic/experimental opt-in after calibration
- * showed that density, not bass/kick lock, is the current groove bottleneck.
+ * candidate-first arrangement, return and density gates. Bass-pocket refinement
+ * remains an explicit diagnostic opt-in after calibration showed that density,
+ * not bass/kick lock, is the current groove bottleneck.
  */
 export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) {
   const source = cloneRecord(config);
@@ -150,6 +150,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
       : freshGeneration,
     returnDevelopment: typeof source.returnDevelopment === "boolean"
       ? source.returnDevelopment
+      : freshGeneration,
+    densityRefinement: typeof source.densityRefinement === "boolean"
+      ? source.densityRefinement
       : freshGeneration,
     groovePocketRefinement: typeof source.groovePocketRefinement === "boolean"
       ? source.groovePocketRefinement
