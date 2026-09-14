@@ -139,10 +139,13 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
   const source = cloneRecord(config);
   if (source.outputQualityEvolution === false) return source;
   const profile = createOutputQualityProfile(source, { kind });
+  const defaultArrangementEvolution = kind === "new";
 
   const out = {
     ...source,
-    arrangementEvolution: kind === "new" || kind === "songVariations",
+    arrangementEvolution: typeof source.arrangementEvolution === "boolean"
+      ? source.arrangementEvolution
+      : defaultArrangementEvolution,
     variation: unit(finite(source.variation, 0.5) + profile.repetitionGuard * 0.018 + profile.phraseDevelopment * 0.01, 0.5),
     evolution: unit(finite(source.evolution, 0.58) + profile.sectionMotion * 0.024 + profile.phraseDevelopment * 0.012, 0.58),
     surprise: unit(finite(source.surprise, 0.28) + profile.melodicContrast * 0.008, 0.28),
