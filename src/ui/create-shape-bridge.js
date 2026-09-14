@@ -105,7 +105,7 @@ function createHandoffCard(root) {
       <strong>Ready to shape this idea?</strong>
       <span>Carry the current song DNA into Shape instead of starting over.</span>
     </div>
-    <button id="shapeThisSongButton" type="button">Shape this song →</button>
+    <button id="shapeThisSongButton" type="button" data-create-control="shape-this-song" data-create-intent="navigation" data-create-event="click" aria-description="Carry the current generated song DNA into Shape.">Shape this song →</button>
   `;
   host.appendChild(card);
   return card.querySelector("#shapeThisSongButton");
@@ -211,10 +211,11 @@ export function installCreateShapeBridge(root = document) {
   });
 
   doc.querySelector?.('[data-workspace="arrange"]')?.addEventListener("click", () => {
-    if (!activeCreativeContext && hasGeneratedCreateSong(doc)) activeCreativeContext = readCreateCreativeContext(doc);
+    if (hasGeneratedCreateSong(doc)) activeCreativeContext = readCreateCreativeContext(doc);
     if (activeCreativeContext) {
       const ribbon = renderShapeCreativeContext(doc, activeCreativeContext);
       ribbon?.removeAttribute("hidden");
+      emitContext(doc, activeCreativeContext);
     }
   });
 
