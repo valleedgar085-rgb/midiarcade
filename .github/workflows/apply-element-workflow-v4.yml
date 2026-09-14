@@ -28,6 +28,18 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Repair temporary Element harness
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-element-workflow-v4.mjs')
+          text = path.read_text()
+          old = '}, { seed: `element-shape-${provenance}` });'
+          new = '}, { seed: "element-shape-" + provenance });'
+          if old not in text:
+              raise SystemExit('Element harness repair target not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
       - name: Apply first-class Elements patch
         run: node scripts/apply-element-workflow-v4.mjs
       - name: Verify focused Element and Shape contracts
