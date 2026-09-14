@@ -78,20 +78,26 @@ jobs:
 
           engine_test = Path('tests/shape-director-engine.test.mjs')
           text = engine_test.read_text()
-          old = '''    const transaction = createShapeCandidate(source, {
-              selection: { target: "track", sectionId: "verse", trackId: "melody" },
-              size: "reshape",
-              direction: "catchier",
-            }, { seed: "element-shape-" + provenance });'''
-          new = '''    const intent = createShapeIntent({
-              selection: { target: "track", sectionId: "verse", trackId: "melody" },
-              size: "reshape",
-              direction: "catchier",
-            });
-            const transaction = createShapeCandidate(source, intent, { seed: "element-shape-" + provenance });'''
-          if old not in text:
-              raise SystemExit('Element Shape intent fixture target not found')
-          engine_test.write_text(text.replace(old, new, 1))
+          block_start = text.find('test("Shape preserves Element identity and lineage across local rewrites"')
+          if block_start < 0:
+              raise SystemExit('Element Shape identity test block not found')
+          block_end_marker = '    assert.equal(transaction.after.shapeRevision.elementId, "electric");\n  }\n});'
+          block_end = text.find(block_end_marker, block_start)
+          if block_end < 0:
+              raise SystemExit('Element Shape identity test block end not found')
+          block_end += len(block_end_marker)
+          block = text[block_start:block_end]
+          old_open = 'const transaction = createShapeCandidate(source, {'
+          old_close = '}, { seed: "element-shape-" + provenance });'
+          if old_open not in block or old_close not in block:
+              raise SystemExit('Element Shape raw-intent fixture not found inside test block')
+          block = block.replace(old_open, 'const intent = createShapeIntent({', 1)
+          block = block.replace(
+              old_close,
+              '});\n    const transaction = createShapeCandidate(source, intent, { seed: "element-shape-" + provenance });',
+              1,
+          )
+          engine_test.write_text(text[:block_start] + block + text[block_end:])
 
           html_path = Path('index.html')
           html = html_path.read_text()
