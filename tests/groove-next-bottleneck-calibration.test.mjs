@@ -49,19 +49,11 @@ function baseBeforeDensity(genre, seed) {
   return { config, generated, song: processed.song };
 }
 
-function drumBarMetrics(song) {
-  const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
-  const barBeats = finite(song.meta?.beatsPerBar, 4);
-  const bars = Math.max(1, Math.round(finite(song.meta?.bars, song.bars ?? 1)));
-  const signatures = Array.from({ length: bars }, (_, bar) => drums
-    .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
-    .map((note) => `${note.pitch}:${round(((finite(note.start) % barBeats) + barBeats) % barBeats, 4)}`)
-    .join("|"));
+function signatureSummary(signatures) {
   const populated = signatures.filter(Boolean);
   const uniqueRatio = new Set(populated).size / Math.max(1, populated.length);
   const adjacentCopies = populated.slice(1)
     .filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
-  const counts = Array.from({ length: bars }, (_, bar) => drums.filter((note) => Math.floor(finite(note.start) / barBeats) === bar).length);
   const duplicateGroups = Object.entries(signatures.reduce((groups, signature, bar) => {
     if (!signature) return groups;
     (groups[signature] ??= []).push(bar);
@@ -74,11 +66,41 @@ function drumBarMetrics(song) {
     adjacentCopies: round(adjacentCopies),
     uniqueBars: new Set(populated).size,
     populatedBars: populated.length,
+    duplicateGroups,
+  };
+}
+
+function drumBarMetrics(song) {
+  const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const barBeats = finite(song.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song.meta?.bars, song.bars ?? 1)));
+  const signatures = Array.from({ length: bars }, (_, bar) => drums
+    .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+    .map((note) => `${note.pitch}:${round(((finite(note.start) % barBeats) + barBeats) % barBeats, 4)}`)
+    .join("|"));
+  const counts = Array.from({ length: bars }, (_, bar) => drums.filter((note) => Math.floor(finite(note.start) / barBeats) === bar).length);
+  return {
+    ...signatureSummary(signatures),
     avgHitsPerBar: round(counts.reduce((sum, count) => sum + count, 0) / bars),
     minHits: Math.min(...counts),
     maxHits: Math.max(...counts),
-    duplicateGroups,
   };
+}
+
+function drumSkeletonMetrics(song, step) {
+  const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const barBeats = finite(song.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song.meta?.bars, song.bars ?? 1)));
+  const signatures = Array.from({ length: bars }, (_, bar) => drums
+    .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+    .map((note) => {
+      const local = ((finite(note.start) % barBeats) + barBeats) % barBeats;
+      const quantized = Math.round(local / step) * step;
+      return `${note.pitch}:${round(quantized, 4)}`;
+    })
+    .sort()
+    .join("|"));
+  return { step: round(step, 5), ...signatureSummary(signatures) };
 }
 
 function evaluationSummary(song) {
@@ -102,7 +124,7 @@ function evaluationSummary(song) {
   };
 }
 
-test("Jazz fixed seeds reveal whether drum-variety weakness is cloning or over-randomization", () => {
+test("Jazz fixed seeds separate literal drum-variety score from structural groove memory", () => {
   const rows = [];
   for (const seed of SEEDS) {
     const config = generationConfig("jazz", seed);
@@ -113,11 +135,15 @@ test("Jazz fixed seeds reveal whether drum-variety weakness is cloning or over-r
       seed,
       evaluation: evaluationSummary(song),
       drums: drumBarMetrics(song),
+      skeleton12: drumSkeletonMetrics(song, 1 / 12),
+      skeleton8: drumSkeletonMetrics(song, 1 / 8),
+      skeleton4: drumSkeletonMetrics(song, 1 / 4),
     });
   }
-  console.log("JAZZ_DRUM_VARIETY_CALIBRATION", JSON.stringify(rows));
+  console.log("JAZZ_DRUM_MEMORY_CALIBRATION", JSON.stringify(rows));
   assert.equal(rows.length, 3);
   assert.ok(rows.every((row) => row.evaluation.releasePassed && row.evaluation.scaleFit === 1));
+  assert.ok(rows.every((row) => row.drums.uniqueRatio === 1));
 });
 
 test("Funk fixed seeds expose the protected dimension behind rejected deep density candidates", () => {
