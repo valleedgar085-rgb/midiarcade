@@ -72,9 +72,12 @@ test("Create copy explains reference, direction, generation and Elements without
 });
 
 test("every contracted Create control receives intent, event and contextual-help wiring", () => {
-  assert.match(contract, /dataset\.createControl = id/);
-  assert.match(contract, /dataset\.createIntent = contract\.intent/);
-  assert.match(contract, /dataset\.createEvent = contract\.event/);
+  assert.match(contract, /function wireControl\(control, key, contract\)/);
+  assert.match(contract, /control\.dataset\.createControl = key/);
+  assert.match(contract, /control\.dataset\.createIntent = contract\.intent/);
+  assert.match(contract, /control\.dataset\.createEvent = contract\.event/);
+  assert.match(contract, /CREATE_SELECTOR_CONTRACT/);
+  assert.match(contract, /panel\.querySelectorAll\(contract\.selector\)/);
   assert.match(contract, /aria-description/);
   for (const eventName of ["focusin", "pointerover", "input", "change", "click"]) {
     assert.match(contract, new RegExp(`"${eventName}"`), `${eventName} must refresh Create control context`);
