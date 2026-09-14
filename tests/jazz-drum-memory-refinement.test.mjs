@@ -84,20 +84,20 @@ test("Jazz fixed seeds gain drum memory without groove, performance, authenticit
   console.log("JAZZ_DRUM_MEMORY_FIXED_SEEDS", JSON.stringify(rows));
 });
 
-test("fresh Jazz production pipeline accepts only critic-safe groove memory", () => {
+test("explicit Jazz identity opt-in accepts only critic-safe groove memory", () => {
   const rows = [];
   for (const seed of SEEDS) {
     const baselineConfig = configFor("jazz", seed, { identity: false });
     const source = applySongOutputQualityPipeline(generateNew(baselineConfig), baselineConfig).song;
     const productionConfig = {
       ...baselineConfig,
-      genreIdentityRefinement: undefined,
+      genreIdentityRefinement: true,
     };
     const processed = applySongOutputQualityPipeline(generateNew(productionConfig), productionConfig);
     const before = evaluateSongCandidate(source);
     const after = evaluateSongCandidate(processed.song);
     const diagnostics = processed.genreIdentityDiagnostics;
-    assert.equal(diagnostics?.accepted, true, `${seed} production identity candidate should be accepted`);
+    assert.equal(diagnostics?.accepted, true, `${seed} explicit identity candidate should be accepted`);
     assert.equal(diagnostics?.id, "jazz-return-groove-recall");
     assert.ok(finite(after.subscores?.drumVariety) - finite(before.subscores?.drumVariety) >= 2);
     assert.ok(finite(after.subscores?.groove) >= finite(before.subscores?.groove));
@@ -117,23 +117,29 @@ test("fresh Jazz production pipeline accepts only critic-safe groove memory", ()
   console.log("JAZZ_GENRE_IDENTITY_PIPELINE", JSON.stringify(rows));
 });
 
-test("genre identity defaults to fresh generation only and explicit opt-out wins", () => {
+test("genre identity defaults off after device playback feedback and explicit opt-in remains available", () => {
   const seed = SEEDS[0];
   const fresh = {
     ...applyOutputQualityEvolution({ genre: "jazz", seed: `${seed}:jazz`, bars: 16, candidateCount: 1 }, { kind: "new" }),
     phraseResolutionRefinement: true,
     registerHealthRefinement: true,
   };
+  assert.equal(fresh.genreIdentityRefinement, false);
   const freshResult = applySongOutputQualityPipeline(generateNew(fresh), fresh);
-  assert.equal(freshResult.genreIdentityDiagnostics?.accepted, true);
+  assert.equal(freshResult.genreIdentityDiagnostics?.attempted, false);
 
   const similar = {
     ...applyOutputQualityEvolution({ genre: "jazz", seed: `${seed}:jazz:similar`, bars: 16, candidateCount: 1 }, { kind: "similar" }),
     phraseResolutionRefinement: false,
     registerHealthRefinement: false,
   };
+  assert.equal(similar.genreIdentityRefinement, false);
   const similarResult = applySongOutputQualityPipeline(generateNew(similar), similar);
   assert.equal(similarResult.genreIdentityDiagnostics?.attempted, false);
+
+  const optedIn = { ...fresh, genreIdentityRefinement: true };
+  const optedInResult = applySongOutputQualityPipeline(generateNew(optedIn), optedIn);
+  assert.equal(optedInResult.genreIdentityDiagnostics?.accepted, true);
 
   const optedOut = { ...fresh, genreIdentityRefinement: false };
   const optedOutResult = applySongOutputQualityPipeline(generateNew(optedOut), optedOut);
