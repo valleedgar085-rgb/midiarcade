@@ -96,6 +96,9 @@ test("bridge provides an explicit Create to Shape CTA and inherited DNA ribbon",
   assert.match(bridgeSource, /id = "createShapeHandoff"/);
   assert.match(bridgeSource, /id=\"shapeThisSongButton\"/);
   assert.match(bridgeSource, /Shape this song/);
+  assert.match(bridgeSource, /data-create-control=\"shape-this-song\"/);
+  assert.match(bridgeSource, /data-create-intent=\"navigation\"/);
+  assert.match(bridgeSource, /aria-description=\"Carry the current generated song DNA into Shape\.\"/);
   assert.match(bridgeSource, /id = "createShapeContextRibbon"/);
   assert.match(bridgeSource, /FROM CREATE · SONG DNA/);
   assert.match(bridgeSource, /midiarcade:create-shape-context/);
@@ -110,6 +113,18 @@ test("bridge reads authoritative current-song facts and preserves staged Create 
   for (const id of ["genreControl", "secondaryGenreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "energyControl", "complexityControl", "variationControl", "evolutionControl", "surpriseControl"]) {
     assert.match(bridgeSource, new RegExp(`#${id}`), `${id} should remain available as staged direction context`);
   }
+});
+
+test("direct Shape entry always refreshes from the latest generated Create song", () => {
+  assert.match(
+    bridgeSource,
+    /if \(hasGeneratedCreateSong\(doc\)\) activeCreativeContext = readCreateCreativeContext\(doc\);/,
+  );
+  assert.doesNotMatch(
+    bridgeSource,
+    /!activeCreativeContext && hasGeneratedCreateSong\(doc\)/,
+    "Shape navigation must not reuse a stale previous-song context",
+  );
 });
 
 test("production app bundle loads the bridge without increasing the protected initial HTML", () => {
