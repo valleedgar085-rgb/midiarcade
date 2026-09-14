@@ -4,6 +4,7 @@ import {
   generateNew,
   GENRE_PROFILES,
 } from "./music-engine.js";
+import { applyOutputQualityEvolution } from "./core/output-quality-evolution.js";
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -142,11 +143,16 @@ export function runGenerationBenchmark({
   genres = Object.keys(GENRE_PROFILES),
   seeds = ["calibration-a", "calibration-b"],
   bars = 8,
+  qualityEvolution = true,
 } = {}) {
   const results = [];
   for (const genre of genres) {
     for (const seed of seeds) {
-      const song = generateNew({ genre, seed: `${seed}:${genre}`, bars, candidateCount: 1 });
+      const rawConfig = { genre, seed: `${seed}:${genre}`, bars, candidateCount: 1 };
+      const generationConfig = qualityEvolution
+        ? applyOutputQualityEvolution(rawConfig, { kind: "new" })
+        : rawConfig;
+      const song = generateNew(generationConfig);
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
       const dimensionScores = { ...(evaluation.subscores ?? {}) };
@@ -185,6 +191,7 @@ export function runGenerationBenchmark({
         vocalSpace: song.vocalSpace,
         voiceLeadingStep,
         maskingPairs: song.perceptualMix?.maskingPairs ?? 0,
+        outputQualitySignature: generationConfig.outputQuality?.seedSignature ?? null,
         weakestDimension,
         weakestGroup,
         dimensionScores,
@@ -213,7 +220,8 @@ export function runGenerationBenchmark({
   const report = {
     phase: 50,
     version: 2,
-    labVersion: 1,
+    labVersion: 2,
+    qualityEvolution,
     genres: genres.length,
     generations: results.length,
     averageScore: averageOf(results, ({ score }) => score),
