@@ -7,8 +7,6 @@ function wrapDegree(value) {
 /**
  * Shapes the last three harmonic events as preparation -> approach -> goal.
  * Degrees stay scale-relative, so the engine's scale-safety contract remains intact.
- * Phase 6A widens only the preparation vocabulary; the approach and goal remain
- * stable so stronger variety cannot destabilize cadential clarity.
  */
 export function cadentialHarmonyDegree({
   cadence = "open",
@@ -34,10 +32,10 @@ export function cadentialHarmonyDegree({
   const approach = wrapDegree(approachDegree);
   if (distanceFromEnd === 1) return approach;
   if (distanceFromEnd !== 2 || sectionBars < 4) return wrapDegree(currentDegree);
-  const preparations = approach === 4 ? [1, 3, 5]
-    : approach === 1 ? [3, 5, 6]
-      : approach === 6 ? [2, 3, 4]
-        : [3, 1, 5];
+  const preparations = approach === 4 ? [1, 3]
+    : approach === 1 ? [3, 5]
+      : approach === 6 ? [2, 3]
+        : [3, 1];
   return preparations[Math.abs(Math.round(finite(flavor))) % preparations.length];
 }
 
@@ -58,12 +56,12 @@ export function phraseLandingRole({
 
 export function phraseLandingProfile(role = "answer") {
   const profiles = {
-    question: { direction: 1, avoidRoot: true, durationScale: 0.7, velocityDelta: -3, articulation: "light" },
-    response: { direction: -1, avoidRoot: false, durationScale: 0.82, velocityDelta: -1, articulation: "connected" },
-    answer: { direction: -1, avoidRoot: false, durationScale: 1.12, velocityDelta: 3, articulation: "tenuto" },
-    lift: { direction: 1, avoidRoot: false, durationScale: 1.02, velocityDelta: 4, articulation: "tenuto" },
-    suspension: { direction: 0, avoidRoot: true, durationScale: 1.18, velocityDelta: 1, articulation: "tenuto" },
-    resolution: { direction: -1, avoidRoot: false, durationScale: 1.28, velocityDelta: 6, articulation: "tenuto" },
+    question: { direction: 1, avoidRoot: true, durationScale: 0.78, velocityDelta: -2, articulation: "light" },
+    response: { direction: -1, avoidRoot: false, durationScale: 0.88, velocityDelta: -1, articulation: "connected" },
+    answer: { direction: -1, avoidRoot: false, durationScale: 1.05, velocityDelta: 2, articulation: "tenuto" },
+    lift: { direction: 1, avoidRoot: false, durationScale: 1.08, velocityDelta: 3, articulation: "tenuto" },
+    suspension: { direction: 0, avoidRoot: true, durationScale: 1.14, velocityDelta: 1, articulation: "tenuto" },
+    resolution: { direction: -1, avoidRoot: false, durationScale: 1.22, velocityDelta: 4, articulation: "tenuto" },
   };
   return Object.freeze(profiles[role] ?? profiles.answer);
 }
