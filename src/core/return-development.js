@@ -225,6 +225,7 @@ function alignWindowToReference(notes, windowStart, windowEnd, reference, maxCha
   const before = signatureForWindow(notes, windowStart);
   if (signatureCoverage(before, reference) >= 1 - 1e-6) return 0;
   const moved = new Set();
+  const originalStarts = new Map();
   let changed = 0;
 
   while (changed < maxChanges) {
@@ -259,6 +260,7 @@ function alignWindowToReference(notes, windowStart, windowEnd, reference, maxCha
     }
     if (!best) break;
 
+    if (!originalStarts.has(best.note)) originalStarts.set(best.note, noteStart(best.note));
     setNoteStart(best.note, best.desired);
     best.note.returnDevelopmentRole = "techno-grid-recall";
     best.note.returnDevelopmentOriginSectionId = String(originId);
@@ -269,6 +271,7 @@ function alignWindowToReference(notes, windowStart, windowEnd, reference, maxCha
   const after = signatureForWindow(notes, windowStart);
   if (signatureCoverage(after, reference) <= signatureCoverage(before, reference) + 1e-6) {
     for (const note of moved) {
+      setNoteStart(note, originalStarts.get(note));
       delete note.returnDevelopmentRole;
       delete note.returnDevelopmentOriginSectionId;
     }
