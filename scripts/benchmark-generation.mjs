@@ -24,6 +24,8 @@ console.table(report.perGenre.map((genre) => ({
   release: `${Math.round(genre.releasePassRate * 100)}%`,
   arrangement: `${Math.round(genre.arrangementAcceptanceRate * 100)}%/${Math.round(genre.arrangementAttemptRate * 100)}%`,
   returns: `${Math.round(genre.returnDevelopmentAcceptanceRate * 100)}%/${Math.round(genre.returnDevelopmentAttemptRate * 100)}%`,
+  pocket: `${Math.round(genre.groovePocketAcceptanceRate * 100)}%/${Math.round(genre.groovePocketAttemptRate * 100)}%`,
+  pocketDelta: genre.averageGroovePocketDelta,
   weakestSubsystem: `${genre.weakestGroup.id} ${genre.weakestGroup.score}`,
   weakestDimension: `${genre.weakestDimension.id} ${genre.weakestDimension.score}`,
   band: genre.healthBand,
@@ -43,6 +45,11 @@ console.log(
 console.log(
   `Return development: ${Math.round(report.returnDevelopmentAcceptanceRate * 100)}% accepted`
   + ` of ${Math.round(report.returnDevelopmentAttemptRate * 100)}% attempted candidates`,
+);
+console.log(
+  `Groove pocket: ${Math.round(report.groovePocketAcceptanceRate * 100)}% accepted`
+  + ` of ${Math.round(report.groovePocketAttemptRate * 100)}% attempted candidates`
+  + ` · average accepted/selected delta ${report.averageGroovePocketDelta}`,
 );
 console.log(
   `Weakest genre: ${report.weakestGenre?.genre ?? "n/a"}`
