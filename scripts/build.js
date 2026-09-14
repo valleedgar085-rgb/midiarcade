@@ -81,10 +81,11 @@ fs.writeFileSync(
 );
 
 await build({
-  entryPoints: [
-    path.join(projectRoot, 'src', 'app.js'),
-    path.join(projectRoot, 'src', 'generation-worker.js'),
-  ],
+  entryPoints: {
+    app: path.join(projectRoot, 'src', 'app.js'),
+    'generation-worker': path.join(projectRoot, 'src', 'generation-worker.js'),
+    'quality-pipeline': path.join(projectRoot, 'src', 'core', 'output-quality-pipeline-register.js'),
+  },
   outdir: path.join(wwwDir, 'src'),
   bundle: true,
   splitting: true,
