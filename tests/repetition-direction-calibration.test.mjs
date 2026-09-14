@@ -64,6 +64,7 @@ test("RnB Soul fixed seeds expose signed repetition error using the production c
       }, { kind: "new" }),
       phraseResolutionRefinement: true,
       registerHealthRefinement: true,
+      repetitionRefinement: false,
     };
     const generated = generateNew(config);
     const song = applySongOutputQualityPipeline(generated, config).song;
