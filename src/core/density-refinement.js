@@ -66,35 +66,33 @@ function eligibleSplitNotes(song) {
     });
 }
 
-function splitSupportNote(note, splitIndex) {
+function splitSupportNote(note, splitIndex, parts = 2) {
   const sourceDuration = finite(note.duration);
-  const firstDuration = round(sourceDuration * 0.5);
-  const secondDuration = round(sourceDuration - firstDuration);
-  const sourceId = String(note.id ?? `support-${finite(note.start)}-${finite(note.pitch)}`);
-  return [
-    {
+  const sourceStart = finite(note.start);
+  const sourceId = String(note.id ?? `support-${sourceStart}-${finite(note.pitch)}`);
+  const unit = round(sourceDuration / parts);
+  let used = 0;
+  return Array.from({ length: parts }, (_, partIndex) => {
+    const duration = partIndex === parts - 1 ? round(sourceDuration - used) : unit;
+    const result = {
       ...note,
-      id: `${sourceId}:density-a-${splitIndex}`,
-      duration: firstDuration,
+      id: `${sourceId}:density-${String.fromCharCode(97 + partIndex)}-${splitIndex}`,
+      start: round(sourceStart + used),
+      duration,
       densityRefinementRole: "support-articulation",
-    },
-    {
-      ...note,
-      id: `${sourceId}:density-b-${splitIndex}`,
-      start: round(finite(note.start) + firstDuration),
-      duration: secondDuration,
-      densityRefinementRole: "support-articulation",
-    },
-  ];
+    };
+    used += duration;
+    return result;
+  });
 }
 
-function articulateSupport(song, splitCount) {
+function articulateSupport(song, splitCount, parts) {
   const candidate = clone(song);
   const eligible = eligibleSplitNotes(candidate).slice(0, splitCount);
   const selected = new Map();
   eligible.forEach((entry, index) => {
     const key = `${entry.trackId}:${entry.noteIndex}`;
-    selected.set(key, splitSupportNote(entry.note, index));
+    selected.set(key, splitSupportNote(entry.note, index, parts));
   });
 
   for (const track of candidate.tracks ?? []) {
@@ -112,10 +110,9 @@ function articulateSupport(song, splitCount) {
 }
 
 /**
- * Phase 6D density refinement is intentionally build-only. Calibration shows
- * every benchmark genre is currently below its critic density target, so this
- * candidate boundary only adds articulation to existing support tones. It does
- * not invent pitches, change harmony, touch melody/drums, or lengthen material.
+ * Phase 6D density refinement only adds articulation to existing support tones.
+ * High-density critic targets can use deeper three-part articulation; pitch,
+ * harmony, aggregate duration, melody, drums and bass remain untouched.
  */
 export function createDensityRefinementCandidates(song, {
   densityTarget = 0,
@@ -132,14 +129,17 @@ export function createDensityRefinementCandidates(song, {
   return SPLITS_PER_BAR
     .slice(0, Math.max(0, Math.min(MAX_DENSITY_REFINEMENT_CANDIDATES, Math.floor(maxCandidates))))
     .map((splitsPerBar, candidateIndex) => {
+      const parts = target >= 30 && candidateIndex > 0 ? 3 : 2;
+      const additionsPerSplit = parts - 1;
       const splitCount = Math.min(
-        deficitNotes,
+        Math.floor(deficitNotes / additionsPerSplit),
         eligibleCount,
         Math.max(1, Math.ceil(bars * splitsPerBar)),
       );
-      if (seenBudgets.has(splitCount)) return null;
-      seenBudgets.add(splitCount);
-      const articulated = articulateSupport(song, splitCount);
+      const budgetKey = `${parts}:${splitCount}`;
+      if (!splitCount || seenBudgets.has(budgetKey)) return null;
+      seenBudgets.add(budgetKey);
+      const articulated = articulateSupport(song, splitCount, parts);
       const afterNotesPerBar = notesPerBar(articulated.song);
       return {
         id: ["light-support", "balanced-support", "full-support"][candidateIndex],
