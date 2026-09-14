@@ -48,6 +48,16 @@ function sourceIdentity(current = {}) {
   });
 }
 
+function sourceTrackSettings(current = {}, input = {}) {
+  const supplied = input?.tracks ?? input?.trackSettings ?? input?.instruments ?? {};
+  return Object.fromEntries((current?.tracks ?? []).map((track) => {
+    const id = String(track?.id ?? "");
+    const generated = track?.settings ?? track?.controls ?? {};
+    const override = supplied?.[id] ?? {};
+    return [id, { ...generated, ...override }];
+  }).filter(([id]) => id));
+}
+
 function familyFingerprint(current = {}) {
   const identity = sourceIdentity(current);
   return [
@@ -94,6 +104,7 @@ function directionConfig(current, input, direction, seed, candidateCount, moodIn
     evolution: clamp(sourceValue(current, input, "evolution", 0.58)),
     surprise: clamp(sourceValue(current, input, "surprise", 0.28)),
     syncopation: clamp(sourceValue(current, input, "syncopation", 0.38)),
+    tracks: sourceTrackSettings(current, input),
   };
   const config = applyElementToGeneration(base, direction, {
     intensity,

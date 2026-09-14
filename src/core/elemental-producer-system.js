@@ -14,6 +14,12 @@ function hashUnit(value) {
   return (hash >>> 0) / 4294967295;
 }
 
+function offsetTrackValue(value, delta, strength, min = 0, max = 1) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return clamp(numeric + Number(delta || 0) * strength, min, max);
+}
+
 export const ELEMENT_DISPLAY_MAX = 3000;
 
 export const MOOD_INTENTS = Object.freeze({
@@ -63,14 +69,14 @@ export const ELEMENT_PROFILES = Object.freeze([
     metricLabel: "Heat",
     unit: "°F",
     description: "Heat, punch and impact: harder transients, stronger low-end accents and bigger transitions.",
-    autoIntensity: Object.freeze([0.72, 0.92]),
-    similarity: 0.84,
-    targetEnergyDelta: 0.16,
-    targetComplexityDelta: 0.02,
-    variationDelta: 0.08,
-    evolutionDelta: 0.06,
-    surpriseDelta: 0.04,
-    syncopationDelta: 0.02,
+    autoIntensity: Object.freeze([0.76, 0.96]),
+    similarity: 0.74,
+    targetEnergyDelta: 0.2,
+    targetComplexityDelta: 0.01,
+    variationDelta: 0.12,
+    evolutionDelta: 0.08,
+    surpriseDelta: 0.05,
+    syncopationDelta: 0.04,
     balancedRoute: "groove-first",
     criticDimensions: Object.freeze(["groove", "drumVariety", "density", "transitions", "production", "stageInterlock"]),
   }),
@@ -78,18 +84,18 @@ export const ELEMENT_PROFILES = Object.freeze([
     id: "electric",
     label: "Electric",
     symbol: "⚡",
-    metricLabel: "Charge",
+    metricLabel: "Voltage",
     unit: "V",
     description: "Motion, spark and energy: brighter synthesis, quicker rhythmic movement and animated detail.",
-    autoIntensity: Object.freeze([0.62, 0.86]),
-    similarity: 0.82,
-    targetEnergyDelta: 0.08,
-    targetComplexityDelta: 0.1,
-    variationDelta: 0.12,
-    evolutionDelta: 0.14,
-    surpriseDelta: 0.1,
-    syncopationDelta: 0.12,
-    balancedRoute: null,
+    autoIntensity: Object.freeze([0.7, 0.92]),
+    similarity: 0.7,
+    targetEnergyDelta: 0.12,
+    targetComplexityDelta: 0.16,
+    variationDelta: 0.18,
+    evolutionDelta: 0.2,
+    surpriseDelta: 0.16,
+    syncopationDelta: 0.2,
+    balancedRoute: "hook-first",
     criticDimensions: Object.freeze(["motif", "performance", "separation", "transitions", "production", "storyArc"]),
   }),
   Object.freeze({
@@ -99,18 +105,61 @@ export const ELEMENT_PROFILES = Object.freeze([
     metricLabel: "Flow",
     unit: "mL/min",
     description: "Flow, space and emotion: smoother attacks, longer phrasing and more spatial breathing room.",
-    autoIntensity: Object.freeze([0.7, 0.94]),
-    similarity: 0.86,
-    targetEnergyDelta: -0.08,
-    targetComplexityDelta: 0.04,
-    variationDelta: 0.05,
-    evolutionDelta: 0.08,
-    surpriseDelta: -0.04,
-    syncopationDelta: -0.02,
+    autoIntensity: Object.freeze([0.74, 0.96]),
+    similarity: 0.76,
+    targetEnergyDelta: -0.14,
+    targetComplexityDelta: 0.06,
+    variationDelta: 0.06,
+    evolutionDelta: 0.12,
+    surpriseDelta: -0.08,
+    syncopationDelta: -0.06,
     balancedRoute: "harmony-first",
     criticDimensions: Object.freeze(["harmonic", "voiceLeading", "motif", "phraseResolution", "performance", "separation"]),
   }),
 ]);
+
+const ELEMENT_TRACK_SHAPES = Object.freeze({
+  fire: Object.freeze({
+    drums: Object.freeze({ density: 0.14, variation: 0.12, humanize: -0.04 }),
+    bass: Object.freeze({ density: 0.1, variation: 0.08, humanize: -0.02 }),
+    chords: Object.freeze({ density: -0.04, variation: 0.03, humanize: -0.02 }),
+    melody: Object.freeze({ density: 0.02, variation: 0.06, humanize: -0.01 }),
+    counterpoint: Object.freeze({ density: -0.04, variation: 0.04, humanize: -0.02 }),
+    pad: Object.freeze({ density: -0.12, variation: -0.02, humanize: -0.02 }),
+  }),
+  electric: Object.freeze({
+    drums: Object.freeze({ density: 0.08, variation: 0.18, humanize: 0.04 }),
+    bass: Object.freeze({ density: 0.1, variation: 0.16, humanize: 0.04 }),
+    chords: Object.freeze({ density: 0.07, variation: 0.16, humanize: 0.05 }),
+    melody: Object.freeze({ density: 0.12, variation: 0.22, humanize: 0.06 }),
+    counterpoint: Object.freeze({ density: 0.16, variation: 0.24, humanize: 0.06 }),
+    pad: Object.freeze({ density: 0.05, variation: 0.16, humanize: 0.04 }),
+  }),
+  drip: Object.freeze({
+    drums: Object.freeze({ density: -0.12, variation: -0.04, humanize: 0.06 }),
+    bass: Object.freeze({ density: -0.07, variation: 0.02, humanize: 0.05 }),
+    chords: Object.freeze({ density: -0.08, variation: 0.05, humanize: 0.05 }),
+    melody: Object.freeze({ density: -0.08, variation: 0.08, humanize: 0.07 }),
+    counterpoint: Object.freeze({ density: -0.14, variation: 0.06, humanize: 0.07 }),
+    pad: Object.freeze({ density: 0.08, variation: 0.04, humanize: 0.04 }),
+  }),
+});
+
+function applyElementTrackShape(tracks, elementId, strength) {
+  if (!tracks || typeof tracks !== "object") return tracks;
+  const shape = ELEMENT_TRACK_SHAPES[elementId];
+  if (!shape) return tracks;
+  return Object.fromEntries(Object.entries(tracks).map(([id, source]) => {
+    const deltas = shape[id];
+    if (!deltas || !source || typeof source !== "object") return [id, source];
+    return [id, {
+      ...source,
+      density: offsetTrackValue(source.density, deltas.density, strength),
+      variation: offsetTrackValue(source.variation, deltas.variation, strength),
+      humanize: offsetTrackValue(source.humanize, deltas.humanize, strength),
+    }];
+  }));
+}
 
 export function resolveMoodIntent(value) {
   const source = typeof value === "object" && value !== null ? value.id : value;
@@ -151,7 +200,9 @@ export function elementDisplayReading(element, intensity) {
 export function elementRoute(element, mood) {
   const profile = resolveElementProfile(element);
   const moodIntent = resolveMoodIntent(mood);
-  return moodIntent.route ?? profile.balancedRoute ?? null;
+  // Element is the production/composition personality. Mood still changes the
+  // numeric targets, but must not collapse all three Elements onto one route.
+  return profile.balancedRoute ?? moodIntent.route ?? null;
 }
 
 export function applyElementToGeneration(base, element, {
@@ -174,6 +225,7 @@ export function applyElementToGeneration(base, element, {
     evolution: clamp((base.evolution ?? 0.58) + moodIntent.evolutionDelta + profile.evolutionDelta * strength),
     surprise: clamp((base.surprise ?? 0.28) + moodIntent.surpriseDelta + profile.surpriseDelta * strength),
     syncopation: clamp((base.syncopation ?? 0.38) + moodIntent.syncopationDelta + profile.syncopationDelta * strength),
+    tracks: applyElementTrackShape(base.tracks, profile.id, strength),
     compositionRoute: elementRoute(profile, moodIntent),
     moodIntent: moodIntent.id,
     element: profile.id,
