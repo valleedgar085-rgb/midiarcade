@@ -111,6 +111,8 @@ function summarizeGenre(genre, results) {
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
     arrangementAttemptRate: averageOf(genreResults, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
     arrangementAcceptanceRate: averageOf(genreResults, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
+    returnDevelopmentAttemptRate: averageOf(genreResults, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
+    returnDevelopmentAcceptanceRate: averageOf(genreResults, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
     weakestGroup,
     weakestDimension,
     groupAverages,
@@ -158,9 +160,10 @@ export function runGenerationBenchmark({
       const generatedSong = generateNew(generationConfig);
       const postprocessed = qualityEvolution
         ? applySongOutputQualityPostprocess(generatedSong, generationConfig)
-        : { song: generatedSong, diagnostics: null };
+        : { song: generatedSong, diagnostics: null, returnDiagnostics: null };
       const song = postprocessed.song;
       const arrangementDiagnostics = postprocessed.diagnostics;
+      const returnDiagnostics = postprocessed.returnDiagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
       const dimensionScores = { ...(evaluation.subscores ?? {}) };
@@ -205,6 +208,11 @@ export function runGenerationBenchmark({
         arrangementFamily: arrangementDiagnostics?.family ?? null,
         arrangementScoreDelta: finite(arrangementDiagnostics?.scoreDelta, 0),
         arrangementSubsystemDelta: finite(arrangementDiagnostics?.arrangementDelta, 0),
+        returnDevelopmentAttempted: Boolean(returnDiagnostics?.attempted),
+        returnDevelopmentAccepted: Boolean(returnDiagnostics?.accepted),
+        returnDevelopmentId: returnDiagnostics?.id ?? null,
+        returnDevelopmentScoreDelta: finite(returnDiagnostics?.scoreDelta, 0),
+        returnDevelopmentTargetDelta: finite(returnDiagnostics?.targetDelta, 0),
         weakestDimension,
         weakestGroup,
         dimensionScores,
@@ -250,6 +258,8 @@ export function runGenerationBenchmark({
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, results.length), 3),
     arrangementAttemptRate: averageOf(results, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
     arrangementAcceptanceRate: averageOf(results, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
+    returnDevelopmentAttemptRate: averageOf(results, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
+    returnDevelopmentAcceptanceRate: averageOf(results, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
     weakestGenre: perGenre[0] ?? null,
     weakestGroup,
     weakestDimension,
