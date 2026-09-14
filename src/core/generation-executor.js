@@ -178,6 +178,7 @@ export function createGenerationExecutor({
       selectedResult = applyResultOutputQualityPostprocess(selectedResult, config);
       flightRecorder.mark(flightId, "finalize", {
         arrangementEvolution: selectedResult?.outputQualityDiagnostics?.arrangement ?? null,
+        returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
