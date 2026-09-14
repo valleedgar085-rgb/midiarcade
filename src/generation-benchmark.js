@@ -113,6 +113,9 @@ function summarizeGenre(genre, results) {
     arrangementAcceptanceRate: averageOf(genreResults, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     returnDevelopmentAttemptRate: averageOf(genreResults, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
     returnDevelopmentAcceptanceRate: averageOf(genreResults, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
+    groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
+    groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
+    averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
     weakestGroup,
     weakestDimension,
     groupAverages,
@@ -160,10 +163,11 @@ export function runGenerationBenchmark({
       const generatedSong = generateNew(generationConfig);
       const postprocessed = qualityEvolution
         ? applySongOutputQualityPostprocess(generatedSong, generationConfig)
-        : { song: generatedSong, diagnostics: null, returnDiagnostics: null };
+        : { song: generatedSong, diagnostics: null, returnDiagnostics: null, grooveDiagnostics: null };
       const song = postprocessed.song;
       const arrangementDiagnostics = postprocessed.diagnostics;
       const returnDiagnostics = postprocessed.returnDiagnostics;
+      const grooveDiagnostics = postprocessed.grooveDiagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
       const dimensionScores = { ...(evaluation.subscores ?? {}) };
@@ -213,6 +217,11 @@ export function runGenerationBenchmark({
         returnDevelopmentId: returnDiagnostics?.id ?? null,
         returnDevelopmentScoreDelta: finite(returnDiagnostics?.scoreDelta, 0),
         returnDevelopmentTargetDelta: finite(returnDiagnostics?.targetDelta, 0),
+        groovePocketAttempted: Boolean(grooveDiagnostics?.attempted),
+        groovePocketAccepted: Boolean(grooveDiagnostics?.accepted),
+        groovePocketId: grooveDiagnostics?.id ?? null,
+        groovePocketDelta: finite(grooveDiagnostics?.grooveDelta, 0),
+        groovePocketLockDelta: finite(grooveDiagnostics?.lockDelta, 0),
         weakestDimension,
         weakestGroup,
         dimensionScores,
@@ -260,6 +269,9 @@ export function runGenerationBenchmark({
     arrangementAcceptanceRate: averageOf(results, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     returnDevelopmentAttemptRate: averageOf(results, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
     returnDevelopmentAcceptanceRate: averageOf(results, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
+    groovePocketAttemptRate: averageOf(results, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
+    groovePocketAcceptanceRate: averageOf(results, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
+    averageGroovePocketDelta: averageOf(results, ({ groovePocketDelta }) => groovePocketDelta, 2),
     weakestGenre: perGenre[0] ?? null,
     weakestGroup,
     weakestDimension,
