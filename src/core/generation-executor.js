@@ -10,9 +10,16 @@ import {
 
 function evolveGenerationPayload(kind, payload = {}) {
   if (!["new", "similar", "songVariations"].includes(kind)) return payload;
+  const evolvedConfig = applyOutputQualityEvolution(payload?.config ?? {}, { kind });
+  const phraseResolutionRefinement = typeof evolvedConfig.phraseResolutionRefinement === "boolean"
+    ? evolvedConfig.phraseResolutionRefinement
+    : kind === "new";
   return {
     ...payload,
-    config: applyOutputQualityEvolution(payload?.config ?? {}, { kind }),
+    config: {
+      ...evolvedConfig,
+      phraseResolutionRefinement,
+    },
   };
 }
 
@@ -180,6 +187,7 @@ export function createGenerationExecutor({
         arrangementEvolution: selectedResult?.outputQualityDiagnostics?.arrangement ?? null,
         returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
         densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
+        phraseResolutionRefinement: selectedResult?.outputQualityDiagnostics?.phraseResolutionRefinement ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
