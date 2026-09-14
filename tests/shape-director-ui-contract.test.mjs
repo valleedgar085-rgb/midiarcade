@@ -25,9 +25,18 @@ test("Shape Director runtime remains candidate-first and history-safe", () => {
   assert.match(app, /function discardShapeDirectorCandidate[\s\S]*?transaction\.before/);
 });
 
+test("Shape Director presents target, direction, and compare as three obvious stages", () => {
+  assert.match(css, /PHASE 5: SHAPE DIRECTOR/);
+  assert.match(css, /content:"1 · TARGET"/);
+  assert.match(css, /content:"2 · MUSICAL DIRECTION"/);
+  assert.match(css, /content:"3 · COMPARE & COMMIT"/);
+  assert.match(css, /\.shape-director-commit button\.is-primary[\s\S]*?linear-gradient\(135deg,#16a34a,#047857\)/);
+});
+
 test("Shape Director is touch friendly and landscape aware", () => {
-  assert.match(css, /PHASE 4: SHAPE DIRECTOR/);
-  assert.match(css, /\.shape-director-directions button\{[\s\S]*?min-height:34px/);
+  assert.match(css, /\.shape-director-directions button\{[\s\S]*?min-height:36px/);
   assert.match(css, /@media\(max-width:680px\)[\s\S]*?grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(css, /@media\(max-width:680px\)[\s\S]*?min-height:42px/);
   assert.match(css, /@media\(orientation:landscape\) and \(max-height:720px\)[\s\S]*?\.shape-director-panel/);
+  assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
 });
