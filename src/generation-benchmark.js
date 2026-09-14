@@ -5,7 +5,7 @@ import {
   GENRE_PROFILES,
 } from "./music-engine.js";
 import { applyOutputQualityEvolution } from "./core/output-quality-evolution.js";
-import { applySongOutputQualityPostprocess } from "./core/output-quality-postprocess.js";
+import { applySongOutputQualityPipeline } from "./core/output-quality-pipeline.js";
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -40,8 +40,7 @@ function groupScoresFor(subscores = {}) {
 }
 
 function weakestEntry(scores = {}) {
-  const entries = Object.entries(scores)
-    .filter(([, score]) => Number.isFinite(Number(score)));
+  const entries = Object.entries(scores).filter(([, score]) => Number.isFinite(Number(score)));
   if (!entries.length) return { id: "unknown", score: 0 };
   const [id, score] = entries.reduce((lowest, entry) => entry[1] < lowest[1] ? entry : lowest);
   return { id, score: round(score, 1) };
@@ -81,14 +80,7 @@ function technicalHealth(song, evaluation, releaseGate) {
     assemblyChecks * 100,
     exportChecks * 100,
   ]));
-  return {
-    score,
-    scaleFit,
-    masterChecks,
-    assemblyChecks,
-    exportChecks,
-    releasePass,
-  };
+  return { score, scaleFit, masterChecks, assemblyChecks, exportChecks, releasePass };
 }
 
 function summarizeGenre(genre, results) {
@@ -113,6 +105,9 @@ function summarizeGenre(genre, results) {
     arrangementAcceptanceRate: averageOf(genreResults, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     returnDevelopmentAttemptRate: averageOf(genreResults, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
     returnDevelopmentAcceptanceRate: averageOf(genreResults, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
+    densityRefinementAttemptRate: averageOf(genreResults, ({ densityRefinementAttempted }) => densityRefinementAttempted ? 1 : 0, 3),
+    densityRefinementAcceptanceRate: averageOf(genreResults, ({ densityRefinementAccepted }) => densityRefinementAccepted ? 1 : 0, 3),
+    averageDensityRefinementDelta: averageOf(genreResults, ({ densityRefinementDelta }) => densityRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
@@ -131,22 +126,12 @@ function recommendationsFor({ perGenre, weakestGroup, weakestDimension, averageT
   const recommendations = [];
   const priorityGenre = perGenre[0];
   if (priorityGenre) {
-    recommendations.push(
-      `Prioritize ${priorityGenre.genre}: ${priorityGenre.weakestGroup.id} is its weakest subsystem at ${priorityGenre.weakestGroup.score}.`,
-    );
+    recommendations.push(`Prioritize ${priorityGenre.genre}: ${priorityGenre.weakestGroup.id} is its weakest subsystem at ${priorityGenre.weakestGroup.score}.`);
   }
-  if (weakestGroup.id !== "unknown") {
-    recommendations.push(`Global producer-brain focus: ${weakestGroup.id} averages ${weakestGroup.score}.`);
-  }
-  if (weakestDimension.id !== "unknown") {
-    recommendations.push(`Lowest individual critic dimension: ${weakestDimension.id} at ${weakestDimension.score}.`);
-  }
-  if (averageTechnicalScore < 100) {
-    recommendations.push(`Technical readiness averages ${averageTechnicalScore}; fix safety/export/master failures before creative tuning.`);
-  }
-  if (releasePassRate < 1) {
-    recommendations.push(`Raw candidate release-pass rate is ${Math.round(releasePassRate * 100)}%; target the lowest creative dimensions before increasing search cost.`);
-  }
+  if (weakestGroup.id !== "unknown") recommendations.push(`Global producer-brain focus: ${weakestGroup.id} averages ${weakestGroup.score}.`);
+  if (weakestDimension.id !== "unknown") recommendations.push(`Lowest individual critic dimension: ${weakestDimension.id} at ${weakestDimension.score}.`);
+  if (averageTechnicalScore < 100) recommendations.push(`Technical readiness averages ${averageTechnicalScore}; fix safety/export/master failures before creative tuning.`);
+  if (releasePassRate < 1) recommendations.push(`Raw candidate release-pass rate is ${Math.round(releasePassRate * 100)}%; target the lowest creative dimensions before increasing search cost.`);
   return recommendations;
 }
 
@@ -160,16 +145,15 @@ export function runGenerationBenchmark({
   for (const genre of genres) {
     for (const seed of seeds) {
       const rawConfig = { genre, seed: `${seed}:${genre}`, bars, candidateCount: 1 };
-      const generationConfig = qualityEvolution
-        ? applyOutputQualityEvolution(rawConfig, { kind: "new" })
-        : rawConfig;
+      const generationConfig = qualityEvolution ? applyOutputQualityEvolution(rawConfig, { kind: "new" }) : rawConfig;
       const generatedSong = generateNew(generationConfig);
       const postprocessed = qualityEvolution
-        ? applySongOutputQualityPostprocess(generatedSong, generationConfig)
-        : { song: generatedSong, diagnostics: null, returnDiagnostics: null, grooveDiagnostics: null };
+        ? applySongOutputQualityPipeline(generatedSong, generationConfig)
+        : { song: generatedSong, diagnostics: null, returnDiagnostics: null, densityDiagnostics: null, grooveDiagnostics: null };
       const song = postprocessed.song;
       const arrangementDiagnostics = postprocessed.diagnostics;
       const returnDiagnostics = postprocessed.returnDiagnostics;
+      const densityDiagnostics = postprocessed.densityDiagnostics;
       const grooveDiagnostics = postprocessed.grooveDiagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
@@ -182,9 +166,7 @@ export function runGenerationBenchmark({
       const technicalScore = technical.score;
       const overallScore = round(musicalScore * 0.82 + technicalScore * 0.18);
       const effectiveBars = Math.max(1, finite(song.meta?.bars, song.bars ?? bars));
-      const pitchedNoteCount = (song.tracks ?? [])
-        .filter((track) => track.id !== "drums")
-        .reduce((sum, track) => sum + (track.notes ?? []).length, 0);
+      const pitchedNoteCount = (song.tracks ?? []).filter((track) => track.id !== "drums").reduce((sum, track) => sum + (track.notes ?? []).length, 0);
       const notesPerBar = pitchedNoteCount / effectiveBars;
       const densityTarget = finite(evaluation?.diagnostics?.densityTarget, notesPerBar);
       const densityDelta = notesPerBar - densityTarget;
@@ -230,6 +212,11 @@ export function runGenerationBenchmark({
         returnDevelopmentId: returnDiagnostics?.id ?? null,
         returnDevelopmentScoreDelta: finite(returnDiagnostics?.scoreDelta, 0),
         returnDevelopmentTargetDelta: finite(returnDiagnostics?.targetDelta, 0),
+        densityRefinementAttempted: Boolean(densityDiagnostics?.attempted),
+        densityRefinementAccepted: Boolean(densityDiagnostics?.accepted),
+        densityRefinementId: densityDiagnostics?.id ?? null,
+        densityRefinementDelta: finite(densityDiagnostics?.densityDelta, 0),
+        densityRefinementErrorDelta: finite(densityDiagnostics?.densityErrorDelta, 0),
         groovePocketAttempted: Boolean(grooveDiagnostics?.attempted),
         groovePocketAccepted: Boolean(grooveDiagnostics?.accepted),
         groovePocketId: grooveDiagnostics?.id ?? null,
@@ -285,6 +272,9 @@ export function runGenerationBenchmark({
     arrangementAcceptanceRate: averageOf(results, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     returnDevelopmentAttemptRate: averageOf(results, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
     returnDevelopmentAcceptanceRate: averageOf(results, ({ returnDevelopmentAccepted }) => returnDevelopmentAccepted ? 1 : 0, 3),
+    densityRefinementAttemptRate: averageOf(results, ({ densityRefinementAttempted }) => densityRefinementAttempted ? 1 : 0, 3),
+    densityRefinementAcceptanceRate: averageOf(results, ({ densityRefinementAccepted }) => densityRefinementAccepted ? 1 : 0, 3),
+    averageDensityRefinementDelta: averageOf(results, ({ densityRefinementDelta }) => densityRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(results, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(results, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(results, ({ groovePocketDelta }) => groovePocketDelta, 2),
