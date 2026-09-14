@@ -1,0 +1,257 @@
+import {
+  createSongFingerprint,
+  evaluateSongCandidate,
+  evaluateSongReleaseGate,
+} from "../music-engine.js";
+import {
+  createDensityRefinementCandidates,
+  MAX_DENSITY_REFINEMENT_CANDIDATES,
+} from "./density-refinement.js";
+import {
+  applyResultOutputQualityPostprocess,
+  applySongOutputQualityPostprocess,
+} from "./output-quality-postprocess.js";
+
+const DENSITY_ATTEMPT_CEILING = 86;
+
+function finite(value, fallback = 0) {
+  return Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+function round(value, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
+}
+
+function creativeFloor(evaluation) {
+  const values = Object.values(evaluation?.subscores ?? {}).filter((value) => Number.isFinite(Number(value)));
+  return values.length ? Math.min(...values.map(Number)) : 0;
+}
+
+function acceptedSongMetadata(song, evaluation, releaseGate, diagnostics) {
+  const scoreDetails = song?.meta?.scoreDetails ?? {};
+  return {
+    ...(song.meta ?? {}),
+    ideaFingerprint: createSongFingerprint(song),
+    scoreDetails: {
+      ...scoreDetails,
+      totalScore: round(evaluation.score),
+      subscores: { ...(evaluation.subscores ?? {}) },
+      releaseGate,
+      outputQualityPostprocess: {
+        ...(scoreDetails.outputQualityPostprocess ?? {}),
+        densityRefinement: diagnostics,
+      },
+    },
+  };
+}
+
+function densityAssessment(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const beforeDensity = finite(before?.subscores?.density);
+  const afterDensity = finite(after?.subscores?.density);
+  const afterFloor = creativeFloor(after);
+  const densityDelta = afterDensity - beforeDensity;
+  const scoreDelta = finite(after?.score) - finite(before?.score);
+  const floorDelta = afterFloor - beforeFloor;
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const accepted = Boolean(
+    release?.passed
+    && scaleSafe
+    && densityDelta >= 0.75
+    && scoreDelta >= -0.25
+    && floorDelta >= -0.75
+    && candidate.densityErrorDelta < -1e-6
+  );
+
+  return {
+    ...candidate,
+    after,
+    release,
+    beforeDensity,
+    afterDensity,
+    afterFloor,
+    densityDelta,
+    scoreDelta,
+    floorDelta,
+    accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : candidate.densityErrorDelta >= -1e-6 ? "density-direction"
+          : accepted ? "density-win" : "critic-regression",
+  };
+}
+
+function compareDensityAssessments(left, right) {
+  const densityDelta = right.densityDelta - left.densityDelta;
+  if (Math.abs(densityDelta) > 1e-9) return densityDelta;
+  const scoreDelta = finite(right.after?.score) - finite(left.after?.score);
+  if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+  const floorDelta = right.afterFloor - left.afterFloor;
+  if (Math.abs(floorDelta) > 1e-9) return floorDelta;
+  return left.candidateIndex - right.candidateIndex;
+}
+
+function disabledDensityDiagnostics(reason = "disabled", patch = {}) {
+  return Object.freeze({
+    attempted: false,
+    accepted: false,
+    changed: false,
+    reason,
+    candidatesEvaluated: 0,
+    candidateLimit: MAX_DENSITY_REFINEMENT_CANDIDATES,
+    candidateIds: [],
+    ...patch,
+  });
+}
+
+function densityDiagnosticsFor(assessment, before, candidatesEvaluated, candidateIds) {
+  return Object.freeze({
+    attempted: true,
+    accepted: Boolean(assessment?.accepted),
+    changed: Boolean(assessment?.changedNotes),
+    reason: assessment?.reason ?? "critic-regression",
+    id: assessment?.id ?? null,
+    changedNotes: finite(assessment?.changedNotes),
+    candidatesEvaluated,
+    candidateLimit: MAX_DENSITY_REFINEMENT_CANDIDATES,
+    candidateIds,
+    beforeScore: round(before?.score),
+    afterScore: round(assessment?.after?.score),
+    scoreDelta: round(assessment?.scoreDelta),
+    beforeDensity: round(assessment?.beforeDensity),
+    afterDensity: round(assessment?.afterDensity),
+    densityDelta: round(assessment?.densityDelta),
+    beforeNotesPerBar: round(assessment?.beforeNotesPerBar, 3),
+    afterNotesPerBar: round(assessment?.afterNotesPerBar, 3),
+    densityTarget: round(assessment?.densityTarget, 3),
+    densityErrorDelta: round(assessment?.densityErrorDelta, 3),
+    floorDelta: round(assessment?.floorDelta),
+  });
+}
+
+function applyDensityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  if (config.densityRefinement !== true) {
+    return { song, diagnostics: disabledDensityDiagnostics() };
+  }
+
+  const before = evaluateCandidate(song);
+  const beforeDensity = finite(before?.subscores?.density);
+  const densityTarget = finite(before?.diagnostics?.densityTarget, 0);
+  if (beforeDensity >= DENSITY_ATTEMPT_CEILING) {
+    return {
+      song,
+      diagnostics: disabledDensityDiagnostics("already-strong", {
+        beforeDensity: round(beforeDensity),
+        densityTarget: round(densityTarget, 3),
+      }),
+    };
+  }
+  if (!(densityTarget > 0)) {
+    return {
+      song,
+      diagnostics: disabledDensityDiagnostics("missing-target", {
+        beforeDensity: round(beforeDensity),
+      }),
+    };
+  }
+
+  const candidates = createDensityRefinementCandidates(song, { densityTarget });
+  if (!candidates.length) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: true,
+        accepted: false,
+        changed: false,
+        reason: "no-support-opportunity",
+        beforeDensity: round(beforeDensity),
+        densityTarget: round(densityTarget, 3),
+        candidatesEvaluated: 0,
+        candidateLimit: MAX_DENSITY_REFINEMENT_CANDIDATES,
+        candidateIds: [],
+      }),
+    };
+  }
+
+  const beforeFloor = creativeFloor(before);
+  const assessments = candidates.map((candidate) => densityAssessment(
+    candidate,
+    before,
+    beforeFloor,
+    evaluateCandidate,
+    evaluateReleaseGate,
+  ));
+  const candidateIds = assessments.map(({ id }) => id);
+  const accepted = assessments.filter((assessment) => assessment.accepted).sort(compareDensityAssessments);
+  const ranked = [...assessments].sort(compareDensityAssessments);
+  const selected = accepted[0] ?? ranked[0];
+  const diagnostics = densityDiagnosticsFor(selected, before, assessments.length, candidateIds);
+
+  if (!accepted.length) return { song, diagnostics };
+
+  selected.song.outputQualityEvolution = {
+    ...(selected.song.outputQualityEvolution ?? {}),
+    densityRefinement: {
+      accepted: true,
+      scoreDelta: diagnostics.scoreDelta,
+      densityDelta: diagnostics.densityDelta,
+      densityErrorDelta: diagnostics.densityErrorDelta,
+      candidatesEvaluated: diagnostics.candidatesEvaluated,
+    },
+  };
+  selected.song.meta = acceptedSongMetadata(selected.song, selected.after, selected.release, diagnostics);
+  return { song: selected.song, diagnostics };
+}
+
+/**
+ * Phase 6D wrapper: preserve the existing arrangement/return/pocket pipeline,
+ * then audition bounded support articulation only when the critic confirms that
+ * density is weak. Rejected density work preserves the exact incoming song.
+ */
+export function applySongOutputQualityPipeline(song, config = {}, {
+  evaluateCandidate = evaluateSongCandidate,
+  evaluateReleaseGate = evaluateSongReleaseGate,
+} = {}) {
+  const base = applySongOutputQualityPostprocess(song, config, {
+    evaluateCandidate,
+    evaluateReleaseGate,
+  });
+  const density = applyDensityRefinement(
+    base.song,
+    config,
+    evaluateCandidate,
+    evaluateReleaseGate,
+  );
+  return {
+    ...base,
+    song: density.song,
+    densityDiagnostics: density.diagnostics,
+  };
+}
+
+export function applyResultOutputQualityPipeline(result, config = {}, evaluators = {}) {
+  if (!result?.song) return result;
+  const baseResult = applyResultOutputQualityPostprocess(result, config, evaluators);
+  if (config.densityRefinement !== true) return baseResult;
+
+  const evaluateCandidate = evaluators.evaluateCandidate ?? evaluateSongCandidate;
+  const evaluateReleaseGate = evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate;
+  const density = applyDensityRefinement(
+    baseResult.song,
+    config,
+    evaluateCandidate,
+    evaluateReleaseGate,
+  );
+  if (!density.diagnostics?.accepted || density.song === baseResult.song) return baseResult;
+
+  return {
+    ...baseResult,
+    song: density.song,
+    outputQualityDiagnostics: {
+      ...(baseResult.outputQualityDiagnostics ?? {}),
+      densityRefinement: density.diagnostics,
+    },
+  };
+}
