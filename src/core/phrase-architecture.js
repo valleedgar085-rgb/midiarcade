@@ -56,12 +56,12 @@ export function phraseLandingRole({
 
 export function phraseLandingProfile(role = "answer") {
   const profiles = {
-    question: { direction: 1, avoidRoot: true, durationScale: 0.78, velocityDelta: -2, articulation: "light" },
-    response: { direction: -1, avoidRoot: false, durationScale: 0.88, velocityDelta: -1, articulation: "connected" },
-    answer: { direction: -1, avoidRoot: false, durationScale: 1.05, velocityDelta: 2, articulation: "tenuto" },
-    lift: { direction: 1, avoidRoot: false, durationScale: 1.08, velocityDelta: 3, articulation: "tenuto" },
-    suspension: { direction: 0, avoidRoot: true, durationScale: 1.14, velocityDelta: 1, articulation: "tenuto" },
-    resolution: { direction: -1, avoidRoot: false, durationScale: 1.22, velocityDelta: 4, articulation: "tenuto" },
+    question: { direction: 1, avoidRoot: true, durationScale: 0.76, velocityDelta: -2, articulation: "light" },
+    response: { direction: -1, avoidRoot: false, durationScale: 0.86, velocityDelta: -1, articulation: "connected" },
+    answer: { direction: -1, avoidRoot: false, durationScale: 1.08, velocityDelta: 2, articulation: "tenuto" },
+    lift: { direction: 1, avoidRoot: false, durationScale: 1.05, velocityDelta: 4, articulation: "tenuto" },
+    suspension: { direction: 0, avoidRoot: true, durationScale: 1.15, velocityDelta: 2, articulation: "tenuto" },
+    resolution: { direction: -1, avoidRoot: false, durationScale: 1.24, velocityDelta: 6, articulation: "tenuto" },
   };
   return Object.freeze(profiles[role] ?? profiles.answer);
 }
