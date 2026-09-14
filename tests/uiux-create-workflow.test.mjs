@@ -72,17 +72,15 @@ test("Create copy explains reference, direction, generation and Elements without
 });
 
 test("every contracted Create control receives intent, event and contextual-help wiring", () => {
-  assert.match(contract, /data\.createControl = id/);
-  assert.match(contract, /data\.createIntent = contract\.intent/);
-  assert.match(contract, /data\.createEvent = contract\.event/);
+  assert.match(contract, /dataset\.createControl = id/);
+  assert.match(contract, /dataset\.createIntent = contract\.intent/);
+  assert.match(contract, /dataset\.createEvent = contract\.event/);
   assert.match(contract, /aria-description/);
   for (const eventName of ["focusin", "pointerover", "input", "change", "click"]) {
     assert.match(contract, new RegExp(`"${eventName}"`), `${eventName} must refresh Create control context`);
   }
-  const moveIndex = presentation.indexOf("moveGenerationEssentials(rootDocument, createPanel)");
-  const advancedIndex = presentation.indexOf("consolidateAdvancedDirection(rootDocument, createPanel)");
-  const contractIndex = presentation.indexOf("applyCreateControlContract(rootDocument, createPanel)");
-  assert.ok(contractIndex > advancedIndex && advancedIndex > moveIndex, "wiring must apply after controls reach their final DOM positions");
+  const calls = presentation.match(/upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateAdvancedDirection\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
+  assert.ok(calls, "Create wiring must apply only after the controls reach their final DOM positions");
 });
 
 test("Create layout overrides inherited grid spans and restores full mobile facts", () => {
