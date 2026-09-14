@@ -1,329 +1,181 @@
 # MIDI Arcade
 
-MIDI Arcade is a local-first Android piano improvisation studio and deterministic multitrack MIDI song generator. It turns a musical direction into a structured backing band, gives the player live harmony guidance, captures a piano performance, and exports the band plus the take as an editable Standard MIDI File.
+MIDI Arcade is a local-first Android music creation studio and deterministic multitrack MIDI song generator. It combines producer-directed generation, Song DNA, Fire / Electric / Drip creative personalities, non-destructive Shape editing, Android-safe preview playback, and DAW-ready MIDI export.
 
-The project started as a song-generation and MIDI workflow experiment and has evolved into a much stricter producer-oriented system: deterministic composition, critic-guided candidate search, surgical repair, Android-safe preview playback, DAW-ready MIDI export, measurable quality gates, and a modular application architecture built to support continued iteration without destabilizing the music engine.
+The project is designed around one rule: musical improvements only stay when they remain deterministic, measurable, export-safe, and compatible with the existing release gates.
 
-## Flagship loop
+## Current production state
 
-1. **Create** — generate a genre-aware arrangement with drums, bass, chords, melody, counterline, and atmosphere.
-2. **Jam** — play the multitouch piano, a computer keyboard, Web MIDI, or native Android MIDI/USB input.
-3. **Improve** — follow the active and upcoming chord, highlight chord/scale tones, and receive private on-device feedback for pitch fit, chord tones, pocket, and phrasing.
-4. **Finish elsewhere** — edit notes in the built-in piano roll, then export one Type-1 `.mid` with six named band tracks and an optional seventh Live Piano Take.
+`main` includes the merged Phase 5 work from PR #24: **safer MIDI export, stronger Elements, Create/Shape polish, and Create ↔ Shape Integration Phase 1**.
 
-Jam Studio supports sustain-pedal input, hot-plug refresh, stuck-note cleanup, backing-only playback, partial take quantization, practice streaks, and a separate personal-best score. It does not reward playing more notes; simple, well-placed phrases can score as highly as busy ones.
+The merged-main `Build MIDI Arcade APK` workflow completed successfully after the Phase 5 merge. The Phase 5 branch also passed the complete repository quality gate, Music Quality Lab, Android asset sync, protected initial-HTML budget, and install-safe Preview APK build.
 
-## Composition and editing
+### Phase 5 highlights
 
-The deterministic engine now covers a broad production palette including Techno, Trap, R&B / Soul, Ambient, Drum & Bass, Hip-Hop, Jazz, Neo Soul, Pop, Pop Radio, Rap, Reggaeton, Rock, Country, Drill, Lo-Fi Hip-Hop, Synth Pop / Radio, Funk, Synthwave, Afrobeats, and House. Each profile supplies its own tempo pocket, modes, groove grammar, chord movement, phrase behavior, arrangement shape, human feel, and General MIDI palette.
+- **Safer MIDI export**
+  - generated notes cannot be lengthened beyond their sanitized export duration;
+  - role-specific duration caps and section/end release protection reduce hanging notes;
+  - near-duplicate same-pitch onsets collapse safely;
+  - genuine retriggers receive an explicit release gap;
+  - generated sustain is normalized off by default, with explicit sustain preservation available when requested;
+  - export preparation remains clone-only, so preview playback is not rewritten by export cleanup.
 
-- **New song idea** creates a new seed, form, harmony, motif, groove, sound palette, and every instrument part.
-- **More like this** preserves the idea's musical DNA while composing a related variation.
-- **Power, Motion, Bloom, and Hush** rewrite only the selected instrument.
-- **Piano roll** tools draw, select, quantize, humanize, nudge, resize, transpose, duplicate, and delete notes with one-step Undo.
-- **Human feel** controls expose triplet spice, transition rolls, phrase evolution, surprise, swing, and timing variation.
-- **Autosave** restores the latest valid song, live take, settings, score, and practice progress from on-device storage.
+- **Stronger Fire / Electric / Drip separation**
+  - **Fire** emphasizes groove, punch, impact, density and rhythmic authority;
+  - **Electric** emphasizes hooks, motion, voltage and forward energy;
+  - **Drip** emphasizes harmony, space, flow and emotional color;
+  - all three retain the same protected song-family identity: key, mode, tempo, bars, chord path and lineage remain authoritative.
 
-Generation is deterministic and multi-candidate. The Producer Brain can expand a bounded search only when the normal pool misses its musical target, diagnose the weakest dependency group, steer additional auditions toward that weakness, and test at most two targeted repairs. Repairs are never accepted merely because they are different: they must improve the diagnosed weakness while preserving scale safety, release quality, critical musical dimensions, and overall balance.
+- **Create workflow polish**
+  - clearer reference → direction → generation flow;
+  - stronger primary action hierarchy and advanced-control language;
+  - exhaustive interaction contracts cover Create controls, workflow buttons, disclosures and Element choices;
+  - new static Create interactions fail closed unless they receive explicit producer-facing copy, intent, event, accessibility and contextual-help wiring.
 
-The browser preview uses layered filtered voices, stereo placement, convolution ambience, a tempo-safe delay bus, low-end cleanup, saturation, compression, and generated CC11 expression curves. Android uses a deliberately cheaper preview graph and tighter voice budget to reduce gaps and dropouts on constrained devices. Exported sound still depends on the receiving DAW or MIDI instrument.
+- **Shape Director polish**
+  - clearer **Target → Musical Direction → Compare & Commit** hierarchy;
+  - stronger selected states and mobile A/B/commit controls;
+  - existing section, track and selected-note targeting remains non-destructive until accepted.
 
-## Why the project evolved this way
+- **Create ↔ Shape Integration — Phase 1**
+  - Create exposes **Shape this song →** after a generated song exists;
+  - the handoff carries the authoritative current title, genre, key/mode, BPM, arrangement length, groove, Song DNA and selected Element;
+  - Shape shows a persistent **FROM CREATE · SONG DNA** context ribbon;
+  - direct Shape entry re-reads the latest generated song to prevent stale context;
+  - **Edit direction** returns to Create without discarding the current song;
+  - the bridge stays inside the existing app bundle so protected startup/HTML budgets are not relaxed.
 
-The central engineering problem was never just “generate more notes.” It was to make generated songs feel more deliberate while preserving determinism, Android reliability, MIDI safety, and the ability to improve one weak musical idea without destroying everything around it.
+## Product workflow
 
-That led to several recurring rules:
+1. **Create** — direct the song, generate a new idea or a related version, and choose Fire, Electric or Drip when desired.
+2. **Shape** — target a section, instrument or selected notes; choose a musical direction and strength; audition Before/After; Accept or Discard.
+3. **Mix / Preview** — audition with the browser or Android preview engine using bounded device-aware DSP and voice budgets.
+4. **Finish / Export** — export clean multitrack Type-1 MIDI for FL Studio or another DAW.
 
-- **Determinism first.** The same seed and configuration must reproduce the same result; generation code does not use unseeded `Math.random()`.
-- **Measure before tuning.** Music Quality Lab, release-gauntlet tests, repair-effectiveness calibration, and fixed real-seed regressions are used before keeping a new strategy.
-- **Prefer surgical edits.** A two-bar problem should not require rewriting an entire song unless the whole-song alternative is measurably better.
-- **Reject collateral damage.** A repair can improve its target and still be rejected if it damages harmony, groove, genre authenticity, separation, creative floor, release readiness, or clean melody/counterpoint dialogue.
-- **Keep CPU bounded.** Candidate search stays under a hard 12-candidate ceiling and targeted repair remains capped at two attempts.
-- **Keep Android honest.** Preview quality is intentionally different from desktop quality when a cheaper graph is necessary to protect playback continuity.
-- **Keep the architecture reviewable.** Large orchestration responsibilities have progressively moved behind smaller state, generation, session, and UI contracts while the sensitive deterministic music engine remains protected.
+## Producer Brain and generation
 
-## Development journey
+Generation is deterministic and multi-candidate. Producer Brain can diagnose weak musical dimensions, steer bounded search toward the weakness, and attempt targeted repairs without increasing the hard search ceiling or bypassing explicit user controls.
 
-The following history summarizes the major work completed since the current development effort began, why each step was needed, and what changed as a result.
+Core invariants:
 
-### 1. Phrase generation and Android preview baseline — PR #5
+- same seed + same configuration reproduces the same musical result;
+- generation does not use unseeded `Math.random()`;
+- explicit candidate counts remain authoritative;
+- explicit composition routes are never silently overridden;
+- candidate search stays under the hard **12-candidate ceiling**;
+- targeted repair stays capped at **2 attempts**;
+- scale safety, MIDI bounds, release quality, novelty, interlock and song-family identity remain regression-tested;
+- repairs must improve the diagnosed problem without causing unacceptable collateral regressions.
 
-**Why:** The early generator had overlapping phrase-generation paths and an Android preview baseline that needed to become repeatable before deeper musical work could be trusted.
+The Music Quality Lab remains the calibration layer for harmony, groove, phrasing, arrangement, production, release safety and generated-output uniqueness.
 
-**Work:** Consolidated phrase generation, established the Android preview baseline, and reduced duplicate pathways that could make later fixes behave differently between environments.
+## Song DNA and Elements
 
-**Result:** One clearer generation path and a stable preview foundation for later quality and Android-performance work.
+Song DNA provides deterministic family and instance identity across harmonic, rhythmic, melodic, arrangement and performance domains. **More like this** stays inside the same musical family while producing a distinct revision instead of cloning the previous song.
 
-### 2. Music Quality Lab and APK quality gate — PR #6
+Fire, Electric and Drip are producer personalities layered on top of that protected identity. They are allowed to change feel, density, motion, humanization, timbral priorities and production emphasis, but not to bypass key/mode safety, explicit user choices, MIDI bounds or release gates.
 
-**Why:** Musical improvements were being discussed qualitatively. The project needed a repeatable way to prove whether a change actually improved or damaged songs.
+## Shape Director
 
-**Work:** Added the Music Quality Lab, deterministic genre/seed benchmarking, release-quality checks, and an APK quality gate.
+Shape is the authorship workspace rather than an effects shortcut.
 
-**Result:** Musical changes could be judged against stable metrics instead of intuition alone. This became the basis for every later Producer Brain checkpoint.
+Supported targeting:
 
-### 3. Groove intelligence and canonical drum memory — PR #7
+- section;
+- track inside the selected section;
+- selected notes only.
 
-**Why:** Drum parts needed stronger genre identity, phrase development, and memory instead of isolated bar-by-bar variation.
+Supported change strengths:
 
-**Work:** Added deterministic groove intelligence, genre-native rhythmic development, canonical drum memory, transition-aware fills, and safeguards against adjacent clone bars.
+- Touch Up;
+- Reshape;
+- Transform.
 
-**Result:** Drums gained stronger phrase continuity and genre character while remaining deterministic and compatible with the bass relationship model.
-
-### 4. Deterministic Song DNA and producer intent — PR #8
-
-**Why:** “More like this” needed to preserve a recognizable musical family without cloning a specific song, and generation needed a clearer upstream musical identity.
-
-**Work:** Consolidated Song DNA and producer intent into deterministic contracts covering harmonic, rhythmic, melodic, structural, and palette direction.
-
-**Result:** New ideas became more distinct while related generations could preserve family identity, lineage, and intent without replaying the original fingerprint.
-
-### 5. Phrase Memory and render-time performance intelligence — PR #9
-
-**Why:** Songs needed callbacks, phrase roles, and expressive continuity that survived from composition through playback and MIDI export.
-
-**Work:** Added Phrase Memory, section-addressable motif memory, performance metadata, callbacks, phrase roles, and render-time interpretation.
-
-**Result:** Musical ideas could recur intentionally across sections while composition identity remained stable and preview/MIDI expression could vary at render time.
-
-### 6. Android preview stutter and voice-pressure repair — PR #10
-
-**Why:** Dense arrangements could create audio gaps, cutouts, and voice pressure on Android even when the composition itself was correct.
-
-**Work:** Tightened scheduling behavior, reduced unnecessary DSP pressure, improved voice prioritization and stealing, and protected drums, bass, and lead before lower-priority tails.
-
-**Result:** Android playback became substantially more resilient under dense polyphony without removing the richer desktop preview path.
-
-### 7. Adaptive groove, taste steering, and creator polish — PR #11
-
-**Why:** Generation needed more producer-level variation and controlled adaptation while the product surface needed stronger identity and usability.
-
-**Work:** Added adaptive groove/taste steering, bounded user preference influence, UI polish, and creator-brand presentation.
-
-**Result:** Musical priors could respond to producer direction without collapsing diversity or determinism, and the app became clearer as a finished creative product.
-
-### 8. Android runtime hardening and repository cleanup — PR #12
-
-**Why:** Playback stability and repository hygiene both needed attention before another major intelligence pass.
-
-**Work:** Hardened Android preview runtime behavior, interruption recovery, visibility handling, and click-safe release behavior while removing stale local artifacts.
-
-**Result:** Better Android recovery and fewer repository-side distractions from generated/local files.
-
-### 9. Producer Brain orchestration — PR #13
-
-**Why:** The engine had many strong local systems but needed one deterministic orchestration layer capable of coordinating candidate search, critic feedback, repair, and selection.
-
-**Work:** Completed the first bounded Producer Brain orchestration layer.
-
-**Result:** Generation could move from “create candidates and choose one” toward “create, diagnose, repair when justified, then select under explicit quality rules.”
-
-### 10. Repository maintenance and shared utilities — PR #14
-
-**Why:** Repeated iteration had left stale screenshots, launcher assets, template tests, duplicated numeric helpers, and CI assumptions that made further work riskier.
-
-**Work:** Removed stale artifacts, introduced shared numeric utilities, cleaned creator branding, and hardened CI around Node 22, Java 21, quality checks, music-quality checks, and APK builds.
-
-**Result:** 38 files changed with a net cleanup of roughly 280 lines. The project entered later architectural work with a smaller and more predictable surface.
-
-### 11. Legacy arrangement architecture removal — PR #15
-
-**Why:** Old arrangement and Song DNA facades were no longer the authoritative path and created architectural ambiguity.
-
-**Work:** Removed the legacy root arrangement engine, obsolete Song DNA facade, and facade-only regression coverage.
-
-**Result:** 469 lines of legacy architecture were deleted. Validation passed **226/226 tests**. The Music Quality Lab established the long-running baseline of approximately **93 overall / 92 musical / 100 technical**, with **100% release** and **100% uniqueness** on the benchmark sweep.
-
-### 12. Engine Architecture 2.0 boundary — PR #16
-
-**Why:** Producer Brain improvements were becoming complex enough that generation orchestration needed a safer boundary around the sensitive deterministic engine.
-
-**Work:** Added generation dispatch/API boundaries, worker plumbing, and clearer separation between producer policy, Producer Brain planning, and engine execution.
-
-**Result:** New orchestration work could be tested independently without casually modularizing or destabilizing `src/music-engine.js`.
-
-### 13. App-controller boundaries — PR #17
-
-**Why:** `src/app.js` had accumulated responsibilities that made UI and runtime changes harder to reason about.
-
-**Work:** Extracted session contracts, scale-guide logic, generation fallback behavior, and adaptive-generation responsibilities from the main app shell.
-
-**Result:** `src/app.js` was reduced by roughly 167 lines while preserving external behavior and generation semantics.
-
-### 14. Session runtime controller — PR #18
-
-**Why:** Persistence, hydration, autosave, and session discard behavior needed a single testable owner instead of being scattered through the app shell.
-
-**Work:** Added `src/core/session-runtime.js` with persisted snapshots, decode/hydration, autosave ownership, and discard cancellation.
-
-**Result:** Storage schema compatibility was preserved while session behavior became directly testable. The merged-main APK passed the normal quality and Android build path.
-
-## Producer Brain 2.0 — current Phase 2 work
-
-Phase 2 began after the architecture work because the next bottleneck was no longer code organization alone. The goal became: **generate, diagnose the weakest musical problem, repair only that problem when possible, compare against the original, and keep the change only when it is actually better.**
-
-### Checkpoint 1 — weakness-aware search
-
-**Why:** Extra candidate auditions previously spent CPU generically even when the critic already knew what was weak.
-
-**Work:** Upgraded Producer Brain metadata to v2 and added bounded weakness-aware expansion. After the deterministic base pool, the best candidate's weakest dependency group can steer additional auditions toward the corresponding composition route. Explicit user candidate counts and composition routes remain authoritative.
-
-**Result:** Search became critic-directed without increasing the hard **12-candidate ceiling** or breaking deterministic seeds.
-
-### Checkpoint 2 — repair acceptance gate
-
-**Why:** A regenerated repair could improve one score while quietly damaging the song elsewhere.
-
-**Work:** Added `evaluateRepairAcceptance` and explicit protection for target gain, total score, balance, creative floor, critical dimensions, scale safety, Phase-9 quality, release readiness, and clean melodic dialogue where relevant.
-
-**Result:** Rejected repairs remain visible in diagnostics and consume their bounded attempt budget, but can no longer satisfy the adaptive target or win final selection.
-
-### Checkpoint 3 — 2–8 bar surgical repair and surgical-vs-whole selection
-
-**Why:** Many musical weaknesses are local. Rewriting a full candidate to fix two weak bars caused unnecessary collateral changes.
-
-**Work:** Reused Critic 7 phrase windows to diagnose deterministic **2–8 bar** repair spans, regenerate only the relevant dependency lanes, preserve everything outside the window byte-for-byte, and compare the surgical version against the already-generated whole repair. Surgical locality wins close calls; a whole rewrite must be materially better.
-
-**Result:** Verified surgical cases improved local phrase scores while preserving material outside the repair window. Producer-facing outcomes now classify decisions as `improved-target`, `improved-balance`, `rejected-no-gain`, or `rejected-regression`.
-
-### Checkpoint 4 — specialized and precision repair strategies
-
-**Why:** A generic local rewrite still wasted repair attempts because density, groove, transitions, dynamics, repetition, cadence, and harmony are different musical problems.
-
-**Work:** Added dimension-specific strategies, then measured them with the permanent Repair Effectiveness Lab. Global statistical weaknesses such as memory, repetition, and drum-variety were routed away from inappropriate local surgery so repair CPU could be spent on genuinely local defects. Transition and performance repair were converted from broad regeneration into source-preserving precision edits.
-
-**Result:** On the fixed 48-song / 96-attempt calibration matrix, overall targeted-repair acceptance climbed from the original **3%** to **76%** after routing and precision work. Transition repair improved from roughly **10% to 100% acceptance** and performance repair from roughly **8% to 100%**, without increasing candidate count.
-
-### Checkpoint 5 — precision cadence repair
-
-**Why:** Phrase/cadence repair remained one of the lowest-yield paths and broad melodic rewrites were causing genre-authenticity and melody/counterpoint-separation regressions.
-
-**Work:** Added a source-preserving cadence alternative that edits only the section-ending landing inside the diagnosed phrase window, avoids moving melody onsets, prefers tonic/chord landing pitches, and keeps the whole-song cadence repair as a scored fallback.
-
-**Result:** On the fixed calibration set, phrase-cadence acceptance improved from **11% to 33%**. Average accepted cadence gain improved from **2.00 to 2.33**, and average total-score delta improved from **-0.89 to +0.11**. Phase-40 interlock reconciliation remained green.
-
-### Checkpoint 6 — localized arrangement and density repair
-
-**Why:** Arrangement/story-arc repair and density repair were still rewriting more music than necessary, while an experimental voice-leading surgery needed evidence before it could be trusted.
-
-**Work:**
-
-- Added `arrangement-energy-arc`, which rebalances section energy against the existing blueprint using bounded velocity shaping and minimal support-note density edits instead of regenerating the arrangement.
-- Converted density build/thin behavior into surgical support-material edits inside the diagnosed window while preserving drums and the melody hook lane.
-- Tested octave-only voice-leading surgery across a wider seed matrix and removed it after it produced **0% surgical effectiveness**; the proven whole-harmony fallback remains available.
-- Added permanent real-seed regressions for arrangement tension improvement, surgical density wins, and harmony fallback behavior.
-
-**Result:** On the fixed 48-song / 96-attempt matrix:
-
-- overall repair acceptance improved from **78% to 81%**;
-- arrangement precision reached **80% acceptance**;
-- `tensionFollow` reached **100% acceptance (4/4)**;
-- density reached **50% acceptance**, with **50% surgical wins** and **0% broad fallback**;
-- `harmony-foundation` retained **67% acceptance** through the proven fallback path;
-- average candidate count remained **9**, maximum **9**;
-- targeted repair remained capped at **2 attempts**.
-
-## Current validation snapshot
-
-The current Phase 2 branch has been validated through the canonical `Build MIDI Arcade APK` workflow after all temporary diagnostic/codemod tooling was removed.
-
-- **264 tests / 264 passed / 0 failed**
-- Web build quality gate: **92 buttons / 0 broad legacy transitions**
-- Music Quality Lab: **93 overall / 92 musical / 100 technical**
-- Creative floor: **74**
-- Release gate: **100%**
-- Unique generated output in the benchmark: **100%**
-- Subsystem averages: **harmony 97.6 / groove 85.9 / phrasing 87.5 / arrangement 94.3 / production 93.9**
-- Weakest current genre in the canonical benchmark: **Techno**
-- Weakest global subsystem: **Groove (85.9)**
-- Lowest aggregate critic dimension: **Density (79.5)**
-- Android Capacitor sync: passed
-- Gradle `assembleDebug`: passed with **154 actionable tasks**
-
-The canonical Music Quality Lab intentionally remains near the established **93/92** baseline because it uses explicit candidate budgets, and explicit candidate budgets deliberately disable automatic Producer Brain expansion. Phase 2 is improving **repair effectiveness, locality, decision quality, and collateral-damage control**, not inflating that baseline by changing the benchmark rules.
-
-## Current architecture and invariants
-
-The browser application is split across focused state, storage, generation, workspace, rendering, playback, session, and control-catalog modules under `src/core/` and `src/ui/`. `src/app.js` remains the integration shell.
-
-The deterministic music engine remains intentionally protected:
-
-- no unseeded `Math.random()` in generation;
-- same seed + same config remains reproducible;
-- explicit `candidateCount` disables automatic weakness search;
-- explicit `compositionRoute` is never overridden;
-- hard candidate ceiling: **12**;
-- targeted repair budget: **2**;
-- key/scale safety is preserved;
-- MIDI remains Type-1 and multitrack;
-- release, novelty, interlock, Phrase Memory, Android/audio, and UI contracts are regression-tested;
-- heavy generation work belongs in the worker path rather than idle UI execution.
+Shape preserves a candidate-first transaction model: the original song remains authoritative until **Accept**. Before/After audition snapshots are isolated, narrow scopes fail closed instead of widening silently, and pending Shape candidates are resolved before destructive or context-changing actions.
 
 ## MIDI input and export
 
-Android uses a small Capacitor bridge over `MidiManager`, so class-compliant USB and native Android MIDI inputs can be discovered without media-library or storage permissions. The web build can use already-authorized Web MIDI devices and requests browser access only after the player presses **Find my keyboard**. Bluetooth LE MIDI (BLE MIDI) is future work and is not supported in the current release.
+Android uses a Capacitor bridge over Android MIDI APIs for class-compliant USB/native MIDI input without requesting broad media-library or storage permissions. Browser builds can use Web MIDI after explicit user interaction.
 
-Export writes a temporary MIDI file to the Android app cache and opens the system save/share sheet. The Type-1 file includes tempo, time signature, corrected modal key signature, section markers, track/instrument names, program changes, volume, pan, expression, reverb, notes, velocities, and channels. Drums use General MIDI channel 10; the live piano take has its own channel and track.
+MIDI export produces a Type-1 multitrack file with tempo, time signature, key information, section markers, track names, program changes, volume/pan/expression data and note events. Drums use General MIDI channel 10.
 
-For FL Studio, import the `.mid`, enable **Create one channel per track** and **Set mixer tracks for new channels**, then replace the placeholder General MIDI sounds. See [FL Studio's MIDI import guide](https://www.image-line.com/fl-studio-learning/fl-studio-online-manual/html/automation_midiimport.htm).
+For FL Studio, import the `.mid`, enable **Create one channel per track** and **Set mixer tracks for new channels**, then replace General MIDI placeholder sounds with your production instruments.
+
+## Android playback
+
+Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately cheaper constrained profile with tighter scheduling and voice limits to reduce gaps, cutouts and node pressure on real devices.
+
+The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery and bounded scheduling logic.
 
 ## Privacy
 
-The production code has no accounts, ads, analytics, crash SDK, cloud service, microphone access, media-library access, or Internet permission. MIDI messages, songs, scores, and practice data stay on the device unless the user explicitly exports or shares a file. Android backup and device-transfer extraction are disabled for app data.
+MIDI Arcade is local-first. Production code does not require accounts, analytics, cloud generation, microphone access or broad media-library access. Songs, MIDI input and local state stay on the device unless the user explicitly exports or shares a file.
 
-The source policy is in [docs/PRIVACY.md](docs/PRIVACY.md), with a bundled web version at [privacy-policy.html](privacy-policy.html). The public Google Play URL is [midi-arcade-privacy.edgarvalle520.chatgpt.site](https://midi-arcade-privacy.edgarvalle520.chatgpt.site/).
+See [docs/PRIVACY.md](docs/PRIVACY.md) and [privacy-policy.html](privacy-policy.html).
 
 ## Development
 
 Requirements:
 
 - Node.js 22+
-- Python available on `PATH` for the simple local server
+- Python available on `PATH` for the local server
 - Android builds: JDK 21 and Android SDK 36
 
-```powershell
+```bash
 npm install
 npm test
 npm run build
 npm run dev
 ```
 
-Open `http://localhost:4173` for the development build.
+Full quality gates:
 
-For the full project quality gates:
-
-```powershell
+```bash
 npm run quality
 npm run quality:music
 npm run benchmark:repairs
 ```
 
-Android commands:
+Android:
 
-```powershell
+```bash
 npm run android:sync
 npm run android:verify
 npm run android:bundle
 ```
 
-`android:bundle` creates the release AAB under `android/app/build/outputs/bundle/release/`. A production upload still requires the developer's private upload keystore and Play App Signing setup; secrets are intentionally not included in this repository.
+`android:bundle` creates the release AAB under `android/app/build/outputs/bundle/release/`. Production signing credentials are intentionally not stored in this repository.
 
-## Roadmap from here
+## Branch and merge discipline
 
-The project is currently finishing **Producer Brain 2.0** before moving deeper into the remaining roadmap:
+`main` is the production baseline.
 
-1. **Finish Phase 2 Producer Brain 2.0** — continue improving low-yield phrase/stage-interlock cases using measured, bounded repairs rather than wider brute-force search.
-2. **Songcraft & Arrangement Intelligence** — stronger intro/verse/pre/chorus/bridge/drop/outro storytelling, chorus payoff, silence, call/response, hook evolution, alternate verses, fills, and genre-specific tension arcs.
-3. **Audio Engine / Android Performance 2.0** — adaptive quality tiers, scheduling telemetry, dynamic voice budgets, dropout detection, and more resilient lookahead behavior.
-4. **Producer Workflow & FL Studio Bridge** — faster Create workflow, clearer advanced controls, variation history, locking/regenerating selected bars, MIDI export presets, section markers, stems, naming, and DAW-oriented metadata.
-5. **Release-grade MIDI Arcade 2.0** — broader device matrix, performance budgets, dependency/security maintenance, accessibility, migration/recovery, signing/AAB/store readiness, and final release hardening.
+Feature branches should be short-lived and deleted after their work is merged and the merged-main APK workflow passes. New work should branch from current `main`, preserve the existing quality gates, and avoid reviving obsolete phase branches as alternate production lines.
 
-## Launch material
+Do not make CI green by removing meaningful assertions, skipping quality checks, weakening build budgets, or bypassing deterministic/music-safety contracts.
 
-- [Google Play listing copy and screenshot storyboard](docs/PLAY_STORE_LISTING.md)
-- [Quality, closed-test, staged-rollout, retention, and ASO plan](docs/LAUNCH_PLAN.md)
-- [Versioned brand assets](assets/brand/)
-- [512 px Play icon](assets/store/play-icon-512-v2.png)
-- [1024 × 500 Play feature graphic](assets/store/play-feature-graphic-1024x500-v2.png)
+## Next integration work
 
-A top-10 chart position cannot be guaranteed by code or metadata. The launch plan instead defines measurable product quality, activation, retention, rating, and store-conversion gates that make durable growth possible.
+The current Create ↔ Shape bridge is Phase 1. The next intended integration steps are:
+
+1. **Element-aware Shape suggestions** — inherited Fire/Electric/Drip context can guide useful starting Shape directions without taking control away from the producer.
+2. **Authoritative accepted Shape lineage** — accepted Shape revisions become the source for future Similar and Element branches.
+3. **Continued Android and DAW validation** — prioritize real-device playback continuity and FL Studio export behavior before widening the feature surface.
+
+## Project history
+
+Major completed milestones include:
+
+- phrase generation and Android preview baseline;
+- Music Quality Lab and APK quality gates;
+- groove intelligence and canonical drum memory;
+- deterministic Song DNA and Phrase Memory;
+- Android audio-pressure hardening;
+- adaptive groove/taste steering;
+- deterministic Producer Brain orchestration and weakness-aware repair;
+- architecture/session boundaries;
+- Create workflow redesign;
+- Shape Director;
+- Phase 5 export safety, Element separation, Create/Shape polish and Create ↔ Shape integration.
+
+For detailed implementation history, merged PRs are the authoritative record.
