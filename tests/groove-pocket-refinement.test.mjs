@@ -168,16 +168,22 @@ test("groove postprocess preserves the exact source object when the critic canno
   assert.equal(processed.grooveDiagnostics.reason, "critic-regression");
 });
 
-test("fresh generation opts into pocket refinement while Similar and explicit opt-outs remain authoritative", () => {
+test("pocket refinement stays explicit after calibration while opt-in and opt-out remain authoritative", () => {
   const fresh = applyOutputQualityEvolution({ genre: "techno", seed: "groove-pocket-fresh" }, { kind: "new" });
   const similar = applyOutputQualityEvolution({ genre: "techno", seed: "groove-pocket-similar" }, { kind: "similar" });
+  const enabled = applyOutputQualityEvolution({
+    genre: "techno",
+    seed: "groove-pocket-enabled",
+    groovePocketRefinement: true,
+  }, { kind: "new" });
   const disabled = applyOutputQualityEvolution({
     genre: "techno",
     seed: "groove-pocket-disabled",
     groovePocketRefinement: false,
   }, { kind: "new" });
 
-  assert.equal(fresh.groovePocketRefinement, true);
+  assert.equal(fresh.groovePocketRefinement, false);
   assert.equal(similar.groovePocketRefinement, false);
+  assert.equal(enabled.groovePocketRefinement, true);
   assert.equal(disabled.groovePocketRefinement, false);
 });
