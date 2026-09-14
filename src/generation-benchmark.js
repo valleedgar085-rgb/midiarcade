@@ -108,6 +108,9 @@ function summarizeGenre(genre, results) {
     densityRefinementAttemptRate: averageOf(genreResults, ({ densityRefinementAttempted }) => densityRefinementAttempted ? 1 : 0, 3),
     densityRefinementAcceptanceRate: averageOf(genreResults, ({ densityRefinementAccepted }) => densityRefinementAccepted ? 1 : 0, 3),
     averageDensityRefinementDelta: averageOf(genreResults, ({ densityRefinementDelta }) => densityRefinementDelta, 2),
+    phraseResolutionRefinementAttemptRate: averageOf(genreResults, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
+    phraseResolutionRefinementAcceptanceRate: averageOf(genreResults, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
+    averagePhraseResolutionRefinementDelta: averageOf(genreResults, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
@@ -145,15 +148,25 @@ export function runGenerationBenchmark({
   for (const genre of genres) {
     for (const seed of seeds) {
       const rawConfig = { genre, seed: `${seed}:${genre}`, bars, candidateCount: 1 };
-      const generationConfig = qualityEvolution ? applyOutputQualityEvolution(rawConfig, { kind: "new" }) : rawConfig;
+      const generationConfig = qualityEvolution
+        ? { ...applyOutputQualityEvolution(rawConfig, { kind: "new" }), phraseResolutionRefinement: true }
+        : rawConfig;
       const generatedSong = generateNew(generationConfig);
       const postprocessed = qualityEvolution
         ? applySongOutputQualityPipeline(generatedSong, generationConfig)
-        : { song: generatedSong, diagnostics: null, returnDiagnostics: null, densityDiagnostics: null, grooveDiagnostics: null };
+        : {
+          song: generatedSong,
+          diagnostics: null,
+          returnDiagnostics: null,
+          densityDiagnostics: null,
+          phraseResolutionDiagnostics: null,
+          grooveDiagnostics: null,
+        };
       const song = postprocessed.song;
       const arrangementDiagnostics = postprocessed.diagnostics;
       const returnDiagnostics = postprocessed.returnDiagnostics;
       const densityDiagnostics = postprocessed.densityDiagnostics;
+      const phraseResolutionDiagnostics = postprocessed.phraseResolutionDiagnostics;
       const grooveDiagnostics = postprocessed.grooveDiagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
@@ -217,6 +230,10 @@ export function runGenerationBenchmark({
         densityRefinementId: densityDiagnostics?.id ?? null,
         densityRefinementDelta: finite(densityDiagnostics?.densityDelta, 0),
         densityRefinementErrorDelta: finite(densityDiagnostics?.densityErrorDelta, 0),
+        phraseResolutionRefinementAttempted: Boolean(phraseResolutionDiagnostics?.attempted),
+        phraseResolutionRefinementAccepted: Boolean(phraseResolutionDiagnostics?.accepted),
+        phraseResolutionRefinementId: phraseResolutionDiagnostics?.id ?? null,
+        phraseResolutionRefinementDelta: finite(phraseResolutionDiagnostics?.phraseResolutionDelta, 0),
         groovePocketAttempted: Boolean(grooveDiagnostics?.attempted),
         groovePocketAccepted: Boolean(grooveDiagnostics?.accepted),
         groovePocketId: grooveDiagnostics?.id ?? null,
@@ -275,6 +292,9 @@ export function runGenerationBenchmark({
     densityRefinementAttemptRate: averageOf(results, ({ densityRefinementAttempted }) => densityRefinementAttempted ? 1 : 0, 3),
     densityRefinementAcceptanceRate: averageOf(results, ({ densityRefinementAccepted }) => densityRefinementAccepted ? 1 : 0, 3),
     averageDensityRefinementDelta: averageOf(results, ({ densityRefinementDelta }) => densityRefinementDelta, 2),
+    phraseResolutionRefinementAttemptRate: averageOf(results, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
+    phraseResolutionRefinementAcceptanceRate: averageOf(results, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
+    averagePhraseResolutionRefinementDelta: averageOf(results, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(results, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(results, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(results, ({ groovePocketDelta }) => groovePocketDelta, 2),
