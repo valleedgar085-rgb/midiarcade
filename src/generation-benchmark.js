@@ -5,6 +5,7 @@ import {
   GENRE_PROFILES,
 } from "./music-engine.js";
 import { applyOutputQualityEvolution } from "./core/output-quality-evolution.js";
+import { applySongOutputQualityPostprocess } from "./core/output-quality-postprocess.js";
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -108,6 +109,8 @@ function summarizeGenre(genre, results) {
     averageCreativeFloor: averageOf(genreResults, ({ creativeFloor }) => creativeFloor, 1),
     releasePassRate: averageOf(genreResults, ({ releasePassed }) => releasePassed ? 1 : 0, 3),
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
+    arrangementAttemptRate: averageOf(genreResults, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
+    arrangementAcceptanceRate: averageOf(genreResults, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     weakestGroup,
     weakestDimension,
     groupAverages,
@@ -152,7 +155,12 @@ export function runGenerationBenchmark({
       const generationConfig = qualityEvolution
         ? applyOutputQualityEvolution(rawConfig, { kind: "new" })
         : rawConfig;
-      const song = generateNew(generationConfig);
+      const generatedSong = generateNew(generationConfig);
+      const postprocessed = qualityEvolution
+        ? applySongOutputQualityPostprocess(generatedSong, generationConfig)
+        : { song: generatedSong, diagnostics: null };
+      const song = postprocessed.song;
+      const arrangementDiagnostics = postprocessed.diagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
       const dimensionScores = { ...(evaluation.subscores ?? {}) };
@@ -192,6 +200,11 @@ export function runGenerationBenchmark({
         voiceLeadingStep,
         maskingPairs: song.perceptualMix?.maskingPairs ?? 0,
         outputQualitySignature: generationConfig.outputQuality?.seedSignature ?? null,
+        arrangementAttempted: Boolean(arrangementDiagnostics?.attempted),
+        arrangementAccepted: Boolean(arrangementDiagnostics?.accepted),
+        arrangementFamily: arrangementDiagnostics?.family ?? null,
+        arrangementScoreDelta: finite(arrangementDiagnostics?.scoreDelta, 0),
+        arrangementSubsystemDelta: finite(arrangementDiagnostics?.arrangementDelta, 0),
         weakestDimension,
         weakestGroup,
         dimensionScores,
@@ -220,7 +233,7 @@ export function runGenerationBenchmark({
   const report = {
     phase: 50,
     version: 2,
-    labVersion: 2,
+    labVersion: 3,
     qualityEvolution,
     genres: genres.length,
     generations: results.length,
@@ -235,6 +248,8 @@ export function runGenerationBenchmark({
     averageMaskingPairs: averageOf(results, ({ maskingPairs }) => maskingPairs),
     releasePassRate,
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, results.length), 3),
+    arrangementAttemptRate: averageOf(results, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
+    arrangementAcceptanceRate: averageOf(results, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     weakestGenre: perGenre[0] ?? null,
     weakestGroup,
     weakestDimension,
