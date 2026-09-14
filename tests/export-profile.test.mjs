@@ -56,15 +56,24 @@ test("performance export bounds long generated notes and removes generated susta
   assert.ok(byId.pad.notes.every((note) => note.duration <= 3));
   assert.ok(byId.melody.automation.every((event) => event.controller !== 64));
   assert.equal(prepared.song.meta.exportArticulation.safeNoteLengths, true);
+  assert.equal(prepared.song.meta.exportArticulation.duplicateRetriggersCollapsed, true);
   assert.equal(prepared.song.meta.exportArticulation.generatedSustainNormalized, true);
 });
 
-test("same-pitch retriggers are separated and optional sustain preservation stays explicit", () => {
-  const prepared = prepareMidiExport(SONG, { timing: "performance", preserveSustain: true });
+test("near-duplicate notes collapse, real same-pitch retriggers separate, and sustain preservation is explicit", () => {
+  const source = structuredClone(SONG);
+  source.tracks.find((track) => track.id === "melody").notes = [
+    { pitch: 64, start: 0.1, duration: 2.2, velocity: 80 },
+    { pitch: 64, start: 0.11, duration: 0.4, velocity: 96 },
+    { pitch: 64, start: 0.8, duration: 1.8, velocity: 88 },
+  ];
+  const prepared = prepareMidiExport(source, { timing: "performance", preserveSustain: true });
   const melody = prepared.song.tracks.find((track) => track.id === "melody");
+  assert.equal(melody.notes.length, 2, "near-identical same-pitch onsets should keep only the stronger note");
   const first = melody.notes[0];
   const second = melody.notes[1];
-  assert.ok(first.start + first.duration <= second.start - 0.039, "same-pitch note-off must occur before retrigger");
+  assert.equal(first.velocity, 96);
+  assert.ok(first.start + first.duration <= second.start - 0.039, "same-pitch note-off must occur before a real retrigger");
   assert.ok(melody.automation.some((event) => event.controller === 64));
   assert.equal(prepared.song.meta.exportArticulation.generatedSustainNormalized, false);
 });
