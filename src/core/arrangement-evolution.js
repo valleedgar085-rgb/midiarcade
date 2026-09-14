@@ -30,6 +30,12 @@ function pick(values, seed) {
   return values[hash32(seed) % values.length];
 }
 
+function clone(value) {
+  return typeof structuredClone === "function"
+    ? structuredClone(value)
+    : JSON.parse(JSON.stringify(value));
+}
+
 function cloneLayout(layout = []) {
   return layout.map((section) => ({
     name: String(section?.name ?? "idea").toLowerCase(),
@@ -130,9 +136,9 @@ function songLayout(family, bars) {
 }
 
 /**
- * Replaces only the macro section sequence. Bar allocation, section intensity,
- * Song DNA, phrase memory, orchestration, critic repair, and export safety stay
- * inside their existing engine paths.
+ * Planning helper for future structure-first composition. Phase 6B's shipped
+ * runtime uses evolveSongArrangement below because it can be independently
+ * scored and rejected after the existing calibrated composition pass.
  */
 export function evolveArrangementLayout(baseLayout = [], config = {}) {
   const source = cloneLayout(baseLayout);
@@ -142,4 +148,215 @@ export function evolveArrangementLayout(baseLayout = [], config = {}) {
   if (ELECTRONIC_GENRES.has(evolution.genre)) return electronicLayout(evolution.family, evolution.bars);
   if (LOOP_GENRES.has(evolution.genre)) return loopLayout(evolution.family, evolution.bars);
   return songLayout(evolution.family, evolution.bars);
+}
+
+function sectionName(section) {
+  return String(section?.name ?? "idea").toLowerCase();
+}
+
+function isPayoff(section) {
+  return ["chorus", "drop", "theme"].includes(sectionName(section));
+}
+
+function isContrast(section) {
+  return ["bridge", "breakdown"].includes(sectionName(section));
+}
+
+function isVerseLike(section) {
+  return ["verse", "idea", "solo"].includes(sectionName(section));
+}
+
+function moveSection(sections, fromIndex, targetIndex) {
+  if (fromIndex < 0 || targetIndex < 0 || fromIndex >= sections.length || targetIndex >= sections.length || fromIndex === targetIndex) return false;
+  const [section] = sections.splice(fromIndex, 1);
+  sections.splice(targetIndex, 0, section);
+  return true;
+}
+
+function firstIndex(sections, predicate, start = 0) {
+  for (let index = Math.max(0, start); index < sections.length; index += 1) {
+    if (predicate(sections[index])) return index;
+  }
+  return -1;
+}
+
+function lastIndex(sections, predicate) {
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    if (predicate(sections[index])) return index;
+  }
+  return -1;
+}
+
+function evolvedSectionOrder(sourceSections, family) {
+  const sections = clone(sourceSections);
+  if (sections.length < 4) return sections;
+  const introOffset = sectionName(sections[0]) === "intro" ? 1 : 0;
+  const outroOffset = sectionName(sections.at(-1)) === "outro" ? 1 : 0;
+
+  if (["hook-first", "early-impact"].includes(family)) {
+    const payoff = firstIndex(sections, isPayoff, introOffset);
+    if (payoff >= 0) moveSection(sections, payoff, introOffset);
+  } else if (family === "verse-driven") {
+    const firstVerse = firstIndex(sections, isVerseLike, introOffset);
+    if (firstVerse >= 0) moveSection(sections, firstVerse, introOffset);
+    const secondVerse = firstIndex(sections, isVerseLike, introOffset + 1);
+    if (secondVerse >= 0) moveSection(sections, secondVerse, introOffset + 1);
+    const payoff = firstIndex(sections, isPayoff, introOffset + 2);
+    if (payoff >= 0) moveSection(sections, payoff, Math.min(sections.length - 1 - outroOffset, introOffset + 2));
+  } else if (family === "bridge-payoff") {
+    const finalPayoff = lastIndex(sections, isPayoff);
+    const contrast = firstIndex(sections, isContrast, introOffset);
+    if (finalPayoff > introOffset + 1 && contrast >= 0 && contrast !== finalPayoff - 1) {
+      const destination = contrast < finalPayoff ? finalPayoff - 1 : finalPayoff;
+      moveSection(sections, contrast, Math.max(introOffset, destination));
+    }
+  } else if (family === "slow-bloom") {
+    const payoff = firstIndex(sections, isPayoff, introOffset);
+    const latestBodyIndex = Math.max(introOffset, sections.length - 2 - outroOffset);
+    const target = Math.min(latestBodyIndex, Math.max(introOffset + 1, Math.floor(sections.length * 0.58)));
+    if (payoff >= introOffset && payoff < target) moveSection(sections, payoff, target);
+  } else if (["double-peak", "hypnotic-wave"].includes(family)) {
+    const firstPayoff = firstIndex(sections, isPayoff, introOffset);
+    const secondPayoff = firstIndex(sections, isPayoff, firstPayoff + 1);
+    const contrast = firstIndex(sections, isContrast, firstPayoff + 1);
+    if (firstPayoff >= 0 && secondPayoff >= 0 && contrast >= 0 && !(contrast > firstPayoff && contrast < secondPayoff)) {
+      const target = Math.min(sections.length - 1 - outroOffset, firstPayoff + 1);
+      moveSection(sections, contrast, target);
+    }
+  } else if (family === "loop-development") {
+    const firstIdea = firstIndex(sections, isVerseLike, introOffset);
+    const contrast = firstIndex(sections, isContrast, introOffset);
+    if (firstIdea >= 0 && contrast >= 0 && contrast !== firstIdea + 1) {
+      moveSection(sections, contrast, Math.min(sections.length - 1 - outroOffset, firstIdea + 1));
+    }
+  }
+
+  return sections;
+}
+
+function eventStart(event) {
+  return finite(event?.start ?? event?.startBeat ?? event?.beat ?? event?.time ?? event?.tick, 0);
+}
+
+function setEventStart(event, value) {
+  const key = ["start", "startBeat", "beat", "time", "tick"].find((candidate) => (
+    Object.prototype.hasOwnProperty.call(event, candidate)
+  )) || "start";
+  event[key] = value;
+}
+
+function sectionBars(section) {
+  return Math.max(1, Math.round(finite(section?.bars, 1)));
+}
+
+function sectionStartBeat(section, beatsPerBar) {
+  return finite(section?.startBeat, finite(section?.startBar, finite(section?.start, 0)) * beatsPerBar);
+}
+
+function reorderSectionAddressedArray(entries, orderedIds) {
+  if (!Array.isArray(entries)) return entries;
+  const byId = new Map(entries.map((entry) => [String(entry?.sectionId ?? ""), entry]));
+  const ordered = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+  const addressed = new Set(ordered.map((entry) => String(entry?.sectionId ?? "")));
+  return [...ordered, ...entries.filter((entry) => !addressed.has(String(entry?.sectionId ?? "")))];
+}
+
+/**
+ * Reorder whole existing sections while preserving every event and section id.
+ * No notes are created, deleted, quantized, or retuned here. This makes the
+ * operation reversible and safe to score against the original candidate.
+ */
+export function evolveSongArrangement(sourceSong, config = {}) {
+  const evolution = createArrangementEvolution(config);
+  const sourceSections = sourceSong?.structure ?? sourceSong?.sections;
+  if (!evolution.enabled || !Array.isArray(sourceSections) || sourceSections.length < 4 || !Array.isArray(sourceSong?.tracks)) {
+    return { changed: false, song: sourceSong, evolution };
+  }
+
+  const ordered = evolvedSectionOrder(sourceSections, evolution.family);
+  const originalIds = sourceSections.map((section) => String(section?.id ?? ""));
+  const orderedIds = ordered.map((section) => String(section?.id ?? ""));
+  if (orderedIds.some((id) => !id) || new Set(orderedIds).size !== orderedIds.length) {
+    return { changed: false, song: sourceSong, evolution };
+  }
+  if (originalIds.every((id, index) => id === orderedIds[index])) {
+    return { changed: false, song: sourceSong, evolution };
+  }
+
+  const song = clone(sourceSong);
+  const beatsPerBar = Math.max(1, finite(song.meta?.beatsPerBar, 4));
+  const original = clone(sourceSections);
+  const reordered = clone(ordered);
+  let cursorBars = 0;
+  for (const section of reordered) {
+    const bars = sectionBars(section);
+    section.start = cursorBars;
+    section.startBar = cursorBars;
+    section.startBeat = cursorBars * beatsPerBar;
+    section.endBeat = (cursorBars + bars) * beatsPerBar;
+    cursorBars += bars;
+  }
+
+  const destinationById = new Map(reordered.map((section) => [String(section.id), section]));
+  const sourceForBeat = (beat) => original.find((section) => {
+    const start = sectionStartBeat(section, beatsPerBar);
+    return beat >= start - 1e-7 && beat < start + sectionBars(section) * beatsPerBar - 1e-7;
+  });
+  const relocate = (event) => {
+    const source = sourceForBeat(eventStart(event));
+    const destination = destinationById.get(String(source?.id ?? ""));
+    if (!source || !destination) return;
+    setEventStart(event, eventStart(event) + destination.startBeat - sectionStartBeat(source, beatsPerBar));
+  };
+  const relocateArray = (events) => Array.isArray(events)
+    ? events.map((event) => {
+        const next = clone(event);
+        relocate(next);
+        return next;
+      }).sort((left, right) => eventStart(left) - eventStart(right))
+    : events;
+
+  song.tracks = song.tracks.map((track) => ({
+    ...track,
+    notes: relocateArray(track.notes),
+    automation: relocateArray(track.automation),
+  }));
+  song.harmony = relocateArray(song.harmony);
+  song.structure = reordered;
+  song.sections = clone(reordered);
+  song.bars = cursorBars;
+  song.meta = {
+    ...(song.meta ?? {}),
+    bars: cursorBars,
+    totalBeats: cursorBars * beatsPerBar,
+  };
+  if (song.songBlueprint?.sectionPlans) {
+    song.songBlueprint = {
+      ...song.songBlueprint,
+      sectionPlans: reorderSectionAddressedArray(song.songBlueprint.sectionPlans, orderedIds),
+    };
+  }
+  if (song.phraseMemory?.sections) {
+    song.phraseMemory = {
+      ...song.phraseMemory,
+      sections: reorderSectionAddressedArray(song.phraseMemory.sections, orderedIds),
+    };
+  }
+  if (song.songDNA?.sections) {
+    song.songDNA = {
+      ...song.songDNA,
+      sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
+    };
+  }
+  song.outputQualityEvolution = {
+    ...(song.outputQualityEvolution ?? {}),
+    arrangement: {
+      version: evolution.version,
+      family: evolution.family,
+      label: evolution.label,
+      signature: evolution.signature,
+      sectionOrder: orderedIds,
+    },
+  };
+  return { changed: true, song, evolution };
 }
