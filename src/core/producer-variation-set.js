@@ -1,3 +1,4 @@
+import { evaluateSongNovelty } from "../music-engine.js";
 import {
   ELEMENT_PROFILES,
   applyElementToGeneration,
@@ -70,20 +71,54 @@ function familyFingerprint(current = {}) {
   ].join(":");
 }
 
+function siblingClonePenalty(maxSimilarity) {
+  const similarity = clamp(finite(maxSimilarity, 0), 0, 1);
+  if (similarity <= 0.88) return 0;
+  return clamp((similarity - 0.88) / 0.12, 0, 1) * 4;
+}
+
 // Compatibility export: callers can keep the old name while the semantics are
 // now elemental personalities rather than mood-specific A/B/C roles.
 export const PRODUCER_VARIATION_DIRECTIONS = ELEMENT_PROFILES;
 export { ELEMENT_PROFILES };
 
-export function producerVariationDirectionScore(song, direction) {
+/**
+ * Phase 6C favors candidates that sound excellent *as the requested Element*,
+ * not merely candidates with the highest generic total score. Sibling
+ * similarity is only a bounded clone penalty: healthy same-family resemblance
+ * is preserved and extreme difference is never rewarded for its own sake.
+ */
+export function producerVariationDirectionAssessment(song, direction, {
+  siblings = [],
+} = {}) {
   const details = song?.meta?.scoreDetails ?? {};
   const subscores = details.subscores ?? details.critic?.subscores ?? {};
   const overall = finite(details.totalScore ?? song?.meta?.qualityScore ?? song?.meta?.score, 0);
   const roleScore = average((direction?.criticDimensions ?? []).map((id) => subscores?.[id]), overall);
   const balance = finite(details.balance?.balanceScore, overall);
   const releasePassed = details.releaseGate?.passed !== false;
-  const weighted = overall * 0.5 + roleScore * 0.4 + balance * 0.1;
-  return releasePassed ? weighted : weighted - 20;
+  const siblingNovelty = siblings.length
+    ? evaluateSongNovelty(song, siblings, "similar")
+    : null;
+  const siblingMaxSimilarity = clamp(finite(siblingNovelty?.maxSimilarity, 0), 0, 1);
+  const clonePenalty = siblingClonePenalty(siblingMaxSimilarity);
+  const score = overall * 0.42 + roleScore * 0.48 + balance * 0.1 - clonePenalty;
+
+  return Object.freeze({
+    score: releasePassed ? score : -1000,
+    eligible: releasePassed,
+    overallScore: overall,
+    roleScore,
+    balanceScore: balance,
+    siblingMaxSimilarity,
+    siblingClonePenalty: clonePenalty,
+    comparedSiblings: siblings.length,
+    criticDimensions: Object.freeze([...(direction?.criticDimensions ?? [])]),
+  });
+}
+
+export function producerVariationDirectionScore(song, direction, options = {}) {
+  return producerVariationDirectionAssessment(song, direction, options).score;
 }
 
 function directionConfig(current, input, direction, seed, candidateCount, moodIntent, intensity) {
@@ -158,19 +193,24 @@ export function generateProducerVariationSet(current, input = {}, {
         ...selected.map((song) => song?.oneShotKit?.id),
       ].filter(Boolean);
       const song = applyElementSoundProfile(generateSimilar(current, config), direction.id, intensity);
+      const assessment = producerVariationDirectionAssessment(song, direction, { siblings: selected });
       auditions.push({
         song,
-        score: producerVariationDirectionScore(song, direction),
+        assessment,
+        score: assessment.score,
+        candidateIndex,
       });
     }
-    auditions.sort((left, right) => right.score - left.score);
-    const winner = auditions[0]?.song;
+    const eligible = auditions.filter(({ assessment }) => assessment.eligible);
+    eligible.sort((left, right) => right.score - left.score || left.candidateIndex - right.candidateIndex);
+    const winnerEntry = eligible[0];
+    const winner = winnerEntry?.song;
     if (!winner) continue;
     winner.title = current.title;
     winner.parentId = current.id ?? null;
     winner.generation = "song-variation";
     winner.variationSet = {
-      version: 3,
+      version: 4,
       id: setId,
       index,
       total: count,
@@ -197,8 +237,19 @@ export function generateProducerVariationSet(current, input = {}, {
         route: directionConfig(current, input, direction, sourceSeed, 1, moodIntent, intensity).compositionRoute ?? null,
       },
       producerIntent: direction.id,
-      directionScore: Number(producerVariationDirectionScore(winner, direction).toFixed(2)),
+      directionScore: Number(winnerEntry.assessment.score.toFixed(2)),
+      elementAssessment: {
+        overallScore: Number(winnerEntry.assessment.overallScore.toFixed(2)),
+        roleScore: Number(winnerEntry.assessment.roleScore.toFixed(2)),
+        balanceScore: Number(winnerEntry.assessment.balanceScore.toFixed(2)),
+        siblingMaxSimilarity: Number(winnerEntry.assessment.siblingMaxSimilarity.toFixed(4)),
+        siblingClonePenalty: Number(winnerEntry.assessment.siblingClonePenalty.toFixed(2)),
+        comparedSiblings: winnerEntry.assessment.comparedSiblings,
+        criticDimensions: [...winnerEntry.assessment.criticDimensions],
+      },
       auditions: candidatesPerVariation,
+      eligibleAuditions: eligible.length,
+      selectedAudition: winnerEntry.candidateIndex,
       identityLocked: {
         key: true,
         mode: true,
