@@ -22,6 +22,7 @@ console.table(report.perGenre.map((genre) => ({
   technical: genre.averageTechnicalScore,
   floor: genre.averageCreativeFloor,
   release: `${Math.round(genre.releasePassRate * 100)}%`,
+  arrangement: `${Math.round(genre.arrangementAcceptanceRate * 100)}%/${Math.round(genre.arrangementAttemptRate * 100)}%`,
   weakestSubsystem: `${genre.weakestGroup.id} ${genre.weakestGroup.score}`,
   weakestDimension: `${genre.weakestDimension.id} ${genre.weakestDimension.score}`,
   band: genre.healthBand,
@@ -33,6 +34,10 @@ console.log(
   + ` · technical ${report.averageTechnicalScore} · creative floor ${report.averageCreativeFloor}`
   + ` · release ${Math.round(report.releasePassRate * 100)}%`
   + ` · unique ${(report.uniqueFingerprintRatio * 100).toFixed(1)}%`,
+);
+console.log(
+  `Arrangement evolution: ${Math.round(report.arrangementAcceptanceRate * 100)}% accepted`
+  + ` of ${Math.round(report.arrangementAttemptRate * 100)}% attempted candidates`,
 );
 console.log(
   `Weakest genre: ${report.weakestGenre?.genre ?? "n/a"}`
