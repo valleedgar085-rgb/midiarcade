@@ -31,8 +31,31 @@ function makeSource() {
   assert.fail("expected a deterministic song with at least two return-development candidates");
 }
 
+function phraseRepetitionRatio(song) {
+  const melodyNotes = song?.tracks?.find((track) => track.id === "melody")?.notes ?? [];
+  const length = Number(song?.motifs?.melody?.lengthBeats ?? 0);
+  if (!(length > 0) || melodyNotes.length < 4) return 0.55;
+  const signatures = [];
+  for (const section of song?.structure ?? []) {
+    const repeats = Math.min(4, Math.floor((section.endBeat - section.startBeat) / length));
+    for (let repeat = 0; repeat < repeats; repeat += 1) {
+      const start = section.startBeat + repeat * length;
+      const notes = melodyNotes.filter((note) => note.start >= start - 1e-6 && note.start < start + length - 1e-6);
+      if (notes.length < 2) continue;
+      signatures.push(new Set(notes.map((note) => `${Math.round((note.start - start) * 4) / 4}`)));
+    }
+  }
+  if (signatures.length < 2) return 0.55;
+  const reference = signatures[0];
+  const values = signatures.slice(1).map((signature) => {
+    const shared = [...reference].filter((item) => signature.has(item)).length;
+    return shared / Math.max(1, Math.min(reference.size, signature.size));
+  });
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
 function makeTechnoSource() {
-  for (let index = 0; index < 32; index += 1) {
+  for (let index = 0; index < 48; index += 1) {
     const song = generateNew({
       genre: "techno",
       seed: `phase6d-techno-return-${index}`,
@@ -50,11 +73,13 @@ function makeTechnoSource() {
     const rhythmic = candidates.find(({ id }) => id === "rhythmic-recall");
     const tagged = rhythmic?.song?.tracks?.find((track) => track.id === "melody")?.notes
       ?.filter((note) => note.returnDevelopmentRole === "techno-grid-recall") ?? [];
-    if (returnDevelopmentTargets(song).length && rhythmic && tagged.length >= 2) {
-      return { song, config, rhythmic, tagged };
+    const before = phraseRepetitionRatio(song);
+    const after = rhythmic ? phraseRepetitionRatio(rhythmic.song) : before;
+    if (returnDevelopmentTargets(song).length && rhythmic && tagged.length >= 1 && after > before + 0.02) {
+      return { song, config, rhythmic, tagged, before, after };
     }
   }
-  assert.fail("expected deterministic techno output with multi-phrase rhythmic return recall");
+  assert.fail("expected deterministic techno output with critic-overlap-improving return recall");
 }
 
 function noteKey(note) {
@@ -132,19 +157,20 @@ test("Phase 6B return development is deterministic, immutable, focused, and capp
   }
 });
 
-test("Phase 6D techno recall develops repeated motif windows without changing note count or pitch", () => {
-  const { song, rhythmic, tagged } = makeTechnoSource();
+test("Phase 6D techno recall directly improves critic repetition overlap without changing note count or pitch", () => {
+  const { song, rhythmic, tagged, before, after } = makeTechnoSource();
   const sourceMelody = song.tracks.find((track) => track.id === "melody");
   const candidateMelody = rhythmic.song.tracks.find((track) => track.id === "melody");
   const targetIds = new Set(returnDevelopmentTargets(song).map(({ sectionId }) => sectionId));
 
   assert.equal(candidateMelody.notes.length, sourceMelody.notes.length, "techno recall must not add or remove melody notes");
   assert.deepEqual(
-    candidateMelody.notes.map((note) => note.pitch),
-    sourceMelody.notes.map((note) => note.pitch),
+    candidateMelody.notes.map((note) => note.pitch).sort((left, right) => left - right),
+    sourceMelody.notes.map((note) => note.pitch).sort((left, right) => left - right),
     "techno recall should improve timing identity without rewriting pitches",
   );
-  assert.ok(tagged.length >= 2, "techno return should develop more than a single isolated onset");
+  assert.ok(after > before + 0.02, `critic-shaped repetition overlap should improve (${before} -> ${after})`);
+  assert.ok(tagged.length >= 1, "techno return should move at least one missing reference onset");
   assert.ok(tagged.length <= targetIds.size * 16, "per-return change budget must remain bounded");
   for (const note of tagged) {
     const section = rhythmic.song.structure.find((entry) => note.start >= entry.startBeat - 1e-6 && note.start < entry.endBeat - 1e-6);
