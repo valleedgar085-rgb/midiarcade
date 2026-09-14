@@ -30,6 +30,7 @@ const EXPORT_DURATION_LIMITS = Object.freeze({
 const GENERATED_TRACK_IDS = new Set(Object.keys(EXPORT_DURATION_LIMITS));
 const EXPORT_RELEASE_GAP = 0.04;
 const EXPORT_MIN_DURATION = 0.05;
+const EXPORT_NEAR_DUPLICATE_WINDOW = EXPORT_RELEASE_GAP + EXPORT_MIN_DURATION;
 
 function quantizeNotes(notes, totalBeats, step = 0.25) {
   const byOnset = new Map();
@@ -45,6 +46,31 @@ function quantizeNotes(notes, totalBeats, step = 0.25) {
   return [...byOnset.values()].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
+function collapseNearDuplicateOnsets(notes) {
+  const kept = [];
+  for (const note of notes) {
+    const pitch = Math.round(finite(note.pitch, 60));
+    const start = finite(note.start, 0);
+    let duplicateIndex = -1;
+    for (let index = kept.length - 1; index >= 0; index -= 1) {
+      const candidate = kept[index];
+      const distance = start - finite(candidate.start, 0);
+      if (distance > EXPORT_NEAR_DUPLICATE_WINDOW) break;
+      if (Math.round(finite(candidate.pitch, 60)) === pitch && Math.abs(distance) <= EXPORT_NEAR_DUPLICATE_WINDOW) {
+        duplicateIndex = index;
+        break;
+      }
+    }
+    if (duplicateIndex < 0) {
+      kept.push(note);
+      continue;
+    }
+    const existing = kept[duplicateIndex];
+    if (finite(note.velocity, 0) > finite(existing.velocity, 0)) kept[duplicateIndex] = note;
+  }
+  return kept.sort((left, right) => finite(left.start, 0) - finite(right.start, 0) || finite(left.pitch, 60) - finite(right.pitch, 60));
+}
+
 function sectionEndForBeat(structure, beat, totalBeats) {
   const section = (structure ?? []).find((candidate) => (
     beat >= finite(candidate.startBeat, 0) - 1e-6
@@ -56,9 +82,9 @@ function sectionEndForBeat(structure, beat, totalBeats) {
 function sanitizeExportNotes(track, structure, totalBeats) {
   const id = String(track?.id ?? "");
   const roleLimit = finite(EXPORT_DURATION_LIMITS[id], 2);
-  const source = [...(track?.notes ?? [])]
+  const source = collapseNearDuplicateOnsets([...(track?.notes ?? [])]
     .map((note) => ({ ...note }))
-    .sort((left, right) => finite(left.start, 0) - finite(right.start, 0) || finite(left.pitch, 60) - finite(right.pitch, 60));
+    .sort((left, right) => finite(left.start, 0) - finite(right.start, 0) || finite(left.pitch, 60) - finite(right.pitch, 60)));
 
   return source.map((note, index) => {
     const start = clamp(finite(note.start, 0), 0, Math.max(0, totalBeats - EXPORT_MIN_DURATION));
@@ -109,6 +135,7 @@ function applySafeExportArticulation(song, { preserveSustain = false } = {}) {
     exportArticulation: {
       version: 1,
       safeNoteLengths: true,
+      duplicateRetriggersCollapsed: true,
       generatedSustainNormalized: !preserveSustain,
     },
   };
