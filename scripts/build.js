@@ -72,18 +72,22 @@ fs.writeFileSync(
 );
 
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
-fs.writeFileSync(
-  path.join(wwwDir, 'index.html'),
-  indexSource.replace(
+const builtIndex = indexSource
+  .replace(
     '</head>',
     `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"></head>`,
-  ),
-);
+  )
+  .replace(
+    '</body>',
+    '<script type="module" src="./src/create-shape-bridge.js?v=20260914-1"></script></body>',
+  );
+fs.writeFileSync(path.join(wwwDir, 'index.html'), builtIndex);
 
 await build({
   entryPoints: [
     path.join(projectRoot, 'src', 'app.js'),
     path.join(projectRoot, 'src', 'generation-worker.js'),
+    path.join(projectRoot, 'src', 'ui', 'create-shape-bridge.js'),
   ],
   outdir: path.join(wwwDir, 'src'),
   bundle: true,
