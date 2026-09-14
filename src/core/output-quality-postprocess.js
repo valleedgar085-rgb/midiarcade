@@ -1,4 +1,8 @@
-import { evaluateSongCandidate, evaluateSongReleaseGate } from "../music-engine.js";
+import {
+  createSongFingerprint,
+  evaluateSongCandidate,
+  evaluateSongReleaseGate,
+} from "../music-engine.js";
 import { evolveSongArrangement } from "./arrangement-evolution.js";
 
 const ARRANGEMENT_DIMENSIONS = Object.freeze([
@@ -31,13 +35,34 @@ function round(value, digits = 2) {
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
 }
 
+function acceptedSongMetadata(song, evaluation, releaseGate, diagnostics) {
+  const scoreDetails = song?.meta?.scoreDetails ?? {};
+  return {
+    ...(song.meta ?? {}),
+    ideaFingerprint: createSongFingerprint(song),
+    scoreDetails: {
+      ...scoreDetails,
+      totalScore: round(evaluation.score),
+      subscores: { ...(evaluation.subscores ?? {}) },
+      releaseGate,
+      outputQualityPostprocess: {
+        ...(scoreDetails.outputQualityPostprocess ?? {}),
+        arrangement: diagnostics,
+      },
+    },
+  };
+}
+
 /**
  * Phase 6B is candidate-first: a structural evolution is never committed just
  * because it is different. It must remain release-safe and either improve the
  * critic overall or provide a measurable arrangement gain without meaningful
  * collateral loss.
  */
-export function applySongOutputQualityPostprocess(song, config = {}) {
+export function applySongOutputQualityPostprocess(song, config = {}, {
+  evaluateCandidate = evaluateSongCandidate,
+  evaluateReleaseGate = evaluateSongReleaseGate,
+} = {}) {
   const attempted = evolveSongArrangement(song, config);
   if (!attempted.changed) {
     return {
@@ -53,9 +78,9 @@ export function applySongOutputQualityPostprocess(song, config = {}) {
     };
   }
 
-  const before = evaluateSongCandidate(song);
-  const after = evaluateSongCandidate(attempted.song);
-  const release = evaluateSongReleaseGate(attempted.song, after);
+  const before = evaluateCandidate(song);
+  const after = evaluateCandidate(attempted.song);
+  const release = evaluateReleaseGate(attempted.song, after);
   const beforeArrangement = arrangementScore(before);
   const afterArrangement = arrangementScore(after);
   const scoreDelta = finite(after.score) - finite(before.score);
@@ -95,12 +120,13 @@ export function applySongOutputQualityPostprocess(song, config = {}) {
       arrangementDelta: diagnostics.arrangementDelta,
     },
   };
+  attempted.song.meta = acceptedSongMetadata(attempted.song, after, release, diagnostics);
   return { song: attempted.song, diagnostics };
 }
 
-export function applyResultOutputQualityPostprocess(result, config = {}) {
+export function applyResultOutputQualityPostprocess(result, config = {}, evaluators = {}) {
   if (!result?.song || config.arrangementEvolution !== true) return result;
-  const processed = applySongOutputQualityPostprocess(result.song, config);
+  const processed = applySongOutputQualityPostprocess(result.song, config, evaluators);
   return {
     ...result,
     song: processed.song,
