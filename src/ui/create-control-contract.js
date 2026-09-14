@@ -1,4 +1,5 @@
 const entry = (label, help, intent, event = "change") => Object.freeze({ label, help, intent, event });
+const selectorEntry = (key, selector, label, help, intent, event = "click") => Object.freeze({ key, selector, label, help, intent, event });
 
 export const CREATE_CONTROL_CONTRACT = Object.freeze({
   renameButton: entry("Rename song", "Changes only the song title. Notes, sounds, arrangement and Element identity stay untouched.", "current-song", "click"),
@@ -35,6 +36,23 @@ export const CREATE_CONTROL_CONTRACT = Object.freeze({
 
 export const CREATE_CONTROL_IDS = Object.freeze(Object.keys(CREATE_CONTROL_CONTRACT));
 
+export const CREATE_SELECTOR_CONTRACT = Object.freeze([
+  selectorEntry("workflow-step-direct", '[data-workflow-step="1"]', "Workflow step: Direct", "Returns the Create coach to direction-setting so you can choose the musical intent before generating.", "guidance"),
+  selectorEntry("workflow-step-listen", '[data-workflow-step="2"]', "Workflow step: Listen", "Moves the Create coach to listening so you can evaluate the generated song before making edits.", "guidance"),
+  selectorEntry("workflow-step-shape", '[data-workflow-step="3"]', "Workflow step: Shape", "Moves the workflow toward Shape, where section and instrument-level musical decisions are edited.", "guidance"),
+  selectorEntry("workflow-step-export", '[data-workflow-step="4"]', "Workflow step: Export", "Moves the workflow toward Finish so the completed arrangement can be checked and exported as MIDI.", "guidance"),
+  selectorEntry("song-insight-toggle", ".dna-integrated-card > summary", "Song insight", "Opens or closes the generated song DNA, harmony, groove and structural analysis without changing the music.", "current-song"),
+  selectorEntry("workflow-guide-toggle", "#workflowPanel > summary", "Optional workflow guide", "Opens or closes the four-step Create guide. It changes only guidance visibility, never the song or staged direction.", "guidance"),
+  selectorEntry("song-shape-toggle", ".shape-controls > summary", "Key, mode and harmony controls", "Opens or closes optional tonal controls for root key, scale and harmonic path without changing values by itself.", "advanced"),
+  selectorEntry("recipe-toggle", ".creator-recipe-side > summary", "Recipe and fine tuning", "Opens or closes the optional recipe and performance-tuning area without changing the staged song direction.", "advanced"),
+  selectorEntry("fine-tune-toggle", ".advanced-controls > summary", "Rhythm and variety fine tuning", "Opens or closes detailed swing, humanize, triplet, roll, variation, evolution and surprise controls.", "advanced"),
+]);
+
+const CREATE_CONTEXT_CONTRACT = Object.freeze({
+  ...CREATE_CONTROL_CONTRACT,
+  ...Object.fromEntries(CREATE_SELECTOR_CONTRACT.map((contract) => [contract.key, contract])),
+});
+
 const ELEMENT_HELP = Object.freeze([
   Object.freeze(["Fire", "Choose the impact-first sibling: stronger groove pressure, punch, density and transitions while keeping the shared song DNA."]),
   Object.freeze(["Electric", "Choose the motion-first sibling: more hook movement, syncopation, variation and animated phrasing while keeping the shared song DNA."]),
@@ -43,9 +61,9 @@ const ELEMENT_HELP = Object.freeze([
 
 export function createControlHelp(element) {
   if (!element) return null;
-  const id = String(element.id || "");
-  if (id && CREATE_CONTROL_CONTRACT[id]) {
-    const { label, help } = CREATE_CONTROL_CONTRACT[id];
+  const contractKey = String(element.dataset?.createControl || element.id || "");
+  if (contractKey && CREATE_CONTEXT_CONTRACT[contractKey]) {
+    const { label, help } = CREATE_CONTEXT_CONTRACT[contractKey];
     return [label, help];
   }
   if (element.dataset?.songVariation != null) {
@@ -69,6 +87,17 @@ function setContextHelp(rootDocument, element) {
   return true;
 }
 
+function wireControl(control, key, contract) {
+  if (!control) return false;
+  control.dataset.createControl = key;
+  control.dataset.createIntent = contract.intent;
+  control.dataset.createEvent = contract.event;
+  control.setAttribute?.("aria-description", contract.help);
+  if (!control.getAttribute?.("aria-label")) control.setAttribute?.("aria-label", contract.label);
+  if (!control.getAttribute?.("title")) control.setAttribute?.("title", contract.help);
+  return true;
+}
+
 export function applyCreateControlContract(rootDocument = globalThis.document, createPanel = null) {
   const panel = createPanel ?? rootDocument?.querySelector?.("#tab-create");
   if (!panel?.querySelector || !panel?.querySelectorAll) return false;
@@ -76,31 +105,32 @@ export function applyCreateControlContract(rootDocument = globalThis.document, c
   let wired = 0;
   for (const [id, contract] of Object.entries(CREATE_CONTROL_CONTRACT)) {
     const control = panel.querySelector(`#${id}`);
-    if (!control) continue;
-    control.dataset.createControl = id;
-    control.dataset.createIntent = contract.intent;
-    control.dataset.createEvent = contract.event;
-    control.setAttribute?.("aria-description", contract.help);
-    if (!control.getAttribute?.("aria-label")) control.setAttribute?.("aria-label", contract.label);
-    if (!control.getAttribute?.("title")) control.setAttribute?.("title", contract.help);
-    wired += 1;
+    if (wireControl(control, id, contract)) wired += 1;
+  }
+
+  for (const contract of CREATE_SELECTOR_CONTRACT) {
+    for (const control of panel.querySelectorAll(contract.selector)) {
+      if (wireControl(control, contract.key, contract)) wired += 1;
+    }
   }
 
   for (const button of panel.querySelectorAll("[data-song-variation]")) {
     const help = createControlHelp(button);
     if (!help) continue;
+    button.dataset.createControl = `element-${button.dataset.songVariation}`;
     button.dataset.createIntent = "element";
     button.dataset.createEvent = "click";
     button.setAttribute?.("aria-label", `${help[0]} Element variation`);
     button.setAttribute?.("aria-description", help[1]);
     button.setAttribute?.("title", help[1]);
+    wired += 1;
   }
 
   if (panel.dataset.createContractWired !== "true" && typeof panel.addEventListener === "function") {
     const refresh = (event) => {
       const control = closestInteractive(event.target);
       if (!setContextHelp(rootDocument, control)) return;
-      const id = control?.id || (control?.dataset?.songVariation != null ? `element-${control.dataset.songVariation}` : "delegated");
+      const id = control?.dataset?.createControl || control?.id || (control?.dataset?.songVariation != null ? `element-${control.dataset.songVariation}` : "delegated");
       panel.dataset.createLastControl = id;
     };
     for (const eventName of ["focusin", "pointerover", "input", "change", "click"]) {
