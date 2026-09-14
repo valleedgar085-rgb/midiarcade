@@ -1,7 +1,7 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
 import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
-import { applyResultOutputQualityPostprocess } from "./output-quality-postprocess.js";
+import { applyResultOutputQualityPipeline } from "./output-quality-pipeline.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
@@ -175,10 +175,11 @@ export function createGenerationExecutor({
         });
       }
 
-      selectedResult = applyResultOutputQualityPostprocess(selectedResult, config);
+      selectedResult = applyResultOutputQualityPipeline(selectedResult, config);
       flightRecorder.mark(flightId, "finalize", {
         arrangementEvolution: selectedResult?.outputQualityDiagnostics?.arrangement ?? null,
         returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
+        densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
