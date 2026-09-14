@@ -1,254 +1,172 @@
-const CANDIDATE_EDIT_BUDGETS = Object.freeze([1, 2, 3]);
-const MAX_ONSET_SHIFT_BEATS = 0.5;
-const CADENCE_GUARD_BEATS = 0.75;
-const MIN_NOTE_GAP_BEATS = 0.06;
-const ERROR_EPSILON = 1e-6;
+import { clamp, finite } from "../utils.js";
 
-export const MAX_REPETITION_REFINEMENT_CANDIDATES = CANDIDATE_EDIT_BUDGETS.length;
-export const MAX_REPETITION_REFINEMENT_EDITS = Math.max(...CANDIDATE_EDIT_BUDGETS);
-export const MAX_REPETITION_REFINEMENT_SHIFT = MAX_ONSET_SHIFT_BEATS;
+const EDIT_BUDGETS = Object.freeze([1, 2, 3]);
+const MAX_SHIFT = 0.5;
+const CADENCE_GUARD = 0.75;
+const MIN_GAP = 0.06;
+const EPSILON = 1e-6;
 
-function finite(value, fallback = 0) {
-  return Number.isFinite(Number(value)) ? Number(value) : fallback;
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, finite(value, min)));
-}
+export const MAX_REPETITION_REFINEMENT_CANDIDATES = EDIT_BUDGETS.length;
+export const MAX_REPETITION_REFINEMENT_EDITS = 3;
+export const MAX_REPETITION_REFINEMENT_SHIFT = MAX_SHIFT;
 
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
 }
 
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
+function melody(song) {
+  return (song?.tracks ?? []).find((track) => track.id === "melody");
 }
 
-function noteStart(note) {
-  return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time, 0);
-}
-
-function setNoteStart(note, value) {
-  const key = ["start", "startBeat", "beat", "time"]
-    .find((candidate) => Object.prototype.hasOwnProperty.call(note ?? {}, candidate)) ?? "start";
-  note[key] = round(value);
-}
-
-function notePitch(note) {
-  return finite(note?.pitch ?? note?.note ?? note?.midi, 60);
-}
-
-function melodyTrack(song) {
-  return (song?.tracks ?? []).find((track) => track?.id === "melody") ?? null;
-}
-
-function sectionsOf(song) {
-  return Array.isArray(song?.structure) ? song.structure : Array.isArray(song?.sections) ? song.sections : [];
-}
-
-function motifLengthOf(song) {
-  return finite(song?.motifs?.melody?.lengthBeats, 0);
-}
-
-function quarterBeatOffset(note, windowStart) {
-  return Math.round((noteStart(note) - windowStart) * 4) / 4;
-}
-
-function signatureForEntries(entries, windowStart) {
-  return new Set(entries.map(({ note }) => quarterBeatOffset(note, windowStart)));
-}
-
-function signatureCoverage(signature, reference) {
-  if (!signature?.size || !reference?.size) return 0;
-  const shared = [...reference].filter((offset) => signature.has(offset)).length;
+function coverage(signature, reference) {
+  if (!signature.size || !reference.size) return 0;
+  let shared = 0;
+  for (const offset of reference) if (signature.has(offset)) shared += 1;
   return shared / Math.max(1, Math.min(reference.size, signature.size));
 }
 
-function motifWindows(song) {
-  const melody = melodyTrack(song);
-  const length = motifLengthOf(song);
-  if (!melody?.notes?.length || length <= 0) return [];
-  const indexedNotes = melody.notes.map((note, noteIndex) => ({ note, noteIndex }));
-  const windows = [];
-  for (const section of sectionsOf(song)) {
-    const sectionStart = finite(section?.startBeat, 0);
-    const sectionEnd = finite(section?.endBeat, sectionStart);
+function windows(song) {
+  const track = melody(song);
+  const length = finite(song?.motifs?.melody?.lengthBeats);
+  if (!track?.notes?.length || length <= 0) return [];
+  const indexed = track.notes.map((note, noteIndex) => ({ note, noteIndex }));
+  const result = [];
+  for (const section of song.structure ?? []) {
+    const sectionStart = finite(section.startBeat);
+    const sectionEnd = finite(section.endBeat, sectionStart);
     const repeats = Math.min(4, Math.floor((sectionEnd - sectionStart) / length));
     for (let repeat = 0; repeat < repeats; repeat += 1) {
       const start = sectionStart + repeat * length;
       const end = Math.min(sectionEnd, start + length);
-      const entries = indexedNotes
-        .filter(({ note }) => noteStart(note) >= start - 1e-6 && noteStart(note) < end - 1e-6)
-        .sort((left, right) => noteStart(left.note) - noteStart(right.note) || notePitch(left.note) - notePitch(right.note));
+      const entries = indexed
+        .filter(({ note }) => note.start >= start - EPSILON && note.start < end - EPSILON)
+        .sort((left, right) => left.note.start - right.note.start || left.note.pitch - right.note.pitch);
       if (entries.length < 2) continue;
-      windows.push({
-        sectionId: String(section?.id ?? section?.name ?? windows.length),
+      result.push({
         start,
         end,
-        sectionEnd,
         entries,
-        signature: signatureForEntries(entries, start),
+        signature: new Set(entries.map(({ note }) => Math.round((note.start - start) * 4) / 4)),
       });
     }
   }
-  return windows;
+  return result;
 }
 
-/** Mirrors the production critic's quarter-beat motif-window repetition ratio. */
 export function repetitionRatio(song) {
-  const windows = motifWindows(song);
-  if (windows.length < 2) return 0.55;
-  const reference = windows[0].signature;
-  return windows.length > 1
-    ? windows.slice(1).reduce((sum, window) => sum + signatureCoverage(window.signature, reference), 0) / (windows.length - 1)
-    : 0.55;
+  const groups = windows(song);
+  if (groups.length < 2) return 0.55;
+  const reference = groups[0].signature;
+  return groups.slice(1).reduce((sum, group) => sum + coverage(group.signature, reference), 0) / (groups.length - 1);
 }
 
 export function repetitionBalance(song, target = 0.62) {
-  const boundedTarget = clamp(target, 0, 1);
   const actual = repetitionRatio(song);
+  const boundedTarget = clamp(target, 0, 1);
   const signedDelta = actual - boundedTarget;
   return Object.freeze({
     actual: round(actual),
     target: round(boundedTarget),
     signedDelta: round(signedDelta),
     absoluteError: round(Math.abs(signedDelta)),
-    direction: signedDelta < -ERROR_EPSILON ? "reinforce" : signedDelta > ERROR_EPSILON ? "evolve" : "on-target",
+    direction: signedDelta < -EPSILON ? "reinforce" : signedDelta > EPSILON ? "evolve" : "on-target",
   });
 }
 
-function offsetCounts(window) {
-  const counts = new Map();
-  for (const { note } of window.entries) {
-    const offset = quarterBeatOffset(note, window.start);
-    counts.set(offset, (counts.get(offset) ?? 0) + 1);
-  }
-  return counts;
-}
-
-function placementIsSafe(window, entry, desiredStart) {
-  const guardEnd = Math.min(window.end, window.sectionEnd) - CADENCE_GUARD_BEATS;
-  if (noteStart(entry.note) >= guardEnd - 1e-6 || desiredStart >= guardEnd - 1e-6) return false;
-  if (desiredStart < window.start - 1e-6 || desiredStart >= window.end - 0.03) return false;
-  const shift = Math.abs(desiredStart - noteStart(entry.note));
-  if (shift <= ERROR_EPSILON || shift > MAX_ONSET_SHIFT_BEATS + 1e-6) return false;
-  return window.entries.every((other) => (
-    other.noteIndex === entry.noteIndex
-    || Math.abs(noteStart(other.note) - desiredStart) >= MIN_NOTE_GAP_BEATS - 1e-6
-  ));
+function safePlacement(group, entry, desiredStart) {
+  if (entry.note.start >= group.end - CADENCE_GUARD || desiredStart >= group.end - CADENCE_GUARD) return false;
+  const shift = Math.abs(desiredStart - entry.note.start);
+  if (shift <= EPSILON || shift > MAX_SHIFT + EPSILON || desiredStart < group.start || desiredStart >= group.end - 0.03) return false;
+  return group.entries.every((other) => other.noteIndex === entry.noteIndex || Math.abs(other.note.start - desiredStart) >= MIN_GAP - EPSILON);
 }
 
 function possibleMoves(song, direction) {
-  const windows = motifWindows(song);
-  if (windows.length < 2) return [];
-  const reference = windows[0].signature;
-  const moves = [];
+  const groups = windows(song);
+  if (groups.length < 2) return [];
+  const reference = groups[0].signature;
+  const result = [];
+  for (let windowIndex = 1; windowIndex < groups.length; windowIndex += 1) {
+    const group = groups[windowIndex];
+    const counts = new Map();
+    for (const offset of group.signature) counts.set(offset, 0);
+    for (const { note } of group.entries) {
+      const offset = Math.round((note.start - group.start) * 4) / 4;
+      counts.set(offset, (counts.get(offset) ?? 0) + 1);
+    }
 
-  for (let windowIndex = 1; windowIndex < windows.length; windowIndex += 1) {
-    const window = windows[windowIndex];
-    const counts = offsetCounts(window);
     if (direction === "reinforce") {
-      const missing = [...reference].filter((offset) => !window.signature.has(offset));
-      if (!missing.length) continue;
-      for (const entry of window.entries) {
-        const sourceOffset = quarterBeatOffset(entry.note, window.start);
-        const movable = !reference.has(sourceOffset) || (counts.get(sourceOffset) ?? 0) > 1;
-        if (!movable) continue;
-        for (const targetOffset of missing) {
-          const desiredStart = window.start + targetOffset;
-          if (!placementIsSafe(window, entry, desiredStart)) continue;
-          moves.push({ windowIndex, noteIndex: entry.noteIndex, desiredStart, targetOffset });
+      const missing = [...reference].filter((offset) => !group.signature.has(offset));
+      for (const entry of group.entries) {
+        const sourceOffset = Math.round((entry.note.start - group.start) * 4) / 4;
+        if (reference.has(sourceOffset) && counts.get(sourceOffset) === 1) continue;
+        for (const offset of missing) {
+          const desiredStart = group.start + offset;
+          if (safePlacement(group, entry, desiredStart)) result.push({ windowIndex, noteIndex: entry.noteIndex, desiredStart });
         }
       }
-    } else if (direction === "evolve") {
-      for (const entry of window.entries) {
-        const sourceOffset = quarterBeatOffset(entry.note, window.start);
-        if (!reference.has(sourceOffset) || (counts.get(sourceOffset) ?? 0) !== 1) continue;
-        for (const offsetDelta of [-0.5, -0.25, 0.25, 0.5]) {
-          const targetOffset = round(sourceOffset + offsetDelta, 2);
-          if (targetOffset < 0 || targetOffset >= window.end - window.start - 0.03) continue;
-          if (reference.has(targetOffset) || window.signature.has(targetOffset)) continue;
-          const desiredStart = window.start + targetOffset;
-          if (!placementIsSafe(window, entry, desiredStart)) continue;
-          moves.push({ windowIndex, noteIndex: entry.noteIndex, desiredStart, targetOffset });
+    } else {
+      for (const entry of group.entries) {
+        const sourceOffset = Math.round((entry.note.start - group.start) * 4) / 4;
+        if (!reference.has(sourceOffset) || counts.get(sourceOffset) !== 1) continue;
+        for (const delta of [-0.5, -0.25, 0.25, 0.5]) {
+          const offset = round(sourceOffset + delta, 2);
+          if (offset < 0 || offset >= group.end - group.start - 0.03 || reference.has(offset) || group.signature.has(offset)) continue;
+          const desiredStart = group.start + offset;
+          if (safePlacement(group, entry, desiredStart)) result.push({ windowIndex, noteIndex: entry.noteIndex, desiredStart });
         }
       }
     }
   }
-  return moves;
+  return result;
 }
 
-function bestImprovingMove(song, target, direction) {
-  const melody = melodyTrack(song);
-  if (!melody?.notes?.length) return null;
+function bestMove(song, target, direction) {
+  const track = melody(song);
   const before = repetitionBalance(song, target);
   let best = null;
-
   for (const move of possibleMoves(song, direction)) {
-    const note = melody.notes[move.noteIndex];
+    const note = track?.notes?.[move.noteIndex];
     if (!note) continue;
-    const originalStart = noteStart(note);
-    setNoteStart(note, move.desiredStart);
+    const start = note.start;
+    note.start = round(move.desiredStart);
     const after = repetitionBalance(song, target);
-    setNoteStart(note, originalStart);
-
-    const directional = direction === "reinforce"
-      ? after.actual > before.actual + ERROR_EPSILON
-      : after.actual < before.actual - ERROR_EPSILON;
+    note.start = start;
+    const directional = direction === "reinforce" ? after.actual > before.actual + EPSILON : after.actual < before.actual - EPSILON;
     const improvement = before.absoluteError - after.absoluteError;
-    if (!directional || improvement <= ERROR_EPSILON) continue;
-
-    const shift = Math.abs(move.desiredStart - originalStart);
-    const candidate = { ...move, originalStart, improvement, shift, after };
-    if (
-      !best
-      || improvement > best.improvement + ERROR_EPSILON
-      || (Math.abs(improvement - best.improvement) <= ERROR_EPSILON && shift < best.shift - ERROR_EPSILON)
-      || (
-        Math.abs(improvement - best.improvement) <= ERROR_EPSILON
-        && Math.abs(shift - best.shift) <= ERROR_EPSILON
-        && (move.windowIndex < best.windowIndex || (move.windowIndex === best.windowIndex && move.noteIndex < best.noteIndex))
-      )
-    ) best = candidate;
+    if (!directional || improvement <= EPSILON) continue;
+    const shift = Math.abs(move.desiredStart - start);
+    if (!best || improvement > best.improvement + EPSILON || (Math.abs(improvement - best.improvement) <= EPSILON && shift < best.shift - EPSILON)) {
+      best = { ...move, improvement, shift };
+    }
   }
   return best;
 }
 
 function createCandidate(song, target, editBudget, candidateIndex) {
-  const candidate = clone(song);
+  const candidate = JSON.parse(JSON.stringify(song));
   const before = repetitionBalance(candidate, target);
   if (before.direction === "on-target") return null;
-  const melody = melodyTrack(candidate);
-  if (!melody?.notes?.length) return null;
-
+  const track = melody(candidate);
   let changedNotes = 0;
   let maxShift = 0;
-  for (let edit = 0; edit < editBudget; edit += 1) {
+  for (; changedNotes < editBudget; changedNotes += 1) {
     const current = repetitionBalance(candidate, target);
     if (current.direction === "on-target") break;
-    const move = bestImprovingMove(candidate, target, current.direction);
+    const move = bestMove(candidate, target, current.direction);
     if (!move) break;
-    const note = melody.notes[move.noteIndex];
+    const note = track?.notes?.[move.noteIndex];
     if (!note) break;
-    setNoteStart(note, move.desiredStart);
+    note.start = round(move.desiredStart);
     note.repetitionRefinementRole = current.direction === "reinforce" ? "motif-reinforce" : "motif-evolve";
-    note.preservePitch = true;
     maxShift = Math.max(maxShift, move.shift);
-    changedNotes += 1;
   }
-
   const after = repetitionBalance(candidate, target);
   const errorDelta = after.absoluteError - before.absoluteError;
-  if (changedNotes === 0 || errorDelta >= -ERROR_EPSILON) return null;
-  melody.notes.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
-
+  if (!changedNotes || errorDelta >= -EPSILON) return null;
+  track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   return {
-    id: before.direction === "reinforce"
-      ? `rnb-recall-${editBudget}`
-      : `rnb-evolve-${editBudget}`,
+    id: `${before.direction === "reinforce" ? "rnb-recall" : "rnb-evolve"}-${editBudget}`,
     candidateIndex,
     song: candidate,
     direction: before.direction,
@@ -263,31 +181,20 @@ function createCandidate(song, target, editBudget, candidateIndex) {
   };
 }
 
-/**
- * Build no more than three signed repetition candidates. This first calibrated
- * pass is intentionally RnB Soul-only: the Quality Lab proved that RnB can be
- * both under-recalled and over-repeated across seeds, while Techno already has
- * a separately proven recall path. Candidates preserve note count, pitch,
- * duration and velocity and only move a few non-reference melody onsets.
- */
 export function createRepetitionRefinementCandidates(song, {
   target = 0.62,
   maxCandidates = MAX_REPETITION_REFINEMENT_CANDIDATES,
 } = {}) {
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
-  if (genre !== "rnbSoul") return [];
-  const limit = Math.max(0, Math.min(MAX_REPETITION_REFINEMENT_CANDIDATES, Math.floor(finite(maxCandidates))));
+  if (String(song?.genre ?? song?.meta?.genre ?? "") !== "rnbSoul") return [];
+  const limit = clamp(Math.floor(finite(maxCandidates)), 0, MAX_REPETITION_REFINEMENT_CANDIDATES);
   const seen = new Set();
-  return CANDIDATE_EDIT_BUDGETS
-    .slice(0, limit)
-    .map((editBudget, candidateIndex) => createCandidate(song, target, editBudget, candidateIndex))
+  return EDIT_BUDGETS.slice(0, limit)
+    .map((budget, candidateIndex) => createCandidate(song, target, budget, candidateIndex))
     .filter(Boolean)
     .filter((candidate) => {
-      const signature = JSON.stringify(melodyTrack(candidate.song)?.notes ?? []);
+      const signature = JSON.stringify(melody(candidate.song)?.notes ?? []);
       if (seen.has(signature)) return false;
       seen.add(signature);
-      return candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS
-        && candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT + 1e-6
-        && candidate.errorDelta < -ERROR_EPSILON;
+      return candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS && candidate.maxShift <= MAX_SHIFT + EPSILON && candidate.errorDelta < -EPSILON;
     });
 }
