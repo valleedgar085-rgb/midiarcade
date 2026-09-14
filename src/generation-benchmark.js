@@ -5,7 +5,7 @@ import {
   GENRE_PROFILES,
 } from "./music-engine.js";
 import { applyOutputQualityEvolution } from "./core/output-quality-evolution.js";
-import { applySongOutputQualityPipeline } from "./core/output-quality-pipeline.js";
+import { applySongOutputQualityPipeline } from "./core/output-quality-pipeline-register.js";
 
 const mean = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -111,6 +111,9 @@ function summarizeGenre(genre, results) {
     phraseResolutionRefinementAttemptRate: averageOf(genreResults, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
     phraseResolutionRefinementAcceptanceRate: averageOf(genreResults, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
     averagePhraseResolutionRefinementDelta: averageOf(genreResults, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
+    registerHealthRefinementAttemptRate: averageOf(genreResults, ({ registerHealthRefinementAttempted }) => registerHealthRefinementAttempted ? 1 : 0, 3),
+    registerHealthRefinementAcceptanceRate: averageOf(genreResults, ({ registerHealthRefinementAccepted }) => registerHealthRefinementAccepted ? 1 : 0, 3),
+    averageRegisterHealthRefinementDelta: averageOf(genreResults, ({ registerHealthRefinementDelta }) => registerHealthRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
@@ -149,7 +152,11 @@ export function runGenerationBenchmark({
     for (const seed of seeds) {
       const rawConfig = { genre, seed: `${seed}:${genre}`, bars, candidateCount: 1 };
       const generationConfig = qualityEvolution
-        ? { ...applyOutputQualityEvolution(rawConfig, { kind: "new" }), phraseResolutionRefinement: true }
+        ? {
+          ...applyOutputQualityEvolution(rawConfig, { kind: "new" }),
+          phraseResolutionRefinement: true,
+          registerHealthRefinement: true,
+        }
         : rawConfig;
       const generatedSong = generateNew(generationConfig);
       const postprocessed = qualityEvolution
@@ -160,6 +167,7 @@ export function runGenerationBenchmark({
           returnDiagnostics: null,
           densityDiagnostics: null,
           phraseResolutionDiagnostics: null,
+          registerHealthDiagnostics: null,
           grooveDiagnostics: null,
         };
       const song = postprocessed.song;
@@ -167,6 +175,7 @@ export function runGenerationBenchmark({
       const returnDiagnostics = postprocessed.returnDiagnostics;
       const densityDiagnostics = postprocessed.densityDiagnostics;
       const phraseResolutionDiagnostics = postprocessed.phraseResolutionDiagnostics;
+      const registerHealthDiagnostics = postprocessed.registerHealthDiagnostics;
       const grooveDiagnostics = postprocessed.grooveDiagnostics;
       const evaluation = evaluateSongCandidate(song);
       const releaseGate = evaluateSongReleaseGate(song, evaluation);
@@ -234,6 +243,10 @@ export function runGenerationBenchmark({
         phraseResolutionRefinementAccepted: Boolean(phraseResolutionDiagnostics?.accepted),
         phraseResolutionRefinementId: phraseResolutionDiagnostics?.id ?? null,
         phraseResolutionRefinementDelta: finite(phraseResolutionDiagnostics?.phraseResolutionDelta, 0),
+        registerHealthRefinementAttempted: Boolean(registerHealthDiagnostics?.attempted),
+        registerHealthRefinementAccepted: Boolean(registerHealthDiagnostics?.accepted),
+        registerHealthRefinementId: registerHealthDiagnostics?.id ?? null,
+        registerHealthRefinementDelta: finite(registerHealthDiagnostics?.registerHealthDelta, 0),
         groovePocketAttempted: Boolean(grooveDiagnostics?.attempted),
         groovePocketAccepted: Boolean(grooveDiagnostics?.accepted),
         groovePocketId: grooveDiagnostics?.id ?? null,
@@ -295,6 +308,9 @@ export function runGenerationBenchmark({
     phraseResolutionRefinementAttemptRate: averageOf(results, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
     phraseResolutionRefinementAcceptanceRate: averageOf(results, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
     averagePhraseResolutionRefinementDelta: averageOf(results, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
+    registerHealthRefinementAttemptRate: averageOf(results, ({ registerHealthRefinementAttempted }) => registerHealthRefinementAttempted ? 1 : 0, 3),
+    registerHealthRefinementAcceptanceRate: averageOf(results, ({ registerHealthRefinementAccepted }) => registerHealthRefinementAccepted ? 1 : 0, 3),
+    averageRegisterHealthRefinementDelta: averageOf(results, ({ registerHealthRefinementDelta }) => registerHealthRefinementDelta, 2),
     groovePocketAttemptRate: averageOf(results, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(results, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(results, ({ groovePocketDelta }) => groovePocketDelta, 2),
