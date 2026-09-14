@@ -5,6 +5,7 @@ import test from "node:test";
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta.url), "utf8");
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const contract = fs.readFileSync(new URL("../src/ui/create-control-contract.js", import.meta.url), "utf8");
 const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
 const build = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
 const pkg = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
@@ -18,14 +19,15 @@ test("Create workspace keeps the production flow intact", () => {
   }
 });
 
-test("Phase 1 presentation mounts through the existing generation UI boundary", () => {
+test("Create presentation mounts through the existing generation UI boundary", () => {
   assert.match(progress, /import "\.\/create-workflow-phase1\.js";/);
   assert.match(presentation, /typeof document !== "undefined"/);
   assert.match(presentation, /applyCreateWorkflowPhase1\(document\)/);
+  assert.match(presentation, /import \{ applyCreateControlContract \} from "\.\/create-control-contract\.js"/);
   assert.doesNotMatch(presentation, /music-engine|generateNew\(|generateSimilar\(/);
 });
 
-test("Phase 1 presentation can be imported without browser globals", async () => {
+test("Create presentation can be imported without browser globals", async () => {
   const previousDocument = globalThis.document;
   try {
     delete globalThis.document;
@@ -57,6 +59,32 @@ test("advanced direction moves optional controls below the primary generation ac
   assert.match(css, /#preGenSection \.creator-grid\.phase1-essentials-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
 });
 
+test("Create copy explains reference, direction, generation and Elements without ambiguous wording", () => {
+  assert.match(presentation, /Hear it\. Direct it\. Make it yours\./);
+  assert.match(presentation, /current song as your reference/i);
+  assert.match(presentation, /Direct the next generation/);
+  assert.match(presentation, /Genre establishes the writing rules/);
+  assert.match(presentation, /COMPOSE FROM THIS DIRECTION/);
+  assert.match(presentation, /Create Fire \/ Electric \/ Drip/);
+  assert.match(presentation, /Impact · punch · groove/);
+  assert.match(presentation, /Motion · hook · syncopation/);
+  assert.match(presentation, /Space · harmony · flow/);
+});
+
+test("every contracted Create control receives intent, event and contextual-help wiring", () => {
+  assert.match(contract, /data\.createControl = id/);
+  assert.match(contract, /data\.createIntent = contract\.intent/);
+  assert.match(contract, /data\.createEvent = contract\.event/);
+  assert.match(contract, /aria-description/);
+  for (const eventName of ["focusin", "pointerover", "input", "change", "click"]) {
+    assert.match(contract, new RegExp(`"${eventName}"`), `${eventName} must refresh Create control context`);
+  }
+  const moveIndex = presentation.indexOf("moveGenerationEssentials(rootDocument, createPanel)");
+  const advancedIndex = presentation.indexOf("consolidateAdvancedDirection(rootDocument, createPanel)");
+  const contractIndex = presentation.indexOf("applyCreateControlContract(rootDocument, createPanel)");
+  assert.ok(contractIndex > advancedIndex && advancedIndex > moveIndex, "wiring must apply after controls reach their final DOM positions");
+});
+
 test("Create layout overrides inherited grid spans and restores full mobile facts", () => {
   assert.match(css, /#tab-create \.create-live-control,[\s\S]*?#tab-create \.create-live-select\s*\{[\s\S]*?grid-column:\s*span 1/);
   assert.match(css, /#tab-create #factBars,[\s\S]*?#tab-create #factDuration,[\s\S]*?#tab-create #factRhythm\s*\{[\s\S]*?display:\s*inline-flex/);
@@ -67,7 +95,7 @@ test("Create-only mobile header changes do not leak into Shape, Mix, or Finish",
   assert.doesNotMatch(css, /\n\s*\.topbar \.session-status,[\s\S]*?display:\s*none/);
 });
 
-test("Phase 1 gives Create a clear desktop and mobile hierarchy", () => {
+test("Create gives desktop and mobile a clear action hierarchy", () => {
   assert.match(css, /#preGenSection \.generation-actions-bar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1\.3fr\) minmax\(0, 0\.9fr\)/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?body:has\(#tab-create\.is-active\) \.topbar \.session-status[\s\S]*?display:\s*none/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?#tab-create \.create-live-controls\s*\{[\s\S]*?grid-template-columns:\s*1fr 1fr/);
