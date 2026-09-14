@@ -116,6 +116,9 @@ function summarizeGenre(genre, results) {
     groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
+    averageNotesPerBar: averageOf(genreResults, ({ notesPerBar }) => notesPerBar, 1),
+    averageDensityTarget: averageOf(genreResults, ({ densityTarget }) => densityTarget, 1),
+    averageDensityDelta: averageOf(genreResults, ({ densityDelta }) => densityDelta, 1),
     weakestGroup,
     weakestDimension,
     groupAverages,
@@ -178,6 +181,13 @@ export function runGenerationBenchmark({
       const musicalScore = finite(evaluation.score, 0);
       const technicalScore = technical.score;
       const overallScore = round(musicalScore * 0.82 + technicalScore * 0.18);
+      const effectiveBars = Math.max(1, finite(song.meta?.bars, song.bars ?? bars));
+      const pitchedNoteCount = (song.tracks ?? [])
+        .filter((track) => track.id !== "drums")
+        .reduce((sum, track) => sum + (track.notes ?? []).length, 0);
+      const notesPerBar = pitchedNoteCount / effectiveBars;
+      const densityTarget = finite(evaluation?.diagnostics?.densityTarget, notesPerBar);
+      const densityDelta = notesPerBar - densityTarget;
       const chords = song.tracks.find((t) => t.id === "chords")?.notes ?? [];
       let totalStepDistance = 0;
       let transitionCount = 0;
@@ -206,6 +216,9 @@ export function runGenerationBenchmark({
         vocalSpace: song.vocalSpace,
         voiceLeadingStep,
         maskingPairs: song.perceptualMix?.maskingPairs ?? 0,
+        notesPerBar: round(notesPerBar, 2),
+        densityTarget: round(densityTarget, 2),
+        densityDelta: round(densityDelta, 2),
         outputQualitySignature: generationConfig.outputQuality?.seedSignature ?? null,
         arrangementAttempted: Boolean(arrangementDiagnostics?.attempted),
         arrangementAccepted: Boolean(arrangementDiagnostics?.accepted),
@@ -263,6 +276,9 @@ export function runGenerationBenchmark({
     averageCreativeFloor: averageOf(results, ({ creativeFloor }) => creativeFloor),
     averageVoiceLeadingStep: averageOf(results, ({ voiceLeadingStep }) => voiceLeadingStep, 2),
     averageMaskingPairs: averageOf(results, ({ maskingPairs }) => maskingPairs),
+    averageNotesPerBar: averageOf(results, ({ notesPerBar }) => notesPerBar, 1),
+    averageDensityTarget: averageOf(results, ({ densityTarget }) => densityTarget, 1),
+    averageDensityDelta: averageOf(results, ({ densityDelta }) => densityDelta, 1),
     releasePassRate,
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, results.length), 3),
     arrangementAttemptRate: averageOf(results, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
