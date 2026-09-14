@@ -193,6 +193,90 @@ function applyCadencePayoff(song, pairs) {
   return changed;
 }
 
+function quarterBeatOffset(note, windowStart) {
+  return Math.round((noteStart(note) - windowStart) * 4) / 4;
+}
+
+function signatureForWindow(notes, windowStart) {
+  return new Set(notes.map((note) => `${quarterBeatOffset(note, windowStart)}`));
+}
+
+function referenceMotifSignature(song, melody, motifLength) {
+  for (const section of sectionsOf(song)) {
+    const repeats = Math.min(4, Math.floor((sectionEnd(section) - sectionStart(section)) / motifLength));
+    for (let repeat = 0; repeat < repeats; repeat += 1) {
+      const start = sectionStart(section) + repeat * motifLength;
+      const notes = notesInSection(melody, section)
+        .filter((note) => noteStart(note) >= start - 1e-6 && noteStart(note) < start + motifLength - 1e-6);
+      if (notes.length >= 2) return signatureForWindow(notes, start);
+    }
+  }
+  return null;
+}
+
+function signatureCoverage(signature, reference) {
+  if (!signature?.size || !reference?.size) return 0;
+  const shared = [...reference].filter((item) => signature.has(item)).length;
+  return shared / Math.max(1, Math.min(reference.size, signature.size));
+}
+
+function alignWindowToReference(notes, windowStart, windowEnd, reference, maxChanges, originId) {
+  if (notes.length < 2 || !reference?.size || maxChanges <= 0) return 0;
+  const before = signatureForWindow(notes, windowStart);
+  if (signatureCoverage(before, reference) >= 1 - 1e-6) return 0;
+  const moved = new Set();
+  let changed = 0;
+
+  while (changed < maxChanges) {
+    const counts = new Map();
+    for (const note of notes) {
+      const offset = `${quarterBeatOffset(note, windowStart)}`;
+      counts.set(offset, (counts.get(offset) ?? 0) + 1);
+    }
+    const current = new Set(counts.keys());
+    if (signatureCoverage(current, reference) >= 1 - 1e-6) break;
+    const missing = [...reference].map(Number).filter((offset) => !current.has(`${offset}`));
+    if (!missing.length) break;
+
+    const movable = notes.filter((note) => {
+      if (moved.has(note)) return false;
+      const offset = `${quarterBeatOffset(note, windowStart)}`;
+      return !reference.has(offset) || (counts.get(offset) ?? 0) > 1;
+    });
+    if (!movable.length) break;
+
+    let best = null;
+    for (const note of movable) {
+      const currentStart = noteStart(note);
+      for (const offset of missing) {
+        const desired = windowStart + offset;
+        const shift = Math.abs(desired - currentStart);
+        if (desired < windowStart - 1e-6 || desired >= windowEnd - 0.03 || shift > 0.75) continue;
+        if (!best || shift < best.shift - 1e-6 || (Math.abs(shift - best.shift) <= 1e-6 && desired < best.desired)) {
+          best = { note, desired, shift };
+        }
+      }
+    }
+    if (!best) break;
+
+    setNoteStart(best.note, best.desired);
+    best.note.returnDevelopmentRole = "techno-grid-recall";
+    best.note.returnDevelopmentOriginSectionId = String(originId);
+    moved.add(best.note);
+    changed += 1;
+  }
+
+  const after = signatureForWindow(notes, windowStart);
+  if (signatureCoverage(after, reference) <= signatureCoverage(before, reference) + 1e-6) {
+    for (const note of moved) {
+      delete note.returnDevelopmentRole;
+      delete note.returnDevelopmentOriginSectionId;
+    }
+    return 0;
+  }
+  return changed;
+}
+
 function applyRhythmicRecall(song, pairs) {
   const melody = trackOf(song, "melody");
   if (!melody?.notes?.length) return 0;
@@ -201,6 +285,7 @@ function applyRhythmicRecall(song, pairs) {
   const technoGridRecall = genre === "techno";
   const maxRepeats = technoGridRecall ? 4 : 1;
   const maxChangedPerTarget = technoGridRecall ? 16 : 8;
+  const criticReference = technoGridRecall ? referenceMotifSignature(song, melody, motifLength) : null;
   let changed = 0;
 
   for (const { target, origin } of pairs) {
@@ -218,11 +303,24 @@ function applyRhythmicRecall(song, pairs) {
       const repeatStart = targetStart + repeat * motifLength;
       const repeatEnd = Math.min(targetEnd, repeatStart + motifLength);
       const destination = notesInSection(melody, target)
-        .filter((note) => noteStart(note) >= repeatStart - 1e-6 && noteStart(note) < repeatEnd - 1e-6)
-        .slice(0, 8);
-      const count = Math.min(source.length, destination.length, maxChangedPerTarget - changedInTarget);
-      if (count < 2) continue;
+        .filter((note) => noteStart(note) >= repeatStart - 1e-6 && noteStart(note) < repeatEnd - 1e-6);
+      if (destination.length < 2) continue;
 
+      if (technoGridRecall && criticReference?.size) {
+        const aligned = alignWindowToReference(
+          destination,
+          repeatStart,
+          repeatEnd,
+          criticReference,
+          maxChangedPerTarget - changedInTarget,
+          origin.id,
+        );
+        changed += aligned;
+        changedInTarget += aligned;
+        continue;
+      }
+
+      const count = Math.min(source.length, destination.length, maxChangedPerTarget - changedInTarget);
       let previousStart = repeatStart - 1e-4;
       for (let index = 0; index < count; index += 1) {
         const sourceOffset = noteStart(source[index]) - sourceStart;
@@ -230,7 +328,7 @@ function applyRhythmicRecall(song, pairs) {
         const nextStart = Math.max(previousStart + 0.02, desired);
         if (Math.abs(noteStart(destination[index]) - nextStart) > 1e-6) {
           setNoteStart(destination[index], nextStart);
-          destination[index].returnDevelopmentRole = technoGridRecall ? "techno-grid-recall" : "rhythmic-recall";
+          destination[index].returnDevelopmentRole = "rhythmic-recall";
           destination[index].returnDevelopmentOriginSectionId = String(origin.id);
           changed += 1;
           changedInTarget += 1;
