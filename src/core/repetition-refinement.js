@@ -158,7 +158,6 @@ function createCandidate(song, target, editBudget, candidateIndex) {
     const note = track?.notes?.[move.noteIndex];
     if (!note) break;
     note.start = round(move.desiredStart);
-    note.repetitionRefinementRole = current.direction === "reinforce" ? "motif-reinforce" : "motif-evolve";
     maxShift = Math.max(maxShift, move.shift);
   }
   const after = repetitionBalance(candidate, target);
