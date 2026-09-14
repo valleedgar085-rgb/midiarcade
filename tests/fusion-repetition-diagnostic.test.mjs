@@ -1,5 +1,6 @@
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
+import { adaptGenerationConfig } from "../src/core/adaptive-generation.js";
 import { applyOutputQualityEvolution, createOutputQualityProfile } from "../src/core/output-quality-evolution.js";
 
 const base = {
@@ -12,36 +13,52 @@ const base = {
   surprise: 0.28,
 };
 
-function row(genre, seed, secondaryGenre = null) {
-  const request = {
+function requestFor(genre, seed, secondaryGenre = null) {
+  return {
     ...base,
     genre,
     seed,
     ...(secondaryGenre ? { secondaryGenre, fusionBlend: 0.5 } : {}),
   };
-  const evolved = applyOutputQualityEvolution(request, { kind: "new" });
-  const profile = createOutputQualityProfile(request, { kind: "new" });
-  const song = engine.generateNew(request);
+}
+
+function summarize(song) {
   const details = song.meta?.scoreDetails ?? {};
   return {
-    genre,
-    secondaryGenre,
     score: details.totalScore,
     repetition: details.subscores?.repetition,
     motifRepetition: details.diagnostics?.motifRepetition,
     repetitionTarget: details.diagnostics?.repetitionTarget,
     motif: details.subscores?.motif,
     phraseResolution: details.subscores?.phraseResolution,
-    variation: evolved.variation,
-    evolution: evolved.evolution,
-    syncopation: evolved.syncopation,
-    repetitionGuard: profile.repetitionGuard,
-    phraseDevelopment: profile.phraseDevelopment,
-    melodicContrast: profile.melodicContrast,
+    performance: details.subscores?.performance,
+    groove: details.subscores?.groove,
   };
 }
 
-test("diagnose Hip-Hop Rap fusion repetition direction", () => {
+function row(genre, seed, secondaryGenre = null) {
+  const request = requestFor(genre, seed, secondaryGenre);
+  const rawProfile = createOutputQualityProfile(request, { kind: "new" });
+  const adapted = adaptGenerationConfig(request, { kind: "new" });
+  const evolved = applyOutputQualityEvolution(adapted, { kind: "new" });
+  return {
+    genre,
+    secondaryGenre,
+    raw: summarize(engine.generateNew(request)),
+    runtimeSteered: summarize(engine.generateNew(evolved)),
+    controls: {
+      variation: evolved.variation,
+      evolution: evolved.evolution,
+      syncopation: evolved.syncopation,
+      drumFills: evolved.drumFills,
+      repetitionGuard: rawProfile.repetitionGuard,
+      phraseDevelopment: rawProfile.phraseDevelopment,
+      melodicContrast: rawProfile.melodicContrast,
+    },
+  };
+}
+
+test("diagnose Hip-Hop Rap fusion repetition on raw and runtime-steered paths", () => {
   const rows = [
     row("hipHop", "fusion-quality-01:hipHop"),
     row("rap", "fusion-quality-01:rap"),
