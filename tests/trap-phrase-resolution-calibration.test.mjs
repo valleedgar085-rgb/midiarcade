@@ -83,30 +83,57 @@ function phraseResolutionBreakdown(song) {
   };
 }
 
-test("Trap fixed seeds expose the residual section-ending cause behind phrase-resolution score", () => {
+test("Trap fixed seeds expose the exact Quality Lab cadence-refinement bottleneck", () => {
   const results = [];
   for (const seed of ["quality-lab-01", "quality-lab-02", "quality-lab-03"]) {
-    const config = applyOutputQualityEvolution({
-      genre: "trap",
-      seed: `${seed}:trap`,
-      bars: 16,
-      candidateCount: 1,
-    }, { kind: "new" });
-    const generated = generateNew(config);
-    const processed = applySongOutputQualityPipeline(generated, config);
-    const evaluation = evaluateSongCandidate(processed.song);
-    const breakdown = phraseResolutionBreakdown(processed.song);
+    const generationConfig = {
+      ...applyOutputQualityEvolution({
+        genre: "trap",
+        seed: `${seed}:trap`,
+        bars: 16,
+        candidateCount: 1,
+      }, { kind: "new" }),
+      phraseResolutionRefinement: true,
+      registerHealthRefinement: true,
+    };
+    const generated = generateNew(generationConfig);
+    const beforeProcessed = applySongOutputQualityPipeline(generated, {
+      ...generationConfig,
+      phraseResolutionRefinement: false,
+      registerHealthRefinement: false,
+    });
+    const phraseProcessed = applySongOutputQualityPipeline(generated, {
+      ...generationConfig,
+      registerHealthRefinement: false,
+    });
+    const fullProcessed = applySongOutputQualityPipeline(generated, generationConfig);
 
-    assert.equal(breakdown.score, evaluation.subscores.phraseResolution, `${seed} breakdown must match production critic`);
+    const beforeEvaluation = evaluateSongCandidate(beforeProcessed.song);
+    const phraseEvaluation = evaluateSongCandidate(phraseProcessed.song);
+    const fullEvaluation = evaluateSongCandidate(fullProcessed.song);
+    const before = phraseResolutionBreakdown(beforeProcessed.song);
+    const afterPhrase = phraseResolutionBreakdown(phraseProcessed.song);
+    const afterFull = phraseResolutionBreakdown(fullProcessed.song);
+
+    assert.equal(before.score, beforeEvaluation.subscores.phraseResolution, `${seed} before breakdown must match critic`);
+    assert.equal(afterPhrase.score, phraseEvaluation.subscores.phraseResolution, `${seed} phrase breakdown must match critic`);
+    assert.equal(afterFull.score, fullEvaluation.subscores.phraseResolution, `${seed} full breakdown must match critic`);
+    assert.ok(afterPhrase.score >= before.score, `${seed} phrase refinement must not lower phrase resolution`);
+
     results.push({
       seed,
-      phraseResolution: breakdown.score,
-      counts: breakdown.counts,
-      rows: breakdown.rows,
-      refinement: processed.phraseResolutionDiagnostics ?? null,
+      beforePhraseResolution: before.score,
+      afterPhraseResolution: afterPhrase.score,
+      finalPhraseResolution: afterFull.score,
+      beforeCounts: before.counts,
+      afterCounts: afterPhrase.counts,
+      beforeRows: before.rows,
+      afterRows: afterPhrase.rows,
+      phraseRefinement: phraseProcessed.phraseResolutionDiagnostics ?? null,
+      registerRefinement: fullProcessed.registerHealthDiagnostics ?? null,
     });
   }
 
-  console.log("TRAP_PHRASE_RESOLUTION_CALIBRATION", JSON.stringify(results));
+  console.log("TRAP_PHRASE_RESOLUTION_EXACT_CALIBRATION", JSON.stringify(results));
   assert.equal(results.length, 3);
 });
