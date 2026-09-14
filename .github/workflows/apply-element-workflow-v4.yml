@@ -38,6 +38,16 @@ jobs:
           new = '}, { seed: "element-shape-" + provenance });'
           if old in text:
               text = text.replace(old, new, 1)
+          text = text.replace(
+              "'    renderSongVariationTray();\\n    renderCreativeThread();'",
+              "'  renderSongVariationTray();\\n  renderCreativeThread();'",
+              1,
+          )
+          text = text.replace(
+              "'    renderActiveElementIdentity();\\n    renderSongVariationTray();\\n    renderCreativeThread();'",
+              "'  renderActiveElementIdentity();\\n  renderSongVariationTray();\\n  renderCreativeThread();'",
+              1,
+          )
           start_marker = 'const trayBlock = `'
           end_marker = '\n\nexport function selectSongVariation`;'
           start = text.find(start_marker)
