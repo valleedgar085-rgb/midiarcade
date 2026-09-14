@@ -157,6 +157,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     repetitionRefinement: typeof source.repetitionRefinement === "boolean"
       ? source.repetitionRefinement
       : freshGeneration,
+    genreIdentityRefinement: typeof source.genreIdentityRefinement === "boolean"
+      ? source.genreIdentityRefinement
+      : false,
     groovePocketRefinement: typeof source.groovePocketRefinement === "boolean"
       ? source.groovePocketRefinement
       : false,
