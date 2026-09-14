@@ -12,7 +12,8 @@ test("phase 50 calibration benchmark measures quality, safety, novelty, and weak
   });
   assert.equal(report.phase, 50);
   assert.equal(report.version, 2);
-  assert.equal(report.labVersion, 1);
+  assert.equal(report.labVersion, 2);
+  assert.equal(report.qualityEvolution, true);
   assert.equal(report.generations, 6);
   assert.equal(report.failures.length, 0);
   assert.ok(report.averageScore >= 58);
@@ -24,8 +25,8 @@ test("phase 50 calibration benchmark measures quality, safety, novelty, and weak
   assert.ok(Object.hasOwn(QUALITY_DIMENSION_GROUPS, report.weakestGroup.id));
   assert.ok(report.weakestDimension.id !== "unknown");
   assert.ok(report.recommendations.length >= 3);
-  assert.ok(report.results.every(({ scaleFit, finalChecks, finalAssemblyChecks, exportChecks }) => (
-    scaleFit === 1 && finalChecks && finalAssemblyChecks && exportChecks
+  assert.ok(report.results.every(({ scaleFit, finalChecks, finalAssemblyChecks, exportChecks, outputQualitySignature }) => (
+    scaleFit === 1 && finalChecks && finalAssemblyChecks && exportChecks && Boolean(outputQualitySignature)
   )));
 });
 
@@ -37,6 +38,7 @@ test("generation success rate benchmark evaluates all genre families with high q
     bars: 8,
   });
   assert.equal(report.phase, 50);
+  assert.equal(report.qualityEvolution, true);
   assert.equal(report.generations, allGenres.length * 2);
   assert.equal(report.failures.length, 0, `Generation failures detected: ${report.failures.join(", ")}`);
   assert.ok(report.averageScore >= 80, `Expected average score >= 80, got ${report.averageScore}`);
@@ -53,9 +55,33 @@ test("generation success rate benchmark evaluates all genre families with high q
     && averageOverallScore <= 100
   )));
   assert.ok(
-    report.results.every(({ scaleFit, finalChecks, finalAssemblyChecks, exportChecks }) => (
-      scaleFit === 1 && finalChecks && finalAssemblyChecks && exportChecks
+    report.results.every(({ scaleFit, finalChecks, finalAssemblyChecks, exportChecks, outputQualitySignature }) => (
+      scaleFit === 1 && finalChecks && finalAssemblyChecks && exportChecks && Boolean(outputQualitySignature)
     )),
-    "Every song candidate must achieve 100% scale safety and pass final assembly/export checks",
+    "Every evolved song candidate must retain scale safety, final assembly/export checks, and a Phase 6 quality signature",
   );
+});
+
+test("quality lab can still produce an explicit pre-Phase-6 baseline for A/B comparison", () => {
+  const baseline = runGenerationBenchmark({
+    genres: ["techno"],
+    seeds: ["ab-proof"],
+    bars: 8,
+    qualityEvolution: false,
+  });
+  const evolved = runGenerationBenchmark({
+    genres: ["techno"],
+    seeds: ["ab-proof"],
+    bars: 8,
+    qualityEvolution: true,
+  });
+
+  assert.equal(baseline.qualityEvolution, false);
+  assert.equal(evolved.qualityEvolution, true);
+  assert.equal(baseline.results[0].outputQualitySignature, null);
+  assert.ok(evolved.results[0].outputQualitySignature);
+  assert.equal(baseline.results[0].scaleFit, 1);
+  assert.equal(evolved.results[0].scaleFit, 1);
+  assert.equal(baseline.results[0].exportChecks, true);
+  assert.equal(evolved.results[0].exportChecks, true);
 });
