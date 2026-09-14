@@ -31,6 +31,32 @@ function makeSource() {
   assert.fail("expected a deterministic song with at least two return-development candidates");
 }
 
+function makeTechnoSource() {
+  for (let index = 0; index < 32; index += 1) {
+    const song = generateNew({
+      genre: "techno",
+      seed: `phase6d-techno-return-${index}`,
+      bars: 32,
+      candidateCount: 1,
+    });
+    const config = {
+      genre: "techno",
+      seed: `phase6d-techno-post-${index}`,
+      bars: 32,
+      arrangementEvolution: false,
+      returnDevelopment: true,
+    };
+    const candidates = createReturnDevelopmentCandidates(song, config);
+    const rhythmic = candidates.find(({ id }) => id === "rhythmic-recall");
+    const tagged = rhythmic?.song?.tracks?.find((track) => track.id === "melody")?.notes
+      ?.filter((note) => note.returnDevelopmentRole === "techno-grid-recall") ?? [];
+    if (returnDevelopmentTargets(song).length && rhythmic && tagged.length >= 2) {
+      return { song, config, rhythmic, tagged };
+    }
+  }
+  assert.fail("expected deterministic techno output with multi-phrase rhythmic return recall");
+}
+
 function noteKey(note) {
   return `${note.id ?? ""}:${note.start ?? note.startBeat ?? note.beat ?? note.time}:${note.pitch ?? note.note ?? note.midi}:${note.duration ?? note.length}`;
 }
@@ -103,6 +129,26 @@ test("Phase 6B return development is deterministic, immutable, focused, and capp
       }).map(noteKey);
       assert.deepEqual(candidateOutside, sourceOutside, `${candidate.id} must preserve ${trackId} outside return sections`);
     }
+  }
+});
+
+test("Phase 6D techno recall develops repeated motif windows without changing note count or pitch", () => {
+  const { song, rhythmic, tagged } = makeTechnoSource();
+  const sourceMelody = song.tracks.find((track) => track.id === "melody");
+  const candidateMelody = rhythmic.song.tracks.find((track) => track.id === "melody");
+  const targetIds = new Set(returnDevelopmentTargets(song).map(({ sectionId }) => sectionId));
+
+  assert.equal(candidateMelody.notes.length, sourceMelody.notes.length, "techno recall must not add or remove melody notes");
+  assert.deepEqual(
+    candidateMelody.notes.map((note) => note.pitch),
+    sourceMelody.notes.map((note) => note.pitch),
+    "techno recall should improve timing identity without rewriting pitches",
+  );
+  assert.ok(tagged.length >= 2, "techno return should develop more than a single isolated onset");
+  assert.ok(tagged.length <= targetIds.size * 16, "per-return change budget must remain bounded");
+  for (const note of tagged) {
+    const section = rhythmic.song.structure.find((entry) => note.start >= entry.startBeat - 1e-6 && note.start < entry.endBeat - 1e-6);
+    assert.ok(section && targetIds.has(String(section.id)), "techno recall must stay inside recurring target sections");
   }
 });
 
