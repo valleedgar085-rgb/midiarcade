@@ -6,7 +6,10 @@ import {
   evolveSongArrangement,
 } from "../src/core/arrangement-evolution.js";
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
-import { applySongOutputQualityPostprocess } from "../src/core/output-quality-postprocess.js";
+import {
+  applyResultOutputQualityPostprocess,
+  applySongOutputQualityPostprocess,
+} from "../src/core/output-quality-postprocess.js";
 import { createSongFingerprint, generateNew } from "../src/music-engine.js";
 
 function fixtureSong() {
@@ -187,4 +190,33 @@ test("candidate-first postprocess keeps the original song when the evolved arran
   assert.equal(processed.diagnostics.accepted, false);
   assert.equal(processed.diagnostics.reason, "critic-regression");
   assert.strictEqual(processed.song, source, "rejected arrangement candidates must not replace the generated song");
+});
+
+test("result postprocess is reference-stable when no arrangement candidate is committed", () => {
+  const noStructureResult = { status: "committed", song: { id: "no-structure" } };
+  assert.strictEqual(
+    applyResultOutputQualityPostprocess(noStructureResult, {
+      genre: "pop",
+      seed: "no-op-contract",
+      bars: 16,
+      arrangementEvolution: true,
+    }),
+    noStructureResult,
+    "no-op arrangement diagnostics must not change the executor result object",
+  );
+
+  const source = generateNew({ genre: "pop", seed: "phase6b-result-reject", bars: 16, candidateCount: 1 });
+  const config = changingConfig(source, "pop");
+  const rejectedResult = { status: "committed", song: source };
+  let evaluationCall = 0;
+  const processed = applyResultOutputQualityPostprocess(rejectedResult, config, {
+    evaluateCandidate() {
+      evaluationCall += 1;
+      return evaluationCall === 1 ? evaluation(92, 86) : evaluation(88, 79);
+    },
+    evaluateReleaseGate() {
+      return { passed: true, totalScore: 88, exportChecks: { durationSafe: true } };
+    },
+  });
+  assert.strictEqual(processed, rejectedResult, "rejected arrangement candidates must preserve exact executor result identity");
 });
