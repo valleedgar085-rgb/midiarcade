@@ -197,32 +197,46 @@ function applyRhythmicRecall(song, pairs) {
   const melody = trackOf(song, "melody");
   if (!melody?.notes?.length) return 0;
   const motifLength = clamp(finite(song?.motifs?.melody?.lengthBeats, finite(song?.meta?.beatsPerBar, 4)), 1, 8);
+  const genre = String(song?.genre ?? song?.meta?.genre ?? "pop");
+  const technoGridRecall = genre === "techno";
+  const maxRepeats = technoGridRecall ? 4 : 1;
+  const maxChangedPerTarget = technoGridRecall ? 16 : 8;
   let changed = 0;
 
   for (const { target, origin } of pairs) {
     const sourceStart = sectionStart(origin);
     const targetStart = sectionStart(target);
+    const targetEnd = sectionEnd(target);
     const source = notesInSection(melody, origin)
       .filter((note) => noteStart(note) < sourceStart + motifLength - 1e-6)
       .slice(0, 8);
-    const destination = notesInSection(melody, target)
-      .filter((note) => noteStart(note) < targetStart + motifLength - 1e-6)
-      .slice(0, 8);
-    const count = Math.min(source.length, destination.length);
-    if (count < 2) continue;
+    if (source.length < 2) continue;
 
-    let previousStart = targetStart - 1e-4;
-    for (let index = 0; index < count; index += 1) {
-      const sourceOffset = noteStart(source[index]) - sourceStart;
-      const desired = clamp(targetStart + sourceOffset, targetStart, sectionEnd(target) - 0.03);
-      const nextStart = Math.max(previousStart + 0.02, desired);
-      if (Math.abs(noteStart(destination[index]) - nextStart) > 1e-6) {
-        setNoteStart(destination[index], nextStart);
-        destination[index].returnDevelopmentRole = "rhythmic-recall";
-        destination[index].returnDevelopmentOriginSectionId = String(origin.id);
-        changed += 1;
+    const repeatCount = Math.min(maxRepeats, Math.max(1, Math.floor((targetEnd - targetStart) / motifLength)));
+    let changedInTarget = 0;
+    for (let repeat = 0; repeat < repeatCount && changedInTarget < maxChangedPerTarget; repeat += 1) {
+      const repeatStart = targetStart + repeat * motifLength;
+      const repeatEnd = Math.min(targetEnd, repeatStart + motifLength);
+      const destination = notesInSection(melody, target)
+        .filter((note) => noteStart(note) >= repeatStart - 1e-6 && noteStart(note) < repeatEnd - 1e-6)
+        .slice(0, 8);
+      const count = Math.min(source.length, destination.length, maxChangedPerTarget - changedInTarget);
+      if (count < 2) continue;
+
+      let previousStart = repeatStart - 1e-4;
+      for (let index = 0; index < count; index += 1) {
+        const sourceOffset = noteStart(source[index]) - sourceStart;
+        const desired = clamp(repeatStart + sourceOffset, repeatStart, repeatEnd - 0.03);
+        const nextStart = Math.max(previousStart + 0.02, desired);
+        if (Math.abs(noteStart(destination[index]) - nextStart) > 1e-6) {
+          setNoteStart(destination[index], nextStart);
+          destination[index].returnDevelopmentRole = technoGridRecall ? "techno-grid-recall" : "rhythmic-recall";
+          destination[index].returnDevelopmentOriginSectionId = String(origin.id);
+          changed += 1;
+          changedInTarget += 1;
+        }
+        previousStart = nextStart;
       }
-      previousStart = nextStart;
     }
   }
   melody.notes.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
