@@ -23,6 +23,8 @@ console.table(report.perGenre.map((genre) => ({
   floor: genre.averageCreativeFloor,
   density: `${genre.averageNotesPerBar}/${genre.averageDensityTarget}`,
   densityDelta: genre.averageDensityDelta,
+  densityRefine: `${Math.round(genre.densityRefinementAcceptanceRate * 100)}%/${Math.round(genre.densityRefinementAttemptRate * 100)}%`,
+  densityGain: genre.averageDensityRefinementDelta,
   release: `${Math.round(genre.releasePassRate * 100)}%`,
   arrangement: `${Math.round(genre.arrangementAcceptanceRate * 100)}%/${Math.round(genre.arrangementAttemptRate * 100)}%`,
   returns: `${Math.round(genre.returnDevelopmentAcceptanceRate * 100)}%/${Math.round(genre.returnDevelopmentAttemptRate * 100)}%`,
@@ -43,6 +45,11 @@ console.log(
 console.log(
   `Density fit: ${report.averageNotesPerBar}/${report.averageDensityTarget} pitched notes per bar`
   + ` · signed delta ${report.averageDensityDelta}`,
+);
+console.log(
+  `Density refinement: ${Math.round(report.densityRefinementAcceptanceRate * 100)}% accepted`
+  + ` of ${Math.round(report.densityRefinementAttemptRate * 100)}% attempted candidates`
+  + ` · average critic gain ${report.averageDensityRefinementDelta}`,
 );
 console.log(
   `Arrangement evolution: ${Math.round(report.arrangementAcceptanceRate * 100)}% accepted`
