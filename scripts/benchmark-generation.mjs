@@ -27,6 +27,8 @@ console.table(report.perGenre.map((genre) => ({
   densityGain: genre.averageDensityRefinementDelta,
   phraseRefine: `${Math.round(genre.phraseResolutionRefinementAcceptanceRate * 100)}%/${Math.round(genre.phraseResolutionRefinementAttemptRate * 100)}%`,
   phraseGain: genre.averagePhraseResolutionRefinementDelta,
+  registerRefine: `${Math.round(genre.registerHealthRefinementAcceptanceRate * 100)}%/${Math.round(genre.registerHealthRefinementAttemptRate * 100)}%`,
+  registerGain: genre.averageRegisterHealthRefinementDelta,
   release: `${Math.round(genre.releasePassRate * 100)}%`,
   arrangement: `${Math.round(genre.arrangementAcceptanceRate * 100)}%/${Math.round(genre.arrangementAttemptRate * 100)}%`,
   returns: `${Math.round(genre.returnDevelopmentAcceptanceRate * 100)}%/${Math.round(genre.returnDevelopmentAttemptRate * 100)}%`,
@@ -57,6 +59,11 @@ console.log(
   `Phrase resolution refinement: ${Math.round(report.phraseResolutionRefinementAcceptanceRate * 100)}% accepted`
   + ` of ${Math.round(report.phraseResolutionRefinementAttemptRate * 100)}% attempted candidates`
   + ` · average critic gain ${report.averagePhraseResolutionRefinementDelta}`,
+);
+console.log(
+  `Register health refinement: ${Math.round(report.registerHealthRefinementAcceptanceRate * 100)}% accepted`
+  + ` of ${Math.round(report.registerHealthRefinementAttemptRate * 100)}% attempted candidates`
+  + ` · average critic gain ${report.averageRegisterHealthRefinementDelta}`,
 );
 console.log(
   `Arrangement evolution: ${Math.round(report.arrangementAcceptanceRate * 100)}% accepted`
