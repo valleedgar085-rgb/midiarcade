@@ -27,9 +27,22 @@ const EXPORT_DURATION_LIMITS = Object.freeze({
   pad: 3,
 });
 
+// Keep these aligned with the canonical TRACK_DEFINITIONS gate defaults used by
+// the MIDI writer. Export uses them only to neutralize post-sanitize gate
+// expansion; direct engine exports retain their normal performance behavior.
+const EXPORT_DEFAULT_GATES = Object.freeze({
+  drums: 0.85,
+  bass: 0.82,
+  chords: 0.9,
+  melody: 0.88,
+  counterpoint: 0.94,
+  pad: 1,
+});
+
 const GENERATED_TRACK_IDS = new Set(Object.keys(EXPORT_DURATION_LIMITS));
 const EXPORT_RELEASE_GAP = 0.04;
 const EXPORT_MIN_DURATION = 0.05;
+const EXPORT_ENCODER_MIN_DURATION = 1 / 480;
 const EXPORT_NEAR_DUPLICATE_WINDOW = EXPORT_RELEASE_GAP + EXPORT_MIN_DURATION;
 
 function quantizeNotes(notes, totalBeats, step = 0.25) {
@@ -79,9 +92,17 @@ function sectionEndForBeat(structure, beat, totalBeats) {
   return clamp(finite(section?.endBeat, totalBeats), beat + EXPORT_MIN_DURATION, totalBeats);
 }
 
+function exportGateScale(track) {
+  const id = String(track?.id ?? "");
+  const defaultGate = finite(EXPORT_DEFAULT_GATES[id], 1);
+  const gate = clamp(finite(track?.settings?.gate, defaultGate), 0.08, 1.5);
+  return clamp(Math.sqrt(gate / Math.max(0.08, defaultGate)), 0.65, 1.4);
+}
+
 function sanitizeExportNotes(track, structure, totalBeats) {
   const id = String(track?.id ?? "");
   const roleLimit = finite(EXPORT_DURATION_LIMITS[id], 2);
+  const gateScale = exportGateScale(track);
   const source = collapseNearDuplicateOnsets([...(track?.notes ?? [])]
     .map((note) => ({ ...note }))
     .sort((left, right) => finite(left.start, 0) - finite(right.start, 0) || finite(left.pitch, 60) - finite(right.pitch, 60)));
@@ -102,11 +123,20 @@ function sanitizeExportNotes(track, structure, totalBeats) {
       sectionEndForBeat(structure, start, totalBeats) - start - EXPORT_RELEASE_GAP,
     );
     const endOfSongLimit = Math.max(EXPORT_MIN_DURATION, totalBeats - start);
-    const duration = Math.min(sourceDuration, roleLimit, retriggerLimit, boundaryLimit, endOfSongLimit);
+    const safeFinalDuration = Math.max(
+      EXPORT_MIN_DURATION,
+      Math.min(sourceDuration, roleLimit, retriggerLimit, boundaryLimit, endOfSongLimit),
+    );
+    // The MIDI writer applies track gate plus phrase-performance scaling after
+    // this profile runs. Prevent either stage from lengthening a safe note by
+    // pre-compensating gate > 1 and clamping phrase duration expansion to 1.
+    const storedDuration = safeFinalDuration / Math.max(1, gateScale);
+    const phraseDurationScale = Math.min(1, clamp(finite(note.phrasePerformanceDurationScale, 1), 0.72, 1.28));
     return {
       ...note,
       start,
-      duration: Number(Math.max(EXPORT_MIN_DURATION, duration).toFixed(6)),
+      duration: Number(Math.max(EXPORT_ENCODER_MIN_DURATION, storedDuration).toFixed(6)),
+      phrasePerformanceDurationScale: phraseDurationScale,
     };
   });
 }
@@ -133,9 +163,10 @@ function applySafeExportArticulation(song, { preserveSustain = false } = {}) {
   song.meta = {
     ...song.meta,
     exportArticulation: {
-      version: 1,
+      version: 2,
       safeNoteLengths: true,
       duplicateRetriggersCollapsed: true,
+      postEncoderLengtheningBlocked: true,
       generatedSustainNormalized: !preserveSustain,
     },
   };
