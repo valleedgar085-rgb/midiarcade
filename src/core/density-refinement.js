@@ -91,8 +91,7 @@ function articulateSupport(song, splitCount, parts) {
   const eligible = eligibleSplitNotes(candidate).slice(0, splitCount);
   const selected = new Map();
   eligible.forEach((entry, index) => {
-    const key = `${entry.trackId}:${entry.noteIndex}`;
-    selected.set(key, splitSupportNote(entry.note, index, parts));
+    selected.set(`${entry.trackId}:${entry.noteIndex}`, splitSupportNote(entry.note, index, parts));
   });
 
   for (const track of candidate.tracks ?? []) {
@@ -103,17 +102,9 @@ function articulateSupport(song, splitCount, parts) {
     track.notes.sort((a, b) => finite(a.start) - finite(b.start) || finite(a.pitch) - finite(b.pitch));
   }
 
-  return {
-    song: candidate,
-    changedNotes: eligible.length,
-  };
+  return { song: candidate, changedNotes: eligible.length };
 }
 
-/**
- * Phase 6D density refinement only adds articulation to existing support tones.
- * High-density critic targets can use deeper three-part articulation; pitch,
- * harmony, aggregate duration, melody, drums and bass remain untouched.
- */
 export function createDensityRefinementCandidates(song, {
   densityTarget = 0,
   maxCandidates = MAX_DENSITY_REFINEMENT_CANDIDATES,
@@ -130,9 +121,8 @@ export function createDensityRefinementCandidates(song, {
     .slice(0, Math.max(0, Math.min(MAX_DENSITY_REFINEMENT_CANDIDATES, Math.floor(maxCandidates))))
     .map((splitsPerBar, candidateIndex) => {
       const parts = target >= 30 && candidateIndex > 0 ? 3 : 2;
-      const additionsPerSplit = parts - 1;
       const splitCount = Math.min(
-        Math.floor(deficitNotes / additionsPerSplit),
+        Math.floor(deficitNotes / (parts - 1)),
         eligibleCount,
         Math.max(1, Math.ceil(bars * splitsPerBar)),
       );
