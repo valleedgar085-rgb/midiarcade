@@ -1,5 +1,3 @@
-const SCORE_EPSILON = 1e-6;
-
 export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
 export const MAX_PHRASE_RESOLUTION_EDITS = 3;
 
@@ -116,31 +114,26 @@ function sectionLandingEntries(song) {
 }
 
 function selectedEntries(song, limit, hold, payoff) {
-  const entries = sectionLandingEntries(song)
-    .filter((entry) => entry.landing && chordToneSet(entry.chord).size > 0)
+  return sectionLandingEntries(song)
     .filter((entry) => {
+      if (!entry.landing) return false;
       const tones = chordToneSet(entry.chord);
-      const pitchClass = mod(entry.landing.note.pitch, 12);
+      if (!tones.size) return false;
+      const note = entry.landing.note;
+      const pitchClass = mod(note.pitch, 12);
       const desiredDuration = entry.beatsPerBar * 0.35;
-      const availableDuration = finite(entry.section?.endBeat) - finite(entry.landing.note.start) - 0.02;
       return !tones.has(pitchClass)
         || (payoff && entry.isFinal && tones.has(entry.tonic) && pitchClass !== entry.tonic)
         || (hold
-          && finite(entry.landing.note.duration) < desiredDuration - SCORE_EPSILON
-          && availableDuration >= desiredDuration - SCORE_EPSILON);
+          && finite(note.duration) < desiredDuration
+          && finite(entry.section?.endBeat) - finite(note.start) - 0.02 >= desiredDuration);
     })
-    .sort((left, right) => left.score - right.score || left.sectionIndex - right.sectionIndex);
-  if (!payoff) return entries.slice(0, limit);
-
-  const finalEntry = entries.find((entry) => entry.isFinal);
-  const selected = [];
-  if (finalEntry) selected.push(finalEntry);
-  for (const entry of entries) {
-    if (selected.some((selectedEntry) => selectedEntry.sectionIndex === entry.sectionIndex)) continue;
-    selected.push(entry);
-    if (selected.length >= limit) break;
-  }
-  return selected.slice(0, limit);
+    .sort((left, right) => (
+      Number(payoff && right.isFinal) - Number(payoff && left.isFinal)
+      || left.score - right.score
+      || left.sectionIndex - right.sectionIndex
+    ))
+    .slice(0, limit);
 }
 
 function refineLandingCandidate(song, limit, { hold = false, payoff = false } = {}) {
