@@ -1,4 +1,5 @@
 import { applyCreateControlContract } from "./create-control-contract.js";
+import "./create-shape-bridge.js";
 
 function setCopy(rootDocument, selector, text) {
   const element = rootDocument?.querySelector?.(selector);
