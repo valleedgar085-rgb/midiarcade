@@ -124,9 +124,16 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
   return { song: attempted.song, diagnostics };
 }
 
+/**
+ * Keep the executor's public result contract reference-stable unless Phase 6B
+ * actually commits a quality-gated arrangement candidate. Rejected/no-op
+ * diagnostics remain available to direct benchmark callers without leaking a
+ * new result shape into worker/fallback/self-correction contracts.
+ */
 export function applyResultOutputQualityPostprocess(result, config = {}, evaluators = {}) {
   if (!result?.song || config.arrangementEvolution !== true) return result;
   const processed = applySongOutputQualityPostprocess(result.song, config, evaluators);
+  if (!processed.diagnostics?.accepted || processed.song === result.song) return result;
   return {
     ...result,
     song: processed.song,
