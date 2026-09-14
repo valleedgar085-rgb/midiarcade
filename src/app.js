@@ -48,6 +48,8 @@ import {
   nearestScalePitch,
   transposeScaleStep,
 } from "./ui/shape-logic.js";
+import { SHAPE_QUICK_DIRECTIONS, createShapeIntent } from "./core/shape-director-policy.js";
+import { auditionShapeCandidate, createShapeCandidate } from "./core/shape-director-engine.js";
 import { executeArrangementCommand } from "./ui/arrangement-logic.js";
 import { coverArtworkDataUrl, coverArtworkFinish, createCoverArtworkSvg } from "./cover-art.js";
 import {
@@ -219,7 +221,7 @@ let latestMidiRequestedDeviceId = "onscreen";
 
 const sessionRuntime = createSessionAutosaveController({
   storage: sessionStorage,
-  snapshot: () => createPersistedSessionSnapshot(state, {
+  snapshot: () => createPersistedSessionSnapshot(shapeDirectorPersistenceState(), {
     schema: SESSION_SCHEMA,
     normalizeMixAssistant,
   }),
@@ -1643,7 +1645,7 @@ function preserveLockedTracks(previous, next) {
 function createHistorySnapshot() {
   if (!state.song) return null;
   return {
-    song: deepClone(state.song),
+    song: deepClone(shapeDirectorPersistenceState().song),
     trackSettings: deepClone(state.trackSettings),
     muted: [...state.muted],
     solo: [...state.solo],
@@ -1716,6 +1718,7 @@ function applyHistorySnapshot(snapshot) {
 }
 
 function restoreHistory({ captureFuture = true, announce = true } = {}) {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const snapshot = state.history.pop();
   if (!snapshot) return;
   const current = captureFuture ? createHistorySnapshot() : null;
@@ -1728,6 +1731,7 @@ function restoreHistory({ captureFuture = true, announce = true } = {}) {
 }
 
 function redoHistory() {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const snapshot = state.future.pop();
   if (!snapshot) return;
   pushHistory(createHistorySnapshot(), { preserveFuture: true });
@@ -2006,6 +2010,7 @@ export function selectSongVariation(index) {
   const safeIndex = Math.round(Number(index));
   const variation = state.songVariations?.[safeIndex];
   if (!variation) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   player.stop();
   appStore.transaction("generation:variation-select", (draft) => {
     draft.song = variation;
@@ -2312,6 +2317,214 @@ function sectionNotes(section, trackFilter = null) {
   });
 }
 
+
+function shapeDirectorState() {
+  if (!state.shapeDirector || typeof state.shapeDirector !== "object") {
+    state.shapeDirector = {
+      target: "section",
+      size: "touchUp",
+      direction: null,
+      preserve: [],
+      transaction: null,
+      audition: "before",
+    };
+  }
+  return state.shapeDirector;
+}
+
+function shapeDirectorSelection(section = editorSection()) {
+  if (!section) return null;
+  const director = shapeDirectorState();
+  if (director.target === "track") {
+    return { target: "track", sectionId: section.id, trackId: state.editorTrack };
+  }
+  if (director.target === "notes") {
+    const noteIds = [...(state.editorSelection ?? [])].map(String);
+    if (!noteIds.length) return null;
+    return { target: "notes", sectionId: section.id, trackId: state.editorTrack, noteIds };
+  }
+  return { target: "section", sectionId: section.id };
+}
+
+function shapeDirectorPersistenceState() {
+  const director = state.shapeDirector;
+  if (director?.transaction && director.audition === "after") {
+    return { ...state, song: director.transaction.before };
+  }
+  return state;
+}
+
+function resolvePendingShapeDirectorCandidate({ rerender = false } = {}) {
+  if (!state.shapeDirector?.transaction) return false;
+  clearShapeDirectorCandidate({ restore: true, rerender });
+  return true;
+}
+
+function clearShapeDirectorCandidate({ restore = true, rerender = true } = {}) {
+  const director = shapeDirectorState();
+  const transaction = director.transaction;
+  const shouldRestore = Boolean(restore && transaction && director.audition === "after");
+  director.transaction = null;
+  director.audition = "before";
+  director.direction = null;
+  if (shouldRestore) {
+    player.stop();
+    state.song = deepClone(transaction.before);
+    applyTrackSettingsToSong(state.song);
+    if (rerender) renderAll();
+  } else if (rerender) {
+    renderShapeDirector();
+  }
+}
+
+function renderShapeDirector(section = editorSection()) {
+  const panel = $("#shapeDirectorPanel");
+  if (!panel) return;
+  panel.hidden = !section;
+  if (!section) return;
+  const director = shapeDirectorState();
+  const target = $("#shapeDirectorTarget");
+  const size = $("#shapeDirectorSize");
+  const trackName = $("#shapeDirectorTrackName");
+  const noteCount = $("#shapeDirectorNoteCount");
+  const status = $("#shapeDirectorStatus");
+  const candidate = $("#shapeDirectorCandidate");
+  const directions = $("#shapeDirectorDirections");
+  const auditionControls = $("#shapeDirectorAudition");
+  if (directions && !directions.childElementCount) {
+    directions.innerHTML = Object.values(SHAPE_QUICK_DIRECTIONS)
+      .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
+      .join("");
+  }
+  if (auditionControls && !auditionControls.childElementCount) {
+    auditionControls.innerHTML = '<button type="button" data-shape-audition="before">Before</button><button type="button" data-shape-audition="after">After</button>';
+  }
+  if (target) target.value = director.target;
+  if (size) size.value = director.size;
+  if (trackName) trackName.textContent = TRACK_META[state.editorTrack]?.name || state.editorTrack || "Instrument";
+  if (noteCount) noteCount.textContent = String(state.editorSelection?.size || 0) + " selected notes";
+  const notesOption = target?.querySelector?.('option[value="notes"]');
+  if (notesOption) notesOption.disabled = !(state.editorSelection?.size > 0);
+  $$('[data-shape-preserve]', panel).forEach((control) => {
+    control.checked = director.preserve.includes(control.dataset.shapePreserve);
+  });
+  $$('[data-shape-direction]', panel).forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.shapeDirection === director.direction);
+  });
+  if (!director.transaction) {
+    if (candidate) candidate.hidden = true;
+    if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
+      ? "Select notes in the piano roll first, or use Section / Current instrument scope."
+      : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
+    return;
+  }
+  const summary = director.transaction.summary;
+  if (candidate) candidate.hidden = false;
+  $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
+  $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+  $$('[data-shape-audition]', panel).forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
+  });
+  if (status) status.textContent = director.audition === "after"
+    ? "After is playing from the uncommitted candidate. Accept to write it into the song or return to Before."
+    : "Original song is still active. Tap After to audition the proposed local rewrite.";
+}
+
+function prepareShapeDirectorCandidate(direction) {
+  const section = editorSection();
+  if (!section || !state.song) return false;
+  if (state.sectionVariations) {
+    showToast("Finish or cancel the current A/B section variation before starting a Shape Director pass.");
+    return false;
+  }
+  clearShapeDirectorCandidate({ restore: true, rerender: false });
+  const director = shapeDirectorState();
+  director.direction = direction;
+  const selection = shapeDirectorSelection(section);
+  if (!selection) {
+    renderShapeDirector(section);
+    showToast("Select at least one note first, or widen Shape scope to the current instrument or section.");
+    return false;
+  }
+  const intent = createShapeIntent({
+    selection,
+    size: director.size,
+    direction,
+    preserve: director.preserve,
+  });
+  const transaction = createShapeCandidate(state.song, intent, {
+    seed: "shape:" + state.generationCount + ":" + section.id + ":" + state.editorTrack + ":" + direction + ":" + director.size,
+  });
+  if (transaction.status !== "candidate") {
+    renderShapeDirector(section);
+    showToast(transaction.error === "no-musical-change"
+      ? "That part already matches the requested direction. Try a stronger size or another direction."
+      : "Shape Director could not make that local change safely with the current locks.");
+    return false;
+  }
+  director.transaction = transaction;
+  director.audition = "before";
+  renderShapeDirector(section);
+  showToast(transaction.intent.direction.label + " candidate ready. Compare Before and After before committing.");
+  return true;
+}
+
+async function auditionShapeDirector(side) {
+  const director = shapeDirectorState();
+  const transaction = director.transaction;
+  const sectionId = transaction?.intent?.selection?.sectionId;
+  if (!transaction || !sectionId) return false;
+  const song = auditionShapeCandidate(transaction, side);
+  if (!song) return false;
+  player.stop();
+  state.song = song;
+  director.audition = side === "after" ? "after" : "before";
+  applyTrackSettingsToSong(state.song);
+  renderAll();
+  const section = normalizeSections().find((candidate) => String(candidate.id) === String(sectionId));
+  if (section) {
+    const range = editorBeatRange(section);
+    player.seek(range.start * 60 / songBpm());
+    if (!player.playing) await player.play();
+  }
+  renderShapeDirector(section);
+  return true;
+}
+
+function acceptShapeDirectorCandidate() {
+  const director = shapeDirectorState();
+  const transaction = director.transaction;
+  if (!transaction) return false;
+  player.stop();
+  pushHistory({ ...createHistorySnapshot(), song: deepClone(transaction.before) });
+  state.song = deepClone(transaction.after);
+  applyTrackSettingsToSong(state.song);
+  const label = transaction.intent.direction.label;
+  director.transaction = null;
+  director.audition = "before";
+  director.direction = null;
+  renderAll();
+  scheduleSessionSave();
+  showToast(label + " is now part of this section. Undo can restore the previous version.");
+  return true;
+}
+
+function discardShapeDirectorCandidate() {
+  const director = shapeDirectorState();
+  const transaction = director.transaction;
+  if (!transaction) return false;
+  player.stop();
+  state.song = deepClone(transaction.before);
+  applyTrackSettingsToSong(state.song);
+  director.transaction = null;
+  director.audition = "before";
+  director.direction = null;
+  renderAll();
+  scheduleSessionSave();
+  showToast("Shape candidate discarded. The original section is restored.");
+  return true;
+}
+
 function renderSectionShaper(message = "") {
   const shaper = $("#sectionShaper");
   if (!shaper) return;
@@ -2347,6 +2560,7 @@ function renderSectionShaper(message = "") {
   const sectionIndex = sections.findIndex((candidate) => candidate.id === section.id);
   $('[data-section-action="earlier"]', shaper).disabled = sectionIndex <= 0;
   $('[data-section-action="later"]', shaper).disabled = sectionIndex < 0 || sectionIndex >= sections.length - 1;
+  renderShapeDirector(section);
 }
 
 const ARRANGEMENT_ERROR_COPY = {
@@ -2463,6 +2677,7 @@ function moveFocusedSectionToIndex(targetIndex) {
 export function focusSongSection(sectionId, track = state.editorTrack, { openEditor = false, scroll = false } = {}) {
   const section = normalizeSections().find((candidate) => candidate.id === sectionId);
   if (!section) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   state.focusedSection = section.id;
   if (TRACK_ORDER.includes(track)) {
     state.editorTrack = track;
@@ -2989,6 +3204,7 @@ const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
   onChange(workspace) {
+    resolvePendingShapeDirectorCandidate({ rerender: true });
     appStore.transaction("workspace:activate", (draft) => {
       draft.activeWorkspace = workspace;
     });
@@ -3284,6 +3500,7 @@ function chooseNewGenrePrograms(seed) {
 
 async function runGeneration(kind, options = {}) {
   if (state.isGenerating) return;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const copy = GENERATION_STATUS_COPY[kind] ?? GENERATION_STATUS_COPY.new;
   appStore.transaction("generation:start", (draft) => {
     draft.isGenerating = true;
@@ -3772,6 +3989,7 @@ export function buildExportSongSnapshot(song = state.song, { includeLiveTake = t
 
 async function exportSong() {
   if (!state.song) return;
+  resolvePendingShapeDirectorCandidate({ rerender: true });
   let isNative = false;
   try {
     const clone = buildExportSongSnapshot();
@@ -5546,6 +5764,33 @@ function toggleFullscreen() {
   });
   $("#reorderButton").addEventListener("click", reshapeArrangement);
   $("#sectionShaper")?.addEventListener("change", (event) => {
+    const shapeTarget = event.target.closest?.("#shapeDirectorTarget");
+    if (shapeTarget) {
+      clearShapeDirectorCandidate({ restore: true, rerender: false });
+      const director = shapeDirectorState();
+      director.target = shapeTarget.value;
+      renderAll();
+      return;
+    }
+    const shapeSize = event.target.closest?.("#shapeDirectorSize");
+    if (shapeSize) {
+      clearShapeDirectorCandidate({ restore: true, rerender: false });
+      const director = shapeDirectorState();
+      director.size = shapeSize.value;
+      renderAll();
+      return;
+    }
+    const preserve = event.target.closest?.("[data-shape-preserve]");
+    if (preserve) {
+      clearShapeDirectorCandidate({ restore: true, rerender: false });
+      const director = shapeDirectorState();
+      const locks = new Set(director.preserve);
+      if (preserve.checked) locks.add(preserve.dataset.shapePreserve);
+      else locks.delete(preserve.dataset.shapePreserve);
+      director.preserve = [...locks];
+      renderAll();
+      return;
+    }
     const barsControl = event.target.closest?.("[data-section-bars]");
     if (barsControl) {
       const section = editorSection();
@@ -5560,6 +5805,24 @@ function toggleFullscreen() {
     if (control) applySectionMacro(control.dataset.sectionMacro, control.value);
   });
   $("#sectionShaper")?.addEventListener("click", (event) => {
+    const direction = event.target.closest?.("[data-shape-direction]")?.dataset.shapeDirection;
+    if (direction) {
+      prepareShapeDirectorCandidate(direction);
+      return;
+    }
+    const audition = event.target.closest?.("[data-shape-audition]")?.dataset.shapeAudition;
+    if (audition) {
+      void auditionShapeDirector(audition);
+      return;
+    }
+    if (event.target.closest?.("[data-shape-accept]")) {
+      acceptShapeDirectorCandidate();
+      return;
+    }
+    if (event.target.closest?.("[data-shape-discard]")) {
+      discardShapeDirectorCandidate();
+      return;
+    }
     if (event.target.closest("#sectionShaperPlay")) {
       const section = editorSection();
       if (!section) return;
@@ -5606,6 +5869,7 @@ function toggleFullscreen() {
     showToast(active ? "Advanced song-shaping controls are open." : "Back to the focused essentials.");
   });
   $("#resetControlsButton").addEventListener("click", () => {
+    resolvePendingShapeDirectorCandidate({ rerender: true });
     state.autoControls.clear();
     for (const key of createDefaultAutoControls(TRACK_ORDER)) state.autoControls.add(key);
     $("#genreControl").value = "neoSoul";
@@ -5793,6 +6057,7 @@ function toggleFullscreen() {
 }
 
 function resetSessionStateForFreshStart() {
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   clearTimeout(sessionSaveTimer);
   sessionSaveTimer = null;
   state.song = null;
@@ -5822,6 +6087,7 @@ function resetSessionStateForFreshStart() {
   state.songVariations = [];
   state.activeSongVariation = -1;
   state.sectionMacroValues = {};
+  state.shapeDirector = null;
   midiConnectionRequestGeneration += 1;
   latestMidiRequestedDeviceId = "onscreen";
   player.cancelPendingPlay();

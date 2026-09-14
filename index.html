@@ -579,6 +579,48 @@
                     <label style="--shape-tone:#c084fc"><span>TENSION <small>Register and urgency</small></span><select data-section-macro="tension" aria-label="Section tension"><option value="auto">Auto · follow story</option><option value="open">Open</option><option value="balanced">Balanced</option><option value="charged">Charged</option></select></label>
                     <label style="--shape-tone:#34d399"><span>POCKET <small>Timing character</small></span><select data-section-macro="pocket" aria-label="Section pocket"><option value="auto">Auto · genre pocket</option><option value="relaxed">Relaxed</option><option value="tight">Tight</option><option value="pushed">Pushed</option></select></label>
                   </div>
+
+                  <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
+                    <div class="shape-director-heading">
+                      <span><small>SHAPE DIRECTOR</small><strong id="shapeDirectorTitle">Direct only what you choose</strong></span>
+                    </div>
+                    <div class="shape-director-scope">
+                      <label><span>SCOPE</span>
+                        <select id="shapeDirectorTarget" aria-label="Shape target scope">
+                          <option value="section">Whole section</option>
+                          <option value="track">Instrument</option>
+                          <option value="notes">Selected notes</option>
+                        </select>
+                      </label>
+                      <span class="shape-director-current"><small>INSTRUMENT</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
+                      <label><span>CHANGE SIZE</span>
+                        <select id="shapeDirectorSize" aria-label="Shape change size">
+                          <option value="touchUp">Touch Up</option>
+                          <option value="reshape">Reshape</option>
+                          <option value="transform">Transform</option>
+                        </select>
+                      </label>
+                    </div>
+                    <div class="shape-director-directions" id="shapeDirectorDirections" aria-label="Quick musical directions"></div>
+                    <details class="shape-director-locks">
+                      <summary><span>Preserve what already works</span><small>OPTIONAL LOCKS</small></summary>
+                      <div>
+                        <label><input type="checkbox" data-shape-preserve="melody" /> Melody</label>
+                        <label><input type="checkbox" data-shape-preserve="harmony" /> Harmony</label>
+                        <label><input type="checkbox" data-shape-preserve="rhythm" /> Rhythm</label>
+                        <label><input type="checkbox" data-shape-preserve="instrument" /> Instrument</label>
+                      </div>
+                    </details>
+                    <div class="shape-director-candidate" id="shapeDirectorCandidate" hidden>
+                      <span><small>LOCAL CANDIDATE</small><strong id="shapeDirectorCandidateTitle">More Bounce · Touch Up</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
+                      <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Before and After audition"></div>
+                      <div class="shape-director-commit">
+                        <button type="button" data-shape-discard>Discard</button>
+                        <button class="is-primary" type="button" data-shape-accept>Accept change</button>
+                      </div>
+                    </div>
+                    <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
+                  </section>
                   <button class="section-edit-primary" type="button" data-section-action="edit">
                     <span><small>2 · OPTIONAL PRECISION</small><strong>Open note editor</strong></span>
                     <b aria-hidden="true">→</b>
