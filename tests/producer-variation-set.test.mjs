@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   ELEMENT_PROFILES,
   generateProducerVariationSet,
+  producerVariationDirectionAssessment,
+  producerVariationDirectionScore,
   PRODUCER_VARIATION_DIRECTIONS,
 } from "../src/core/producer-variation-set.js";
 
@@ -34,6 +36,37 @@ function sourceSong() {
   };
 }
 
+function scoreSong({ id = "score-song", overall = 90, role = 90, releasePassed = true } = {}, direction = ELEMENT_PROFILES[0]) {
+  const subscores = Object.fromEntries(direction.criticDimensions.map((dimension) => [dimension, role]));
+  return {
+    id,
+    generation: "similar",
+    meta: {
+      key: "A",
+      mode: "minor",
+      tempo: 96,
+      bars: 16,
+      beatsPerBar: 4,
+      totalBeats: 64,
+      scoreDetails: {
+        totalScore: overall,
+        subscores,
+        balance: { balanceScore: overall },
+        releaseGate: { passed: releasePassed },
+      },
+    },
+    settings: { bars: 16, similarity: direction.similarity },
+    tracks: [
+      { id: "drums", notes: [{ pitch: 36, start: 0, duration: 0.1, velocity: 100 }] },
+      { id: "bass", notes: [{ pitch: 45, start: 0, duration: 0.5, velocity: 90 }] },
+      { id: "chords", notes: [{ pitch: 57, start: 0, duration: 4, velocity: 80 }] },
+      { id: "melody", notes: [{ pitch: 69, start: 0, duration: 0.5, velocity: 88 }] },
+      { id: "counterpoint", notes: [] },
+      { id: "pad", notes: [] },
+    ],
+  };
+}
+
 function candidateFrom(config, calls) {
   calls.push(config);
   const seedParts = String(config.seed).split(":");
@@ -60,6 +93,12 @@ function candidateFrom(config, calls) {
     id: `candidate-${element}-${candidateIndex}`,
     title: "temporary",
     meta: {
+      key: "A",
+      mode: "minor",
+      tempo: 96,
+      bars: 16,
+      beatsPerBar: 4,
+      totalBeats: 64,
       scoreDetails: {
         totalScore: 88 + bonus,
         subscores,
@@ -67,6 +106,7 @@ function candidateFrom(config, calls) {
         releaseGate: { passed: true },
       },
     },
+    settings: { bars: 16, similarity: config.similarity },
     tracks: sourceSong().tracks,
     oneShotKit: { id: `kit-${element}-${candidateIndex}` },
   };
@@ -87,6 +127,7 @@ test("producer variations are Fire, Electric and Drip interpretations of one son
   assert.equal(calls.length, 6, "three elements should audition two complete arrangements each");
   assert.deepEqual(variations.map((song) => song.variationSet.element.label), ["Fire", "Electric", "Drip"]);
   assert.deepEqual(variations.map((song) => song.variationSet.producerIntent), ["fire", "electric", "drip"]);
+  assert.ok(variations.every((song) => song.variationSet.version === 4));
   assert.ok(variations.every((song) => song.variationSet.moodIntent.id === "balanced"));
   assert.ok(variations.every((song) => song.title === source.title));
   assert.ok(variations.every((song) => song.parentId === source.id));
@@ -94,6 +135,9 @@ test("producer variations are Fire, Electric and Drip interpretations of one son
   assert.ok(variations.every((song) => song.variationSet.identityLocked.tempo));
   assert.ok(variations.every((song) => song.variationSet.identityLocked.chordPath));
   assert.ok(variations.every((song) => song.id.endsWith("-1")), "element-specific critic scoring should choose the stronger audition");
+  assert.ok(variations.every((song) => song.variationSet.selectedAudition === 1));
+  assert.ok(variations.every((song) => song.variationSet.eligibleAuditions === 2));
+  assert.ok(variations.every((song) => song.variationSet.elementAssessment.roleScore > 0));
   assert.equal(new Set(variations.map((song) => song.variationSet.familyFingerprint)).size, 1);
   assert.deepEqual(
     variations.map((song) => song.variationSet.direction.route),
@@ -138,4 +182,67 @@ test("element meters are deterministic and drive clearly separated generation pa
   assert.ok(firstCalls[1].tracks.melody.variation > firstCalls[0].tracks.melody.variation, "Electric should animate melody more than Fire");
   assert.ok(firstCalls[2].tracks.pad.density > firstCalls[0].tracks.pad.density, "Drip should favor a wider pad bed than Fire");
   assert.ok(new Set(firstCalls.map((config) => config.similarity)).size === 3, "Element similarity targets should be intentionally separated");
+});
+
+test("Phase 6C prefers strong Element identity over a generic high total score", () => {
+  const direction = ELEMENT_PROFILES.find(({ id }) => id === "electric");
+  const generic = scoreSong({ id: "generic", overall: 95, role: 78 }, direction);
+  const elemental = scoreSong({ id: "elemental", overall: 91, role: 97 }, direction);
+  const genericAssessment = producerVariationDirectionAssessment(generic, direction);
+  const elementalAssessment = producerVariationDirectionAssessment(elemental, direction);
+
+  assert.ok(genericAssessment.overallScore > elementalAssessment.overallScore);
+  assert.ok(elementalAssessment.roleScore > genericAssessment.roleScore);
+  assert.ok(elementalAssessment.score > genericAssessment.score, "Element-specific critic axes should outweigh a modest generic-score lead");
+  assert.equal(producerVariationDirectionScore(elemental, direction), elementalAssessment.score);
+});
+
+test("Phase 6C only penalizes near-cloned siblings and never rewards arbitrary divergence", () => {
+  const direction = ELEMENT_PROFILES.find(({ id }) => id === "drip");
+  const candidate = scoreSong({ id: "drip-candidate", overall: 92, role: 94 }, direction);
+  const withoutSibling = producerVariationDirectionAssessment(candidate, direction);
+  const withClone = producerVariationDirectionAssessment(candidate, direction, { siblings: [structuredClone(candidate)] });
+
+  assert.equal(withoutSibling.siblingClonePenalty, 0);
+  assert.equal(withClone.siblingMaxSimilarity, 1);
+  assert.equal(withClone.siblingClonePenalty, 4);
+  assert.equal(withClone.score, withoutSibling.score - 4);
+  assert.equal(withClone.comparedSiblings, 1);
+});
+
+test("release-failed Element auditions are ineligible and cannot beat a safe candidate", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const failed = scoreSong({ id: "failed", overall: 100, role: 100, releasePassed: false }, direction);
+  const safe = scoreSong({ id: "safe", overall: 84, role: 86, releasePassed: true }, direction);
+  const failedAssessment = producerVariationDirectionAssessment(failed, direction);
+  const safeAssessment = producerVariationDirectionAssessment(safe, direction);
+  assert.equal(failedAssessment.eligible, false);
+  assert.equal(failedAssessment.score, -1000);
+  assert.equal(safeAssessment.eligible, true);
+
+  const source = sourceSong();
+  const variations = generateProducerVariationSet(source, { count: 1, candidatesPerVariation: 2 }, {
+    generateSimilar(_source, config) {
+      const candidateIndex = Number(String(config.seed).split(":").at(-1));
+      const song = candidateIndex === 0 ? structuredClone(failed) : structuredClone(safe);
+      song.id = candidateIndex === 0 ? "unsafe-winner-trap" : "safe-winner";
+      return song;
+    },
+  });
+
+  assert.equal(variations.length, 1);
+  assert.equal(variations[0].id, "safe-winner");
+  assert.equal(variations[0].variationSet.eligibleAuditions, 1);
+  assert.equal(variations[0].variationSet.selectedAudition, 1);
+});
+
+test("an Element with no release-safe auditions fails closed instead of returning an unsafe card", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const failed = scoreSong({ id: "failed", overall: 100, role: 100, releasePassed: false }, direction);
+  const variations = generateProducerVariationSet(sourceSong(), { count: 1, candidatesPerVariation: 2 }, {
+    generateSimilar() {
+      return structuredClone(failed);
+    },
+  });
+  assert.deepEqual(variations, []);
 });
