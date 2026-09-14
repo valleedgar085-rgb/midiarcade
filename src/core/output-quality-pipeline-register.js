@@ -12,6 +12,7 @@ import {
 import {
   createRepetitionRefinementCandidates,
   MAX_REPETITION_REFINEMENT_CANDIDATES,
+  repetitionRefinementFamily,
 } from "./repetition-refinement.js";
 import {
   applyResultOutputQualityPipeline as applyBaseResultOutputQualityPipeline,
@@ -252,7 +253,8 @@ function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateRele
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES) };
   }
   const genre = String(song?.genre ?? song?.meta?.genre ?? "");
-  if (genre !== "rnbSoul") {
+  const family = repetitionRefinementFamily(song);
+  if (!family) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES, "calibrated-genre-only", { genre }) };
   }
   const before = evaluateCandidate(song);
