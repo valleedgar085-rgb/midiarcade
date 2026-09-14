@@ -70,7 +70,7 @@ function candidateSummary(candidate) {
   };
 }
 
-test("fixed sparse-genre seeds expose whether density headroom is material- or intensity-limited", () => {
+test("fixed sparse-genre seeds get deeper bounded density candidates without broadening search", () => {
   const rows = [];
 
   for (const genre of TARGET_GENRES) {
@@ -99,6 +99,7 @@ test("fixed sparse-genre seeds expose whether density headroom is material- or i
       const eligible = eligibleSupport(beforeSong);
       const deficitNotes = Math.max(0, Math.ceil((target - beforeNpb) * barsFor(beforeSong)));
       const candidates = createDensityRefinementCandidates(beforeSong, { densityTarget: target });
+      const full = candidates.find(({ id }) => id === "full-support");
       const densityProcessed = applySongOutputQualityPipeline(generated, {
         ...generationConfig,
         phraseResolutionRefinement: false,
@@ -106,11 +107,12 @@ test("fixed sparse-genre seeds expose whether density headroom is material- or i
       });
       const afterEvaluation = evaluateSongCandidate(densityProcessed.song);
       const afterNpb = notesPerBar(densityProcessed.song);
-      const fullSupportCapacity = Math.min(deficitNotes, eligible.length, barsFor(beforeSong));
-      const theoreticalFullSupportNpb = beforeNpb + fullSupportCapacity / barsFor(beforeSong);
 
       assert.equal(beforeEvaluation.subscores.density, densityScoreFor(beforeNpb, target));
       assert.ok(candidates.length <= MAX_DENSITY_REFINEMENT_CANDIDATES);
+      assert.ok(full, `${genre}/${seed} must retain a full candidate`);
+      assert.equal(Number((full.afterNotesPerBar - full.beforeNotesPerBar).toFixed(3)), 2);
+      assert.ok(full.changedNotes <= barsFor(beforeSong));
       assert.ok(afterEvaluation.subscores.density >= beforeEvaluation.subscores.density);
 
       rows.push({
@@ -125,9 +127,6 @@ test("fixed sparse-genre seeds expose whether density headroom is material- or i
           trackId,
           eligible.filter((entry) => entry.trackId === trackId).length,
         ])),
-        fullSupportCapacity,
-        theoreticalFullSupportNotesPerBar: Number(theoreticalFullSupportNpb.toFixed(3)),
-        theoreticalFullSupportDensity: densityScoreFor(theoreticalFullSupportNpb, target),
         candidateCount: candidates.length,
         candidates: candidates.map(candidateSummary),
         accepted: Boolean(densityProcessed.densityDiagnostics?.accepted),
