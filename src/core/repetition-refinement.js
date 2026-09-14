@@ -19,6 +19,15 @@ function melody(song) {
   return (song?.tracks ?? []).find((track) => track.id === "melody");
 }
 
+export function repetitionRefinementFamily(song) {
+  const primary = String(song?.genre ?? song?.meta?.genre ?? "");
+  if (primary === "rnbSoul") return "rnb";
+  const secondary = String(song?.meta?.secondaryGenre ?? song?.secondaryGenre ?? "");
+  const hipHopRap = (primary === "hipHop" && secondary === "rap")
+    || (primary === "rap" && secondary === "hipHop");
+  return song?.meta?.isFusion === true && hipHopRap ? "hiphop-rap-fusion" : null;
+}
+
 function coverage(signature, reference) {
   if (!signature.size || !reference.size) return 0;
   let shared = 0;
@@ -143,7 +152,7 @@ function bestMove(song, target, direction) {
   return best;
 }
 
-function createCandidate(song, target, editBudget, candidateIndex) {
+function createCandidate(song, target, editBudget, candidateIndex, family) {
   const candidate = JSON.parse(JSON.stringify(song));
   const before = repetitionBalance(candidate, target);
   if (before.direction === "on-target") return null;
@@ -164,8 +173,9 @@ function createCandidate(song, target, editBudget, candidateIndex) {
   const errorDelta = after.absoluteError - before.absoluteError;
   if (!changedNotes || errorDelta >= -EPSILON) return null;
   track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const prefix = family === "rnb" ? "rnb" : "hiphop-rap-fusion";
   return {
-    id: `${before.direction === "reinforce" ? "rnb-recall" : "rnb-evolve"}-${editBudget}`,
+    id: `${prefix}-${before.direction === "reinforce" ? "recall" : "evolve"}-${editBudget}`,
     candidateIndex,
     song: candidate,
     direction: before.direction,
@@ -184,11 +194,12 @@ export function createRepetitionRefinementCandidates(song, {
   target = 0.62,
   maxCandidates = MAX_REPETITION_REFINEMENT_CANDIDATES,
 } = {}) {
-  if (String(song?.genre ?? song?.meta?.genre ?? "") !== "rnbSoul") return [];
+  const family = repetitionRefinementFamily(song);
+  if (!family) return [];
   const limit = clamp(Math.floor(finite(maxCandidates)), 0, MAX_REPETITION_REFINEMENT_CANDIDATES);
   const seen = new Set();
   return EDIT_BUDGETS.slice(0, limit)
-    .map((budget, candidateIndex) => createCandidate(song, target, budget, candidateIndex))
+    .map((budget, candidateIndex) => createCandidate(song, target, budget, candidateIndex, family))
     .filter(Boolean)
     .filter((candidate) => {
       const signature = JSON.stringify(melody(candidate.song)?.notes ?? []);
