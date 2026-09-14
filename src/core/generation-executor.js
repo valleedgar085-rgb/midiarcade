@@ -1,7 +1,7 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
 import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
-import { applyResultOutputQualityPipeline } from "./output-quality-pipeline.js";
+import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
@@ -14,11 +14,15 @@ function evolveGenerationPayload(kind, payload = {}) {
   const phraseResolutionRefinement = typeof evolvedConfig.phraseResolutionRefinement === "boolean"
     ? evolvedConfig.phraseResolutionRefinement
     : kind === "new";
+  const registerHealthRefinement = typeof evolvedConfig.registerHealthRefinement === "boolean"
+    ? evolvedConfig.registerHealthRefinement
+    : kind === "new";
   return {
     ...payload,
     config: {
       ...evolvedConfig,
       phraseResolutionRefinement,
+      registerHealthRefinement,
     },
   };
 }
@@ -188,6 +192,7 @@ export function createGenerationExecutor({
         returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
         densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
         phraseResolutionRefinement: selectedResult?.outputQualityDiagnostics?.phraseResolutionRefinement ?? null,
+        registerHealthRefinement: selectedResult?.outputQualityDiagnostics?.registerHealthRefinement ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
