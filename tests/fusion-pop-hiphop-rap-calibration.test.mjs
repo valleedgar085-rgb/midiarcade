@@ -55,7 +55,7 @@ function generate(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
   });
 }
 
-test("Pop, Hip-Hop and Rap fusion calibration exposes parent-relative musical quality", { timeout: 120_000 }, () => {
+test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical quality", { timeout: 120_000 }, () => {
   const rows = [];
   for (const seed of SEEDS) {
     const parents = new Map(GENRES.map((genre) => [genre, qualityRow(generate(genre, `${seed}:${genre}`))]));
@@ -66,29 +66,57 @@ test("Pop, Hip-Hop and Rap fusion calibration exposes parent-relative musical qu
       const b = parents.get(secondary);
       const parentAverage = (key) => (finite(a[key]) + finite(b[key])) / 2;
       const delta = (key) => round(finite(fused[key]) - parentAverage(key));
+      const scoreDelta = delta("score");
+      const floorDelta = delta("floor");
+      const grooveDelta = delta("groove");
+      const motifDelta = delta("motif");
+      const repetitionDelta = delta("repetition");
+      const phraseDelta = delta("phraseResolution");
+      const performanceDelta = delta("performance");
+      const separationDelta = delta("separation");
       rows.push({
         seed,
         pair: `${primary}+${secondary}`,
         ...fused,
-        scoreDelta: delta("score"),
-        floorDelta: delta("floor"),
-        grooveDelta: delta("groove"),
-        motifDelta: delta("motif"),
-        repetitionDelta: delta("repetition"),
-        phraseDelta: delta("phraseResolution"),
-        performanceDelta: delta("performance"),
-        separationDelta: delta("separation"),
+        scoreDelta,
+        floorDelta,
+        grooveDelta,
+        motifDelta,
+        repetitionDelta,
+        phraseDelta,
+        performanceDelta,
+        separationDelta,
       });
 
+      const label = `${primary}+${secondary} ${seed}`;
       assert.equal(song.meta.isFusion, true);
       assert.equal(song.meta.secondaryGenre, secondary);
       assert.equal(fused.scaleFit, 1);
       assert.match(fused.producerStatus, /passed|best-available/);
-      assert.ok(fused.score >= 82, `${primary}+${secondary} total quality collapsed`);
-      assert.ok(fused.floor >= 55, `${primary}+${secondary} creative floor collapsed`);
-      assert.ok(fused.groove >= Math.min(a.groove, b.groove) - 12, `${primary}+${secondary} lost too much groove`);
-      assert.ok(fused.motif >= Math.min(a.motif, b.motif) - 12, `${primary}+${secondary} lost too much hook identity`);
-      assert.ok(fused.performance >= Math.min(a.performance, b.performance) - 12, `${primary}+${secondary} lost too much performance feel`);
+      assert.ok(fused.score >= 90, `${label} score=${fused.score}`);
+      assert.ok(fused.floor >= 75, `${label} floor=${fused.floor}`);
+      assert.ok(
+        fused.groove >= 90 && grooveDelta >= -8,
+        `${label} groove=${fused.groove} parentDelta=${grooveDelta}`,
+      );
+      assert.ok(
+        fused.motif >= 85 && motifDelta >= -8,
+        `${label} motif=${fused.motif} parentDelta=${motifDelta}`,
+      );
+      assert.ok(
+        fused.repetition >= 78 && repetitionDelta >= -12,
+        `${label} repetition=${fused.repetition} parentDelta=${repetitionDelta}`,
+      );
+      assert.ok(
+        fused.phraseResolution >= 79 && phraseDelta >= -8,
+        `${label} phraseResolution=${fused.phraseResolution} parentDelta=${phraseDelta}`,
+      );
+      assert.ok(
+        fused.performance >= 84 && performanceDelta >= -8,
+        `${label} performance=${fused.performance} parentDelta=${performanceDelta}`,
+      );
+      assert.ok(scoreDelta >= -4, `${label} score parentDelta=${scoreDelta}`);
+      assert.ok(floorDelta >= -7, `${label} floor parentDelta=${floorDelta}`);
     }
   }
   console.log("POP_HIPHOP_RAP_FUSION_CALIBRATION", JSON.stringify(rows));
