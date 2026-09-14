@@ -1,7 +1,6 @@
-const CANDIDATE_LIMITS = Object.freeze([1, 2, 3]);
 const SCORE_EPSILON = 1e-6;
 
-export const MAX_PHRASE_RESOLUTION_CANDIDATES = CANDIDATE_LIMITS.length;
+export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
 export const MAX_PHRASE_RESOLUTION_EDITS = 3;
 
 function finite(value, fallback = 0) {
@@ -116,17 +115,27 @@ function sectionLandingEntries(song) {
   });
 }
 
-function selectedEntries(song, limit, payoff) {
-  const entries = sectionLandingEntries(song).filter((entry) => entry.landing && chordToneSet(entry.chord).size > 0);
-  const weak = entries
-    .filter((entry) => entry.score < 0.82 - SCORE_EPSILON)
+function selectedEntries(song, limit, hold, payoff) {
+  const entries = sectionLandingEntries(song)
+    .filter((entry) => entry.landing && chordToneSet(entry.chord).size > 0)
+    .filter((entry) => {
+      const tones = chordToneSet(entry.chord);
+      const pitchClass = mod(entry.landing.note.pitch, 12);
+      const desiredDuration = entry.beatsPerBar * 0.35;
+      const availableDuration = finite(entry.section?.endBeat) - finite(entry.landing.note.start) - 0.02;
+      return !tones.has(pitchClass)
+        || (payoff && entry.isFinal && tones.has(entry.tonic) && pitchClass !== entry.tonic)
+        || (hold
+          && finite(entry.landing.note.duration) < desiredDuration - SCORE_EPSILON
+          && availableDuration >= desiredDuration - SCORE_EPSILON);
+    })
     .sort((left, right) => left.score - right.score || left.sectionIndex - right.sectionIndex);
-  if (!payoff) return weak.slice(0, limit);
+  if (!payoff) return entries.slice(0, limit);
 
-  const finalEntry = entries.find((entry) => entry.isFinal && entry.score < 1 - SCORE_EPSILON);
+  const finalEntry = entries.find((entry) => entry.isFinal);
   const selected = [];
   if (finalEntry) selected.push(finalEntry);
-  for (const entry of weak) {
+  for (const entry of entries) {
     if (selected.some((selectedEntry) => selectedEntry.sectionIndex === entry.sectionIndex)) continue;
     selected.push(entry);
     if (selected.length >= limit) break;
@@ -139,7 +148,7 @@ function refineLandingCandidate(song, limit, { hold = false, payoff = false } = 
   const melody = (candidate.tracks ?? []).find((track) => track?.id === "melody");
   if (!melody) return { song: candidate, edits: 0, pitchEdits: 0, durationEdits: 0 };
 
-  const selected = selectedEntries(candidate, limit, payoff);
+  const selected = selectedEntries(candidate, limit, hold, payoff);
   let edits = 0;
   let pitchEdits = 0;
   let durationEdits = 0;
