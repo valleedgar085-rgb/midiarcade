@@ -36,7 +36,19 @@ function configFor(primary, secondary, seed) {
 
 function noteIdentity(song) {
   return (song.tracks.find((track) => track.id === "melody")?.notes ?? [])
-    .map((note) => ({ id: note.id, pitch: note.pitch, duration: note.duration, velocity: note.velocity }));
+    .map((note) => ({
+      pitch: note.pitch,
+      start: note.start,
+      duration: note.duration,
+      velocity: note.velocity,
+    }));
+}
+
+function compareNoteIdentity(left, right) {
+  return left.pitch - right.pitch
+    || left.start - right.start
+    || left.duration - right.duration
+    || left.velocity - right.velocity;
 }
 
 test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broadening its budget", () => {
@@ -69,7 +81,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   assert.ok(balanceAfter.absoluteError < balanceBefore.absoluteError);
   assert.ok(Object.values(processed.repetitionDiagnostics.protectedDeltas).every((delta) => delta >= -1));
   assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
-  assert.deepEqual(noteIdentity(processed.song).sort((a, b) => String(a.id).localeCompare(String(b.id))), sourceIdentity.sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  assert.deepEqual(noteIdentity(processed.song).sort(compareNoteIdentity), sourceIdentity.sort(compareNoteIdentity));
 
   console.log("HIPHOP_RAP_FUSION_REPETITION_REPAIR", JSON.stringify({
     beforeScore: before.score,
@@ -116,7 +128,7 @@ test("Pop Rap fusion uses the calibrated signed repetition repair while uncalibr
   assert.ok(processed.repetitionDiagnostics.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS);
   assert.ok(processed.repetitionDiagnostics.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT);
   assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
-  assert.deepEqual(noteIdentity(processed.song).sort((a, b) => String(a.id).localeCompare(String(b.id))), sourceIdentity.sort((a, b) => String(a.id).localeCompare(String(b.id))));
+  assert.deepEqual(noteIdentity(processed.song).sort(compareNoteIdentity), sourceIdentity.sort(compareNoteIdentity));
 
   const popHipHop = generateNew(configFor("pop", "hipHop", "fusion-isolation:pop+hipHop"));
   const plainHipHop = generateNew(applyOutputQualityEvolution({
