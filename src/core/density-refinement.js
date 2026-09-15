@@ -1,5 +1,6 @@
 const SUPPORT_TRACK_PRIORITY = ["chords", "counterpoint", "pad"];
 const SPLITS_PER_BAR = [0.25, 0.5, 1];
+const DEEP_ARTICULATION_DEFICIT_PER_BAR = 6;
 
 export const MAX_DENSITY_REFINEMENT_CANDIDATES = SPLITS_PER_BAR.length;
 
@@ -112,7 +113,8 @@ export function createDensityRefinementCandidates(song, {
   const bars = songBars(song);
   const beforeNotesPerBar = notesPerBar(song);
   const target = Math.max(0, finite(densityTarget));
-  const deficitNotes = Math.max(0, Math.ceil((target - beforeNotesPerBar) * bars));
+  const densityDeficitPerBar = Math.max(0, target - beforeNotesPerBar);
+  const deficitNotes = Math.max(0, Math.ceil(densityDeficitPerBar * bars));
   const eligibleCount = eligibleSplitNotes(song).length;
   if (!deficitNotes || !eligibleCount) return [];
 
@@ -120,7 +122,11 @@ export function createDensityRefinementCandidates(song, {
   return SPLITS_PER_BAR
     .slice(0, Math.max(0, Math.min(MAX_DENSITY_REFINEMENT_CANDIDATES, Math.floor(maxCandidates))))
     .map((splitsPerBar, candidateIndex) => {
-      const parts = target >= 30 && candidateIndex ? 3 : 2;
+      const deepArticulation = candidateIndex > 0 && (
+        target >= 30
+        || densityDeficitPerBar >= DEEP_ARTICULATION_DEFICIT_PER_BAR
+      );
+      const parts = deepArticulation ? 3 : 2;
       const splitCount = Math.min(
         Math.floor(deficitNotes / (parts - 1)),
         eligibleCount,
@@ -136,6 +142,7 @@ export function createDensityRefinementCandidates(song, {
         candidateIndex,
         song: articulated.song,
         changedNotes: articulated.changedNotes,
+        articulationParts: parts,
         beforeNotesPerBar: round(beforeNotesPerBar, 3),
         afterNotesPerBar: round(afterNotesPerBar, 3),
         densityTarget: round(target, 3),
