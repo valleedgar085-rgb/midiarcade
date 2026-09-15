@@ -85,8 +85,40 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   }));
 });
 
-test("signed fusion repetition repair remains isolated to the calibrated Hip-Hop Rap pair", () => {
-  const popRap = generateNew(configFor("pop", "rap", "fusion-isolation:pop+rap"));
+test("Pop Rap fusion uses the calibrated signed repetition repair while uncalibrated families stay isolated", () => {
+  const config = configFor("pop", "rap", "fusion-quality-03:pop+rap");
+  const generated = generateNew(config);
+  const before = evaluateSongCandidate(generated);
+  const target = before.diagnostics?.repetitionTarget;
+  const balanceBefore = repetitionBalance(generated, target);
+  const sourceIdentity = noteIdentity(generated);
+  const sourceCount = generated.tracks.find((track) => track.id === "melody")?.notes?.length ?? 0;
+
+  assert.equal(repetitionRefinementFamily(generated), "pop-rap-fusion");
+  const candidates = createRepetitionRefinementCandidates(generated, { target });
+  assert.ok(candidates.length > 0 && candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
+  assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS));
+  assert.ok(candidates.every((candidate) => candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT));
+  assert.ok(candidates.every((candidate) => candidate.errorDelta < 0));
+
+  const processed = applySongOutputQualityPipeline(generated, config);
+  const after = evaluateSongCandidate(processed.song);
+  const balanceAfter = repetitionBalance(processed.song, target);
+
+  assert.equal(processed.repetitionDiagnostics.accepted, true);
+  assert.equal(processed.repetitionDiagnostics.direction, "reinforce");
+  assert.ok(after.subscores.repetition >= 78);
+  assert.ok(after.subscores.motif >= 85);
+  assert.ok(after.subscores.repetition > before.subscores.repetition);
+  assert.ok(after.subscores.motif > before.subscores.motif);
+  assert.ok(balanceAfter.absoluteError < balanceBefore.absoluteError);
+  assert.ok(Object.values(processed.repetitionDiagnostics.protectedDeltas).every((delta) => delta >= -1));
+  assert.ok(processed.repetitionDiagnostics.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS);
+  assert.ok(processed.repetitionDiagnostics.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT);
+  assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
+  assert.deepEqual(noteIdentity(processed.song).sort((a, b) => String(a.id).localeCompare(String(b.id))), sourceIdentity.sort((a, b) => String(a.id).localeCompare(String(b.id))));
+
+  const popHipHop = generateNew(configFor("pop", "hipHop", "fusion-isolation:pop+hipHop"));
   const plainHipHop = generateNew(applyOutputQualityEvolution({
     genre: "hipHop",
     seed: "fusion-isolation:hipHop",
@@ -94,8 +126,8 @@ test("signed fusion repetition repair remains isolated to the calibrated Hip-Hop
     candidateCount: 1,
   }, { kind: "new" }));
 
-  assert.equal(repetitionRefinementFamily(popRap), null);
+  assert.equal(repetitionRefinementFamily(popHipHop), null);
   assert.equal(repetitionRefinementFamily(plainHipHop), null);
-  assert.deepEqual(createRepetitionRefinementCandidates(popRap, { target: 0.7 }), []);
+  assert.deepEqual(createRepetitionRefinementCandidates(popHipHop, { target: 0.7 }), []);
   assert.deepEqual(createRepetitionRefinementCandidates(plainHipHop, { target: 0.7 }), []);
 });
