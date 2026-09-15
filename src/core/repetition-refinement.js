@@ -23,9 +23,13 @@ export function repetitionRefinementFamily(song) {
   const primary = String(song?.genre ?? song?.meta?.genre ?? "");
   if (primary === "rnbSoul") return "rnb";
   const secondary = String(song?.meta?.secondaryGenre ?? song?.secondaryGenre ?? "");
+  if (song?.meta?.isFusion !== true) return null;
   const hipHopRap = (primary === "hipHop" && secondary === "rap")
     || (primary === "rap" && secondary === "hipHop");
-  return song?.meta?.isFusion === true && hipHopRap ? "hiphop-rap-fusion" : null;
+  if (hipHopRap) return "hiphop-rap-fusion";
+  const popRap = (primary === "pop" && secondary === "rap")
+    || (primary === "rap" && secondary === "pop");
+  return popRap ? "pop-rap-fusion" : null;
 }
 
 function coverage(signature, reference) {
@@ -173,7 +177,7 @@ function createCandidate(song, target, editBudget, candidateIndex, family) {
   const errorDelta = after.absoluteError - before.absoluteError;
   if (!changedNotes || errorDelta >= -EPSILON) return null;
   track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-  const prefix = family === "rnb" ? "rnb" : "hiphop-rap-fusion";
+  const prefix = family === "rnb" ? "rnb" : family;
   return {
     id: `${prefix}-${before.direction === "reinforce" ? "recall" : "evolve"}-${editBudget}`,
     candidateIndex,
