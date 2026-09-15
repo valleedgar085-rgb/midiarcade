@@ -4,6 +4,7 @@ import {
   evaluateSongReleaseGate,
   GENRE_CRITIC_PROFILES,
 } from "../music-engine.js";
+import { createFusionPerformanceRebalanceCandidate } from "./fusion-performance-refinement.js";
 import { createJazzDrumMemoryCandidate } from "./jazz-drum-memory-refinement.js";
 import {
   createRegisterHealthCandidates,
@@ -21,13 +22,16 @@ import {
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
+const FUSION_PERFORMANCE_FLOOR = 84;
 const REGISTER_PROTECTED_DIMENSIONS = Object.freeze([
   "phraseResolution", "repetition", "memory", "motif", "separation",
 ]);
 const REPETITION_PROTECTED_DIMENSIONS = Object.freeze([
   "phraseResolution", "memory", "motif", "registerHealth", "groove", "performance", "separation",
 ]);
+const FUSION_PERFORMANCE_FAMILY = new Set(["pop", "hipHop", "rap"]);
 const GENRE_IDENTITY_CANDIDATE_LIMIT = 1;
+const FUSION_PERFORMANCE_CANDIDATE_LIMIT = 1;
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -445,6 +449,142 @@ function applyGenreIdentityRefinement(song, config, evaluateCandidate, evaluateR
   return { song: candidate.song, diagnostics };
 }
 
+function noteTopologySignature(song) {
+  return JSON.stringify((song?.tracks ?? []).map((track) => ({
+    id: track.id,
+    notes: (track.notes ?? []).map((note) => [
+      finite(note.pitch), finite(note.start), finite(note.duration),
+    ]),
+  })));
+}
+
+function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  const primaryGenre = String(config.genre ?? song?.genre ?? song?.meta?.genre ?? "");
+  const secondaryGenre = String(config.secondaryGenre ?? song?.meta?.secondaryGenre ?? "");
+  const calibratedFusion = config.outputQuality?.kind === "new"
+    && song?.meta?.isFusion === true
+    && FUSION_PERFORMANCE_FAMILY.has(primaryGenre)
+    && FUSION_PERFORMANCE_FAMILY.has(secondaryGenre)
+    && primaryGenre !== secondaryGenre;
+  if (!calibratedFusion) {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(FUSION_PERFORMANCE_CANDIDATE_LIMIT, "calibrated-fusion-only", {
+        primaryGenre,
+        secondaryGenre,
+      }),
+    };
+  }
+
+  const before = evaluateCandidate(song);
+  const beforePerformance = finite(before?.subscores?.performance);
+  if (beforePerformance >= FUSION_PERFORMANCE_FLOOR) {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(FUSION_PERFORMANCE_CANDIDATE_LIMIT, "already-strong", {
+        beforePerformance: round(beforePerformance),
+      }),
+    };
+  }
+
+  const candidate = createFusionPerformanceRebalanceCandidate(song);
+  if (!candidate || candidate.changedNotes < 1) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: true,
+        accepted: false,
+        changed: false,
+        reason: "no-dynamic-rebalance-opportunity",
+        beforePerformance: round(beforePerformance),
+        candidatesEvaluated: candidate ? 1 : 0,
+        candidateLimit: FUSION_PERFORMANCE_CANDIDATE_LIMIT,
+        candidateIds: candidate ? [candidate.id] : [],
+      }),
+    };
+  }
+
+  const beforeFloor = creativeFloor(before);
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const afterPerformance = finite(after?.subscores?.performance);
+  const performanceDelta = afterPerformance - beforePerformance;
+  const scoreDelta = finite(after?.score) - finite(before?.score);
+  const floorDelta = creativeFloor(after) - beforeFloor;
+  const dimensions = Object.keys(before?.subscores ?? {}).filter((dimension) => dimension !== "performance");
+  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1);
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const topologySafe = noteTopologySignature(candidate.song) === noteTopologySignature(song);
+  const spreadImproved = candidate.spreadErrorAfter + 1e-6 < candidate.spreadErrorBefore;
+  const accepted = Boolean(
+    release?.passed && scaleSafe && topologySafe && spreadImproved && protectedSafe
+    && afterPerformance >= FUSION_PERFORMANCE_FLOOR && performanceDelta >= 0.75
+    && scoreDelta >= -0.25 && floorDelta >= -0.5
+  );
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted,
+    changed: accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : !topologySafe ? "note-topology-regression"
+          : !spreadImproved ? "dynamic-spread-direction"
+            : !protectedSafe ? "protected-dimension-regression"
+              : afterPerformance < FUSION_PERFORMANCE_FLOOR || performanceDelta < 0.75 ? "performance-floor-not-repaired"
+                : scoreDelta < -0.25 || floorDelta < -0.5 ? "critic-regression"
+                  : "fusion-performance-win",
+    id: candidate.id,
+    primaryGenre,
+    secondaryGenre,
+    changedNotes: candidate.changedNotes,
+    maxVelocityDelta: candidate.maxVelocityDelta,
+    candidatesEvaluated: 1,
+    candidateLimit: FUSION_PERFORMANCE_CANDIDATE_LIMIT,
+    candidateIds: [candidate.id],
+    beforeScore: round(before?.score),
+    afterScore: round(after?.score),
+    scoreDelta: round(scoreDelta),
+    beforePerformance: round(beforePerformance),
+    afterPerformance: round(afterPerformance),
+    performanceDelta: round(performanceDelta),
+    floorDelta: round(floorDelta),
+    spreadBefore: candidate.spreadBefore,
+    spreadAfter: candidate.spreadAfter,
+    targetSpread: candidate.targetSpread,
+    spreadErrorBefore: candidate.spreadErrorBefore,
+    spreadErrorAfter: candidate.spreadErrorAfter,
+    meanVelocityBefore: candidate.meanVelocityBefore,
+    meanVelocityAfter: candidate.meanVelocityAfter,
+    topologySafe,
+    protectedDeltas: Object.fromEntries(
+      Object.entries(dimensionDeltas).map(([dimension, delta]) => [dimension, round(delta)]),
+    ),
+  });
+  if (!accepted) return { song, diagnostics };
+
+  candidate.song.outputQualityEvolution = {
+    ...(candidate.song.outputQualityEvolution ?? {}),
+    fusionPerformanceRefinement: {
+      accepted: true,
+      performanceDelta: diagnostics.performanceDelta,
+      scoreDelta: diagnostics.scoreDelta,
+      changedNotes: diagnostics.changedNotes,
+      spreadBefore: diagnostics.spreadBefore,
+      spreadAfter: diagnostics.spreadAfter,
+      targetSpread: diagnostics.targetSpread,
+    },
+  };
+  candidate.song.meta = acceptedMetadata(
+    candidate.song,
+    after,
+    release,
+    "fusionPerformanceRefinement",
+    diagnostics,
+  );
+  return { song: candidate.song, diagnostics };
+}
+
 export function applySongOutputQualityPipeline(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
@@ -453,12 +593,14 @@ export function applySongOutputQualityPipeline(song, config = {}, {
   const repetition = applyRepetitionRefinement(base.song, config, evaluateCandidate, evaluateReleaseGate);
   const register = applyRegisterHealthRefinement(repetition.song, config, evaluateCandidate, evaluateReleaseGate);
   const identity = applyGenreIdentityRefinement(register.song, config, evaluateCandidate, evaluateReleaseGate);
+  const performance = applyFusionPerformanceRefinement(identity.song, config, evaluateCandidate, evaluateReleaseGate);
   return {
     ...base,
-    song: identity.song,
+    song: performance.song,
     repetitionDiagnostics: repetition.diagnostics,
     registerHealthDiagnostics: register.diagnostics,
     genreIdentityDiagnostics: identity.diagnostics,
+    fusionPerformanceDiagnostics: performance.diagnostics,
   };
 }
 
@@ -470,17 +612,20 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
   const repetition = applyRepetitionRefinement(baseResult.song, config, evaluateCandidate, evaluateReleaseGate);
   const register = applyRegisterHealthRefinement(repetition.song, config, evaluateCandidate, evaluateReleaseGate);
   const identity = applyGenreIdentityRefinement(register.song, config, evaluateCandidate, evaluateReleaseGate);
+  const performance = applyFusionPerformanceRefinement(identity.song, config, evaluateCandidate, evaluateReleaseGate);
   const repetitionAccepted = Boolean(repetition.diagnostics?.accepted && repetition.song !== baseResult.song);
   const registerAccepted = Boolean(register.diagnostics?.accepted && register.song !== repetition.song);
   const identityAccepted = Boolean(identity.diagnostics?.accepted && identity.song !== register.song);
-  if (!repetitionAccepted && !registerAccepted && !identityAccepted) return baseResult;
+  const performanceAccepted = Boolean(performance.diagnostics?.accepted && performance.song !== identity.song);
+  if (!repetitionAccepted && !registerAccepted && !identityAccepted && !performanceAccepted) return baseResult;
   const diagnostics = { ...(baseResult.outputQualityDiagnostics ?? {}) };
   if (repetitionAccepted) diagnostics.repetitionRefinement = repetition.diagnostics;
   if (registerAccepted) diagnostics.registerHealthRefinement = register.diagnostics;
   if (identityAccepted) diagnostics.genreIdentityRefinement = identity.diagnostics;
+  if (performanceAccepted) diagnostics.fusionPerformanceRefinement = performance.diagnostics;
   return {
     ...baseResult,
-    song: identity.song,
+    song: performance.song,
     outputQualityDiagnostics: diagnostics,
   };
 }
