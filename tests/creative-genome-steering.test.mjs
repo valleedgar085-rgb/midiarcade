@@ -22,6 +22,7 @@ const TRACKS = Object.freeze({
 
 const BASE = Object.freeze({
   genre: "hipHop",
+  creativeRange: "fresh",
   seed: "phase9b-base",
   bars: 16,
   key: "A",
@@ -115,6 +116,19 @@ test("fusion calibration defers audible Genome steering instead of weakening par
   assert.deepEqual(result.tracks, config.tracks);
 });
 
+test("ordinary requests stay composition-neutral until Creative Range is explicitly selected", () => {
+  const config = { ...BASE, seed: "phase9b-neutral-default" };
+  delete config.creativeRange;
+  const result = applyProducerBrainConfig(config, { kind: "new" });
+
+  assert.equal(result.creativeGenomeSteering.applied, false);
+  assert.equal(result.creativeGenomeSteering.reason, "disabled");
+  assert.equal(result.producerBrain.creativeGenome.guardrails.compositionNeutral, true);
+  assert.equal(result.energy, config.energy);
+  assert.equal(result.evolution, config.evolution);
+  assert.deepEqual(result.tracks, config.tracks);
+});
+
 test("explicit Genome steering opt-out keeps composition priors unchanged", () => {
   const config = { ...BASE, seed: "phase9b-opt-out", creativeGenomeSteering: false };
   const result = applyProducerBrainConfig(config, { kind: "new" });
@@ -127,7 +141,7 @@ test("explicit Genome steering opt-out keeps composition priors unchanged", () =
   assert.deepEqual(result.tracks, config.tracks);
 });
 
-test("adaptive generation actually routes single-genre requests through Phase 9B steering", () => {
+test("adaptive generation routes explicit Creative Range requests through Phase 9B steering", () => {
   const { seed } = seedFor((genome) => genome.spaceStrategy === "breathing");
   const adapted = adaptGenerationConfig({ ...BASE, seed }, { kind: "new" });
   assert.equal(adapted.creativeGenomeSteering.applied, true);
