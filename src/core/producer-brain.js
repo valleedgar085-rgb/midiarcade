@@ -1,5 +1,9 @@
 import { createCreativeGenome } from "./creative-genome.js";
 import {
+  applyCreativeGenomeSteering,
+  isCreativeGenomeFusionProtected,
+} from "./creative-genome-steering.js";
+import {
   createProducerSearchPolicy,
   createProductionPriorities,
   normalizeProducerCharacter,
@@ -20,6 +24,7 @@ export function createProducerBrainPlan(config = {}, {
   kind = "new",
   character = {},
   taste = {},
+  consumeCreativeGenome = false,
 } = {}) {
   const normalizedKind = normalizeProducerKind(kind);
   const depth = normalizeThinkingDepth(config.thinkingDepth);
@@ -33,7 +38,10 @@ export function createProducerBrainPlan(config = {}, {
     taste: resolvedTaste,
     priorities,
   });
-  const creativeGenome = createCreativeGenome(config, { kind: normalizedKind });
+  const creativeGenome = createCreativeGenome(config, {
+    kind: normalizedKind,
+    consumedByComposition: consumeCreativeGenome,
+  });
   const qualityIntent = Object.freeze({
     preserveKeySafety: true,
     preserveDeterminism: true,
@@ -76,21 +84,33 @@ export function createProducerBrainPlan(config = {}, {
 }
 
 /**
- * Convert producer intent into the existing engine knobs. This deliberately
- * preserves explicit user/benchmark controls and does not change executor
- * result shapes or bypass the engine's critic and key-safety contracts.
+ * Convert producer intent into the existing engine knobs. Phase 9B consumes
+ * only Creative Genome Energy Arc + Space Strategy, through bounded priors.
+ * Fusion calibration, explicit opt-out, candidate ceilings and the engine's
+ * critic/release authority remain intact.
  */
 export function applyProducerBrainConfig(config = {}, options = {}) {
   const source = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
-  const plan = createProducerBrainPlan(source, options);
+  const protectedFusion = isCreativeGenomeFusionProtected(source);
+  const requestedConsumption = options.consumeCreativeGenome ?? (source.creativeGenomeSteering !== false);
+  const consumeCreativeGenome = Boolean(requestedConsumption) && !protectedFusion;
+  const plan = createProducerBrainPlan(source, {
+    ...options,
+    consumeCreativeGenome,
+  });
+  const steering = applyCreativeGenomeSteering(source, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: consumeCreativeGenome,
+  });
   const out = {
-    ...source,
+    ...steering.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
     weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
     targetedRepair: source.targetedRepair ?? plan.search.targetedRepair,
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,
+    creativeGenomeSteering: steering.diagnostics,
   };
   if (plan.kind === "songVariations" && source.candidatesPerVariation == null) {
     out.candidatesPerVariation = plan.search.candidatesPerVariation;
