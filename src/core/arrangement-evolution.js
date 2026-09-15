@@ -344,7 +344,6 @@ function noteIsProtected(note) {
 }
 
 function shapeTransitionBoundary(song, transition) {
-  if (transition.type === "drop-out") return 0;
   const from = song.structure?.find((section) => section.id === transition.fromSectionId);
   if (!from) return 0;
   const boundary = finite(from.endBeat, 0);
@@ -358,6 +357,7 @@ function shapeTransitionBoundary(song, transition) {
       }
     }
   }
+  if (transition.type === "drop-out") return 0;
 
   let changed = 0;
   const usedTracks = new Set();
