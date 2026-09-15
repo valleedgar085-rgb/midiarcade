@@ -86,13 +86,18 @@ export function createProducerBrainPlan(config = {}, {
 /**
  * Convert producer intent into the existing engine knobs. Phase 9B consumes
  * only Creative Genome Energy Arc + Space Strategy, through bounded priors.
- * Fusion calibration, explicit opt-out, candidate ceilings and the engine's
- * critic/release authority remain intact.
+ * Audible Genome steering is opt-in until its UI phase: an explicit
+ * `creativeRange` or `creativeGenomeSteering: true` activates it. Ordinary
+ * calibrated requests remain bit-for-bit compatible. Fusion calibration,
+ * candidate ceilings and the engine's critic/release authority remain intact.
  */
 export function applyProducerBrainConfig(config = {}, options = {}) {
   const source = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
   const protectedFusion = isCreativeGenomeFusionProtected(source);
-  const requestedConsumption = options.consumeCreativeGenome ?? (source.creativeGenomeSteering !== false);
+  const explicitRange = source.creativeRange != null && String(source.creativeRange).trim() !== "";
+  const defaultConsumption = source.creativeGenomeSteering === true
+    || (source.creativeGenomeSteering !== false && explicitRange);
+  const requestedConsumption = options.consumeCreativeGenome ?? defaultConsumption;
   const consumeCreativeGenome = Boolean(requestedConsumption) && !protectedFusion;
   const plan = createProducerBrainPlan(source, {
     ...options,
@@ -100,7 +105,7 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
   });
   const steering = applyCreativeGenomeSteering(source, plan.creativeGenome, {
     kind: plan.kind,
-    enabled: consumeCreativeGenome,
+    enabled: Boolean(requestedConsumption),
   });
   const out = {
     ...steering.config,
