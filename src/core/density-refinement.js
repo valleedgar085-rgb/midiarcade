@@ -124,7 +124,7 @@ export function createDensityRefinementCandidates(song, {
     .map((splitsPerBar, candidateIndex) => {
       const deepArticulation = candidateIndex > 0 && (
         target >= 30
-        || densityDeficitPerBar >= DEEP_ARTICULATION_DEFICIT_PER_BAR
+        || (song?.meta?.isFusion !== true && densityDeficitPerBar >= DEEP_ARTICULATION_DEFICIT_PER_BAR)
       );
       const parts = deepArticulation ? 3 : 2;
       const splitCount = Math.min(
