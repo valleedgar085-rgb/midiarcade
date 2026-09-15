@@ -40,6 +40,11 @@ function clamp01(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
+function finitePositive(value, fallback = 0.0001) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
 export function previewNoteEnvelope({ trackId, duration, release, reverb, articulation } = {}) {
   const limits = NOTE_ENVELOPE_LIMITS[String(trackId)] ?? NOTE_ENVELOPE_LIMITS.melody;
   const noteDuration = Math.min(limits.maxDuration, Math.max(0.04, Number(duration) || 0.04));
@@ -119,6 +124,64 @@ export function previewMixHealth(song = {}, trackSettings = {}, assistant = {}) 
     status,
     spotlight,
   });
+}
+
+/**
+ * Freeze an AudioParam at its current value before changing automation.
+ * cancelAndHoldAtTime preserves the rendered value on modern browsers; the
+ * fallback re-establishes the observable value after cancelling future ramps.
+ */
+export function holdAudioParamValue(parameter, now, fallbackValue = 0.0001) {
+  const time = Math.max(0, Number(now) || 0);
+  const currentValue = finitePositive(parameter?.value, finitePositive(fallbackValue));
+  if (!parameter) return currentValue;
+  try {
+    if (typeof parameter.cancelAndHoldAtTime === "function") {
+      parameter.cancelAndHoldAtTime(time);
+    } else {
+      if (typeof parameter.cancelScheduledValues === "function") parameter.cancelScheduledValues(time);
+      if (typeof parameter.setValueAtTime === "function") parameter.setValueAtTime(currentValue, time);
+      else parameter.value = currentValue;
+    }
+  } catch {
+    try { parameter.value = currentValue; } catch { /* read-only AudioParam shim */ }
+  }
+  return currentValue;
+}
+
+/**
+ * Move an AudioParam without introducing a discontinuity at `now`.
+ * Positive gain values use exponential ramps; non-gain-style values fall back
+ * to linear ramps. Returns immutable diagnostics for deterministic tests.
+ */
+export function rampAudioParamValue(parameter, targetValue, now, duration = PREVIEW_TRANSITION.stopSeconds, {
+  minimum = 0.0001,
+} = {}) {
+  const time = Math.max(0, Number(now) || 0);
+  const seconds = Math.max(0, Number(duration) || 0);
+  const floor = finitePositive(minimum);
+  const startValue = holdAudioParamValue(parameter, time, floor);
+  const target = Math.max(floor, finitePositive(targetValue, floor));
+  const endTime = time + seconds;
+  if (!parameter) return Object.freeze({ startValue, targetValue: target, endTime });
+
+  try {
+    if (seconds <= 1e-6) {
+      if (typeof parameter.setValueAtTime === "function") parameter.setValueAtTime(target, time);
+      else parameter.value = target;
+    } else if (startValue > 0 && target > 0 && typeof parameter.exponentialRampToValueAtTime === "function") {
+      parameter.exponentialRampToValueAtTime(target, endTime);
+    } else if (typeof parameter.linearRampToValueAtTime === "function") {
+      parameter.linearRampToValueAtTime(target, endTime);
+    } else if (typeof parameter.setTargetAtTime === "function") {
+      parameter.setTargetAtTime(target, time, Math.max(0.001, seconds / 3));
+    } else {
+      parameter.value = target;
+    }
+  } catch {
+    try { parameter.value = target; } catch { /* read-only AudioParam shim */ }
+  }
+  return Object.freeze({ startValue, targetValue: target, endTime });
 }
 
 export function clickSafeStopTime(now, startedAt, transition = PREVIEW_TRANSITION) {

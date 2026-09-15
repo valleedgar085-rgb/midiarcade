@@ -31,6 +31,7 @@ import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previe
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  rampAudioParamValue,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
   previewNoteEnvelope,
@@ -4740,14 +4741,8 @@ export class PreviewPlayer {
     if (requestGeneration !== this.playRequestGeneration || this.playing) return this.playing;
     void requestScreenWakeLock();
     if (this.master?.gain) {
-      try {
-        const now = this.context.currentTime;
-        this.master.gain.cancelScheduledValues(now);
-        this.master.gain.setValueAtTime(0.0001, now);
-        this.master.gain.exponentialRampToValueAtTime(0.42, now + this.previewBudget.masterFadeSeconds);
-      } catch {
-        this.master.gain.value = 0.42;
-      }
+      const now = this.context.currentTime;
+      rampAudioParamValue(this.master.gain, 0.42, now, this.previewBudget.masterFadeSeconds);
     }
     this.buildEvents();
     const duration = totalSeconds();
@@ -5372,6 +5367,21 @@ export class PreviewPlayer {
     this.registerScheduledVoice(sources, nodes, event, when);
   }
 
+  restartLoopPlayback() {
+    if (!this.playing || !this.context) return;
+    this.clearTimers();
+    this.clearScheduledAudio();
+    this.resetDynamicBuses();
+    this.position = 0;
+    this.offset = 0;
+    this.startedAt = this.context.currentTime;
+    this.eventIndex = 0;
+    this.lastScheduleAt = this.context.currentTime;
+    this.schedule();
+    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.updateFrame();
+  }
+
   updateFrame() {
     if (!this.playing || !this.context) return;
     const duration = totalSeconds();
@@ -5386,10 +5396,7 @@ export class PreviewPlayer {
     }
     if (this.position >= duration) {
       if (state.loop) {
-        this.position = 0;
-        this.clearTimers();
-        this.playing = false;
-        this.play();
+        this.restartLoopPlayback();
         return;
       }
       this.stop();
@@ -5454,16 +5461,12 @@ export class PreviewPlayer {
     this.playing = false;
     setPlaybackPresentation(false);
     this.clearTimers();
+    if (this.context && this.master?.gain) {
+      const now = this.context.currentTime;
+      rampAudioParamValue(this.master.gain, 0.0001, now, this.previewBudget.masterFadeSeconds);
+    }
     this.clearScheduledAudio();
     this.resetDynamicBuses();
-    if (this.context && this.master?.gain) {
-      try {
-        const now = this.context.currentTime;
-        this.master.gain.cancelScheduledValues(now);
-        this.master.gain.setValueAtTime(Math.max(0.0001, this.master.gain.value), now);
-        this.master.gain.exponentialRampToValueAtTime(0.0001, now + this.previewBudget.masterFadeSeconds);
-      } catch { /* ignore */ }
-    }
     if (this.context) this.suspendWhenIdle();
     $("#playButton").classList.remove("playing");
     $("#playButton").setAttribute("aria-label", "Play song");
