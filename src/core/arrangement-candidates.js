@@ -2,6 +2,7 @@ import {
   createArrangementEvolution,
   evolveSongArrangement,
 } from "./arrangement-evolution.js";
+import { applyArrangementPerformance } from "./arrangement-performance.js";
 
 export const MAX_ARRANGEMENT_CANDIDATES = 3;
 const MAX_SEED_ATTEMPTS = 12;
@@ -89,11 +90,19 @@ function compareNarrativeCandidates(left, right) {
   return left.attemptIndex - right.attemptIndex;
 }
 
+function performanceProfileForFamily(family) {
+  if (["hook-first", "early-impact", "bridge-payoff", "double-peak"].includes(family)) return "impact";
+  if (["verse-driven", "slow-bloom"].includes(family)) return "restraint";
+  return "balanced";
+}
+
 /**
  * Build a tiny deterministic audition pool from the same generated song.
  * The discovery pass may inspect the existing bounded seed-attempt budget, but
  * only the three strongest narrative shapes are returned to the expensive
- * critic/release audition. No notes are composed, removed, retuned or quantized.
+ * critic/release audition. Atomic section movement happens first; then a
+ * separate bounded performance pass reconciles the new handoffs on existing
+ * drums/support notes so the critic hears the arrangement change it evaluates.
  */
 export function createArrangementCandidates(sourceSong, config = {}, {
   maxCandidates = MAX_ARRANGEMENT_CANDIDATES,
@@ -135,16 +144,23 @@ export function createArrangementCandidates(sourceSong, config = {}, {
     .sort(compareNarrativeCandidates)
     .slice(0, limit)
     .map((candidate, candidateIndex) => {
-      candidate.song.outputQualityEvolution = {
-        ...(candidate.song.outputQualityEvolution ?? {}),
+      const profile = performanceProfileForFamily(candidate.evolution.family);
+      const performance = applyArrangementPerformance(candidate.song, { profile });
+      const auditionSong = performance.changed ? performance.song : candidate.song;
+      auditionSong.outputQualityEvolution = {
+        ...(auditionSong.outputQualityEvolution ?? {}),
         arrangement: {
-          ...(candidate.song.outputQualityEvolution?.arrangement ?? {}),
+          ...(auditionSong.outputQualityEvolution?.arrangement ?? {}),
           audition: {
             candidateIndex,
             attemptIndex: candidate.attemptIndex,
             limit,
             narrativeScore: candidate.narrativeScore,
             discoveredCandidates: discovered.length,
+            performanceProfile: profile,
+            performanceChanged: performance.changed,
+            performanceChangedNotes: performance.diagnostics?.changedNotes ?? 0,
+            staleMarkersCleared: performance.diagnostics?.staleMarkersCleared ?? 0,
           },
         },
       };
@@ -153,8 +169,9 @@ export function createArrangementCandidates(sourceSong, config = {}, {
         attemptIndex: candidate.attemptIndex,
         orderKey: candidate.orderKey,
         narrativeScore: candidate.narrativeScore,
-        song: candidate.song,
+        song: auditionSong,
         evolution: candidate.evolution,
+        performance: performance.diagnostics,
       });
     });
 }
