@@ -135,16 +135,16 @@ test("ordinary requests remain free of Phase 9C engine tokens", () => {
   assert.equal(result.producerBrain.creativeGenome.guardrails.compositionNeutral, true);
 });
 
-test("Phase 9C changes real music through the existing hook and return-spotlight machinery", () => {
-  const { seed } = seedFor((genome) => genome.motifMutation === "contour-rewrite" && genome.spotlightRotation === "bass-to-lead");
+test("Phase 9C motif mutation changes real music through the existing hook machinery", () => {
+  const { seed } = seedFor((genome) => genome.motifMutation === "contour-rewrite");
   const steered = adaptGenerationConfig({
     ...BASE,
     seed,
     bars: 32,
-    creativeRange: "wild",
     candidateCount: 1,
   }, { kind: "new" });
   assert.equal(steered.creativeGenomeMotifSteering.applied, true);
+  assert.equal(steered.creativeMotifMutation, "contour-rewrite");
 
   const neutral = { ...steered };
   delete neutral.creativeMotifMutation;
@@ -158,18 +158,42 @@ test("Phase 9C changes real music through the existing hook and return-spotlight
   assert.equal(activeSong.motifs.creativeGenomeMutation?.mode, "contour-rewrite");
   assert.ok(activeSong.motifs.creativeGenomeMutation?.changedEvents >= 1);
   assert.ok(activeSong.motifs.creativeGenomeMutation?.changedEvents <= 2);
-
-  const core = new Map();
-  let witnessedBassReturn = false;
-  for (const entry of activeSong.orchestrationMatrix) {
-    if (!["verse", "chorus", "theme", "idea"].includes(entry.sectionName)) continue;
-    const first = core.get(entry.sectionName);
-    if (!first) core.set(entry.sectionName, entry);
-    else if (entry.featureOccurrence === 1 && entry.featuredTrack === "bass") witnessedBassReturn = true;
-  }
-  assert.equal(witnessedBassReturn, true, "bass-to-lead strategy should audibly move a first core return to bass");
-  assert.ok(activeSong.tracks.flatMap((track) => track.notes).some((note) => note.motifHandoffRole));
   assertScaleSafe(activeSong);
+});
+
+test("Phase 9C spotlight steering moves a proven first return through native orchestration and handoff machinery", () => {
+  const input = {
+    genre: "pop",
+    seed: "section-contrast-pop",
+    bars: 32,
+    energy: 0.76,
+    evolution: 0.84,
+    candidateCount: 1,
+    creativeSpotlightRotation: "bass-to-lead",
+    creativeMotifStrength: 1,
+    creativeMotifMaxEvents: 0,
+  };
+  const song = generateNew(input);
+  const firstByName = new Map();
+  const firstCoreReturns = [];
+
+  for (const entry of song.orchestrationMatrix) {
+    const first = firstByName.get(entry.sectionName);
+    if (!first) {
+      firstByName.set(entry.sectionName, entry);
+      continue;
+    }
+    if (["verse", "chorus", "theme", "idea"].includes(entry.sectionName) && entry.featureOccurrence === 1) {
+      firstCoreReturns.push(entry);
+    }
+  }
+
+  assert.ok(firstCoreReturns.length > 0, "fixture must contain a repeated core return");
+  assert.ok(firstCoreReturns.every((entry) => entry.featuredTrack === "bass"));
+  assert.ok(song.tracks.flatMap((track) => track.notes).some((note) => note.motifHandoffRole?.endsWith("-to-bass")));
+  assert.equal(song.sectionContrast.phase, 68);
+  assert.equal(song.motifHandoff.phase, 69);
+  assertScaleSafe(song);
 });
 
 test("Phase 9C strategy source contains no unseeded randomness", () => {
