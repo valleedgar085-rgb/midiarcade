@@ -280,14 +280,19 @@ function alignWindowToReference(notes, windowStart, windowEnd, reference, maxCha
   return changed;
 }
 
-function applyRhythmicRecall(song, pairs) {
+function applyRhythmicRecall(song, pairs, options = {}) {
   const melody = trackOf(song, "melody");
   if (!melody?.notes?.length) return 0;
   const motifLength = clamp(finite(song?.motifs?.melody?.lengthBeats, finite(song?.meta?.beatsPerBar, 4)), 1, 8);
   const genre = String(song?.genre ?? song?.meta?.genre ?? "pop");
   const technoGridRecall = genre === "techno";
-  const maxRepeats = technoGridRecall ? 4 : 1;
-  const maxChangedPerTarget = technoGridRecall ? 16 : 8;
+  const maxRepeats = Number.isFinite(Number(options.maxRepeats))
+    ? clamp(Math.round(Number(options.maxRepeats)), 1, 4)
+    : technoGridRecall ? 4 : 1;
+  const maxChangedPerTarget = Number.isFinite(Number(options.maxChangedPerTarget))
+    ? clamp(Math.round(Number(options.maxChangedPerTarget)), 1, 16)
+    : technoGridRecall ? 16 : 8;
+  const recallRole = String(options.role ?? "rhythmic-recall");
   const criticReference = technoGridRecall ? referenceMotifSignature(song, melody, motifLength) : null;
   let changed = 0;
 
@@ -331,7 +336,7 @@ function applyRhythmicRecall(song, pairs) {
         const nextStart = Math.max(previousStart + 0.02, desired);
         if (Math.abs(noteStart(destination[index]) - nextStart) > 1e-6) {
           setNoteStart(destination[index], nextStart);
-          destination[index].returnDevelopmentRole = "rhythmic-recall";
+          destination[index].returnDevelopmentRole = recallRole;
           destination[index].returnDevelopmentOriginSectionId = String(origin.id);
           changed += 1;
           changedInTarget += 1;
@@ -342,6 +347,55 @@ function applyRhythmicRecall(song, pairs) {
   }
   melody.notes.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
   return changed;
+}
+
+function orchestrationEntryForSection(song, section) {
+  const matrix = Array.isArray(song?.orchestrationMatrix) ? song.orchestrationMatrix : [];
+  return matrix.find((entry) => String(entry?.sectionId) === String(section?.id)) ?? null;
+}
+
+function applyReturnSpotlight(song, pairs) {
+  const eligibleTracks = new Set(["melody", "bass", "chords", "counterpoint"]);
+  let changed = 0;
+
+  for (const { target, origin } of pairs) {
+    const matrix = orchestrationEntryForSection(song, target);
+    const featuredTrackId = String(matrix?.featuredTrack ?? "");
+    if (finite(matrix?.featureOccurrence, 0) <= 0 || !eligibleTracks.has(featuredTrackId)) continue;
+    const track = trackOf(song, featuredTrackId);
+    if (!track?.notes?.length) continue;
+    const notes = notesInSection(track, target);
+    if (!notes.length) continue;
+
+    const handoffSuffix = `-to-${featuredTrackId}`;
+    const handoffNotes = notes.filter((note) => String(note?.motifHandoffRole ?? "").endsWith(handoffSuffix));
+    const handoffSet = new Set(handoffNotes);
+    const ordered = [...handoffNotes, ...notes.filter((note) => !handoffSet.has(note))].slice(0, 2);
+
+    for (const note of ordered) {
+      const before = noteVelocity(note);
+      const lift = note?.motifHandoffRole ? 7 : 4;
+      const after = clamp(before + lift, 1, 127);
+      if (after <= before + 1e-6) continue;
+      setNoteVelocity(note, after);
+      note.returnDevelopmentSpotlightRole = `feature-${featuredTrackId}`;
+      note.returnDevelopmentOriginSectionId = String(origin.id);
+      changed += 1;
+    }
+  }
+
+  return changed;
+}
+
+function applyReturnPayoff(song, pairs) {
+  const recallChanges = applyRhythmicRecall(song, pairs, {
+    maxRepeats: 1,
+    maxChangedPerTarget: 2,
+    role: "return-payoff-recall",
+  });
+  const cadenceChanges = applyCadencePayoff(song, pairs);
+  const spotlightChanges = applyReturnSpotlight(song, pairs);
+  return recallChanges + cadenceChanges + spotlightChanges;
 }
 
 function grooveOffsetsForGenre(genre) {
@@ -401,8 +455,8 @@ function makeCandidate(sourceSong, pairs, id, apply) {
 }
 
 /**
- * Create at most three focused return-section candidates. Each candidate fixes
- * one measurable quality axis and leaves harmony, song length, section order,
+ * Create at most three focused return-section candidates. Each strategy stays
+ * bounded to recurring sections and leaves harmony, song length, section order,
  * and all unrelated notes untouched. The caller must critic/release-gate them.
  */
 export function createReturnDevelopmentCandidates(sourceSong, config = {}) {
@@ -410,7 +464,7 @@ export function createReturnDevelopmentCandidates(sourceSong, config = {}) {
   const pairs = returnPairs(sourceSong);
   if (!pairs.length) return [];
   const definitions = [
-    ["cadence-payoff", applyCadencePayoff],
+    ["return-payoff", applyReturnPayoff],
     ["rhythmic-recall", applyRhythmicRecall],
     ["groove-lock", applyGrooveLock],
   ];

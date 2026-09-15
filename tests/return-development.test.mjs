@@ -157,6 +157,63 @@ test("Phase 6B return development is deterministic, immutable, focused, and capp
   }
 });
 
+test("Phase 9D return payoff coordinates bounded recall, cadence, and native spotlight inside return sections", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "section-contrast-pop",
+    bars: 32,
+    energy: 0.76,
+    evolution: 0.84,
+    candidateCount: 1,
+    creativeSpotlightRotation: "bass-to-lead",
+    creativeMotifStrength: 1,
+    creativeMotifMaxEvents: 0,
+  });
+  const before = structuredClone(song);
+  const config = {
+    genre: "pop",
+    seed: "phase9d-return-payoff",
+    bars: 32,
+    arrangementEvolution: false,
+    returnDevelopment: true,
+  };
+  const first = createReturnDevelopmentCandidates(song, config);
+  const repeated = createReturnDevelopmentCandidates(song, config);
+  const payoff = first.find(({ id }) => id === "return-payoff");
+  const repeatedPayoff = repeated.find(({ id }) => id === "return-payoff");
+  const targets = returnDevelopmentTargets(song);
+  const targetIds = new Set(targets.map(({ sectionId }) => sectionId));
+
+  assert.deepEqual(song, before, "Phase 9D candidate creation must keep the source authoritative");
+  assert.ok(payoff, "the coordinated return-payoff candidate should be available for a repeated hook fixture");
+  assert.deepEqual(payoff.song, repeatedPayoff.song, "the coordinated payoff must be deterministic");
+  assert.ok(first.length <= MAX_RETURN_DEVELOPMENT_CANDIDATES);
+  assert.ok(payoff.changedNotes > 0);
+  assert.ok(payoff.changedNotes <= targets.length * 5, "return payoff must stay within the 2 recall + 1 cadence + 2 spotlight edit envelope");
+  assert.deepEqual(payoff.song.structure, song.structure);
+  assert.deepEqual(payoff.song.harmony, song.harmony);
+
+  for (const sourceTrack of song.tracks) {
+    const candidateTrack = payoff.song.tracks.find((track) => track.id === sourceTrack.id);
+    assert.equal(candidateTrack?.notes?.length, sourceTrack.notes.length, `${sourceTrack.id} note count must remain unchanged`);
+  }
+
+  const spotlight = payoff.song.tracks.flatMap((track) => (track.notes ?? [])
+    .filter((note) => note.returnDevelopmentSpotlightRole)
+    .map((note) => ({ track, note })));
+  assert.ok(spotlight.length >= 1, "Phase 9D should audibly reinforce at least one native return spotlight");
+  assert.ok(spotlight.length <= targets.length * 2, "spotlight reinforcement is capped at two notes per return");
+  assert.ok(spotlight.some(({ note }) => note.motifHandoffRole), "known Phase 9C fixture should reinforce an existing motif handoff instead of inventing a new phrase");
+
+  for (const { track, note } of spotlight) {
+    const section = payoff.song.structure.find((entry) => note.start >= entry.startBeat - 1e-6 && note.start < entry.endBeat - 1e-6);
+    assert.ok(section && targetIds.has(String(section.id)), "spotlight edits must stay inside recurring target sections");
+    const matrix = payoff.song.orchestrationMatrix.find((entry) => String(entry.sectionId) === String(section.id));
+    assert.equal(matrix?.featuredTrack, track.id, "spotlight reinforcement must follow the native orchestration feature owner");
+    assert.equal(note.returnDevelopmentSpotlightRole, `feature-${track.id}`);
+  }
+});
+
 test("Phase 6D techno recall directly improves critic repetition overlap without changing note count or pitch", () => {
   const { song, rhythmic, tagged, before, after } = makeTechnoSource();
   const sourceMelody = song.tracks.find((track) => track.id === "melody");
@@ -204,7 +261,7 @@ test("candidate-first return development commits the strongest quality-safe targ
       const id = candidateSong.outputQualityEvolution?.returnDevelopment?.id;
       if (!id || !candidateIds.has(id)) return evaluation(90);
       candidateScores += 1;
-      if (id === "cadence-payoff") return evaluation(90.5, { phraseResolution: 86 });
+      if (id === "return-payoff") return evaluation(91.8, { phraseResolution: 88, repetition: 90, motif: 91 });
       if (id === "rhythmic-recall") return evaluation(91.4, { repetition: 90, motif: 91 });
       if (id === "groove-lock") return evaluation(90.8, { groove: 92 });
       return evaluation(89);
@@ -216,7 +273,7 @@ test("candidate-first return development commits the strongest quality-safe targ
 
   assert.equal(processed.diagnostics.reason, "disabled");
   assert.equal(processed.returnDiagnostics.accepted, true);
-  assert.equal(processed.returnDiagnostics.id, "rhythmic-recall");
+  assert.equal(processed.returnDiagnostics.id, "return-payoff");
   assert.equal(processed.returnDiagnostics.candidatesEvaluated, candidates.length);
   assert.equal(processed.returnDiagnostics.candidateLimit, MAX_RETURN_DEVELOPMENT_CANDIDATES);
   assert.equal(candidateScores, candidates.length);
