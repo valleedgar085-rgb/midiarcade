@@ -96,6 +96,21 @@ function performanceProfileForFamily(family) {
   return "balanced";
 }
 
+function protectedFusionPerformance(song, profile) {
+  return Object.freeze({
+    changed: false,
+    song,
+    diagnostics: Object.freeze({
+      profile,
+      reason: "fusion-contract-protected",
+      changedNotes: 0,
+      staleMarkersCleared: 0,
+      pickups: 0,
+      arrivals: 0,
+    }),
+  });
+}
+
 /**
  * Build a tiny deterministic audition pool from the same generated song.
  * The discovery pass may inspect the existing bounded seed-attempt budget, but
@@ -103,6 +118,8 @@ function performanceProfileForFamily(family) {
  * critic/release audition. Atomic section movement happens first; then a
  * separate bounded performance pass reconciles the new handoffs on existing
  * drums/support notes so the critic hears the arrangement change it evaluates.
+ * Calibrated fusion songs retain their proven parent-relative performance and
+ * defer the new audible boundary pass until a fusion-specific calibration wins.
  */
 export function createArrangementCandidates(sourceSong, config = {}, {
   maxCandidates = MAX_ARRANGEMENT_CANDIDATES,
@@ -118,6 +135,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
   const seenOrders = new Set([sourceOrder]);
   const discovered = [];
   const attempts = Math.min(MAX_SEED_ATTEMPTS, Math.max(4, limit * 4));
+  const protectFusionPerformance = sourceSong?.meta?.isFusion === true;
 
   for (let attemptIndex = 0; attemptIndex < attempts; attemptIndex += 1) {
     const candidateSeed = `${baseSeed}:arrangement-audition:${attemptIndex}`;
@@ -145,7 +163,9 @@ export function createArrangementCandidates(sourceSong, config = {}, {
     .slice(0, limit)
     .map((candidate, candidateIndex) => {
       const profile = performanceProfileForFamily(candidate.evolution.family);
-      const performance = applyArrangementPerformance(candidate.song, { profile });
+      const performance = protectFusionPerformance
+        ? protectedFusionPerformance(candidate.song, profile)
+        : applyArrangementPerformance(candidate.song, { profile });
       const auditionSong = performance.changed ? performance.song : candidate.song;
       auditionSong.outputQualityEvolution = {
         ...(auditionSong.outputQualityEvolution ?? {}),
@@ -161,6 +181,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
             performanceChanged: performance.changed,
             performanceChangedNotes: performance.diagnostics?.changedNotes ?? 0,
             staleMarkersCleared: performance.diagnostics?.staleMarkersCleared ?? 0,
+            performanceReason: performance.diagnostics?.reason ?? (performance.changed ? "shaped" : "unchanged"),
           },
         },
       };
