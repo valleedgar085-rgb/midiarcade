@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { previewGraphBudget, previewRuntimeProfile } from "../src/core/preview-performance.js";
+import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures } from "../src/core/preview-performance.js";
 import { PREVIEW_TRANSITION } from "../src/core/preview-audio.js";
 
 test("Phase 7 keeps Android playback inside a cheaper DSP graph", () => {
@@ -10,10 +10,16 @@ test("Phase 7 keeps Android playback inside a cheaper DSP graph", () => {
   const androidBudget = previewGraphBudget(android);
   const desktopBudget = previewGraphBudget(desktop);
   assert.equal(androidBudget.saturation, false);
+  assert.ok(android.maxScheduledVoices <= 32);
+  assert.ok(androidBudget.reverbSeconds <= 0.9);
   assert.ok(androidBudget.reverbSeconds < desktopBudget.reverbSeconds);
   assert.ok(androidBudget.reverbChannels < desktopBudget.reverbChannels);
+  assert.ok(androidBudget.delayFeedback <= 0.08);
   assert.ok(androidBudget.delayFeedback < desktopBudget.delayFeedback);
+  assert.ok(androidBudget.sendFloor >= 0.07);
   assert.ok(androidBudget.sendFloor > desktopBudget.sendFloor);
+  assert.deepEqual(previewVoiceFeatures("bass", android), { layer: false, transient: false, sub: true });
+  assert.deepEqual(previewVoiceFeatures("melody", android), { layer: true, transient: false, sub: false });
 });
 
 test("Phase 7 wires runtime graph budgets into the real PreviewPlayer", () => {

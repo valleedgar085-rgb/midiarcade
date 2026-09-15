@@ -11,7 +11,7 @@ const CONSTRAINED_PROFILE = Object.freeze({
   scheduleIntervalMs: 45,
   lookAheadSeconds: 0.55,
   lateEventGraceSeconds: 0.08,
-  maxScheduledVoices: 48,
+  maxScheduledVoices: 32,
 });
 
 const FULL_GRAPH_BUDGET = Object.freeze({
@@ -32,21 +32,19 @@ const FULL_GRAPH_BUDGET = Object.freeze({
 const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
   saturation: false,
   oversample: "none",
-  reverbSeconds: 1.15,
+  reverbSeconds: 0.9,
   reverbChannels: 1,
-  reverbReturnScale: 0.72,
-  delayFeedback: 0.11,
-  delayReturnScale: 0.78,
+  reverbReturnScale: 0.62,
+  delayFeedback: 0.08,
+  delayReturnScale: 0.64,
   preserveKickClick: false,
   preserveSnareSnap: false,
   filterMotion: false,
-  sendFloor: 0.045,
-  // Android audio drivers are less forgiving of abrupt Web Audio graph stops.
-  // Keep the master fade aligned with the click-safe per-voice release window.
+  sendFloor: 0.07,
   masterFadeSeconds: 0.04,
 });
 
-const RICH_TRACKS = new Set(["bass", "melody"]);
+const CONSTRAINED_LAYER_TRACKS = new Set(["melody"]);
 
 function finitePositive(value, fallback) {
   const numeric = Number(value);
@@ -78,7 +76,7 @@ export function previewVoiceFeatures(trackId, profile = FULL_PROFILE) {
   }
   const id = String(trackId || "");
   return {
-    layer: RICH_TRACKS.has(id),
+    layer: CONSTRAINED_LAYER_TRACKS.has(id),
     transient: false,
     sub: id === "bass",
   };

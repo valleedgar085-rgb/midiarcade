@@ -6,9 +6,24 @@ The project is designed around one rule: musical improvements only stay when the
 
 ## Current production state
 
-`main` includes the merged Phase 5 work from PR #24: **safer MIDI export, stronger Elements, Create/Shape polish, and Create ↔ Shape Integration Phase 1**.
+`main` includes the merged **Phase 6 output-quality evolution** from PR #25 on top of the Phase 5 export, Elements, and Create ↔ Shape work.
 
-The merged-main `Build MIDI Arcade APK` workflow completed successfully after the Phase 5 merge. The Phase 5 branch also passed the complete repository quality gate, Music Quality Lab, Android asset sync, protected initial-HTML budget, and install-safe Preview APK build.
+The final pre-merge `Build MIDI Arcade APK` workflow for Phase 6 completed successfully with the complete repository quality gate, Music Quality Lab, Android asset sync, and install-safe Preview APK build. No critic or release thresholds were weakened to reach that checkpoint.
+
+### Phase 6 highlights
+
+- **Critic-gated output quality evolution**
+  - density, phrase resolution, register health, repetition, groove pocket, arrangement development, return development, and selected fusion weaknesses can be refined through bounded candidate repair;
+  - repairs remain deterministic and must pass release and collateral-regression checks before they are accepted;
+  - candidate ceilings, scale safety, MIDI bounds, novelty, interlock, and song-family identity remain authoritative.
+
+- **Fusion calibration**
+  - Pop + Hip-Hop dynamics can be rebalanced toward the intended performance spread without rewriting note topology;
+  - Hip-Hop + Rap and Pop + Rap repetition repair uses tightly bounded onset edits while preserving note identity;
+  - fusion-specific corrections do not lower the shared quality floors.
+
+- **Output observability**
+  - quality reports expose refinement attempt/acceptance rates and critic gains so weak dimensions can be improved from measured evidence instead of threshold manipulation.
 
 ### Phase 5 highlights
 
@@ -103,9 +118,9 @@ For FL Studio, import the `.mid`, enable **Create one channel per track** and **
 
 ## Android playback
 
-Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately cheaper constrained profile with tighter scheduling and voice limits to reduce gaps, cutouts and node pressure on real devices.
+Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately cheaper constrained profile with tighter scheduling and voice limits to reduce gaps, cutouts, clicks, pops, and Web Audio node pressure on real devices.
 
-The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery and bounded scheduling logic.
+The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery and bounded scheduling logic. Generated sound profiles are allowed to change musical character, but the Android runtime budget remains authoritative when those profiles increase overlap or ambience.
 
 ## Privacy
 
@@ -156,11 +171,13 @@ Do not make CI green by removing meaningful assertions, skipping quality checks,
 
 ## Next integration work
 
-The current Create ↔ Shape bridge is Phase 1. The next intended integration steps are:
+A **real-device audio stability checkpoint comes first**. Do not widen the feature surface until the fresh Android Preview APK has been tested for sustained playback, dense arrangements, Fire/Electric/Drip variations, loop transitions, seek/pause/resume, and background/foreground recovery without recurring clicks, pops, gaps, or cutouts.
+
+After that checkpoint, the next intended integration steps are:
 
 1. **Element-aware Shape suggestions** — inherited Fire/Electric/Drip context can guide useful starting Shape directions without taking control away from the producer.
 2. **Authoritative accepted Shape lineage** — accepted Shape revisions become the source for future Similar and Element branches.
-3. **Continued Android and DAW validation** — prioritize real-device playback continuity and FL Studio export behavior before widening the feature surface.
+3. **Continued Android and DAW validation** — keep real-device playback continuity and FL Studio export behavior as release gates while the Create ↔ Shape workflow expands.
 
 ## Project history
 
@@ -176,6 +193,7 @@ Major completed milestones include:
 - architecture/session boundaries;
 - Create workflow redesign;
 - Shape Director;
-- Phase 5 export safety, Element separation, Create/Shape polish and Create ↔ Shape integration.
+- Phase 5 export safety, Element separation, Create/Shape polish and Create ↔ Shape integration;
+- Phase 6 critic-gated output-quality evolution and fusion calibration.
 
 For detailed implementation history, merged PRs are the authoritative record.

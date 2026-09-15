@@ -8,7 +8,7 @@ import {
   selectPreviewVoiceVictim,
 } from "../src/core/preview-performance.js";
 
-test("Android preview uses a smaller low-latency scheduling graph with next-beat cushion", () => {
+test("Android preview uses a bounded scheduling graph with next-beat cushion", () => {
   const profile = previewRuntimeProfile({
     userAgent: "Mozilla/5.0 (Linux; Android 14)",
     hardwareConcurrency: 8,
@@ -18,8 +18,8 @@ test("Android preview uses a smaller low-latency scheduling graph with next-beat
   assert.equal(profile.scheduleIntervalMs, 45);
   assert.equal(profile.lookAheadSeconds, 0.55);
   assert.ok(profile.lookAheadSeconds >= 0.5, "constrained scheduling must still pre-queue the next half-second beat");
-  assert.equal(profile.maxScheduledVoices, 48);
-  assert.ok(profile.maxScheduledVoices <= 48, "Android must keep the preview graph inside the constrained voice budget");
+  assert.equal(profile.maxScheduledVoices, 32);
+  assert.ok(profile.maxScheduledVoices <= 32, "Android must keep the preview graph inside the hardened voice budget");
 });
 
 test("constrained Android DSP budget removes expensive graph layers without muting ambience", () => {
@@ -27,15 +27,15 @@ test("constrained Android DSP budget removes expensive graph layers without muti
   const budget = previewGraphBudget(profile);
   assert.equal(budget.saturation, false);
   assert.equal(budget.oversample, "none");
-  assert.ok(budget.reverbSeconds <= 1.2);
+  assert.ok(budget.reverbSeconds <= 0.9);
   assert.equal(budget.reverbChannels, 1);
-  assert.ok(budget.reverbReturnScale < 1);
-  assert.ok(budget.delayFeedback < 0.18);
-  assert.ok(budget.delayReturnScale < 1);
+  assert.ok(budget.reverbReturnScale <= 0.62);
+  assert.ok(budget.delayFeedback <= 0.08);
+  assert.ok(budget.delayReturnScale <= 0.64);
   assert.equal(budget.preserveKickClick, false);
   assert.equal(budget.preserveSnareSnap, false);
   assert.equal(budget.filterMotion, false);
-  assert.ok(budget.sendFloor >= 0.04);
+  assert.ok(budget.sendFloor >= 0.07);
   assert.ok(budget.masterFadeSeconds >= 0.025);
 });
 
@@ -50,12 +50,13 @@ test("desktop preview keeps the full synthesis and DSP profile", () => {
   assert.equal(budget.reverbSeconds, 2.2);
   assert.equal(budget.reverbChannels, 2);
   assert.equal(budget.filterMotion, true);
+  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: true, sub: true });
 });
 
-test("constrained preview preserves lead and bass body while removing transient multipliers", () => {
+test("constrained preview keeps melody color and bass sub while removing redundant source multipliers", () => {
   const profile = previewRuntimeProfile({ userAgent: "Android" });
   assert.deepEqual(previewVoiceFeatures("melody", profile), { layer: true, transient: false, sub: false });
-  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: false, sub: true });
+  assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: false, transient: false, sub: true });
   assert.deepEqual(previewVoiceFeatures("chords", profile), { layer: false, transient: false, sub: false });
   assert.deepEqual(previewVoiceFeatures("pad", profile), { layer: false, transient: false, sub: false });
 });
