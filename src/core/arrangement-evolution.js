@@ -4,7 +4,6 @@ const ELECTRONIC_GENRES = new Set(["house", "techno", "drumBass"]);
 const LOOP_GENRES = new Set(["loFiHipHop", "ambient"]);
 const HOOK_FORWARD_GENRES = new Set(["pop", "popRadio", "synthPopRadio", "synthwave", "rock"]);
 const VERSE_FORWARD_GENRES = new Set(["rap", "hipHop", "country"]);
-const TRANSITION_TRACK_PRIORITY = Object.freeze(["drums", "bass", "melody", "counterpoint", "chords", "pad"]);
 const TRANSITION_ENERGY = Object.freeze({
   intro: 0.34,
   verse: 0.54,
@@ -332,78 +331,8 @@ function buildTransitionContext(song) {
   return transitions;
 }
 
-function noteIsProtected(note) {
-  const roles = [
-    note?.role,
-    note?.phraseRole,
-    note?.memoryRole,
-    note?.motifRole,
-    note?.ensembleCadenceRole,
-  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
-  return /(cadence|landing|memory|reminiscence|hook)/.test(roles);
-}
-
-function shapeTransitionBoundary(song, transition) {
-  const from = song.structure?.find((section) => section.id === transition.fromSectionId);
-  if (!from) return 0;
-  const boundary = finite(from.endBeat, 0);
-  const pickup = clampRange(transition.pickupBeats, 0.25, 1.25);
-
-  for (const track of song.tracks ?? []) {
-    for (const note of track.notes ?? []) {
-      const start = eventStart(note);
-      if (start >= boundary - pickup - 0.08 && start <= boundary + 0.08) {
-        delete note.transitionFeature;
-      }
-    }
-  }
-  if (transition.type === "drop-out") return 0;
-
-  let changed = 0;
-  const usedTracks = new Set();
-  const outgoing = allTrackNotes(song)
-    .filter(({ note }) => {
-      const start = eventStart(note);
-      return start >= boundary - pickup && start < boundary && !noteIsProtected(note);
-    })
-    .sort((left, right) => {
-      const leftPriority = TRANSITION_TRACK_PRIORITY.indexOf(left.trackId);
-      const rightPriority = TRANSITION_TRACK_PRIORITY.indexOf(right.trackId);
-      const priorityDelta = (leftPriority < 0 ? 99 : leftPriority) - (rightPriority < 0 ? 99 : rightPriority);
-      return priorityDelta || Math.abs(boundary - eventStart(left.note)) - Math.abs(boundary - eventStart(right.note));
-    });
-
-  for (const candidate of outgoing) {
-    if (changed >= 2) break;
-    if (usedTracks.has(candidate.trackId)) continue;
-    usedTracks.add(candidate.trackId);
-    const note = candidate.note;
-    note.velocity = Math.round(clampRange(finite(note.velocity, 84) + (transition.type === "lift" ? 5 : 3), 1, 127));
-    note.transitionFeature = transition.type;
-    note.connectionId = transition.connectionId;
-    changed += 1;
-  }
-
-  const arrival = allTrackNotes(song)
-    .filter(({ note }) => {
-      const start = eventStart(note);
-      return start >= boundary - 0.04 && start <= boundary + 0.08 && !noteIsProtected(note);
-    })
-    .sort((left, right) => Math.abs(eventStart(left.note) - boundary) - Math.abs(eventStart(right.note) - boundary))[0];
-  if (arrival) {
-    arrival.note.velocity = Math.round(clampRange(finite(arrival.note.velocity, 84) + (transition.type === "lift" ? 6 : 4), 1, 127));
-    arrival.note.transitionFeature = transition.type;
-    arrival.note.connectionId = transition.connectionId;
-    changed += 1;
-  }
-  return changed;
-}
-
 function recontextualizeTransitions(song) {
   const transitions = buildTransitionContext(song);
-  let shapedNotes = 0;
-  for (const transition of transitions) shapedNotes += shapeTransitionBoundary(song, transition);
-
   song.songBlueprint = {
     ...(song.songBlueprint ?? {}),
     transitions: clone(transitions),
@@ -415,15 +344,14 @@ function recontextualizeTransitions(song) {
     pickupRole: transition.type,
     anchorRole: "arrival",
   }));
-  return { transitions, shapedNotes };
+  return { transitions, shapedNotes: 0 };
 }
 
 /**
- * Reorder whole existing sections while preserving section identity and every
- * note pitch/onset/duration. Phase 8 then rebuilds the transition context for
- * the new neighbors and adds only bounded velocity accents to real boundary
- * notes, so critic credit corresponds to an audible transition rather than
- * stale metadata from the old order.
+ * Reorder whole existing sections while preserving section identity and the
+ * complete note payload. Phase 8 rebuilds only the transition/interlock context
+ * for the new neighbors. Expressive boundary performance belongs in a separate
+ * critic-audited stage so arrangement reordering remains atomic and reversible.
  */
 export function evolveSongArrangement(sourceSong, config = {}) {
   const evolution = createArrangementEvolution(config);

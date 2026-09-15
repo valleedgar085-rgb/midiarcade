@@ -127,10 +127,10 @@ test("reordered sections rebuild every transition against the new adjacency", ()
   });
 
   assert.equal(result.song.outputQualityEvolution.arrangement.transitionsRebuilt, result.song.structure.length - 1);
-  assert.ok(result.song.outputQualityEvolution.arrangement.transitionNotesShaped > 0);
+  assert.equal(result.song.outputQualityEvolution.arrangement.transitionNotesShaped, 0);
 });
 
-test("transition shaping is audible but bounded and never rewrites pitch, duration, or note count", () => {
+test("arrangement recontextualization keeps the complete note payload atomic", () => {
   const source = fixtureSong();
   const config = changingConfig(source);
   const first = evolveSongArrangement(source, config);
@@ -142,25 +142,17 @@ test("transition shaping is audible but bounded and never rewrites pitch, durati
   const evolvedNotes = notesByTag(first.song);
   assert.equal(evolvedNotes.size, sourceNotes.size);
 
-  let velocityChanges = 0;
-  let markedNotes = 0;
   for (const [tag, note] of evolvedNotes) {
     const original = sourceNotes.get(tag);
     assert.ok(original, `missing source note ${tag}`);
     assert.equal(note.pitch, original.pitch, `${tag} pitch must stay authoritative`);
     assert.equal(note.duration, original.duration, `${tag} duration must stay authoritative`);
-    assert.ok(note.velocity >= 1 && note.velocity <= 127, `${tag} velocity must remain MIDI-safe`);
-    if (note.velocity !== original.velocity) velocityChanges += 1;
-    if (note.transitionFeature) {
-      markedNotes += 1;
-      assert.ok(["lift", "push"].includes(note.transitionFeature), "only audibly shaped pickup/arrival notes receive transition markers");
-      assert.ok(first.song.arrangementTransitions.some((transition) => transition.connectionId === note.connectionId));
-    }
+    assert.equal(note.velocity, original.velocity, `${tag} velocity must stay authoritative during reorder`);
+    assert.equal(note.transitionFeature, original.transitionFeature, `${tag} transition feature must not be synthesized during reorder`);
+    assert.equal(note.connectionId, original.connectionId, `${tag} connection id must not be synthesized during reorder`);
   }
 
-  assert.equal(velocityChanges, first.song.outputQualityEvolution.arrangement.transitionNotesShaped);
-  assert.equal(markedNotes, velocityChanges);
-  assert.ok(velocityChanges <= first.song.arrangementTransitions.length * 3, "each boundary may shape at most two pickups and one arrival");
+  assert.equal(first.song.outputQualityEvolution.arrangement.transitionNotesShaped, 0);
 });
 
 test("Phase 8 recontextualization does not widen the critic candidate ceiling", () => {
@@ -173,6 +165,6 @@ test("Phase 8 recontextualization does not widen the critic candidate ceiling", 
   assert.equal(MAX_ARRANGEMENT_CANDIDATES, 3);
   for (const candidate of candidates) {
     assert.ok(candidate.song.arrangementTransitions.length === candidate.song.structure.length - 1);
-    assert.ok(candidate.song.outputQualityEvolution.arrangement.transitionNotesShaped <= candidate.song.arrangementTransitions.length * 3);
+    assert.equal(candidate.song.outputQualityEvolution.arrangement.transitionNotesShaped, 0);
   }
 });
