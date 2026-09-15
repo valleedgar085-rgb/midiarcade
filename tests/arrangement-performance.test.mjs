@@ -127,3 +127,37 @@ test("Phase 8B remains inside the existing three-candidate critic ceiling", () =
     assert.equal(candidate.song.tracks.reduce((sum, track) => sum + track.notes.length, 0), source.tracks.reduce((sum, track) => sum + track.notes.length, 0));
   }
 });
+
+test("Phase 8B defers audible boundary shaping for calibrated fusion songs", () => {
+  const source = generateNew({
+    genre: "hipHop",
+    secondaryGenre: "rap",
+    fusionBlend: 0.5,
+    seed: "phase8b-fusion-protection-source",
+    bars: 16,
+    candidateCount: 1,
+  });
+  assert.equal(source.meta.isFusion, true);
+
+  let candidates = [];
+  for (let index = 0; index < 64 && !candidates.length; index += 1) {
+    const config = {
+      genre: "hipHop",
+      secondaryGenre: "rap",
+      fusionBlend: 0.5,
+      bars: 16,
+      seed: `phase8b-fusion-protection-${index}`,
+      arrangementEvolution: true,
+    };
+    candidates = createArrangementCandidates(source, config, { maxCandidates: 99 });
+  }
+
+  assert.ok(candidates.length > 0, "fusion arrangement discovery should remain available");
+  assert.ok(candidates.length <= MAX_ARRANGEMENT_CANDIDATES);
+  for (const candidate of candidates) {
+    assert.equal(candidate.performance?.reason, "fusion-contract-protected");
+    assert.equal(candidate.performance?.changedNotes, 0);
+    assert.equal(candidate.song.outputQualityEvolution.arrangement.audition.performanceChanged, false);
+    assert.equal(candidate.song.outputQualityEvolution.arrangement.audition.performanceReason, "fusion-contract-protected");
+  }
+});
