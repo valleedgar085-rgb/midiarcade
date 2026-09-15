@@ -38,7 +38,6 @@ function noteIdentity(song) {
   return (song.tracks.find((track) => track.id === "melody")?.notes ?? [])
     .map((note) => ({
       pitch: note.pitch,
-      start: note.start,
       duration: note.duration,
       velocity: note.velocity,
     }));
@@ -46,7 +45,6 @@ function noteIdentity(song) {
 
 function compareNoteIdentity(left, right) {
   return left.pitch - right.pitch
-    || left.start - right.start
     || left.duration - right.duration
     || left.velocity - right.velocity;
 }
