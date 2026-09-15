@@ -56,3 +56,15 @@ test("moderate deficits retain the shallower two-part articulation profile", () 
   assert.deepEqual(candidates.map(({ articulationParts }) => articulationParts), [2, 2, 2]);
   assert.deepEqual(candidates.map(({ afterNotesPerBar }) => afterNotesPerBar), [3.25, 3.5, 4]);
 });
+
+test("fusion songs keep the proven shallow profile for deficit-driven density repair", () => {
+  const source = sourceSong();
+  source.meta.isFusion = true;
+  source.meta.primaryGenre = "pop";
+  source.meta.secondaryGenre = "hipHop";
+
+  const candidates = createDensityRefinementCandidates(source, { densityTarget: 10 });
+
+  assert.deepEqual(candidates.map(({ articulationParts }) => articulationParts), [2, 2, 2]);
+  assert.deepEqual(candidates.map(({ afterNotesPerBar }) => afterNotesPerBar), [3.25, 3.5, 4]);
+});
