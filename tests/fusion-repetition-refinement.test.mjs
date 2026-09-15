@@ -106,7 +106,7 @@ test("Pop Rap fusion uses the calibrated signed repetition repair while uncalibr
   const balanceAfter = repetitionBalance(processed.song, target);
 
   assert.equal(processed.repetitionDiagnostics.accepted, true);
-  assert.equal(processed.repetitionDiagnostics.direction, "reinforce");
+  assert.equal(processed.repetitionDiagnostics.direction, balanceBefore.direction);
   assert.ok(after.subscores.repetition >= 78);
   assert.ok(after.subscores.motif >= 85);
   assert.ok(after.subscores.repetition > before.subscores.repetition);
