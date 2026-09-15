@@ -122,7 +122,7 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
         `${label} phraseResolution=${fused.phraseResolution} parentDelta=${phraseDelta}`,
       );
       assert.ok(
-        fused.performance >= 83 && performanceDelta >= -8,
+        fused.performance >= 84 && performanceDelta >= -8,
         `${label} performance=${fused.performance} parentDelta=${performanceDelta}`,
       );
       assert.ok(scoreDelta >= -4, `${label} score parentDelta=${scoreDelta}`);
