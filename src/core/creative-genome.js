@@ -94,12 +94,15 @@ function signatureFor(genome) {
 }
 
 /**
- * Creative Genome is a deterministic strategy brief, not a composition pass.
- * Phase 9A intentionally does not alter notes, timing, velocities, arrangement,
- * candidate budgets, critic thresholds, preview DSP, or MIDI export behavior.
- * Later phases may consume individual fields behind their own regression gates.
+ * Creative Genome is a deterministic strategy brief. Phase 9A only described
+ * strategy; Phase 9B may consume Energy Arc + Space Strategy through a bounded
+ * prior-steering layer. Other Genome fields remain descriptive until their own
+ * independently tested phases consume them.
  */
-export function createCreativeGenome(config = {}, { kind = "new" } = {}) {
+export function createCreativeGenome(config = {}, {
+  kind = "new",
+  consumedByComposition = false,
+} = {}) {
   const seed = String(config.seed ?? `${config.genre ?? "pop"}:creative-genome`);
   const genre = normalizedGenre(config);
   const creativeRange = normalizeRange(config.creativeRange);
@@ -128,6 +131,7 @@ export function createCreativeGenome(config = {}, { kind = "new" } = {}) {
   };
 
   const signature = signatureFor(genome);
+  const consumed = Boolean(consumedByComposition);
   return Object.freeze({
     ...genome,
     signature,
@@ -138,8 +142,9 @@ export function createCreativeGenome(config = {}, { kind = "new" } = {}) {
       complexity: Math.round(complexity * 1000) / 1000,
     }),
     guardrails: Object.freeze({
-      compositionNeutral: true,
-      consumedByComposition: false,
+      compositionNeutral: !consumed,
+      consumedByComposition: consumed,
+      consumedFields: Object.freeze(consumed ? ["energyArc", "spaceStrategy"] : []),
       preserveDeterminism: true,
       preserveCandidateBudgets: true,
       preserveCriticCalibration: true,
