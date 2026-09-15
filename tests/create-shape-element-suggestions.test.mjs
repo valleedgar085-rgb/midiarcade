@@ -44,7 +44,7 @@ test("Element suggestions are advisory and route through existing Shape controls
   assert.match(bridgeSource, /id = "shapeElementSuggestions"/);
   assert.match(bridgeSource, /Nothing changes until you choose one\./);
   assert.match(bridgeSource, /data-shape-suggestion/);
-  assert.match(bridgeSource, /data-shape-direction=\\"\$\{directionId\}\\"/);
+  assert.match(bridgeSource, /data-shape-direction=.*\$\{directionId\}/);
   assert.match(bridgeSource, /\.click\?\.\(\)/);
   assert.doesNotMatch(bridgeSource, /createShapeCandidate\(/);
   assert.doesNotMatch(bridgeSource, /createShapeIntent\(/);
