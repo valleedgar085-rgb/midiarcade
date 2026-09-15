@@ -1,0 +1,36 @@
+name: Patch Phase 9C Motif Spotlight
+
+on:
+  push:
+    branches:
+      - phase9c/motif-spotlight-genome
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase9c/motif-spotlight-genome
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply Phase 9C engine patch
+        run: node scripts/patch-phase9c-motif-spotlight.mjs
+      - name: Verify full repository quality gate
+        run: npm run quality
+      - name: Commit validated engine patch and clean patcher
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-phase9c-motif-spotlight.yml scripts/patch-phase9c-motif-spotlight.mjs
+          git add src/music-engine.js tests/creative-genome-steering.test.mjs
+          git commit -m "Phase 9C: consume motif mutation and spotlight rotation"
+          git push origin HEAD:phase9c/motif-spotlight-genome
