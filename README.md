@@ -173,11 +173,9 @@ Do not make CI green by removing meaningful assertions, skipping quality checks,
 
 A **real-device audio stability checkpoint comes first**. Do not widen the feature surface until the fresh Android Preview APK has been tested for sustained playback, dense arrangements, Fire/Electric/Drip variations, loop transitions, seek/pause/resume, and background/foreground recovery without recurring clicks, pops, gaps, or cutouts.
 
-After that checkpoint, the next intended integration steps are:
+Element-aware Shape suggestions and accepted Shape lineage protection are now merged (PRs #27–28), along with deficit-aware density fit (#29). Do not rebuild these as missing features.
 
-1. **Element-aware Shape suggestions** — inherited Fire/Electric/Drip context can guide useful starting Shape directions without taking control away from the producer.
-2. **Authoritative accepted Shape lineage** — accepted Shape revisions become the source for future Similar and Element branches.
-3. **Continued Android and DAW validation** — keep real-device playback continuity and FL Studio export behavior as release gates while the Create ↔ Shape workflow expands.
+The next work starts with generation lifecycle safety: a timed-out operation must not commit a late song, undo newer edits, or dismiss a newer operation's progress state. Continue Android playback and FL Studio export validation before release. The [execution checkpoint](docs/execution-checkpoint.md) records the verified baseline, remaining work, and acceptance evidence.
 
 ## Project history
 
