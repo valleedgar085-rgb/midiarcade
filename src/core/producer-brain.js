@@ -1,3 +1,4 @@
+import { createCreativeGenome } from "./creative-genome.js";
 import {
   createProducerSearchPolicy,
   createProductionPriorities,
@@ -32,6 +33,7 @@ export function createProducerBrainPlan(config = {}, {
     taste: resolvedTaste,
     priorities,
   });
+  const creativeGenome = createCreativeGenome(config, { kind: normalizedKind });
   const qualityIntent = Object.freeze({
     preserveKeySafety: true,
     preserveDeterminism: true,
@@ -67,6 +69,7 @@ export function createProducerBrainPlan(config = {}, {
     }),
     priorities,
     blueprint,
+    creativeGenome,
     adaptiveLoop,
     qualityIntent,
   });
