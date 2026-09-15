@@ -4,6 +4,21 @@ const ELECTRONIC_GENRES = new Set(["house", "techno", "drumBass"]);
 const LOOP_GENRES = new Set(["loFiHipHop", "ambient"]);
 const HOOK_FORWARD_GENRES = new Set(["pop", "popRadio", "synthPopRadio", "synthwave", "rock"]);
 const VERSE_FORWARD_GENRES = new Set(["rap", "hipHop", "country"]);
+const TRANSITION_TRACK_PRIORITY = Object.freeze(["drums", "bass", "melody", "counterpoint", "chords", "pad"]);
+const TRANSITION_ENERGY = Object.freeze({
+  intro: 0.34,
+  verse: 0.54,
+  idea: 0.54,
+  solo: 0.66,
+  prechorus: 0.72,
+  build: 0.76,
+  bridge: 0.48,
+  breakdown: 0.34,
+  chorus: 0.86,
+  drop: 0.94,
+  theme: 0.82,
+  outro: 0.3,
+});
 
 const FAMILIES = Object.freeze({
   hookFirst: Object.freeze({ id: "hook-first", label: "Hook first", character: "Open with identity, then earn a larger return." }),
@@ -64,7 +79,7 @@ export function createArrangementEvolution(config = {}) {
   const family = pick(candidates, `${seed}:${genre}:${bars}:family`);
   return Object.freeze({
     enabled,
-    version: 1,
+    version: 2,
     genre,
     bars,
     family: family.id,
@@ -135,11 +150,6 @@ function songLayout(family, bars) {
     : [weight("intro", 0.55), weight("verse", 2.1), weight("verse", 1.55), weight("prechorus", 0.65), weight("chorus", 1.55), weight("bridge", 0.9), weight("chorus", 1.85), weight("outro", 0.5)];
 }
 
-/**
- * Planning helper for future structure-first composition. Phase 6B's shipped
- * runtime uses evolveSongArrangement below because it can be independently
- * scored and rejected after the existing calibrated composition pass.
- */
 export function evolveArrangementLayout(baseLayout = [], config = {}) {
   const source = cloneLayout(baseLayout);
   const evolution = createArrangementEvolution(config);
@@ -261,10 +271,159 @@ function reorderSectionAddressedArray(entries, orderedIds) {
   return [...ordered, ...entries.filter((entry) => !addressed.has(String(entry?.sectionId ?? "")))];
 }
 
+function clampRange(value, min, max) {
+  return Math.min(max, Math.max(min, finite(value, min)));
+}
+
+function sectionEnergy(song, section) {
+  const plan = song.songBlueprint?.sectionPlans?.find((entry) => entry.sectionId === section.id);
+  return clampRange(plan?.energy, 0.18, 1) || TRANSITION_ENERGY[sectionName(section)] || 0.55;
+}
+
+function allTrackNotes(song) {
+  return (song.tracks ?? []).flatMap((track) => (
+    (track.notes ?? []).map((note) => ({ note, trackId: String(track.id ?? "") }))
+  ));
+}
+
+function transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy) {
+  const delta = toEnergy - fromEnergy;
+  if (delta >= 0.14) return "lift";
+  if (delta > -0.22) return "push";
+
+  const boundary = finite(from.endBeat, 0);
+  const pickup = 0.5;
+  const notes = allTrackNotes(song);
+  const before = notes.filter(({ note }) => {
+    const start = eventStart(note);
+    return start >= boundary - pickup * 2 && start < boundary - pickup;
+  }).length;
+  const gap = notes.filter(({ note }) => {
+    const start = eventStart(note);
+    return start >= boundary - pickup && start < boundary;
+  }).length;
+  return before > 0 && gap <= Math.max(1, Math.floor(before * 0.45)) ? "drop-out" : "push";
+}
+
+function buildTransitionContext(song) {
+  const sections = song.structure ?? [];
+  const transitions = [];
+  for (let index = 0; index < sections.length - 1; index += 1) {
+    const from = sections[index];
+    const to = sections[index + 1];
+    const fromEnergy = sectionEnergy(song, from);
+    const toEnergy = sectionEnergy(song, to);
+    const type = transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy);
+    const delta = toEnergy - fromEnergy;
+    const pickupBeats = type === "lift" ? 1 : type === "push" ? 0.75 : 0.5;
+    const connectionId = `connection:${from.id}->${to.id}`;
+    transitions.push({
+      connectionId,
+      index,
+      fromSectionId: from.id,
+      toSectionId: to.id,
+      fromSection: sectionName(from),
+      toSection: sectionName(to),
+      type,
+      strength: clampRange(0.38 + Math.abs(delta) * 1.5, 0.38, 0.92),
+      pickupBeats,
+    });
+  }
+  return transitions;
+}
+
+function noteIsProtected(note) {
+  const roles = [
+    note?.role,
+    note?.phraseRole,
+    note?.memoryRole,
+    note?.motifRole,
+    note?.ensembleCadenceRole,
+  ].map((value) => String(value ?? "").toLowerCase()).join(" ");
+  return /(cadence|landing|memory|reminiscence|hook)/.test(roles);
+}
+
+function shapeTransitionBoundary(song, transition) {
+  if (transition.type === "drop-out") return 0;
+  const from = song.structure?.find((section) => section.id === transition.fromSectionId);
+  if (!from) return 0;
+  const boundary = finite(from.endBeat, 0);
+  const pickup = clampRange(transition.pickupBeats, 0.25, 1.25);
+
+  for (const track of song.tracks ?? []) {
+    for (const note of track.notes ?? []) {
+      const start = eventStart(note);
+      if (start >= boundary - pickup - 0.08 && start <= boundary + 0.08) {
+        delete note.transitionFeature;
+      }
+    }
+  }
+
+  let changed = 0;
+  const usedTracks = new Set();
+  const outgoing = allTrackNotes(song)
+    .filter(({ note }) => {
+      const start = eventStart(note);
+      return start >= boundary - pickup && start < boundary && !noteIsProtected(note);
+    })
+    .sort((left, right) => {
+      const leftPriority = TRANSITION_TRACK_PRIORITY.indexOf(left.trackId);
+      const rightPriority = TRANSITION_TRACK_PRIORITY.indexOf(right.trackId);
+      const priorityDelta = (leftPriority < 0 ? 99 : leftPriority) - (rightPriority < 0 ? 99 : rightPriority);
+      return priorityDelta || Math.abs(boundary - eventStart(left.note)) - Math.abs(boundary - eventStart(right.note));
+    });
+
+  for (const candidate of outgoing) {
+    if (changed >= 2) break;
+    if (usedTracks.has(candidate.trackId)) continue;
+    usedTracks.add(candidate.trackId);
+    const note = candidate.note;
+    note.velocity = Math.round(clampRange(finite(note.velocity, 84) + (transition.type === "lift" ? 5 : 3), 1, 127));
+    note.transitionFeature = transition.type;
+    note.connectionId = transition.connectionId;
+    changed += 1;
+  }
+
+  const arrival = allTrackNotes(song)
+    .filter(({ note }) => {
+      const start = eventStart(note);
+      return start >= boundary - 0.04 && start <= boundary + 0.08 && !noteIsProtected(note);
+    })
+    .sort((left, right) => Math.abs(eventStart(left.note) - boundary) - Math.abs(eventStart(right.note) - boundary))[0];
+  if (arrival) {
+    arrival.note.velocity = Math.round(clampRange(finite(arrival.note.velocity, 84) + (transition.type === "lift" ? 6 : 4), 1, 127));
+    arrival.note.transitionFeature = transition.type;
+    arrival.note.connectionId = transition.connectionId;
+    changed += 1;
+  }
+  return changed;
+}
+
+function recontextualizeTransitions(song) {
+  const transitions = buildTransitionContext(song);
+  let shapedNotes = 0;
+  for (const transition of transitions) shapedNotes += shapeTransitionBoundary(song, transition);
+
+  song.songBlueprint = {
+    ...(song.songBlueprint ?? {}),
+    transitions: clone(transitions),
+  };
+  song.arrangementTransitions = transitions.map((transition) => ({
+    ...transition,
+    handoffId: `handoff:${transition.fromSectionId}->${transition.toSectionId}`,
+    releaseRole: transition.type === "drop-out" ? "breath" : "pickup",
+    pickupRole: transition.type,
+    anchorRole: "arrival",
+  }));
+  return { transitions, shapedNotes };
+}
+
 /**
- * Reorder whole existing sections while preserving every event and section id.
- * No notes are created, deleted, quantized, or retuned here. This makes the
- * operation reversible and safe to score against the original candidate.
+ * Reorder whole existing sections while preserving section identity and every
+ * note pitch/onset/duration. Phase 8 then rebuilds the transition context for
+ * the new neighbors and adds only bounded velocity accents to real boundary
+ * notes, so critic credit corresponds to an audible transition rather than
+ * stale metadata from the old order.
  */
 export function evolveSongArrangement(sourceSong, config = {}) {
   const evolution = createArrangementEvolution(config);
@@ -348,6 +507,14 @@ export function evolveSongArrangement(sourceSong, config = {}) {
       sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
     };
   }
+  if (song.generationInterlock?.sectionContracts) {
+    song.generationInterlock = {
+      ...song.generationInterlock,
+      sectionContracts: reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds),
+    };
+  }
+
+  const transitionContext = recontextualizeTransitions(song);
   song.outputQualityEvolution = {
     ...(song.outputQualityEvolution ?? {}),
     arrangement: {
@@ -356,6 +523,8 @@ export function evolveSongArrangement(sourceSong, config = {}) {
       label: evolution.label,
       signature: evolution.signature,
       sectionOrder: orderedIds,
+      transitionsRebuilt: transitionContext.transitions.length,
+      transitionNotesShaped: transitionContext.shapedNotes,
     },
   };
   return { changed: true, song, evolution };
