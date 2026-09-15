@@ -997,6 +997,35 @@ function normalizeScale(value) {
   return SCALE_ALIASES[token] ?? "minor";
 }
 
+const CREATIVE_MOTIF_MUTATIONS = new Set([
+  "literal-recall",
+  "answer",
+  "rhythmic-mutation",
+  "truncate-expand",
+  "instrument-handoff",
+  "contour-rewrite",
+]);
+const CREATIVE_SPOTLIGHT_ROTATIONS = new Set([
+  "lead-led",
+  "bass-to-lead",
+  "chords-to-lead",
+  "counterpoint-to-hook",
+  "section-rotation",
+]);
+
+function normalizeCreativeStrategyToken(value, allowed) {
+  const token = String(value ?? "").trim();
+  return allowed.has(token) ? token : null;
+}
+
+function normalizeCreativeMotifMutation(value) {
+  return normalizeCreativeStrategyToken(value, CREATIVE_MOTIF_MUTATIONS);
+}
+
+function normalizeCreativeSpotlightRotation(value) {
+  return normalizeCreativeStrategyToken(value, CREATIVE_SPOTLIGHT_ROTATIONS);
+}
+
 export function defaultChordPathForGenre(genre) {
   if (["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
   if (["jazz", "ambient"].includes(genre)) return "jazz";
@@ -1150,6 +1179,10 @@ export function normalizeConfig(input = {}) {
   const tracks = {};
   const paletteRng = createSeededRandom(`${seed}::${genre}::palette`);
   for (const id of TRACK_IDS) tracks[id] = normalizeTrack(id, providedTracks[id], profile, paletteRng.fork(id));
+  const creativeMotifMutation = normalizeCreativeMotifMutation(input.creativeMotifMutation);
+  const creativeSpotlightRotation = normalizeCreativeSpotlightRotation(input.creativeSpotlightRotation);
+  const creativeMotifStrength = clamp(finite(input.creativeMotifStrength, 0), 0, 1.3);
+  const creativeMotifMaxEvents = clamp(Math.round(finite(input.creativeMotifMaxEvents, 0)), 0, 2);
 
   return {
     seed,
@@ -1191,6 +1224,12 @@ export function normalizeConfig(input = {}) {
         .filter(Boolean),
     )].slice(0, 32),
     title: input.title == null ? null : String(input.title).slice(0, 100),
+    ...(creativeMotifMutation ? { creativeMotifMutation } : {}),
+    ...(creativeSpotlightRotation ? { creativeSpotlightRotation } : {}),
+    ...(creativeMotifMutation || creativeSpotlightRotation ? {
+      creativeMotifStrength,
+      creativeMotifMaxEvents,
+    } : {}),
     tracks,
   };
 }
@@ -1610,12 +1649,23 @@ const ORCHESTRATION_SHAPES = deepFreeze({
   solo: { drums: 0.88, bass: 0.9, chords: 0.7, melody: 0.72, counterpoint: 1, pad: 0.48 },
 });
 
+function creativeReturnFeaturedTrack(section, config, occurrence) {
+  if (occurrence <= 0 || !["verse", "chorus", "theme", "idea"].includes(section.name)) return null;
+  if (config.creativeSpotlightRotation === "lead-led") return "melody";
+  if (config.creativeSpotlightRotation === "bass-to-lead") return occurrence % 2 ? "bass" : "melody";
+  if (config.creativeSpotlightRotation === "chords-to-lead") return occurrence % 2 ? "chords" : "melody";
+  if (config.creativeSpotlightRotation === "counterpoint-to-hook") return occurrence % 2 ? "counterpoint" : "melody";
+  return null;
+}
+
 function featuredTrackForSection(section, plan, config, occurrence = 0) {
   if (section.name === "intro" || ["breakdown", "outro"].includes(section.name)) return "pad";
   if (section.name === "bridge") return "counterpoint";
   if (section.name === "solo") return occurrence % 2 ? "melody" : "counterpoint";
   if (section.name === "drop") return plan.role === "peak" ? "bass" : "drums";
   if (["prechorus", "build"].includes(section.name)) return "chords";
+  const creativeReturn = creativeReturnFeaturedTrack(section, config, occurrence);
+  if (creativeReturn) return creativeReturn;
   if (occurrence > 0) {
     const candidates = ["house", "techno", "drumBass", "trap", "drill", "funk", "rock"].includes(config.genre)
       ? ["bass", "drums", "counterpoint"]
@@ -1631,12 +1681,15 @@ function createOrchestrationMatrix(config, structure, sectionPlans, source = nul
   const occurrences = new Map();
   return structure.map((section, index) => {
     const plan = sectionPlans[index];
-    const inherited = source?.orchestrationMatrix?.find((entry) => entry.sectionId === section.id)
-      ?? source?.orchestrationMatrix?.find((entry) => entry.sectionName === section.name);
-    if (inherited?.lanes) return clone(inherited);
-    const shape = ORCHESTRATION_SHAPES[section.name] ?? ORCHESTRATION_SHAPES.idea;
     const occurrence = occurrences.get(section.name) ?? 0;
     occurrences.set(section.name, occurrence + 1);
+    const inherited = source?.orchestrationMatrix?.find((entry) => entry.sectionId === section.id)
+      ?? source?.orchestrationMatrix?.find((entry) => entry.sectionName === section.name);
+    const creativeReturn = occurrence > 0
+      && Boolean(config.creativeSpotlightRotation)
+      && ["verse", "chorus", "theme", "idea"].includes(section.name);
+    if (inherited?.lanes && !creativeReturn) return clone(inherited);
+    const shape = ORCHESTRATION_SHAPES[section.name] ?? ORCHESTRATION_SHAPES.idea;
     const featuredTrack = featuredTrackForSection(section, plan, config, occurrence);
     const lanes = Object.fromEntries(TRACK_IDS.map((id) => {
       const base = finite(shape[id], 0.7);
@@ -2682,6 +2735,79 @@ function hookDistinctivenessMetrics(motif) {
     1,
   );
   return { eventCount: events.length, uniqueDegrees, uniqueGaps, contourTurns, syncopated, score: round(score) };
+}
+
+function applyCreativeHookMutation(source, config, rng) {
+  const motif = clone(source);
+  const mode = normalizeCreativeMotifMutation(config.creativeMotifMutation);
+  const strength = clamp(finite(config.creativeMotifStrength, 0), 0, 1.3);
+  const maxEvents = clamp(Math.round(finite(config.creativeMotifMaxEvents, 0)), 0, 2);
+  const before = hookDistinctivenessMetrics(motif);
+  if (!validMotif(motif) || !mode || strength <= 0 || maxEvents <= 0
+    || ["literal-recall", "instrument-handoff"].includes(mode)) {
+    return {
+      motif,
+      report: {
+        phase: "9C",
+        version: 1,
+        status: "complete",
+        mode: mode ?? null,
+        changedEvents: 0,
+        maxEvents,
+        before,
+        after: before,
+      },
+    };
+  }
+
+  const maximumDegree = Math.max(3, Math.ceil(config.melodicRange / 2));
+  const interior = motif.events
+    .map((event, index) => ({ event, index }))
+    .filter(({ index }) => index > 0 && index < motif.events.length - 1);
+  const chosen = interior.length ? rng.shuffle(interior).slice(0, Math.min(maxEvents, interior.length)) : [];
+  let changedEvents = 0;
+
+  for (const { event, index } of chosen) {
+    const original = { ...event };
+    if (mode === "answer") {
+      const direction = event.degree === 0 ? (index % 2 ? 1 : -1) : -Math.sign(event.degree);
+      event.degree = clamp(event.degree + direction, -maximumDegree, maximumDegree);
+    } else if (mode === "rhythmic-mutation") {
+      const previous = motif.events[index - 1];
+      const next = motif.events[index + 1];
+      const minimum = previous.offset + 0.125;
+      const maximum = Math.min(motif.lengthBeats - 0.125, next.offset - 0.125);
+      const preferred = event.offset + rng.pick([-0.25, 0.25]);
+      event.offset = round(clamp(preferred, minimum, Math.max(minimum, maximum)));
+    } else if (mode === "truncate-expand") {
+      const next = motif.events[index + 1];
+      const available = Math.max(0.2, (next?.offset ?? motif.lengthBeats) - event.offset - 0.05);
+      const scale = index % 2 ? 0.7 : 1.28;
+      event.duration = round(clamp(event.duration * scale, 0.2, Math.min(4, available)));
+    } else if (mode === "contour-rewrite") {
+      const direction = event.degree === 0 ? (rng.bool() ? 1 : -1) : -Math.sign(event.degree);
+      event.degree = clamp(event.degree + direction * 2, -maximumDegree, maximumDegree);
+    }
+    if (event.degree !== original.degree || event.offset !== original.offset || event.duration !== original.duration) {
+      changedEvents += 1;
+    }
+  }
+
+  motif.events.sort((left, right) => left.offset - right.offset);
+  return {
+    motif,
+    report: {
+      phase: "9C",
+      version: 1,
+      status: "complete",
+      mode,
+      strength: round(strength),
+      changedEvents,
+      maxEvents,
+      before,
+      after: hookDistinctivenessMetrics(motif),
+    },
+  };
 }
 
 function refineWeakHookMotif(source, config, rng) {
@@ -8012,8 +8138,15 @@ function compose(config, options = {}) {
     motifs.sectionAssignments = assignMotifFamily(structure, songBlueprint);
   }
   motifs = shapeMotifsForCompositionRoute(motifs, route, harmony, config, style);
-  const renderedHook = motifs.family?.B?.melody;
+  let renderedHook = motifs.family?.B?.melody;
   if (renderedHook) {
+    const creativeGenomeMutation = applyCreativeHookMutation(
+      renderedHook,
+      config,
+      rootRng.fork("creative-genome-hook-mutation"),
+    );
+    motifs.family.B.melody = creativeGenomeMutation.motif;
+    renderedHook = motifs.family.B.melody;
     const finalHookRefinement = refineWeakHookMotif(
       renderedHook,
       config,
@@ -8027,6 +8160,7 @@ function compose(config, options = {}) {
     );
     motifs.family.B.counterpoint = smoothMotifFlow(motifs.family.B.counterpoint, "answer");
     motifs.hookDistinctiveness = finalHookRefinement.report;
+    motifs.creativeGenomeMutation = creativeGenomeMutation.report;
   }
   const grooveConductor = createGrooveConductor(
     config,

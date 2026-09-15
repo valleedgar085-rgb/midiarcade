@@ -59,7 +59,12 @@ test("Phase 9B Energy Arc + Space Strategy steering is deterministic, bounded an
   assert.equal(first.creativeGenomeSteering.version, CREATIVE_GENOME_STEERING_VERSION);
   assert.equal(first.creativeGenomeSteering.applied, true);
   assert.equal(first.producerBrain.creativeGenome.guardrails.consumedByComposition, true);
-  assert.deepEqual(first.producerBrain.creativeGenome.guardrails.consumedFields, ["energyArc", "spaceStrategy"]);
+  assert.deepEqual(first.producerBrain.creativeGenome.guardrails.consumedFields, [
+    "energyArc",
+    "spaceStrategy",
+    "motifMutation",
+    "spotlightRotation",
+  ]);
   assert.equal(first.seed, config.seed);
   assert.equal(first.key, config.key);
   assert.equal(first.scale, config.scale);
