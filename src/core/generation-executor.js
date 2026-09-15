@@ -1,10 +1,31 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
+import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
+import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
+
+function evolveGenerationPayload(kind, payload = {}) {
+  if (!["new", "similar", "songVariations"].includes(kind)) return payload;
+  const evolvedConfig = applyOutputQualityEvolution(payload?.config ?? {}, { kind });
+  const phraseResolutionRefinement = typeof evolvedConfig.phraseResolutionRefinement === "boolean"
+    ? evolvedConfig.phraseResolutionRefinement
+    : kind === "new";
+  const registerHealthRefinement = typeof evolvedConfig.registerHealthRefinement === "boolean"
+    ? evolvedConfig.registerHealthRefinement
+    : kind === "new";
+  return {
+    ...payload,
+    config: {
+      ...evolvedConfig,
+      phraseResolutionRefinement,
+      registerHealthRefinement,
+    },
+  };
+}
 
 export function createGenerationExecutor({
   fallback,
@@ -113,7 +134,7 @@ export function createGenerationExecutor({
   }
 
   async function run(kind, payload = {}) {
-    const adaptedPayload = adaptGenerationRequest(kind, payload);
+    const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
@@ -122,6 +143,7 @@ export function createGenerationExecutor({
     flightRecorder.mark(flightId, "plan", {
       producerBrain: config?.producerBrain?.id ?? null,
       blueprint: config?.producerBrain?.blueprint?.id ?? null,
+      outputQuality: config?.outputQuality?.seedSignature ?? null,
     });
 
     try {
@@ -164,7 +186,14 @@ export function createGenerationExecutor({
         });
       }
 
-      flightRecorder.mark(flightId, "finalize");
+      selectedResult = applyResultOutputQualityPipeline(selectedResult, config);
+      flightRecorder.mark(flightId, "finalize", {
+        arrangementEvolution: selectedResult?.outputQualityDiagnostics?.arrangement ?? null,
+        returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
+        densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
+        phraseResolutionRefinement: selectedResult?.outputQualityDiagnostics?.phraseResolutionRefinement ?? null,
+        registerHealthRefinement: selectedResult?.outputQualityDiagnostics?.registerHealthRefinement ?? null,
+      });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
     } catch (error) {

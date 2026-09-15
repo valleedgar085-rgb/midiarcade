@@ -6,6 +6,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const budgets = Object.freeze({
   "www/src/app.js": 360 * 1024,
   "www/src/generation-worker.js": 320 * 1024,
+  "www/src/quality-pipeline.js": 24 * 1024,
   "www/styles.css": 150 * 1024,
   "www/generation-experience.css": 16 * 1024,
   "www/shape-director.css": 16 * 1024,
@@ -25,6 +26,7 @@ const generationCss = await readFile(path.join(projectRoot, "www/generation-expe
 const shapeCss = await readFile(path.join(projectRoot, "www/shape-director.css"), "utf8");
 const app = await readFile(path.join(projectRoot, "www/src/app.js"), "utf8");
 const generationWorker = await readFile(path.join(projectRoot, "www/src/generation-worker.js"), "utf8");
+const qualityPipeline = await readFile(path.join(projectRoot, "www/src/quality-pipeline.js"), "utf8");
 const buttonCount = (html.match(/<button\b/g) || []).length;
 const transitionAllCount = (css.match(/transition:\s*all/g) || []).length;
 const mojibake = /(?:â€”|â€“|â€™|â€œ|â€|âœ|â†|â‡|â™|âš|â›|â—|â‰|âŒ|ðŸ|Â·|ï¿½|\uFFFD)/u;
@@ -43,6 +45,7 @@ for (const [relativePath, source] of [
   ["www/shape-director.css", shapeCss],
   ["www/src/app.js", app],
   ["www/src/generation-worker.js", generationWorker],
+  ["www/src/quality-pipeline.js", qualityPipeline],
 ]) {
   if (mojibake.test(source)) failures.push(`${relativePath} contains malformed UTF-8 text`);
 }

@@ -1,4 +1,5 @@
 import { clampFinite as clamp, finite } from "../utils.js";
+import { fusionCharacter, popHipHopRapFusionContext } from "./genre-fusion-steering.js";
 import { applyProducerBrainConfig } from "./producer-brain.js";
 
 const TRACK_IDS = Object.freeze(["drums", "bass", "chords", "melody", "counterpoint", "pad"]);
@@ -150,7 +151,8 @@ function adjustTrack(trackId, input, context) {
 export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
   const source = cloneRecord(config);
   const genre = String(source.genre ?? "pop");
-  const character = generationCharacter(genre);
+  const fusion = popHipHopRapFusionContext(source);
+  const character = fusionCharacter(source, generationCharacter, { kind }) ?? generationCharacter(genre);
   const vector = tasteVector(source.tasteProfile, genre);
   const tasteStrength = vector.confidence * 0.2;
 
@@ -208,6 +210,7 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
     version: 1,
     confidence: vector.confidence,
     genreAffinity: vector.genreAffinity,
+    fusion: fusion ? { ...fusion } : null,
     learned: {
       energy: vector.energy == null ? null : round(vector.energy),
       complexity: vector.complexity == null ? null : round(vector.complexity),
