@@ -39,11 +39,19 @@ export function createGenerationExecutor({
   let worker = null;
   let workerUnavailable = typeof workerFactory !== "function";
   let requestId = 0;
+  let lifecycle = 0;
   const pending = new Map();
+
+  function requireCurrentLifecycle(expected) {
+    if (expected !== lifecycle) throw new Error("Background generation was canceled.");
+  }
 
   function runFallback(request) {
     Promise.resolve()
-      .then(() => fallback(request.kind, request.payload))
+      .then(() => {
+        requireCurrentLifecycle(request.lifecycle);
+        return fallback(request.kind, request.payload);
+      })
       .then(request.resolve, request.reject);
   }
 
@@ -86,7 +94,9 @@ export function createGenerationExecutor({
     try {
       worker = workerFactory();
       if (!worker?.postMessage) throw new Error("Background generation is unavailable.");
+      const createdWorker = worker;
       worker.addEventListener("message", (event) => {
+        if (worker !== createdWorker) return;
         const request = takePending(event.data?.requestId);
         if (!request) return;
         if (event.data?.ok) request.resolve(event.data.result);
@@ -97,6 +107,7 @@ export function createGenerationExecutor({
         }
       });
       worker.addEventListener("error", () => {
+        if (worker !== createdWorker) return;
         workerUnavailable = true;
         disposeWorker();
         recoverPendingWithFallback();
@@ -109,9 +120,13 @@ export function createGenerationExecutor({
     }
   }
 
-  function executeAdapted(kind, adaptedPayload) {
+  function executeAdapted(kind, adaptedPayload, expectedLifecycle) {
+    requireCurrentLifecycle(expectedLifecycle);
     const activeWorker = ensureWorker();
-    if (!activeWorker) return Promise.resolve().then(() => fallback(kind, adaptedPayload));
+    if (!activeWorker) return Promise.resolve().then(() => {
+      requireCurrentLifecycle(expectedLifecycle);
+      return fallback(kind, adaptedPayload);
+    });
     const id = ++requestId;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -121,7 +136,7 @@ export function createGenerationExecutor({
         disposeWorker();
         runFallback(request);
       }, Math.max(1000, Number(timeoutMs) || 60000));
-      pending.set(id, { resolve, reject, timer, kind, payload: adaptedPayload });
+      pending.set(id, { resolve, reject, timer, kind, payload: adaptedPayload, lifecycle: expectedLifecycle });
       try {
         activeWorker.postMessage({ requestId: id, kind, payload: adaptedPayload });
       } catch {
@@ -134,6 +149,7 @@ export function createGenerationExecutor({
   }
 
   async function run(kind, payload = {}) {
+    const expectedLifecycle = lifecycle;
     const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
@@ -148,7 +164,8 @@ export function createGenerationExecutor({
 
     try {
       flightRecorder.mark(flightId, "compose", { pass: 0 });
-      const originalResult = await executeAdapted(kind, adaptedPayload);
+      const originalResult = await executeAdapted(kind, adaptedPayload, expectedLifecycle);
+      requireCurrentLifecycle(expectedLifecycle);
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
       flightRecorder.mark(flightId, "diagnose", {
         shouldRetry: diagnosis.shouldRetry,
@@ -169,7 +186,8 @@ export function createGenerationExecutor({
           focusDimension: diagnosis.focusDimension,
           focusGroup: diagnosis.focusGroup,
         });
-        const correctedResult = await executeAdapted(kind, correctionPayload);
+        const correctedResult = await executeAdapted(kind, correctionPayload, expectedLifecycle);
+        requireCurrentLifecycle(expectedLifecycle);
         const comparison = selectSelfCorrectedResult(originalResult, correctedResult);
         selectedResult = comparison.result;
         flightRecorder.mark(flightId, "compare", {
@@ -211,6 +229,7 @@ export function createGenerationExecutor({
       flightRecorder.clear();
     },
     dispose() {
+      lifecycle += 1;
       disposeWorker(new Error("Background generation was canceled."));
     },
     get usingWorker() {
