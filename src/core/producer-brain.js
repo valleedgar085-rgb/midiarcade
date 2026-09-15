@@ -1,5 +1,8 @@
 import { createCreativeGenome } from "./creative-genome.js";
 import {
+  resolveCreativeGenomeMotifStrategy,
+} from "./creative-genome-motif-steering.js";
+import {
   applyCreativeGenomeSteering,
   isCreativeGenomeFusionProtected,
 } from "./creative-genome-steering.js";
@@ -85,7 +88,8 @@ export function createProducerBrainPlan(config = {}, {
 
 /**
  * Convert producer intent into the existing engine knobs. Phase 9B consumes
- * only Creative Genome Energy Arc + Space Strategy, through bounded priors.
+ * Energy Arc + Space Strategy through bounded priors; Phase 9C resolves Motif
+ * Mutation + Spotlight Rotation into explicit bounded engine strategy tokens.
  * Audible Genome steering is opt-in until its UI phase: an explicit
  * `creativeRange` or `creativeGenomeSteering: true` activates it. Ordinary
  * calibrated requests remain bit-for-bit compatible. Fusion calibration,
@@ -107,6 +111,11 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
+  const motifSteering = resolveCreativeGenomeMotifStrategy(source, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: Boolean(requestedConsumption),
+  });
+  const motifStrategy = motifSteering.strategy;
   const out = {
     ...steering.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
@@ -116,6 +125,13 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,
     creativeGenomeSteering: steering.diagnostics,
+    creativeGenomeMotifSteering: motifSteering.diagnostics,
+    ...(motifStrategy ? {
+      creativeMotifMutation: motifStrategy.motifMutation,
+      creativeSpotlightRotation: motifStrategy.spotlightRotation,
+      creativeMotifStrength: motifStrategy.strength,
+      creativeMotifMaxEvents: motifStrategy.maxMutationEvents,
+    } : {}),
   };
   if (plan.kind === "songVariations" && source.candidatesPerVariation == null) {
     out.candidatesPerVariation = plan.search.candidatesPerVariation;
