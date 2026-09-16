@@ -76,6 +76,8 @@ test("Phase 9C motif and spotlight strategy is deterministic, bounded and preser
     "spaceStrategy",
     "motifMutation",
     "spotlightRotation",
+    "rhythmTopology",
+    "performanceFeel",
   ]);
 });
 
