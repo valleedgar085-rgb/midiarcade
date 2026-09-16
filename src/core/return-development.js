@@ -1,3 +1,5 @@
+import { repetitionBalance } from "./repetition-refinement.js";
+
 const RETURN_RELATIONSHIPS = new Set(["recall", "return"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme", "idea"]);
 
@@ -387,56 +389,131 @@ function applyReturnSpotlight(song, pairs) {
   return changed;
 }
 
-function applyReturnPayoff(song, pairs) {
-  const recallChanges = applyRhythmicRecall(song, pairs, {
-    maxRepeats: 1,
-    maxChangedPerTarget: 2,
-    role: "return-payoff-recall",
-  });
-  const cadenceChanges = applyCadencePayoff(song, pairs);
-  const spotlightChanges = applyReturnSpotlight(song, pairs);
-  return recallChanges + cadenceChanges + spotlightChanges;
+const RETURN_EVOLUTION_MAX_EDITS = 3;
+const RETURN_EVOLUTION_MAX_SHIFT = 0.5;
+const RETURN_EVOLUTION_MIN_GAP = 0.06;
+const RETURN_EVOLUTION_CADENCE_GUARD = 0.75;
+
+function repetitionTarget(song) {
+  return clamp(finite(song?.songBlueprint?.qualityTargets?.repetition, 0.62), 0, 1);
 }
 
-function grooveOffsetsForGenre(genre) {
-  if (genre === "house") return [0.5];
-  if (["trap", "drill"].includes(genre)) return [0, 0.25];
-  if (genre === "techno") return [0, 0.5];
-  return [0, 0.25, 0.5, 0.75];
+function quarterOffset(note, windowStart) {
+  return Math.round((noteStart(note) - windowStart) * 4) / 4;
 }
 
-function applyGrooveLock(song, pairs) {
-  const bass = trackOf(song, "bass");
-  const drums = trackOf(song, "drums");
-  if (!bass?.notes?.length || !drums?.notes?.length) return 0;
-  const kicks = drums.notes.filter((note) => [35, 36].includes(Math.round(notePitch(note))));
-  if (!kicks.length) return 0;
-  const offsets = grooveOffsetsForGenre(String(song?.genre ?? song?.meta?.genre ?? "pop"));
-  const barBeats = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
-  let changed = 0;
+function safeReturnEvolutionPlacement(notes, note, desiredStart, windowStart, windowEnd) {
+  const currentStart = noteStart(note);
+  const shift = Math.abs(desiredStart - currentStart);
+  if (currentStart >= windowEnd - RETURN_EVOLUTION_CADENCE_GUARD) return false;
+  if (desiredStart >= windowEnd - RETURN_EVOLUTION_CADENCE_GUARD) return false;
+  if (shift <= 1e-6 || shift > RETURN_EVOLUTION_MAX_SHIFT + 1e-6) return false;
+  if (desiredStart < windowStart - 1e-6 || desiredStart >= windowEnd - 0.03) return false;
+  return notes.every((other) => other === note || Math.abs(noteStart(other) - desiredStart) >= RETURN_EVOLUTION_MIN_GAP - 1e-6);
+}
+
+function possibleReturnEvolutionMoves(song, pairs, direction) {
+  const melody = trackOf(song, "melody");
+  if (!melody?.notes?.length) return [];
+  const motifLength = clamp(finite(song?.motifs?.melody?.lengthBeats, finite(song?.meta?.beatsPerBar, 4)), 1, 8);
+  const moves = [];
 
   for (const { target, origin } of pairs) {
-    const targetStart = sectionStart(target);
-    const windowEnd = Math.min(sectionEnd(target), targetStart + barBeats * 2);
-    const notes = notesInSection(bass, target)
-      .filter((note) => noteStart(note) < windowEnd - 1e-6)
-      .slice(0, 6);
-    const targetKicks = kicks.filter((kick) => noteStart(kick) >= targetStart - 0.75 && noteStart(kick) < windowEnd + 0.01);
-    for (const note of notes) {
-      const current = noteStart(note);
-      const candidates = targetKicks.flatMap((kick) => offsets.map((offset) => noteStart(kick) + offset))
-        .filter((start) => start >= targetStart - 1e-6 && start < sectionEnd(target) - 0.03)
-        .sort((left, right) => Math.abs(left - current) - Math.abs(right - current) || left - right);
-      const nearest = candidates[0];
-      if (!Number.isFinite(nearest) || Math.abs(nearest - current) > 0.18 || Math.abs(nearest - current) < 0.012) continue;
-      setNoteStart(note, nearest);
-      note.returnDevelopmentRole = "groove-lock";
-      note.returnDevelopmentOriginSectionId = String(origin.id);
-      changed += 1;
+    const sourceStart = sectionStart(origin);
+    const referenceNotes = notesInSection(melody, origin)
+      .filter((note) => noteStart(note) < sourceStart + motifLength - 1e-6);
+    if (referenceNotes.length < 2) continue;
+    const reference = new Set(referenceNotes.map((note) => quarterOffset(note, sourceStart)));
+    const repeatCount = Math.min(2, Math.max(1, Math.floor((sectionEnd(target) - sectionStart(target)) / motifLength)));
+
+    for (let repeat = 0; repeat < repeatCount; repeat += 1) {
+      const windowStart = sectionStart(target) + repeat * motifLength;
+      const windowEnd = Math.min(sectionEnd(target), windowStart + motifLength);
+      const destination = notesInSection(melody, target)
+        .filter((note) => noteStart(note) >= windowStart - 1e-6 && noteStart(note) < windowEnd - 1e-6);
+      if (destination.length < 2) continue;
+      const counts = new Map();
+      const currentOffsets = new Set();
+      for (const note of destination) {
+        const offset = quarterOffset(note, windowStart);
+        currentOffsets.add(offset);
+        counts.set(offset, (counts.get(offset) ?? 0) + 1);
+      }
+
+      if (direction === "reinforce") {
+        const missing = [...reference].filter((offset) => !currentOffsets.has(offset));
+        for (const note of destination) {
+          if (note.returnDevelopmentRole === "return-evolution") continue;
+          const sourceOffset = quarterOffset(note, windowStart);
+          if (reference.has(sourceOffset) && (counts.get(sourceOffset) ?? 0) === 1) continue;
+          for (const offset of missing) {
+            const desiredStart = windowStart + offset;
+            if (safeReturnEvolutionPlacement(destination, note, desiredStart, windowStart, windowEnd)) {
+              moves.push({ note, desiredStart, originId: origin.id, targetId: target.id });
+            }
+          }
+        }
+      } else if (direction === "evolve") {
+        for (const note of destination) {
+          if (note.returnDevelopmentRole === "return-evolution") continue;
+          const sourceOffset = quarterOffset(note, windowStart);
+          if (!reference.has(sourceOffset) || (counts.get(sourceOffset) ?? 0) !== 1) continue;
+          for (const delta of [-0.5, -0.25, 0.25, 0.5]) {
+            const desiredOffset = round(sourceOffset + delta, 2);
+            if (desiredOffset < 0 || desiredOffset >= windowEnd - windowStart - 0.03) continue;
+            if (reference.has(desiredOffset) || currentOffsets.has(desiredOffset)) continue;
+            const desiredStart = windowStart + desiredOffset;
+            if (safeReturnEvolutionPlacement(destination, note, desiredStart, windowStart, windowEnd)) {
+              moves.push({ note, desiredStart, originId: origin.id, targetId: target.id });
+            }
+          }
+        }
+      }
     }
   }
-  bass.notes.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
-  return changed;
+  return moves;
+}
+
+function bestReturnEvolutionMove(song, pairs, target) {
+  const before = repetitionBalance(song, target);
+  if (before.direction === "on-target") return null;
+  let best = null;
+  for (const move of possibleReturnEvolutionMoves(song, pairs, before.direction)) {
+    const originalStart = noteStart(move.note);
+    setNoteStart(move.note, move.desiredStart);
+    const after = repetitionBalance(song, target);
+    setNoteStart(move.note, originalStart);
+    const improvement = before.absoluteError - after.absoluteError;
+    if (improvement <= 1e-6) continue;
+    const shift = Math.abs(move.desiredStart - originalStart);
+    if (!best
+      || improvement > best.improvement + 1e-6
+      || (Math.abs(improvement - best.improvement) <= 1e-6 && shift < best.shift - 1e-6)
+      || (Math.abs(improvement - best.improvement) <= 1e-6 && Math.abs(shift - best.shift) <= 1e-6 && move.desiredStart < best.desiredStart)) {
+      best = { ...move, originalStart, improvement, shift };
+    }
+  }
+  return best;
+}
+
+function applyReturnEvolution(song, pairs) {
+  const target = repetitionTarget(song);
+  const before = repetitionBalance(song, target);
+  let timingChanges = 0;
+  for (; timingChanges < RETURN_EVOLUTION_MAX_EDITS; timingChanges += 1) {
+    const move = bestReturnEvolutionMove(song, pairs, target);
+    if (!move) break;
+    setNoteStart(move.note, move.desiredStart);
+    move.note.returnDevelopmentRole = "return-evolution";
+    move.note.returnDevelopmentOriginSectionId = String(move.originId);
+    move.note.returnDevelopmentOriginalStart = round(move.originalStart);
+  }
+  const after = repetitionBalance(song, target);
+  if (!timingChanges || after.absoluteError >= before.absoluteError - 1e-6) return 0;
+  const spotlightChanges = applyReturnSpotlight(song, pairs);
+  const melody = trackOf(song, "melody");
+  melody?.notes?.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
+  return timingChanges + spotlightChanges;
 }
 
 function makeCandidate(sourceSong, pairs, id, apply) {
@@ -464,9 +541,9 @@ export function createReturnDevelopmentCandidates(sourceSong, config = {}) {
   const pairs = returnPairs(sourceSong);
   if (!pairs.length) return [];
   const definitions = [
-    ["return-payoff", applyReturnPayoff],
+    ["cadence-payoff", applyCadencePayoff],
+    ["return-evolution", applyReturnEvolution],
     ["rhythmic-recall", applyRhythmicRecall],
-    ["groove-lock", applyGrooveLock],
   ];
   return definitions
     .map(([id, apply]) => makeCandidate(sourceSong, pairs, id, apply))
