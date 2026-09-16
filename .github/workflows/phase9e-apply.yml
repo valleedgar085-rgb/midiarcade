@@ -1,0 +1,138 @@
+name: Phase 9E apply Creative Range UI
+
+on:
+  push:
+    branches:
+      - phase9e/creative-range-ui
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Phase 9E branch
+        uses: actions/checkout@v4
+        with:
+          ref: phase9e/creative-range-ui
+          fetch-depth: 0
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Apply bounded Creative Range patch
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one marker, found {count}: {old[:90]!r}")
+              p.write_text(text.replace(old, new, 1))
+
+          # Pure normalization policy keeps UI values from silently activating an invalid mode.
+          Path("src/core/creative-range-policy.js").write_text('''const CREATIVE_RANGE_VALUES = Object.freeze(["familiar", "fresh", "wild"]);\nconst CREATIVE_RANGE_SET = new Set(CREATIVE_RANGE_VALUES);\n\nexport { CREATIVE_RANGE_VALUES };\n\nexport function normalizeCreativeRange(value) {\n  const normalized = String(value ?? "").trim().toLowerCase();\n  return CREATIVE_RANGE_SET.has(normalized) ? normalized : null;\n}\n''')
+
+          # Create UI: neutral by default. Only an explicit Familiar/Fresh/Wild selection opts in.
+          replace_once(
+              "index.html",
+              '''                  </select>\n                </label>\n              </div>\n              <div class="showcase-actions" aria-label="Current song actions">''',
+              '''                  </select>\n                </label>\n                <label class="create-live-select creative-range-control">\n                  <span>CREATIVE RANGE</span>\n                  <select id="creativeRangeControl" aria-label="Creative range">\n                    <option value="" selected>Default · existing behavior</option>\n                    <option value="familiar">Familiar · stay close</option>\n                    <option value="fresh">Fresh · balanced ideas</option>\n                    <option value="wild">Wild · explore safely</option>\n                  </select>\n                </label>\n              </div>\n              <div class="showcase-actions" aria-label="Current song actions">''',
+          )
+
+          # Create control contract: producer-facing help and change-event semantics.
+          replace_once(
+              "src/ui/create-control-contract.js",
+              '  grooveControl: entry("Groove feel", "Chooses the timing pocket for the next generation: straight, laid back, shuffled, syncopated or Auto.", "essentials"),\n',
+              '  grooveControl: entry("Groove feel", "Chooses the timing pocket for the next generation: straight, laid back, shuffled, syncopated or Auto.", "essentials"),\n  creativeRangeControl: entry("Creative range", "Chooses how far Creative Genome may steer the next idea. Default preserves existing behavior; Familiar, Fresh and Wild opt into progressively wider deterministic strategy choices while quality gates stay authoritative.", "direction"),\n',
+          )
+
+          # Session preferences remember explicit intent without changing the neutral default.
+          replace_once(
+              "src/core/session-runtime.js",
+              '  "grooveControl",\n  "chordPathControl",\n',
+              '  "grooveControl",\n  "creativeRangeControl",\n  "chordPathControl",\n',
+          )
+
+          # App request wiring.
+          replace_once(
+              "src/app.js",
+              'import { createGenerationOwnership } from "./core/generation-ownership.js";\n',
+              'import { createGenerationOwnership } from "./core/generation-ownership.js";\nimport { normalizeCreativeRange } from "./core/creative-range-policy.js";\n',
+          )
+          replace_once(
+              "src/app.js",
+              '  const selectedChordPath = $("#chordPathControl")?.value || "auto";\n',
+              '  const selectedChordPath = $("#chordPathControl")?.value || "auto";\n  const creativeRange = normalizeCreativeRange($("#creativeRangeControl")?.value);\n',
+          )
+          replace_once(
+              "src/app.js",
+              '    genre: genreId,\n    key: resolvedKey,\n',
+              '    genre: genreId,\n    ...(creativeRange ? { creativeRange } : {}),\n    key: resolvedKey,\n',
+          )
+          replace_once(
+              "src/app.js",
+              '  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "chordPathControl",\n',
+              '  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "creativeRangeControl", "chordPathControl",\n',
+          )
+          replace_once(
+              "src/app.js",
+              '    $("#chordPathControl").value = "auto";\n',
+              '    $("#chordPathControl").value = "auto";\n    $("#creativeRangeControl").value = "";\n',
+          )
+          replace_once(
+              "src/app.js",
+              '  $("#barsControl")?.addEventListener("change", () => {\n',
+              '''  $("#creativeRangeControl")?.addEventListener("change", () => {\n    const control = $("#creativeRangeControl");\n    const creativeRange = normalizeCreativeRange(control?.value);\n    const label = control?.options?.[control.selectedIndex]?.text || "Default";\n    showToast(creativeRange\n      ? `Creative Range: ${label}. Tap New song idea to generate.`\n      : "Creative Range returned to default. Existing generation behavior is preserved.");\n    renderGenerationIntent();\n    scheduleSessionSave();\n  });\n  $("#barsControl")?.addEventListener("change", () => {\n''',
+          )
+
+          # Contract test lists: Creative Range is a first-class change-driven Create control.
+          p = Path("tests/create-control-contract.test.mjs")
+          text = p.read_text()
+          marker = '  "grooveControl",\n  "keyControl",\n'
+          if text.count(marker) != 2:
+              raise SystemExit(f"create-control-contract test: expected two groove/key list markers, found {text.count(marker)}")
+          text = text.replace(marker, '  "grooveControl",\n  "creativeRangeControl",\n  "keyControl",\n')
+          assertion = '  assert.match(app, /secondaryGenreControl[\\s\\S]*?addEventListener\\("change"/);\n'
+          if text.count(assertion) != 1:
+              raise SystemExit("create-control-contract test: change wiring assertion marker missing")
+          text = text.replace(assertion, assertion + '  assert.match(app, /creativeRangeControl[\\s\\S]*?addEventListener\\("change"/);\n', 1)
+          p.write_text(text)
+
+          Path("tests/creative-range-policy.test.mjs").write_text('''import assert from "node:assert/strict";\nimport test from "node:test";\n\nimport { CREATIVE_RANGE_VALUES, normalizeCreativeRange } from "../src/core/creative-range-policy.js";\n\ntest("Creative Range accepts only the three explicit deterministic strategy modes", () => {\n  assert.deepEqual(CREATIVE_RANGE_VALUES, ["familiar", "fresh", "wild"]);\n  assert.equal(normalizeCreativeRange("familiar"), "familiar");\n  assert.equal(normalizeCreativeRange(" Fresh "), "fresh");\n  assert.equal(normalizeCreativeRange("WILD"), "wild");\n});\n\ntest("Creative Range remains neutral until a producer explicitly opts in", () => {\n  for (const value of [undefined, null, "", "auto", "default", "chaos"]) {\n    assert.equal(normalizeCreativeRange(value), null);\n  }\n});\n''')
+
+          Path("tests/creative-range-ui.test.mjs").write_text('''import assert from "node:assert/strict";\nimport fs from "node:fs";\nimport test from "node:test";\n\nconst html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");\nconst app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");\nconst sessionRuntime = fs.readFileSync(new URL("../src/core/session-runtime.js", import.meta.url), "utf8");\n\ntest("Create exposes one neutral-by-default Creative Range selector", () => {\n  const block = html.match(/<select id="creativeRangeControl"[\\s\\S]*?<\\/select>/)?.[0] ?? "";\n  assert.match(block, /<option value="" selected>Default · existing behavior<\\/option>/);\n  for (const value of ["familiar", "fresh", "wild"]) {\n    assert.equal((block.match(new RegExp(`value="${value}"`, "g")) || []).length, 1);\n  }\n});\n\ntest("buildConfig omits Creative Range unless the selected value is valid", () => {\n  const buildConfig = app.match(/export function buildConfig[\\s\\S]*?const GENERATION_SETTING_IDS/)?.[0] ?? "";\n  assert.match(buildConfig, /normalizeCreativeRange\\(\\$\\("#creativeRangeControl"\\)\\?\\.value\\)/);\n  assert.match(buildConfig, /\\.\\.\\.\\(creativeRange \\? \\{ creativeRange \\} : \\{\\}\\)/);\n  assert.doesNotMatch(buildConfig, /creativeRange:\\s*["']fresh["']/);\n});\n\ntest("Creative Range participates in staged direction, reset, change wiring and session restore", () => {\n  assert.match(app, /GENERATION_SETTING_IDS[\\s\\S]*?creativeRangeControl/);\n  assert.match(app, /creativeRangeControl[\\s\\S]*?addEventListener\\("change"/);\n  assert.match(app, /resetControlsButton[\\s\\S]*?creativeRangeControl\\"\\)\\.value = \\"\\"/);\n  assert.match(sessionRuntime, /GENERATION_PREFERENCE_IDS[\\s\\S]*?creativeRangeControl/);\n});\n''')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Phase 9E focused contracts
+        run: node --test tests/creative-range-policy.test.mjs tests/creative-range-ui.test.mjs tests/create-control-contract.test.mjs
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Verify patch hygiene
+        run: git diff --check
+
+      - name: Commit Phase 9E implementation
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No implementation changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html src/app.js src/core/session-runtime.js src/core/creative-range-policy.js src/ui/create-control-contract.js tests/create-control-contract.test.mjs tests/creative-range-policy.test.mjs tests/creative-range-ui.test.mjs
+          git commit -m "Phase 9E: expose Creative Range in Create"
+          git push origin HEAD:phase9e/creative-range-ui
