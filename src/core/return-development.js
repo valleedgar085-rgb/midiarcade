@@ -186,7 +186,7 @@ function applyCadencePayoff(song, pairs) {
     if (pitchChanged) setNotePitch(landing, targetPitch);
     if (durationChanged) setNoteDuration(landing, desiredDuration);
     if (pitchChanged || durationChanged) {
-      setNoteVelocity(landing, noteVelocity(landing) + (relationship === "return" ? 4 : 2));
+      setNoteVelocity(landing, Math.min(120, noteVelocity(landing) + (relationship === "return" ? 4 : 2)));
       landing.returnDevelopmentRole = "cadence-payoff";
       landing.returnDevelopmentOriginSectionId = String(pairs.find((pair) => pair.target.id === target.id)?.origin?.id ?? "");
       changed += 1;
@@ -357,7 +357,7 @@ function orchestrationEntryForSection(song, section) {
 }
 
 function applyReturnSpotlight(song, pairs) {
-  const eligibleTracks = new Set(["melody", "bass", "chords", "counterpoint"]);
+  const eligibleTracks = new Set(["melody", "bass", "chords", "counterpoint", "drums"]);
   let changed = 0;
 
   for (const { target, origin } of pairs) {
@@ -377,7 +377,7 @@ function applyReturnSpotlight(song, pairs) {
     for (const note of ordered) {
       const before = noteVelocity(note);
       const lift = note?.motifHandoffRole ? 7 : 4;
-      const after = clamp(before + lift, 1, 127);
+      const after = clamp(before + lift, 1, 120);
       if (after <= before + 1e-6) continue;
       setNoteVelocity(note, after);
       note.returnDevelopmentSpotlightRole = `feature-${featuredTrackId}`;
