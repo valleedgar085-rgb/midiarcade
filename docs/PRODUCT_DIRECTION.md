@@ -177,9 +177,11 @@ If a new idea conflicts with one of these contracts, the new idea changes — th
 
 The next roadmap shifts from **engine expansion** to **product convergence**.
 
-### Phase 10 — Workflow convergence
+The roadmap uses **Track A / B / C** instead of new phase numbers because historical implementation phases already exist elsewhere in the codebase. This keeps future product planning distinct from old architecture and UI milestone labels.
 
-#### 10A. Canonical workspace model
+### Track A — Workflow convergence
+
+#### A1. Canonical workspace model
 
 Create one shared song-context model across Create, Shape, Mix, and Finish.
 
@@ -196,7 +198,7 @@ Acceptance evidence:
 - history tests across Create → Shape → Mix → Finish → back;
 - no duplicate source of truth for current song or accepted Shape revision.
 
-#### 10B. Create simplification
+#### A2. Create simplification
 
 Reorganize Create around **Song / Feel / Structure / Generate** instead of exposing implementation-oriented controls at the same visual level.
 
@@ -210,7 +212,7 @@ Goals:
 
 Do not remove supported controls simply to simplify the screen; reorganize them and preserve their contracts.
 
-#### 10C. Shape intelligence
+#### A3. Shape intelligence
 
 Use existing Song DNA, Creative Genome, Element identity, critic diagnostics, phrase/section role, and accepted lineage to produce **ranked Shape starting suggestions**.
 
@@ -221,7 +223,7 @@ Goals:
 - one tap can stage a direction, but never auto-commit it;
 - accepted Shape edits become the unquestioned source for subsequent Similar/Element branches.
 
-#### 10D. Mix as musical balance
+#### A4. Mix as musical balance
 
 Tighten Mix around the controls that materially affect audibility and export.
 
@@ -233,7 +235,7 @@ Goals:
 - keep playback and export interpretation aligned;
 - avoid adding effect chains that turn Mix into a DAW clone.
 
-#### 10E. Finish and handoff
+#### A5. Finish and handoff
 
 Make export status and intent obvious before the file leaves MIDI Arcade.
 
@@ -245,9 +247,9 @@ Goals:
 - reliable Android share/save behavior;
 - FL Studio handoff instructions stay concise and accurate.
 
-### Phase 11 — Musical coherence and uniqueness
+### Track B — Musical coherence and uniqueness
 
-After Phase 10 makes the workflow coherent, resume engine work only where measured listening/quality evidence shows a real musical weakness.
+After Track A makes the workflow coherent, resume engine work only where measured listening/quality evidence shows a real musical weakness.
 
 Priority order:
 
@@ -258,9 +260,9 @@ Priority order:
 5. **generation-to-generation novelty** — consecutive New songs should not converge on the same arrangement/rhythm fingerprints;
 6. **Similar usefulness** — recognizable family DNA with enough musical change to justify another version.
 
-Every change remains bounded and critic/release gated. Prefer improving existing phases over creating another permanent parallel repair layer.
+Every change remains bounded and critic/release gated. Prefer improving existing subsystems over creating another permanent parallel repair layer.
 
-### Phase 12 — Android release confidence
+### Track C — Android release confidence
 
 Treat physical Android validation as a repeatable release discipline instead of an occasional final check.
 
@@ -364,11 +366,11 @@ We should judge future work using evidence in four buckets.
 
 1. **Refresh canonical docs and repository hygiene.**
 2. **Finish any outstanding physical Android validation tied to already-merged/proven ownership and playback contracts.**
-3. **Begin Phase 10A canonical workspace/song-context audit.**
+3. **Begin Track A1 canonical workspace/song-context audit.**
 4. **Simplify Create without removing capability.**
 5. **Tighten Shape suggestions and accepted-lineage authority.**
 6. **Refocus Mix on musical balance and Android audition.**
 7. **Refocus Finish on trusted MIDI handoff.**
-8. **Only then resume measured engine expansion under Phase 11.**
+8. **Only then resume measured engine expansion under Track B.**
 
 That order is intentional: MIDI Arcade already has substantial composition intelligence. The highest-leverage next step is to make the whole product feel like one instrument.
