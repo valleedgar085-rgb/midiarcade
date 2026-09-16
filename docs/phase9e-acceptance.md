@@ -7,6 +7,7 @@
 - [x] Reset direction returns Creative Range to the neutral default.
 - [x] Session preferences preserve an explicit selection.
 - [x] Existing Creative Genome strength calibration is unchanged.
-- [ ] Full PR web/music quality gate is green.
-- [ ] Android sync and Preview APK build are green.
+- [x] Branch-head web quality and Music Quality Lab gates are green after the startup-budget fix.
+- [ ] Normal `Build MIDI Arcade APK` workflow is green on the current PR head.
+- [ ] Android sync and Preview APK build are green on the current PR head.
 - [ ] Review confirms no critic/release/candidate/MIDI/scale/fusion/playback threshold changed.
