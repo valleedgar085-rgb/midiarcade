@@ -66,6 +66,7 @@ test("Phase 9B Energy Arc + Space Strategy steering is deterministic, bounded an
     "spotlightRotation",
     "rhythmTopology",
     "performanceFeel",
+    "surpriseBudget",
   ]);
   assert.equal(first.seed, config.seed);
   assert.equal(first.key, config.key);

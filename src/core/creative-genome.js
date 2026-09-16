@@ -98,8 +98,9 @@ function signatureFor(genome) {
  * Arc + Space Strategy through bounded priors. Phase 9C additionally consumes
  * Motif Mutation + Spotlight Rotation through the engine's existing motif and
  * orchestration stages. Phase 9F consumes Rhythm Topology + Performance Feel
- * through existing groove/humanization controls. Remaining Genome fields stay
- * descriptive until their own independently tested phases consume them.
+ * through existing groove/humanization controls. Phase 9G consumes Surprise
+ * Budget through the engine's existing surprise control. Remaining Genome
+ * fields stay descriptive until their own independently tested phases consume them.
  */
 export function createCreativeGenome(config = {}, {
   kind = "new",
@@ -147,7 +148,7 @@ export function createCreativeGenome(config = {}, {
       compositionNeutral: !consumed,
       consumedByComposition: consumed,
       consumedFields: Object.freeze(consumed
-        ? ["energyArc", "spaceStrategy", "motifMutation", "spotlightRotation", "rhythmTopology", "performanceFeel"]
+        ? ["energyArc", "spaceStrategy", "motifMutation", "spotlightRotation", "rhythmTopology", "performanceFeel", "surpriseBudget"]
         : []),
       preserveDeterminism: true,
       preserveCandidateBudgets: true,

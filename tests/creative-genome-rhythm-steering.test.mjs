@@ -120,6 +120,7 @@ test("Producer Brain publishes Phase 9F diagnostics only for explicit Creative R
     "spotlightRotation",
     "rhythmTopology",
     "performanceFeel",
+    "surpriseBudget",
   ]);
 
   const neutralConfig = { ...BASE };
