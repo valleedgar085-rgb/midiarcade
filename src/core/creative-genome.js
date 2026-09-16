@@ -97,8 +97,9 @@ function signatureFor(genome) {
  * Creative Genome is a deterministic strategy brief. Phase 9B consumes Energy
  * Arc + Space Strategy through bounded priors. Phase 9C additionally consumes
  * Motif Mutation + Spotlight Rotation through the engine's existing motif and
- * orchestration stages. Remaining Genome fields stay descriptive until their
- * own independently tested phases consume them.
+ * orchestration stages. Phase 9F consumes Rhythm Topology + Performance Feel
+ * through existing groove/humanization controls. Remaining Genome fields stay
+ * descriptive until their own independently tested phases consume them.
  */
 export function createCreativeGenome(config = {}, {
   kind = "new",
@@ -146,7 +147,7 @@ export function createCreativeGenome(config = {}, {
       compositionNeutral: !consumed,
       consumedByComposition: consumed,
       consumedFields: Object.freeze(consumed
-        ? ["energyArc", "spaceStrategy", "motifMutation", "spotlightRotation"]
+        ? ["energyArc", "spaceStrategy", "motifMutation", "spotlightRotation", "rhythmTopology", "performanceFeel"]
         : []),
       preserveDeterminism: true,
       preserveCandidateBudgets: true,
