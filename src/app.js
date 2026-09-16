@@ -20,6 +20,7 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
+import { createGenerationOwnership } from "./core/generation-ownership.js";
 import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
 import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.js";
 import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessionAutosaveController, decodePersistedSession } from "./core/session-runtime.js";
@@ -1417,7 +1418,7 @@ async function exploreSectionVariations() {
   appStore.transaction("generation:section-variations-start", (draft) => {
     draft.isGenerating = true;
   });
-  armGenerationSafetyTimer();
+  const operation = armGenerationSafetyTimer();
   renderSectionVariationLab(section);
   showGenerationActivity("COMPOSING THREE SECTION DIRECTIONS", { kind: "songVariations" });
   try {
@@ -1431,23 +1432,17 @@ async function exploreSectionVariations() {
       sectionId: section.id,
       input: variationInput,
     });
+    if (!generationOwnership.isCurrent(operation)) return;
     const options = generated?.options || generateSectionVariations(base, section.id, variationInput);
     state.sectionVariations = { sectionId: section.id, base, options, activeOption: 0 };
     renderSectionVariationLab(section);
     showToast(`Three ${section.name} alternatives are ready. Audition A, B, and C, then keep your favorite.`);
   } catch (error) {
+    if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
     showToast("The variation lab could not finish this pass.");
   } finally {
-    clearGenerationSafetyTimer();
-    hideGenerationActivity();
-    try {
-      appStore.transaction("generation:section-variations-finish", (draft) => {
-        draft.isGenerating = false;
-      });
-    } catch {
-      state.isGenerating = false;
-    }
+    if (finishGenerationActivity(operation, "generation:section-variations-finish")) hideGenerationActivity();
   }
 }
 
@@ -3384,6 +3379,7 @@ function generationDelay(kind = "new") {
  */
 let generationSafetyTimer = null;
 let generationProgressTimer = null;
+const generationOwnership = createGenerationOwnership();
 
 function clearGenerationSafetyTimer() {
   if (generationSafetyTimer) {
@@ -3418,22 +3414,28 @@ function startGenerationProgress(kind) {
   generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 160);
 }
 
-function armGenerationSafetyTimer() {
+function finishGenerationActivity(operation, label) {
+  if (!generationOwnership.finish(operation)) return false;
   clearGenerationSafetyTimer();
+  appStore.transaction(label, (draft) => {
+    draft.isGenerating = false;
+  });
+  return true;
+}
+
+function armGenerationSafetyTimer(onTimeout = null) {
+  clearGenerationSafetyTimer();
+  const operation = generationOwnership.begin();
   generationSafetyTimer = setTimeout(() => {
-    if (state.isGenerating) {
-      console.warn("[generation-watchdog] Resetting stuck generation state after 45s timeout.");
-      try { hideGenerationActivity(); } catch { /* ignore */ }
-      try {
-        appStore.transaction("generation:watchdog-reset", (draft) => {
-          draft.isGenerating = false;
-        });
-      } catch {
-        state.isGenerating = false;
-      }
+    if (finishGenerationActivity(operation, "generation:watchdog-reset")) {
+      hideGenerationActivity();
+      console.warn("[generation-watchdog] Canceling stuck generation after 45s timeout.");
+      generationExecutor.dispose();
+      onTimeout?.();
       showToast("Generation took longer than expected. Please try again.");
     }
   }, 45000);
+  return operation;
 }
 
 function showGenerationActivity(message, { threadCopy = "", kind = "new" } = {}) {
@@ -3506,7 +3508,9 @@ async function runGeneration(kind, options = {}) {
   appStore.transaction("generation:start", (draft) => {
     draft.isGenerating = true;
   });
-  armGenerationSafetyTimer();
+  const operation = armGenerationSafetyTimer(() => {
+    if (!options.skipHistory && state.history.length) restoreHistory({ captureFuture: false, announce: false });
+  });
   try {
     try { player.stop(); } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
@@ -3524,6 +3528,7 @@ async function runGeneration(kind, options = {}) {
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
     const [generated] = await Promise.all([work, generationDelay(kind)]);
+    if (!generationOwnership.isCurrent(operation)) return;
     let variationSongs = kind === "songVariations" ? generated?.variations : null;
     if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
       variationSongs = generateSongVariations(sourceSong, config);
@@ -3561,19 +3566,12 @@ async function runGeneration(kind, options = {}) {
     const kitMessage = state.song?.oneShotKit?.name ? ` ${state.song.oneShotKit.name} is loaded.` : "";
     showToast(`${copy.ready}${kitMessage}`);
   } catch (error) {
+    if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
     if (state.history.length) restoreHistory({ captureFuture: false, announce: false });
     showToast(`That idea hit a wrong note. ${error?.message || "Please try again."}`);
   } finally {
-    clearGenerationSafetyTimer();
-    hideGenerationActivity();
-    try {
-      appStore.transaction("generation:finish", (draft) => {
-        draft.isGenerating = false;
-      });
-    } catch {
-      state.isGenerating = false;
-    }
+    if (finishGenerationActivity(operation, "generation:finish")) hideGenerationActivity();
   }
 }
 
@@ -3739,14 +3737,16 @@ async function regenerateTrack(id, options = {}) {
   appStore.transaction("generation:reroll-start", (draft) => {
     draft.isGenerating = true;
   });
-  armGenerationSafetyTimer();
+  const operation = armGenerationSafetyTimer(() => {
+    restoreHistory({ captureFuture: false, announce: false });
+  });
   showGenerationActivity(trackRewriteStatus(TRACK_META[id].name), { kind: "similar" });
   try {
     const generationInput = buildTrackRerollInput(id, original, createSeed());
     const work = generationExecutor.run("similar", { sourceSong: original, config: generationInput })
-      .then((result) => result?.song)
-      .catch(() => null);
+      .then((result) => result?.song);
     let [candidate] = await Promise.all([work, generationDelay()]);
+    if (!generationOwnership.isCurrent(operation)) return;
     if (!candidate) candidate = generateSimilar(original, generationInput);
     const replacement = songTracks(candidate).find((track, index) => trackId(track, index) === id);
     if (!replacement) throw new Error(`No ${id} track was generated.`);
@@ -3772,19 +3772,12 @@ async function regenerateTrack(id, options = {}) {
     renderAttitudeStrip(message);
     showToast(message);
   } catch (error) {
+    if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
     restoreHistory({ captureFuture: false, announce: false });
     showToast(`Could not rewrite ${TRACK_META[id].name.toLowerCase()} this time.`);
   } finally {
-    clearGenerationSafetyTimer();
-    hideGenerationActivity();
-    try {
-      appStore.transaction("generation:reroll-finish", (draft) => {
-        draft.isGenerating = false;
-      });
-    } catch {
-      state.isGenerating = false;
-    }
+    if (finishGenerationActivity(operation, "generation:reroll-finish")) hideGenerationActivity();
   }
 }
 
@@ -6053,6 +6046,10 @@ function toggleFullscreen() {
     saveSessionNow();
   });
   window.addEventListener?.("pagehide", () => {
+    generationOwnership.invalidate();
+    clearGenerationSafetyTimer();
+    hideGenerationActivity();
+    state.isGenerating = false;
     saveSessionNow();
     player.dispose();
     generationExecutor.dispose();
@@ -6060,6 +6057,10 @@ function toggleFullscreen() {
 }
 
 function resetSessionStateForFreshStart() {
+  generationOwnership.invalidate();
+  clearGenerationSafetyTimer();
+  generationExecutor.dispose();
+  hideGenerationActivity();
   resolvePendingShapeDirectorCandidate({ rerender: false });
   clearTimeout(sessionSaveTimer);
   sessionSaveTimer = null;
