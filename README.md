@@ -1,98 +1,81 @@
 # MIDI Arcade
 
-MIDI Arcade is a local-first Android music creation studio and deterministic multitrack MIDI song generator. It combines producer-directed generation, Song DNA, Fire / Electric / Drip creative personalities, non-destructive Shape editing, Android-safe preview playback, and DAW-ready MIDI export.
+MIDI Arcade is an **Android-first, local-first producer workstation and deterministic multitrack MIDI song generator**. It combines producer-directed generation, Song DNA, Creative Genome, Fire / Electric / Drip creative personalities, non-destructive Shape editing, Android-safe preview playback, and DAW-ready MIDI export.
 
-The project is designed around one rule: musical improvements only stay when they remain deterministic, measurable, export-safe, and compatible with the existing release gates.
+The product rule is simple: musical improvements only stay when they remain deterministic, measurable, export-safe, device-safe, and compatible with the existing release contracts.
+
+> **Canonical roadmap:** [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md)
+>
+> Merged pull requests remain the authoritative implementation history. The direction document defines what MIDI Arcade is becoming and what should happen next.
 
 ## Current production state
 
-`main` includes the merged **Phase 6 output-quality evolution** from PR #25 on top of the Phase 5 export, Elements, and Create ↔ Shape work.
+`main` is currently at **Phase 9I**.
 
-The final pre-merge `Build MIDI Arcade APK` workflow for Phase 6 completed successfully with the complete repository quality gate, Music Quality Lab, Android asset sync, and install-safe Preview APK build. No critic or release thresholds were weakened to reach that checkpoint.
+The latest merged work adds critic-gated section-aware drum evolution for Hip-Hop, Rap, and Trap on top of the Phase 9H snare-bounce grammar. The Phase 9I PR validation recorded **518 / 518 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and Preview APK assembly.
 
-### Phase 6 highlights
+Recent production milestones also include:
 
-- **Critic-gated output quality evolution**
-  - density, phrase resolution, register health, repetition, groove pocket, arrangement development, return development, and selected fusion weaknesses can be refined through bounded candidate repair;
-  - repairs remain deterministic and must pass release and collateral-regression checks before they are accepted;
-  - candidate ceilings, scale safety, MIDI bounds, novelty, interlock, and song-family identity remain authoritative.
+- **Phase 9E — Creative Range UI**: neutral default plus explicit Familiar / Fresh / Wild Creative Genome envelopes.
+- **Phase 9F — Rhythm Topology + Performance Feel**: Creative Genome rhythm and feel are consumed through the existing calibrated groove/humanization controls.
+- **Phase 9G — Surprise Budget**: deterministic surprise capacity is consumed through Producer Brain without unseeded randomness.
+- **Phase 9H — Snare Bounce**: critic-gated snare-bounce grammar with hard roll/fill switches preserved.
+- **Phase 9I — Section Drum Evolution**: bounded section-aware kick responses, ghost snares, and transition pickups for Hip-Hop/Rap/Trap.
+- **Generation ownership hardening**: timed-out or disposed generation work cannot overwrite a newer song or clear newer loading, progress, watchdog, or history state.
+- **Accepted Shape authority**: committed Shape revisions are authoritative for subsequent generation and lineage.
 
-- **Fusion calibration**
-  - Pop + Hip-Hop dynamics can be rebalanced toward the intended performance spread without rewriting note topology;
-  - Hip-Hop + Rap and Pop + Rap repetition repair uses tightly bounded onset edits while preserving note identity;
-  - fusion-specific corrections do not lower the shared quality floors.
+No critic/release thresholds, candidate ceilings, repair budgets, scale/MIDI safety contracts, fusion calibration, timeout ownership, or Android audio budgets should be weakened to extend the app.
 
-- **Output observability**
-  - quality reports expose refinement attempt/acceptance rates and critic gains so weak dimensions can be improved from measured evidence instead of threshold manipulation.
+## Product direction
 
-### Phase 5 highlights
+The app is shifting from **engine expansion** to **product convergence**.
 
-- **Safer MIDI export**
-  - generated notes cannot be lengthened beyond their sanitized export duration;
-  - role-specific duration caps and section/end release protection reduce hanging notes;
-  - near-duplicate same-pitch onsets collapse safely;
-  - genuine retriggers receive an explicit release gap;
-  - generated sustain is normalized off by default, with explicit sustain preservation available when requested;
-  - export preparation remains clone-only, so preview playback is not rewritten by export cleanup.
+The north-star workflow is:
 
-- **Stronger Fire / Electric / Drip separation**
-  - **Fire** emphasizes groove, punch, impact, density and rhythmic authority;
-  - **Electric** emphasizes hooks, motion, voltage and forward energy;
-  - **Drip** emphasizes harmony, space, flow and emotional color;
-  - all three retain the same protected song-family identity: key, mode, tempo, bars, chord path and lineage remain authoritative.
+1. **Create** — decide what song to make and generate New, Similar, or an Element-guided version.
+2. **Shape** — target a section, track, or selected notes; stage a musical change; compare Before/After; Accept or Discard.
+3. **Mix** — judge and balance the composition with producer-readable level, velocity, gate, pan/space, mute/solo, and instrument controls.
+4. **Finish** — export/share predictable Type-1 multitrack MIDI for FL Studio or another DAW.
 
-- **Create workflow polish**
-  - clearer reference → direction → generation flow;
-  - stronger primary action hierarchy and advanced-control language;
-  - exhaustive interaction contracts cover Create controls, workflow buttons, disclosures and Element choices;
-  - new static Create interactions fail closed unless they receive explicit producer-facing copy, intent, event, accessibility and contextual-help wiring.
+The next major roadmap is **Track A: Workflow Convergence**. It focuses on one canonical song context across workspaces, a simpler Create hierarchy, smarter but advisory Shape suggestions, a more focused Mix workspace, and a clearer Finish/export handoff. Track naming intentionally avoids reusing historical phase numbers already present in the codebase. Engine expansion resumes only after the product experience is coherent and physical Android validation is repeatable.
 
-- **Shape Director polish**
-  - clearer **Target → Musical Direction → Compare & Commit** hierarchy;
-  - stronger selected states and mobile A/B/commit controls;
-  - existing section, track and selected-note targeting remains non-destructive until accepted.
-
-- **Create ↔ Shape Integration — Phase 1**
-  - Create exposes **Shape this song →** after a generated song exists;
-  - the handoff carries the authoritative current title, genre, key/mode, BPM, arrangement length, groove, Song DNA and selected Element;
-  - Shape shows a persistent **FROM CREATE · SONG DNA** context ribbon;
-  - direct Shape entry re-reads the latest generated song to prevent stale context;
-  - **Edit direction** returns to Create without discarding the current song;
-  - the bridge stays inside the existing app bundle so protected startup/HTML budgets are not relaxed.
-
-## Product workflow
-
-1. **Create** — direct the song, generate a new idea or a related version, and choose Fire, Electric or Drip when desired.
-2. **Shape** — target a section, instrument or selected notes; choose a musical direction and strength; audition Before/After; Accept or Discard.
-3. **Mix / Preview** — audition with the browser or Android preview engine using bounded device-aware DSP and voice budgets.
-4. **Finish / Export** — export clean multitrack Type-1 MIDI for FL Studio or another DAW.
+See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
 
 ## Producer Brain and generation
 
-Generation is deterministic and multi-candidate. Producer Brain can diagnose weak musical dimensions, steer bounded search toward the weakness, and attempt targeted repairs without increasing the hard search ceiling or bypassing explicit user controls.
+Generation is deterministic and multi-candidate. Producer Brain can diagnose weak musical dimensions, steer bounded search toward the weakness, and attempt targeted repairs without bypassing explicit user controls.
 
 Core invariants:
 
 - same seed + same configuration reproduces the same musical result;
 - generation does not use unseeded `Math.random()`;
 - explicit candidate counts remain authoritative;
-- explicit composition routes are never silently overridden;
+- explicit composition routes and hard-off switches are never silently overridden;
 - candidate search stays under the hard **12-candidate ceiling**;
 - targeted repair stays capped at **2 attempts**;
-- scale safety, MIDI bounds, release quality, novelty, interlock and song-family identity remain regression-tested;
-- repairs must improve the diagnosed problem without causing unacceptable collateral regressions.
+- scale safety, MIDI bounds, release quality, novelty, interlock, fusion calibration, and song-family identity remain regression-tested;
+- repairs must improve the diagnosed problem without unacceptable collateral regression;
+- stale/timed-out generation work cannot regain authority over newer state.
 
-The Music Quality Lab remains the calibration layer for harmony, groove, phrasing, arrangement, production, release safety and generated-output uniqueness.
+The Music Quality Lab remains the calibration layer for harmony, groove, phrasing, arrangement, production, release safety, fusion behavior, and generated-output uniqueness.
 
-## Song DNA and Elements
+## Song DNA, Creative Genome, and Elements
 
-Song DNA provides deterministic family and instance identity across harmonic, rhythmic, melodic, arrangement and performance domains. **More like this** stays inside the same musical family while producing a distinct revision instead of cloning the previous song.
+Song DNA provides deterministic family and instance identity across harmonic, rhythmic, melodic, arrangement, and performance domains. **More like this** stays inside the same musical family while producing a distinct revision instead of cloning the previous song.
 
-Fire, Electric and Drip are producer personalities layered on top of that protected identity. They are allowed to change feel, density, motion, humanization, timbral priorities and production emphasis, but not to bypass key/mode safety, explicit user choices, MIDI bounds or release gates.
+Creative Genome provides deterministic higher-level creative strategy. Creative Range exposes calibrated Familiar / Fresh / Wild envelopes while the neutral default preserves ordinary generation behavior.
+
+Fire, Electric, and Drip are producer personalities layered on top of protected song identity:
+
+- **Fire** — groove, punch, density, rhythmic authority;
+- **Electric** — hooks, motion, voltage, forward energy;
+- **Drip** — harmony, space, flow, emotional color.
+
+They may change feel, density, motion, humanization, timbral priorities, and production emphasis, but they do not bypass key/mode safety, explicit user choices, MIDI bounds, release gates, or family lineage.
 
 ## Shape Director
 
-Shape is the authorship workspace rather than an effects shortcut.
+Shape is an authorship workspace rather than an effects shortcut.
 
 Supported targeting:
 
@@ -100,31 +83,35 @@ Supported targeting:
 - track inside the selected section;
 - selected notes only.
 
-Supported change strengths:
+Supported strengths:
 
 - Touch Up;
 - Reshape;
 - Transform.
 
-Shape preserves a candidate-first transaction model: the original song remains authoritative until **Accept**. Before/After audition snapshots are isolated, narrow scopes fail closed instead of widening silently, and pending Shape candidates are resolved before destructive or context-changing actions.
+Shape preserves a candidate-first transaction model: the original song remains authoritative until **Accept**. Before/After snapshots are isolated, narrow scopes fail closed instead of widening silently, and pending Shape candidates are resolved before destructive or context-changing actions.
+
+## Mix and Android playback
+
+Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately constrained profile with tighter scheduling and voice budgets to reduce gaps, cutouts, clicks, pops, and Web Audio node pressure on real devices.
+
+The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery, bounded scheduling, and stale-generation isolation.
+
+The product direction intentionally keeps Mix focused on **musical balance and reliable audition**, rather than turning MIDI Arcade into a miniature DAW.
 
 ## MIDI input and export
 
 Android uses a Capacitor bridge over Android MIDI APIs for class-compliant USB/native MIDI input without requesting broad media-library or storage permissions. Browser builds can use Web MIDI after explicit user interaction.
 
-MIDI export produces a Type-1 multitrack file with tempo, time signature, key information, section markers, track names, program changes, volume/pan/expression data and note events. Drums use General MIDI channel 10.
+MIDI export produces a Type-1 multitrack file with tempo, time signature, key information, section markers, track names, program changes, volume/pan/expression data, and note events. Drums use General MIDI channel 10.
 
-For FL Studio, import the `.mid`, enable **Create one channel per track** and **Set mixer tracks for new channels**, then replace General MIDI placeholder sounds with your production instruments.
+Export preparation remains clone-only: cleanup for exported MIDI must not rewrite the authoritative preview song.
 
-## Android playback
-
-Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately cheaper constrained profile with tighter scheduling and voice limits to reduce gaps, cutouts, clicks, pops, and Web Audio node pressure on real devices.
-
-The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery and bounded scheduling logic. Generated sound profiles are allowed to change musical character, but the Android runtime budget remains authoritative when those profiles increase overlap or ambience.
+For FL Studio, import the `.mid`, enable **Create one channel per track** and **Set mixer tracks for new channels**, then replace General MIDI placeholder sounds with production instruments.
 
 ## Privacy
 
-MIDI Arcade is local-first. Production code does not require accounts, analytics, cloud generation, microphone access or broad media-library access. Songs, MIDI input and local state stay on the device unless the user explicitly exports or shares a file.
+MIDI Arcade is local-first. Production code does not require accounts, analytics, cloud generation, microphone access, or broad media-library access. Songs, MIDI input, and local state stay on the device unless the user explicitly exports or shares a file.
 
 See [docs/PRIVACY.md](docs/PRIVACY.md) and [privacy-policy.html](privacy-policy.html).
 
@@ -165,19 +152,23 @@ npm run android:bundle
 
 `main` is the production baseline.
 
-Feature branches should be short-lived and deleted after their work is merged and the merged-main APK workflow passes. New work should branch from current `main`, preserve the existing quality gates, and avoid reviving obsolete phase branches as alternate production lines.
+Feature branches should be short-lived and deleted after merge and merged-main validation. New work should branch from current `main`, preserve the existing quality gates, and avoid reviving obsolete phase branches as alternate production lines.
 
-Do not make CI green by removing meaningful assertions, skipping quality checks, weakening build budgets, or bypassing deterministic/music-safety contracts.
+Do not make CI green by removing meaningful assertions, skipping quality checks, weakening build budgets, increasing search budgets without evidence, or bypassing deterministic/music-safety contracts.
 
-## Next integration work
+Physical Android validation remains mandatory for behavior that automated browser/Node tests cannot establish, including sustained playback and device lifecycle behavior.
 
-A **real-device audio stability checkpoint comes first**. Do not widen the feature surface until the fresh Android Preview APK has been tested for sustained playback, dense arrangements, Fire/Electric/Drip variations, loop transitions, seek/pause/resume, and background/foreground recovery without recurring clicks, pops, gaps, or cutouts.
+## Repository hygiene
 
-After that checkpoint, the next intended integration steps are:
+Generated output stays generated. Do not commit `www/`, Android build directories, APK/AAB files, temp diagnostics, local signing material, or transient benchmark output.
 
-1. **Element-aware Shape suggestions** — inherited Fire/Electric/Drip context can guide useful starting Shape directions without taking control away from the producer.
-2. **Authoritative accepted Shape lineage** — accepted Shape revisions become the source for future Similar and Element branches.
-3. **Continued Android and DAW validation** — keep real-device playback continuity and FL Studio export behavior as release gates while the Create ↔ Shape workflow expands.
+Long-lived documentation should be limited to:
+
+1. the canonical product direction;
+2. durable subsystem contracts;
+3. privacy/release documentation.
+
+Temporary phase acceptance checklists should be removed after merge and validation because Git history already preserves them.
 
 ## Project history
 
@@ -191,9 +182,12 @@ Major completed milestones include:
 - adaptive groove/taste steering;
 - deterministic Producer Brain orchestration and weakness-aware repair;
 - architecture/session boundaries;
-- Create workflow redesign;
-- Shape Director;
-- Phase 5 export safety, Element separation, Create/Shape polish and Create ↔ Shape integration;
-- Phase 6 critic-gated output-quality evolution and fusion calibration.
+- Create workflow redesign and Shape Director;
+- safer MIDI export and stronger Element separation;
+- critic-gated output-quality evolution and fusion calibration;
+- Create ↔ Shape authoritative lineage;
+- generation timeout ownership and stale-result isolation;
+- Creative Range and broader Creative Genome consumption;
+- critic-gated snare bounce and section-aware drum evolution through Phase 9I.
 
-For detailed implementation history, merged PRs are the authoritative record.
+For implementation detail, merged PRs are the authoritative record.
