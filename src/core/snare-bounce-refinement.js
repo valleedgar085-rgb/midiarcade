@@ -27,6 +27,7 @@ const GENRE_DEFAULTS = Object.freeze({
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, finite(value)));
+const control = (value, fallback) => Number.isFinite(Number(value)) ? clamp(value) : fallback;
 const round = (value, digits = 4) => {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
@@ -126,10 +127,11 @@ function buildCandidate(song, config, genre) {
   if (bars < 8) return null;
 
   const defaults = GENRE_DEFAULTS[genre] ?? GENRE_DEFAULTS.rap;
-  const roll = clamp(config?.rollAmount, 0, 1) || defaults.roll;
-  const fills = clamp(config?.drumFills, 0, 1) || defaults.fills;
-  const energy = clamp(config?.energy, 0, 1) || defaults.energy;
-  const complexity = clamp(config?.complexity, 0, 1) || defaults.complexity;
+  const roll = control(config?.rollAmount, defaults.roll);
+  const fills = control(config?.drumFills, defaults.fills);
+  const energy = control(config?.energy, defaults.energy);
+  const complexity = control(config?.complexity, defaults.complexity);
+  if (roll <= 0.001 || fills <= 0.001) return null;
   const intent = clamp(roll * 0.46 + fills * 0.22 + energy * 0.17 + complexity * 0.15);
   if (intent < 0.28) return null;
 
@@ -259,6 +261,8 @@ export function applySnareBounceRefinement(song, config = {}, {
   if (config?.snareBounceRefinement === false) return disabled("disabled");
   if (!ELIGIBLE_GENRES.has(genre)) return disabled("genre-not-eligible");
   if (!song || typeof song !== "object") return disabled("missing-song");
+  if (Number.isFinite(Number(config?.rollAmount)) && Number(config.rollAmount) <= 0.001) return disabled("roll-off");
+  if (Number.isFinite(Number(config?.drumFills)) && Number(config.drumFills) <= 0.001) return disabled("fills-off");
 
   const candidate = buildCandidate(song, config, genre);
   if (!candidate) return disabled("no-bounce-opportunity");
