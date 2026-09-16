@@ -10,6 +10,9 @@ import {
   isCreativeGenomeFusionProtected,
 } from "./creative-genome-steering.js";
 import {
+  applyCreativeGenomeSurpriseSteering,
+} from "./creative-genome-surprise-steering.js";
+import {
   createProducerSearchPolicy,
   createProductionPriorities,
   normalizeProducerCharacter,
@@ -94,10 +97,11 @@ export function createProducerBrainPlan(config = {}, {
  * Energy Arc + Space Strategy through bounded priors; Phase 9C resolves Motif
  * Mutation + Spotlight Rotation into explicit bounded engine strategy tokens;
  * Phase 9F consumes Rhythm Topology + Performance Feel through the existing
- * syncopation/swing/humanize controls. Audible Genome steering activates only
- * for an explicit `creativeRange` or `creativeGenomeSteering: true`. Ordinary
- * calibrated requests remain bit-for-bit compatible. Fusion calibration,
- * candidate ceilings and the engine's critic/release authority remain intact.
+ * syncopation/swing/humanize controls; Phase 9G consumes Surprise Budget through
+ * the existing surprise control. Audible Genome steering activates only for an
+ * explicit `creativeRange` or `creativeGenomeSteering: true`. Ordinary calibrated
+ * requests remain bit-for-bit compatible. Fusion calibration, candidate ceilings
+ * and the engine's critic/release authority remain intact.
  */
 export function applyProducerBrainConfig(config = {}, options = {}) {
   const source = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
@@ -119,13 +123,17 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
+  const surpriseSteering = applyCreativeGenomeSurpriseSteering(rhythmSteering.config, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: Boolean(requestedConsumption),
+  });
   const motifSteering = resolveCreativeGenomeMotifStrategy(source, plan.creativeGenome, {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
   const motifStrategy = motifSteering.strategy;
   const out = {
-    ...rhythmSteering.config,
+    ...surpriseSteering.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
     weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
@@ -134,6 +142,7 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     producerBrain: plan,
     creativeGenomeSteering: steering.diagnostics,
     creativeGenomeRhythmSteering: rhythmSteering.diagnostics,
+    creativeGenomeSurpriseSteering: surpriseSteering.diagnostics,
     creativeGenomeMotifSteering: motifSteering.diagnostics,
     ...(motifStrategy ? {
       creativeMotifMutation: motifStrategy.motifMutation,
