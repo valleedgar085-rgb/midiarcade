@@ -1,3 +1,11 @@
+import { createCreativeGenome } from "./creative-genome.js";
+import {
+  resolveCreativeGenomeMotifStrategy,
+} from "./creative-genome-motif-steering.js";
+import {
+  applyCreativeGenomeSteering,
+  isCreativeGenomeFusionProtected,
+} from "./creative-genome-steering.js";
 import {
   createProducerSearchPolicy,
   createProductionPriorities,
@@ -19,6 +27,7 @@ export function createProducerBrainPlan(config = {}, {
   kind = "new",
   character = {},
   taste = {},
+  consumeCreativeGenome = false,
 } = {}) {
   const normalizedKind = normalizeProducerKind(kind);
   const depth = normalizeThinkingDepth(config.thinkingDepth);
@@ -31,6 +40,10 @@ export function createProducerBrainPlan(config = {}, {
     character: resolvedCharacter,
     taste: resolvedTaste,
     priorities,
+  });
+  const creativeGenome = createCreativeGenome(config, {
+    kind: normalizedKind,
+    consumedByComposition: consumeCreativeGenome,
   });
   const qualityIntent = Object.freeze({
     preserveKeySafety: true,
@@ -67,27 +80,58 @@ export function createProducerBrainPlan(config = {}, {
     }),
     priorities,
     blueprint,
+    creativeGenome,
     adaptiveLoop,
     qualityIntent,
   });
 }
 
 /**
- * Convert producer intent into the existing engine knobs. This deliberately
- * preserves explicit user/benchmark controls and does not change executor
- * result shapes or bypass the engine's critic and key-safety contracts.
+ * Convert producer intent into the existing engine knobs. Phase 9B consumes
+ * Energy Arc + Space Strategy through bounded priors; Phase 9C resolves Motif
+ * Mutation + Spotlight Rotation into explicit bounded engine strategy tokens.
+ * Audible Genome steering is opt-in until its UI phase: an explicit
+ * `creativeRange` or `creativeGenomeSteering: true` activates it. Ordinary
+ * calibrated requests remain bit-for-bit compatible. Fusion calibration,
+ * candidate ceilings and the engine's critic/release authority remain intact.
  */
 export function applyProducerBrainConfig(config = {}, options = {}) {
   const source = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
-  const plan = createProducerBrainPlan(source, options);
+  const protectedFusion = isCreativeGenomeFusionProtected(source);
+  const explicitRange = source.creativeRange != null && String(source.creativeRange).trim() !== "";
+  const defaultConsumption = source.creativeGenomeSteering === true
+    || (source.creativeGenomeSteering !== false && explicitRange);
+  const requestedConsumption = options.consumeCreativeGenome ?? defaultConsumption;
+  const consumeCreativeGenome = Boolean(requestedConsumption) && !protectedFusion;
+  const plan = createProducerBrainPlan(source, {
+    ...options,
+    consumeCreativeGenome,
+  });
+  const steering = applyCreativeGenomeSteering(source, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: Boolean(requestedConsumption),
+  });
+  const motifSteering = resolveCreativeGenomeMotifStrategy(source, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: Boolean(requestedConsumption),
+  });
+  const motifStrategy = motifSteering.strategy;
   const out = {
-    ...source,
+    ...steering.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
     weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
     targetedRepair: source.targetedRepair ?? plan.search.targetedRepair,
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,
+    creativeGenomeSteering: steering.diagnostics,
+    creativeGenomeMotifSteering: motifSteering.diagnostics,
+    ...(motifStrategy ? {
+      creativeMotifMutation: motifStrategy.motifMutation,
+      creativeSpotlightRotation: motifStrategy.spotlightRotation,
+      creativeMotifStrength: motifStrategy.strength,
+      creativeMotifMaxEvents: motifStrategy.maxMutationEvents,
+    } : {}),
   };
   if (plan.kind === "songVariations" && source.candidatesPerVariation == null) {
     out.candidatesPerVariation = plan.search.candidatesPerVariation;

@@ -143,6 +143,33 @@ test("executor receives producer orchestration without changing its stable resul
   assert.equal(received.config.targetedRepair, true);
 });
 
+test("executor keeps producer brain metadata on the request config instead of decorating committed results", async () => {
+  let received;
+  const expected = {
+    status: "committed",
+    song: { id: "stable-song", meta: {} },
+    variations: [
+      { id: "pocket", meta: {} },
+      { id: "hook", meta: {} },
+    ],
+  };
+  const executor = createGenerationExecutor({
+    fallback: (_kind, payload) => {
+      received = payload;
+      return expected;
+    },
+  });
+
+  const result = await executor.run("new", {
+    config: { seed: "search-only-contract", genre: "pop", thinkingDepth: "deep" },
+  });
+
+  assert.equal(result, expected);
+  assert.equal(received.config.producerBrain.version, 2);
+  assert.equal(result.song.meta.producerBrain, undefined);
+  assert.deepEqual(result.variations.map((song) => song.meta.producerBrain), [undefined, undefined]);
+});
+
 test("producer brain orchestration contains no unseeded randomness", () => {
   const source = fs.readFileSync(new URL("../src/core/producer-brain.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /Math\.random|crypto\.getRandomValues/);
