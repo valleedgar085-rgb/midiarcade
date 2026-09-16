@@ -48,6 +48,25 @@ function upgradeWorkflowCopy(createPanel) {
   if (coachText) coachText.textContent = "Leave anything uncertain on Auto. Manual choices become authoritative only when you make them.";
 }
 
+function mountCreativeRangeControl(rootDocument, createPanel) {
+  const controls = createPanel.querySelector(".create-live-controls");
+  if (!controls || controls.querySelector("#creativeRangeControl") || typeof rootDocument?.createElement !== "function") return false;
+
+  const label = rootDocument.createElement("label");
+  label.className = "create-live-select creative-range-control";
+  label.innerHTML = `
+    <span>CREATIVE RANGE</span>
+    <select id="creativeRangeControl" aria-label="Creative range">
+      <option value="" selected>Default · existing behavior</option>
+      <option value="familiar">Familiar · stay close</option>
+      <option value="fresh">Fresh · balanced ideas</option>
+      <option value="wild">Wild · explore safely</option>
+    </select>
+  `;
+  controls.append(label);
+  return true;
+}
+
 function moveGenerationEssentials(rootDocument, createPanel) {
   const controls = createPanel.querySelector(".create-live-controls");
   const creatorMain = createPanel.querySelector(".creator-main-controls");
@@ -175,6 +194,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   createPanel.dataset.uiuxPhase1 = "ready";
   if (rootDocument.documentElement?.dataset) rootDocument.documentElement.dataset.uiuxPhase1Create = "true";
 
+  mountCreativeRangeControl(rootDocument, createPanel);
   upgradeStaticCreateCopy(rootDocument, createPanel);
   moveGenerationEssentials(rootDocument, createPanel);
   consolidateAdvancedDirection(rootDocument, createPanel);

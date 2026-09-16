@@ -14,6 +14,7 @@ Expose the existing deterministic Creative Genome range modes on Create without 
 - Existing fusion fail-closed behavior remains authoritative.
 - Candidate counts, critic/release thresholds, scale/MIDI/export contracts, Android playback budgets, and Phase 9D return-development logic are unchanged.
 - The selection participates in staged-direction detection, Reset direction, and session preference restore.
+- The selector is mounted by the existing Create presentation boundary before runtime wiring, keeping the protected initial HTML budget unchanged.
 
 ## Validation target
 - Focused Creative Range policy/UI/control-contract tests green.

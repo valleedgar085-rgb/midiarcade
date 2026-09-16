@@ -18,6 +18,7 @@ import { qualityTier } from "../src/ui/copy-catalog.js";
 
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
+const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
@@ -182,7 +183,15 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   const ids = [...htmlSource.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "HTML IDs must be unique");
   const referencedIds = [...appSource.matchAll(/\$\("#([A-Za-z][\w-]*)"\)/g)].map((match) => match[1]);
-  for (const id of new Set(referencedIds)) assert.ok(ids.includes(id), `#${id} must exist in index.html`);
+  const runtimeMountedIds = new Set(["creativeRangeControl"]);
+  for (const id of new Set(referencedIds)) {
+    if (ids.includes(id)) continue;
+    assert.ok(
+      runtimeMountedIds.has(id) && new RegExp(`id=["']${id}["']`).test(createPresentationSource),
+      `#${id} must exist in index.html or an explicitly inventoried pre-wiring Create mount`,
+    );
+  }
+  assert.deepEqual([...runtimeMountedIds], ["creativeRangeControl"], "runtime selector exceptions must remain narrow and explicit");
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
   for (const id of [
     "tripletControl", "tripletValue", "rollControl", "rollValue",
