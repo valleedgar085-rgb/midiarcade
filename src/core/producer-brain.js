@@ -3,6 +3,9 @@ import {
   resolveCreativeGenomeMotifStrategy,
 } from "./creative-genome-motif-steering.js";
 import {
+  applyCreativeGenomeRhythmSteering,
+} from "./creative-genome-rhythm-steering.js";
+import {
   applyCreativeGenomeSteering,
   isCreativeGenomeFusionProtected,
 } from "./creative-genome-steering.js";
@@ -89,9 +92,10 @@ export function createProducerBrainPlan(config = {}, {
 /**
  * Convert producer intent into the existing engine knobs. Phase 9B consumes
  * Energy Arc + Space Strategy through bounded priors; Phase 9C resolves Motif
- * Mutation + Spotlight Rotation into explicit bounded engine strategy tokens.
- * Audible Genome steering is opt-in until its UI phase: an explicit
- * `creativeRange` or `creativeGenomeSteering: true` activates it. Ordinary
+ * Mutation + Spotlight Rotation into explicit bounded engine strategy tokens;
+ * Phase 9F consumes Rhythm Topology + Performance Feel through the existing
+ * syncopation/swing/humanize controls. Audible Genome steering activates only
+ * for an explicit `creativeRange` or `creativeGenomeSteering: true`. Ordinary
  * calibrated requests remain bit-for-bit compatible. Fusion calibration,
  * candidate ceilings and the engine's critic/release authority remain intact.
  */
@@ -111,13 +115,17 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
+  const rhythmSteering = applyCreativeGenomeRhythmSteering(steering.config, plan.creativeGenome, {
+    kind: plan.kind,
+    enabled: Boolean(requestedConsumption),
+  });
   const motifSteering = resolveCreativeGenomeMotifStrategy(source, plan.creativeGenome, {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
   const motifStrategy = motifSteering.strategy;
   const out = {
-    ...steering.config,
+    ...rhythmSteering.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
     weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
@@ -125,6 +133,7 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,
     creativeGenomeSteering: steering.diagnostics,
+    creativeGenomeRhythmSteering: rhythmSteering.diagnostics,
     creativeGenomeMotifSteering: motifSteering.diagnostics,
     ...(motifStrategy ? {
       creativeMotifMutation: motifStrategy.motifMutation,
