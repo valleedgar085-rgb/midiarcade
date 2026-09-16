@@ -33,6 +33,7 @@ const EXPECTED_CREATE_IDS = [
   "complexityControl",
   "barsControl",
   "grooveControl",
+  "creativeRangeControl",
   "keyControl",
   "keyTransposeDown",
   "keyTransposeUp",
@@ -96,6 +97,7 @@ const CHANGE_IDS = [
   "secondaryGenreControl",
   "barsControl",
   "grooveControl",
+  "creativeRangeControl",
   "keyControl",
   "modeControl",
   "chordPathControl",
@@ -201,6 +203,7 @@ test("every change-driven Create control is represented by runtime change wiring
   assert.match(app, /tasteRating[\s\S]*?addEventListener\("change"/);
   assert.match(app, /genreControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /secondaryGenreControl[\s\S]*?addEventListener\("change"/);
+  assert.match(app, /creativeRangeControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /barsControl[\s\S]*?grooveControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /keyControl[\s\S]*?modeControl[\s\S]*?chordPathControl[\s\S]*?addEventListener\("change"/);
 });

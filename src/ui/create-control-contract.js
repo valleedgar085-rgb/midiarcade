@@ -17,6 +17,7 @@ export const CREATE_CONTROL_CONTRACT = Object.freeze({
   complexityControl: entry("Complexity", "Controls harmonic richness, phrase detail and how busy the arrangement is allowed to become.", "essentials", "input"),
   barsControl: entry("Song length", "Chooses the arrangement length. Auto lets Producer Brain pick an appropriate form length.", "essentials"),
   grooveControl: entry("Groove feel", "Chooses the timing pocket for the next generation: straight, laid back, shuffled, syncopated or Auto.", "essentials"),
+  creativeRangeControl: entry("Creative range", "Chooses how far Creative Genome may steer the next idea. Default preserves existing behavior; Familiar, Fresh and Wild opt into progressively wider deterministic strategy choices while quality gates stay authoritative.", "direction"),
   keyControl: entry("Root key", "Sets the tonal center of the next generation. Auto lets the genre and song direction choose it.", "advanced"),
   keyTransposeDown: entry("Transpose key down", "Moves the selected root key down one semitone without changing the mode.", "advanced", "click"),
   keyTransposeUp: entry("Transpose key up", "Moves the selected root key up one semitone without changing the mode.", "advanced", "click"),

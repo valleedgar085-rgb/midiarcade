@@ -1,0 +1,29 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+
+const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const sessionRuntime = fs.readFileSync(new URL("../src/core/session-runtime.js", import.meta.url), "utf8");
+
+test("Create exposes one neutral-by-default Creative Range selector", () => {
+  const block = html.match(/<select id="creativeRangeControl"[\s\S]*?<\/select>/)?.[0] ?? "";
+  assert.match(block, /<option value="" selected>Default · existing behavior<\/option>/);
+  for (const value of ["familiar", "fresh", "wild"]) {
+    assert.equal((block.match(new RegExp(`value="${value}"`, "g")) || []).length, 1);
+  }
+});
+
+test("buildConfig omits Creative Range unless the selected value is valid", () => {
+  const buildConfig = app.match(/export function buildConfig[\s\S]*?const GENERATION_SETTING_IDS/)?.[0] ?? "";
+  assert.match(buildConfig, /normalizeCreativeRange\(\$\("#creativeRangeControl"\)\?\.value\)/);
+  assert.match(buildConfig, /\.\.\.\(creativeRange \? \{ creativeRange \} : \{\}\)/);
+  assert.doesNotMatch(buildConfig, /creativeRange:\s*["']fresh["']/);
+});
+
+test("Creative Range participates in staged direction, reset, change wiring and session restore", () => {
+  assert.match(app, /GENERATION_SETTING_IDS[\s\S]*?creativeRangeControl/);
+  assert.match(app, /creativeRangeControl[\s\S]*?addEventListener\("change"/);
+  assert.match(app, /resetControlsButton[\s\S]*?creativeRangeControl\"\)\.value = \"\"/);
+  assert.match(sessionRuntime, /GENERATION_PREFERENCE_IDS[\s\S]*?creativeRangeControl/);
+});
