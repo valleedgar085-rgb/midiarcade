@@ -1,4 +1,5 @@
 import { continueElementLineage } from "./elemental-lineage.js";
+import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
 
 export function createGenerationRunner({
   generateNew,
@@ -37,11 +38,14 @@ export function createGenerationRunner({
             ? generateNew(config)
             : generateSimilar(sourceSong, config),
         );
-        const song = kind === "similar"
+        const lineageSong = kind === "similar"
           ? continueElementLineage(sourceSong, generated)
           : generated;
+        const refined = applySnareBounceRefinement(lineageSong, config);
+        const song = refined.song;
         recorder?.mark?.(flightId, "diagnose", {
           candidateSearch: Boolean(song?.meta?.scoreDetails?.candidateSearch),
+          snareBounce: refined.diagnostics ?? null,
         });
         if (!validate(song)) throw new Error("The composition engine returned an incomplete song.");
         recorder?.mark?.(flightId, "finalize");
