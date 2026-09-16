@@ -37,7 +37,7 @@ The north-star workflow is:
 3. **Mix** — judge and balance the composition with producer-readable level, velocity, gate, pan/space, mute/solo, and instrument controls.
 4. **Finish** — export/share predictable Type-1 multitrack MIDI for FL Studio or another DAW.
 
-The next major roadmap is **Phase 10: Workflow Convergence**. It focuses on one canonical song context across workspaces, a simpler Create hierarchy, smarter but advisory Shape suggestions, a more focused Mix workspace, and a clearer Finish/export handoff. Engine expansion resumes only after the product experience is coherent and physical Android validation is repeatable.
+The next major roadmap is **Track A: Workflow Convergence**. It focuses on one canonical song context across workspaces, a simpler Create hierarchy, smarter but advisory Shape suggestions, a more focused Mix workspace, and a clearer Finish/export handoff. Track naming intentionally avoids reusing historical phase numbers already present in the codebase. Engine expansion resumes only after the product experience is coherent and physical Android validation is repeatable.
 
 See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
 
