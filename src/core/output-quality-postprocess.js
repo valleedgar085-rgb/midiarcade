@@ -27,8 +27,8 @@ const ARRANGEMENT_DIMENSIONS = Object.freeze([
 
 const RETURN_DIMENSIONS = Object.freeze({
   "cadence-payoff": Object.freeze(["phraseResolution"]),
+  "return-evolution": Object.freeze(["repetition"]),
   "rhythmic-recall": Object.freeze(["repetition", "motif"]),
-  "groove-lock": Object.freeze(["groove"]),
 });
 
 const GROOVE_ATTEMPT_CEILING = 89;

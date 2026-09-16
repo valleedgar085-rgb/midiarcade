@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
 import { applySongOutputQualityPostprocess } from "../src/core/output-quality-postprocess.js";
+import { repetitionBalance } from "../src/core/repetition-refinement.js";
 import {
   createReturnDevelopmentCandidates,
   MAX_RETURN_DEVELOPMENT_CANDIDATES,
@@ -157,6 +158,69 @@ test("Phase 6B return development is deterministic, immutable, focused, and capp
   }
 });
 
+test("Phase 9D return evolution improves repetition balance and reinforces the native spotlight without rewriting identity", () => {
+  let fixture = null;
+  for (const genre of ["pop", "synthwave", "loFiHipHop", "jazz", "techno"]) {
+    for (let index = 0; index < 36 && !fixture; index += 1) {
+      const song = generateNew({
+        genre,
+        seed: `phase9d-return-evolution-${genre}-${index}`,
+        bars: 32,
+        candidateCount: 1,
+        creativeSpotlightRotation: "bass-to-lead",
+        creativeMotifStrength: 1,
+        creativeMotifMaxEvents: 0,
+      });
+      const config = { genre, seed: `phase9d-post-${genre}-${index}`, bars: 32, arrangementEvolution: false, returnDevelopment: true };
+      const candidate = createReturnDevelopmentCandidates(song, config).find(({ id }) => id === "return-evolution");
+      const spotlight = candidate?.song?.tracks?.flatMap((track) => (track.notes ?? [])
+        .filter((note) => note.returnDevelopmentSpotlightRole)
+        .map((note) => ({ track, note }))) ?? [];
+      if (candidate && spotlight.length) fixture = { song, config, candidate, spotlight };
+    }
+    if (fixture) break;
+  }
+  assert.ok(fixture, "expected a deterministic return-evolution fixture with a native spotlight handoff");
+  const { song, config, candidate: evolution, spotlight } = fixture;
+  const before = structuredClone(song);
+  const repeated = createReturnDevelopmentCandidates(song, config).find(({ id }) => id === "return-evolution");
+  const targets = returnDevelopmentTargets(song);
+  const targetIds = new Set(targets.map(({ sectionId }) => sectionId));
+  const target = Math.max(0, Math.min(1, Number(song?.songBlueprint?.qualityTargets?.repetition ?? 0.62)));
+  const beforeBalance = repetitionBalance(song, target);
+  const afterBalance = repetitionBalance(evolution.song, target);
+
+  assert.deepEqual(song, before, "Phase 9D candidate creation must keep the source authoritative");
+  assert.deepEqual(evolution.song, repeated.song, "return evolution must be deterministic");
+  assert.ok(afterBalance.absoluteError < beforeBalance.absoluteError, `return evolution must move repetition toward target (${beforeBalance.absoluteError} -> ${afterBalance.absoluteError})`);
+  assert.deepEqual(evolution.song.structure, song.structure);
+  assert.deepEqual(evolution.song.harmony, song.harmony);
+  assert.ok(evolution.changedNotes <= 3 + targets.length * 2, "return evolution must stay inside the three timing edits plus two spotlight accents per return envelope");
+
+  for (const sourceTrack of song.tracks) {
+    const candidateTrack = evolution.song.tracks.find((track) => track.id === sourceTrack.id);
+    assert.equal(candidateTrack?.notes?.length, sourceTrack.notes.length, `${sourceTrack.id} note count must remain unchanged`);
+  }
+
+  const evolvedTiming = evolution.song.tracks.find((track) => track.id === "melody")?.notes
+    ?.filter((note) => note.returnDevelopmentRole === "return-evolution") ?? [];
+  assert.ok(evolvedTiming.length >= 1 && evolvedTiming.length <= 3, "return evolution timing edit budget must remain 1..3 notes");
+  for (const note of evolvedTiming) {
+    assert.ok(Math.abs(note.start - note.returnDevelopmentOriginalStart) <= 0.5 + 1e-6, "return evolution onset shift must remain <= 0.5 beat");
+    const section = evolution.song.structure.find((entry) => note.start >= entry.startBeat - 1e-6 && note.start < entry.endBeat - 1e-6);
+    assert.ok(section && targetIds.has(String(section.id)), "return evolution timing edits must stay inside recurring sections");
+  }
+
+  assert.ok(spotlight.length >= 1);
+  assert.ok(spotlight.length <= targets.length * 2, "spotlight reinforcement is capped at two notes per return");
+  for (const { track, note } of spotlight) {
+    const section = evolution.song.structure.find((entry) => note.start >= entry.startBeat - 1e-6 && note.start < entry.endBeat - 1e-6);
+    assert.ok(section && targetIds.has(String(section.id)), "spotlight edits must stay inside recurring target sections");
+    const matrix = evolution.song.orchestrationMatrix.find((entry) => String(entry.sectionId) === String(section.id));
+    assert.equal(matrix?.featuredTrack, track.id, "spotlight reinforcement must follow the native orchestration feature owner");
+  }
+});
+
 test("Phase 6D techno recall directly improves critic repetition overlap without changing note count or pitch", () => {
   const { song, rhythmic, tagged, before, after } = makeTechnoSource();
   const sourceMelody = song.tracks.find((track) => track.id === "melody");
@@ -204,9 +268,9 @@ test("candidate-first return development commits the strongest quality-safe targ
       const id = candidateSong.outputQualityEvolution?.returnDevelopment?.id;
       if (!id || !candidateIds.has(id)) return evaluation(90);
       candidateScores += 1;
-      if (id === "cadence-payoff") return evaluation(90.5, { phraseResolution: 86 });
+      if (id === "cadence-payoff") return evaluation(90.8, { phraseResolution: 88 });
+      if (id === "return-evolution") return evaluation(91.8, { repetition: 92 });
       if (id === "rhythmic-recall") return evaluation(91.4, { repetition: 90, motif: 91 });
-      if (id === "groove-lock") return evaluation(90.8, { groove: 92 });
       return evaluation(89);
     },
     evaluateReleaseGate() {
@@ -216,7 +280,7 @@ test("candidate-first return development commits the strongest quality-safe targ
 
   assert.equal(processed.diagnostics.reason, "disabled");
   assert.equal(processed.returnDiagnostics.accepted, true);
-  assert.equal(processed.returnDiagnostics.id, "rhythmic-recall");
+  assert.equal(processed.returnDiagnostics.id, candidateIds.has("return-evolution") ? "return-evolution" : "rhythmic-recall");
   assert.equal(processed.returnDiagnostics.candidatesEvaluated, candidates.length);
   assert.equal(processed.returnDiagnostics.candidateLimit, MAX_RETURN_DEVELOPMENT_CANDIDATES);
   assert.equal(candidateScores, candidates.length);
