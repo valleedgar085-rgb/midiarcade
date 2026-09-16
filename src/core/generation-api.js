@@ -6,6 +6,7 @@ import {
 import { dispatchGenerationRequest } from "./generation-dispatch.js";
 import { continueElementLineage } from "./elemental-lineage.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
+import { applySectionDrumEvolutionRefinement } from "./section-drum-evolution-refinement.js";
 import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
 
 function generateSongVariations(sourceSong, config = {}) {
@@ -30,8 +31,10 @@ const ENGINE_API = Object.freeze({
 export function runGenerationRequest(kind, payload = {}) {
   const result = dispatchGenerationRequest(kind, payload, ENGINE_API);
   if (!result?.song || !["new", "similar"].includes(String(kind))) return result;
-  const refined = applySnareBounceRefinement(result.song, payload.config ?? {});
-  return refined.song === result.song ? result : { ...result, song: refined.song };
+  const config = payload.config ?? {};
+  const bounced = applySnareBounceRefinement(result.song, config);
+  const evolved = applySectionDrumEvolutionRefinement(bounced.song, config);
+  return evolved.song === result.song ? result : { ...result, song: evolved.song };
 }
 
 export const generationEngineApi = ENGINE_API;
