@@ -12,6 +12,7 @@ const GENERATION_PREFERENCE_IDS = Object.freeze([
   "tempoControl",
   "barsControl",
   "grooveControl",
+  "creativeRangeControl",
   "chordPathControl",
   "energyControl",
   "complexityControl",

@@ -21,6 +21,7 @@ import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profi
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { createGenerationOwnership } from "./core/generation-ownership.js";
+import { normalizeCreativeRange } from "./core/creative-range-policy.js";
 import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
 import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.js";
 import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessionAutosaveController, decodePersistedSession } from "./core/session-runtime.js";
@@ -821,6 +822,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const selectedMode = $("#modeControl").value;
   const selectedBars = $("#barsControl").value;
   const selectedChordPath = $("#chordPathControl")?.value || "auto";
+  const creativeRange = normalizeCreativeRange($("#creativeRangeControl")?.value);
   const resolvedKey = selectedKey === "auto"
     ? NOTE_NAMES[hashNumber(`${seed}:auto:key`) % NOTE_NAMES.length]
     : selectedKey;
@@ -864,6 +866,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   return {
     seed,
     genre: genreId,
+    ...(creativeRange ? { creativeRange } : {}),
     key: resolvedKey,
     root: resolvedKey,
     mode: resolvedMode,
@@ -894,7 +897,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
 }
 
 const GENERATION_SETTING_IDS = [
-  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "chordPathControl",
+  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "creativeRangeControl", "chordPathControl",
   "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl",
   "variationControl", "evolutionControl", "surpriseControl",
 ];
@@ -5682,6 +5685,16 @@ function toggleFullscreen() {
     showToast(`Groove feel: ${sel.options[sel.selectedIndex]?.text || sel.value}. Tap New song idea to generate.`);
     renderGenerationIntent();
   });
+  $("#creativeRangeControl")?.addEventListener("change", () => {
+    const control = $("#creativeRangeControl");
+    const creativeRange = normalizeCreativeRange(control?.value);
+    const label = control?.options?.[control.selectedIndex]?.text || "Default";
+    showToast(creativeRange
+      ? `Creative Range: ${label}. Tap New song idea to generate.`
+      : "Creative Range returned to default. Existing generation behavior is preserved.");
+    renderGenerationIntent();
+    scheduleSessionSave();
+  });
   $("#barsControl")?.addEventListener("change", () => {
     $("#barsControl").value === "auto" ? state.autoControls.add("barsControl") : state.autoControls.delete("barsControl");
     showToast(`Song length staged for ${$("#barsControl").value} bars.`);
@@ -5871,6 +5884,7 @@ function toggleFullscreen() {
     $("#genreControl").value = "neoSoul";
     applyGenreDefaultsToControls("neoSoul");
     $("#chordPathControl").value = "auto";
+    $("#creativeRangeControl").value = "";
     state.autoControls.add("chordPathControl");
     $("#energyControl").value = 68;
     $("#complexityControl").value = 54;

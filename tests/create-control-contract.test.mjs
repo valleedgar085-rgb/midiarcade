@@ -33,6 +33,7 @@ const EXPECTED_CREATE_IDS = [
   "complexityControl",
   "barsControl",
   "grooveControl",
+  "creativeRangeControl",
   "keyControl",
   "keyTransposeDown",
   "keyTransposeUp",
@@ -61,6 +62,9 @@ const EXPECTED_SELECTOR_KEYS = [
   "recipe-toggle",
   "fine-tune-toggle",
 ];
+
+const RUNTIME_CREATE_IDS = ["creativeRangeControl"];
+const STATIC_CREATE_IDS = EXPECTED_CREATE_IDS.filter((id) => !RUNTIME_CREATE_IDS.includes(id));
 
 const RANGE_IDS = [
   "tempoControl",
@@ -96,6 +100,7 @@ const CHANGE_IDS = [
   "secondaryGenreControl",
   "barsControl",
   "grooveControl",
+  "creativeRangeControl",
   "keyControl",
   "modeControl",
   "chordPathControl",
@@ -116,8 +121,12 @@ function makeControl(id = "", dataset = {}) {
 test("Create control contract covers every first-class Create control exactly once", () => {
   assert.deepEqual(CREATE_CONTROL_IDS, EXPECTED_CREATE_IDS);
   assert.equal(Object.isFrozen(CREATE_CONTROL_CONTRACT), true);
-  for (const id of CREATE_CONTROL_IDS) {
-    assert.equal((createHtml.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 1, `${id} must exist exactly once in Create`);
+  for (const id of STATIC_CREATE_IDS) {
+    assert.equal((createHtml.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 1, `${id} must exist exactly once in static Create HTML`);
+  }
+  for (const id of RUNTIME_CREATE_IDS) {
+    assert.equal((createHtml.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 0, `${id} must stay out of protected initial HTML`);
+    assert.equal((createPresentation.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 1, `${id} must be mounted exactly once by Create presentation`);
   }
 });
 
@@ -140,7 +149,7 @@ test("every interactive Create element is contract-covered so new controls fail 
   const workflowStepTags = interactiveTags.filter((tag) => /\bdata-workflow-step=["']/.test(tag));
   const summaryTags = interactiveTags.filter((tag) => /^<summary\b/.test(tag));
 
-  assert.equal(idTags.length, CREATE_CONTROL_IDS.length, "every ID-based Create interactive must be declared in CREATE_CONTROL_CONTRACT");
+  assert.equal(idTags.length, STATIC_CREATE_IDS.length, "every static ID-based Create interactive must be declared in CREATE_CONTROL_CONTRACT");
   for (const tag of idTags) {
     const id = tag.match(/\bid=["']([^"']+)["']/)?.[1];
     assert.ok(CREATE_CONTROL_IDS.includes(id), `${id} is interactive but missing from CREATE_CONTROL_CONTRACT`);
@@ -150,7 +159,8 @@ test("every interactive Create element is contract-covered so new controls fail 
   assert.equal(workflowStepTags.length, 4, "all four workflow-step buttons must be covered");
   assert.equal(summaryTags.length, 5, "all five Create disclosures must be covered");
   assert.equal(workflowStepTags.length + summaryTags.length, CREATE_SELECTOR_CONTRACT.length, "selector contract must cover every non-ID structural interactive");
-  assert.equal(interactiveTags.length, CREATE_CONTROL_IDS.length + CREATE_SELECTOR_CONTRACT.length + variationTags.length, "adding any Create interactive requires an explicit contract entry");
+  assert.equal(interactiveTags.length, STATIC_CREATE_IDS.length + CREATE_SELECTOR_CONTRACT.length + variationTags.length, "adding any static Create interactive requires an explicit contract entry");
+  assert.deepEqual(RUNTIME_CREATE_IDS, ["creativeRangeControl"], "runtime-mounted Create controls must remain an explicit, narrow exception");
 });
 
 test("every Create contract entry has producer-facing copy and a wiring expectation", () => {
@@ -201,6 +211,7 @@ test("every change-driven Create control is represented by runtime change wiring
   assert.match(app, /tasteRating[\s\S]*?addEventListener\("change"/);
   assert.match(app, /genreControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /secondaryGenreControl[\s\S]*?addEventListener\("change"/);
+  assert.match(app, /creativeRangeControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /barsControl[\s\S]*?grooveControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /keyControl[\s\S]*?modeControl[\s\S]*?chordPathControl[\s\S]*?addEventListener\("change"/);
 });
@@ -265,7 +276,7 @@ test("contract application wires IDs, selectors and Element buttons through one 
 });
 
 test("Create presentation applies the contract after moving controls into their final layout", () => {
-  const calls = createPresentation.match(/upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateAdvancedDirection\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
+  const calls = createPresentation.match(/mountCreativeRangeControl\(rootDocument, createPanel\);[\s\S]*?upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateAdvancedDirection\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
   assert.ok(calls, "Create contract must run after all control-moving presentation transforms");
   assert.match(createPresentation, /import \{ applyCreateControlContract \} from "\.\/create-control-contract\.js"/);
 });
