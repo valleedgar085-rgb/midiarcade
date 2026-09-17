@@ -107,7 +107,7 @@ function creativeFloor(evaluation) {
   return values.length ? Math.min(...values.map(Number)) : 0;
 }
 
-function protectedDeltas(before, after) {
+function computeProtectedDeltas(before, after) {
   return Object.fromEntries(PROTECTED_DIMENSIONS.map((key) => [
     key,
     finite(after?.subscores?.[key]) - finite(before?.subscores?.[key]),
@@ -129,9 +129,9 @@ function buildCandidate(song, config) {
   if (!target?.notes?.length) return null;
 
   const seed = String(config?.seed ?? song?.seed ?? song?.meta?.seed ?? "trap-staged-build");
-  const energy = clamp(config?.energy, 0.68);
-  const evolution = clamp(config?.evolution, 0.58);
-  const complexity = clamp(config?.complexity, 0.62);
+  const energy = Number.isFinite(Number(config?.energy)) ? clamp(config.energy) : 0.68;
+  const evolution = Number.isFinite(Number(config?.evolution)) ? clamp(config.evolution) : 0.58;
+  const complexity = Number.isFinite(Number(config?.complexity)) ? clamp(config.complexity) : 0.62;
   const edits = [];
   const sectionEdits = [];
 
@@ -219,10 +219,10 @@ export function applyTrapStagedBuildRefinement(song, config = {}, {
   const release = evaluateReleaseGate(candidate.song, after);
   const beforeFloor = creativeFloor(before);
   const afterFloor = creativeFloor(after);
-  const protectedDeltas = protectedDeltas(before, after);
+  const deltas = computeProtectedDeltas(before, after);
   const scoreDelta = finite(after?.score) - finite(before?.score);
   const floorDelta = afterFloor - beforeFloor;
-  const protectedSafe = Object.values(protectedDeltas).every((delta) => delta >= -0.75);
+  const protectedSafe = Object.values(deltas).every((delta) => delta >= -0.75);
   const accepted = Boolean(
     release?.passed
     && finite(after?.diagnostics?.scaleFit, 1) >= 0.999999
@@ -246,7 +246,7 @@ export function applyTrapStagedBuildRefinement(song, config = {}, {
     roles: [...new Set(candidate.edits.map((edit) => edit.role))],
     scoreDelta: round(scoreDelta, 2),
     floorDelta: round(floorDelta, 2),
-    protectedDeltas: Object.fromEntries(Object.entries(protectedDeltas).map(([key, value]) => [key, round(value, 2)])),
+    protectedDeltas: Object.fromEntries(Object.entries(deltas).map(([key, value]) => [key, round(value, 2)])),
   });
 
   if (!accepted) return { song, diagnostics };
