@@ -88,7 +88,7 @@ test("Trap staged build is deterministic, sparse early, and fuller at the hook",
   );
 });
 
-test("Trap staged build is opt-in and Evolution=0 is a hard off switch", () => {
+test("Trap staged build is active by default and Evolution=0 is a hard off switch", () => {
   const source = fixtureSong();
   const disabled = applyTrapStagedBuildRefinement(source, { ...config, trapStagedBuild: false }, accept);
   assert.strictEqual(disabled.song, source);
