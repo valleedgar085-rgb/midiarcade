@@ -81,3 +81,11 @@ test("scale guide normalizes flat and lowercase tonic spellings from stored meta
   assert.equal(guide.key, "F#");
   assert.deepEqual(guide.scaleNotes, ["F#", "G#", "A#", "B", "C#", "D#", "F"]);
 });
+
+test("scale guide normalizes stored mode aliases before resolving intervals", () => {
+  const guide = getScaleChordGuide({
+    global: { key: { tonic: "C", mode: "whole_tone" } },
+  });
+  assert.equal(guide.mode, "wholeTone");
+  assert.deepEqual(guide.scaleIntervals, [0, 2, 4, 6, 8, 10]);
+});

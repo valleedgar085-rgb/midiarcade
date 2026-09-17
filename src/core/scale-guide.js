@@ -23,6 +23,10 @@ const NOTE_ALIASES = Object.freeze({
   CB: "B",
 });
 
+function normalizeToken(value) {
+  return String(value ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 const MODE_INTERVALS = Object.freeze({
   major: [0, 2, 4, 5, 7, 9, 11],
   minor: [0, 2, 3, 5, 7, 8, 10],
@@ -56,10 +60,26 @@ const MODE_INTERVALS = Object.freeze({
   enigmatic: [0, 1, 4, 6, 8, 10, 11],
 });
 
+const MODE_ALIASES = Object.freeze({
+  ...Object.fromEntries(Object.keys(MODE_INTERVALS).map((mode) => [normalizeToken(mode), mode])),
+  superlocrian: "altered",
+  arabic: "doubleHarmonic",
+  byzantine: "doubleHarmonic",
+  japanesehirajoshi: "hirajoshi",
+  gypsyminor: "hungarianMinor",
+  bluesscale: "blues",
+  pentatonicmajor: "majorPentatonic",
+});
+
 function normalizeKeyName(value) {
   const text = String(value ?? "").trim();
   const compact = text.replace(/\s+/g, "").toUpperCase();
   return NOTE_ALIASES[compact] || text || "C";
+}
+
+function normalizeModeName(value) {
+  const text = String(value ?? "").trim();
+  return MODE_ALIASES[normalizeToken(text)] || text || "minor";
 }
 
 function resolveKey(song) {
@@ -71,8 +91,8 @@ function resolveKey(song) {
 
 function resolveMode(song) {
   const globalKey = song?.global?.key;
-  if (globalKey && typeof globalKey === "object" && globalKey.mode) return globalKey.mode;
-  return song?.global?.mode || song?.mode || song?.meta?.mode || song?.meta?.scale || "minor";
+  if (globalKey && typeof globalKey === "object" && globalKey.mode) return normalizeModeName(globalKey.mode);
+  return normalizeModeName(song?.global?.mode || song?.mode || song?.meta?.mode || song?.meta?.scale || "minor");
 }
 
 function sanitizeStoredIntervals(intervals) {
