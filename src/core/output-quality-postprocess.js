@@ -16,6 +16,7 @@ import {
   createReturnDevelopmentCandidates,
   MAX_RETURN_DEVELOPMENT_CANDIDATES,
 } from "./return-development.js";
+import { applySoundCatcherRefinement } from "./sound-catcher-refinement.js";
 
 const ARRANGEMENT_DIMENSIONS = Object.freeze([
   "storyArc",
@@ -548,11 +549,17 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
     evaluateCandidate,
     evaluateReleaseGate,
   );
+  const soundCatcher = applySoundCatcherRefinement(
+    groovePocket.song,
+    config,
+    { evaluateCandidate, evaluateReleaseGate },
+  );
   return {
-    song: groovePocket.song,
+    song: soundCatcher.song,
     diagnostics: arrangement.diagnostics,
     returnDiagnostics: returnDevelopment.diagnostics,
     grooveDiagnostics: groovePocket.diagnostics,
+    soundCatcherDiagnostics: soundCatcher.diagnostics,
   };
 }
 
@@ -567,12 +574,17 @@ export function applyResultOutputQualityPostprocess(result, config = {}, evaluat
     config.arrangementEvolution !== true
     && config.returnDevelopment !== true
     && config.groovePocketRefinement !== true
+    && config.soundCatcherRefinement !== true
   )) return result;
   const processed = applySongOutputQualityPostprocess(result.song, config, evaluators);
   const arrangementAccepted = Boolean(processed.diagnostics?.accepted);
   const returnAccepted = Boolean(processed.returnDiagnostics?.accepted);
   const grooveAccepted = Boolean(processed.grooveDiagnostics?.accepted);
-  if ((!arrangementAccepted && !returnAccepted && !grooveAccepted) || processed.song === result.song) return result;
+  const soundCatcherAccepted = Boolean(processed.soundCatcherDiagnostics?.accepted);
+  if (
+    (!arrangementAccepted && !returnAccepted && !grooveAccepted && !soundCatcherAccepted)
+    || processed.song === result.song
+  ) return result;
   return {
     ...result,
     song: processed.song,
@@ -581,6 +593,7 @@ export function applyResultOutputQualityPostprocess(result, config = {}, evaluat
       arrangement: processed.diagnostics,
       returnDevelopment: processed.returnDiagnostics,
       groovePocket: processed.grooveDiagnostics,
+      soundCatcher: processed.soundCatcherDiagnostics,
     },
   };
 }
