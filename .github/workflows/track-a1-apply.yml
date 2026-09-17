@@ -75,7 +75,7 @@ jobs:
           set -euo pipefail
           mapfile -t changed < <(git diff --name-only | sort)
           printf '%s\n' "${changed[@]}"
-          expected=$(printf '%s\n' src/app.js tests/app-smoke.test.mjs tests/section-variation-authority.test.mjs | sort)
+          expected=$(printf '%s\n' scripts/apply-track-a1-authority-fix.mjs src/app.js tests/app-smoke.test.mjs tests/section-variation-authority.test.mjs | sort)
           actual=$(printf '%s\n' "${changed[@]}")
           test "$actual" = "$expected"
           git diff --check
