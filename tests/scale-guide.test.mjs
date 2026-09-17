@@ -73,3 +73,11 @@ test("scale guide normalizes valid stored interval sets before using them", () =
   assert.deepEqual(guide.scalePitchClasses, [0, 2, 4, 7, 11]);
   assert.deepEqual(guide.scaleNotes, ["C", "D", "E", "G", "B"]);
 });
+
+test("scale guide normalizes flat and lowercase tonic spellings from stored metadata", () => {
+  const guide = getScaleChordGuide({
+    global: { key: { tonic: "gb", mode: "major" } },
+  });
+  assert.equal(guide.key, "F#");
+  assert.deepEqual(guide.scaleNotes, ["F#", "G#", "A#", "B", "C#", "D#", "F"]);
+});

@@ -1,4 +1,27 @@
 const CHROMATIC = Object.freeze(["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]);
+const NOTE_ALIASES = Object.freeze({
+  C: "C",
+  "B#": "C",
+  "C#": "C#",
+  DB: "C#",
+  D: "D",
+  "D#": "D#",
+  EB: "D#",
+  E: "E",
+  FB: "E",
+  "E#": "F",
+  F: "F",
+  "F#": "F#",
+  GB: "F#",
+  G: "G",
+  "G#": "G#",
+  AB: "G#",
+  A: "A",
+  "A#": "A#",
+  BB: "A#",
+  B: "B",
+  CB: "B",
+});
 
 const MODE_INTERVALS = Object.freeze({
   major: [0, 2, 4, 5, 7, 9, 11],
@@ -33,11 +56,17 @@ const MODE_INTERVALS = Object.freeze({
   enigmatic: [0, 1, 4, 6, 8, 10, 11],
 });
 
+function normalizeKeyName(value) {
+  const text = String(value ?? "").trim();
+  const compact = text.replace(/\s+/g, "").toUpperCase();
+  return NOTE_ALIASES[compact] || text || "C";
+}
+
 function resolveKey(song) {
   const key = song?.global?.key;
-  if (typeof key === "string" && key) return key;
-  if (key && typeof key === "object") return key.tonic || key.root || key.name || song?.key || song?.meta?.key || "C";
-  return song?.key || song?.meta?.key || "C";
+  if (typeof key === "string" && key) return normalizeKeyName(key);
+  if (key && typeof key === "object") return normalizeKeyName(key.tonic || key.root || key.name || song?.key || song?.meta?.key || "C");
+  return normalizeKeyName(song?.key || song?.meta?.key || "C");
 }
 
 function resolveMode(song) {
