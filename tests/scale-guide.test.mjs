@@ -54,3 +54,12 @@ test("scale guide honors stored scale intervals and nested global key metadata f
   assert.deepEqual(guide.scalePitchClasses, [6, 8, 10, 0, 2, 4]);
   assert.deepEqual(guide.scaleNotes, ["F#", "G#", "A#", "C", "D", "E"]);
 });
+
+test("scale guide falls back to mode intervals when stored scale metadata is malformed", () => {
+  const guide = getScaleChordGuide({
+    global: { key: { tonic: "E", mode: "phrygian" } },
+    meta: { scaleIntervals: ["bad", null] },
+  });
+  assert.deepEqual(guide.scaleIntervals, [0, 1, 3, 5, 7, 8, 10]);
+  assert.deepEqual(guide.scaleNotes, ["E", "F", "G", "A", "B", "C", "D"]);
+});

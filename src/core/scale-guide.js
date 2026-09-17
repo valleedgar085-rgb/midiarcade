@@ -70,9 +70,13 @@ export function getScaleChordGuide(song, startBeat = 0) {
       : [key];
 
   const rootIndex = CHROMATIC.indexOf(key) >= 0 ? CHROMATIC.indexOf(key) : 0;
-  const intervals = Array.isArray(song?.meta?.scaleIntervals) && song.meta.scaleIntervals.length
-    ? song.meta.scaleIntervals.map((interval) => Number(interval)).filter(Number.isFinite)
-    : MODE_INTERVALS[mode] || MODE_INTERVALS.minor;
+  const storedIntervals = Array.isArray(song?.meta?.scaleIntervals)
+    ? song.meta.scaleIntervals
+      .filter((interval) => interval != null && interval !== "")
+      .map((interval) => Number(interval))
+      .filter(Number.isFinite)
+    : [];
+  const intervals = storedIntervals.length ? storedIntervals : MODE_INTERVALS[mode] || MODE_INTERVALS.minor;
   const scaleNotes = intervals.map((interval) => CHROMATIC[(rootIndex + interval) % 12]);
   const scalePitchClasses = intervals.map((interval) => (rootIndex + interval) % 12);
 
