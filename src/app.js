@@ -868,10 +868,20 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
       solo: state.solo.has(id),
     };
   }
+  const averageTrackDensity = TRACK_ORDER.reduce((sum, id) => sum + trackControls[id].density, 0) / TRACK_ORDER.length;
+  const variationMacro = generationValue("variationControl", 42) / 100;
+  const layeringMode = !state.mixAssistant.enabled
+    ? "off"
+    : averageTrackDensity >= 0.72 || variationMacro >= 0.68
+      ? "high"
+      : averageTrackDensity <= 0.44 && variationMacro <= 0.42
+        ? "subtle"
+        : "medium";
 
   return {
     seed,
     genre: genreId,
+    professionalUpgrade: true,
     ...(creativeRange ? { creativeRange } : {}),
     key: resolvedKey,
     root: resolvedKey,
@@ -897,6 +907,8 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     similarity: clamp(1 - generationValue("variationControl", 42) / 165, 0.58, 0.92),
     trackControls,
     tracks: trackControls,
+    layeringMode,
+    arrangementLayering: layeringMode,
     tasteProfile: deepClone(state.tasteProfile),
     thinkingDepth: "deep",
   };
