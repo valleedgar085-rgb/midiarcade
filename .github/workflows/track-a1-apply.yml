@@ -27,6 +27,40 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Tighten patch to preserve PreviewPlayer method contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-track-a1-authority-fix.mjs')
+          s = p.read_text()
+          s = s.replace(
+              '''`  buildEvents(song = this.playbackSong ?? state.song) {\n    this.playbackSong = song;\n    this.events = buildPreviewEvents(song);\n    this.configureSongFx(song);\n    this.playbackView = playbackViewForSong(song);\n    this.lastDetailRefreshAt = -Infinity;\n  }`''',
+              '''`  buildEvents() {\n    const song = this.playbackSong ?? state.song;\n    this.events = buildPreviewEvents(song);\n    this.configureSongFx(song);\n    this.playbackView = playbackViewForSong(song);\n    this.lastDetailRefreshAt = -Infinity;\n  }`''',
+          )
+          s = s.replace(
+              '''`  async toggle() {\n    this.playing ? this.pause() : await this.play();\n  }\n\n  async auditionSong(song, { startSeconds = 0 } = {}) {\n    if (!song) return false;\n    this.stop();\n    this.position = clamp(Number(startSeconds) || 0, 0, totalSeconds(song));\n    return this.play(song);\n  }\n\n  async play(song = this.playbackSong ?? state.song) {\n    if (!song) return false;`''',
+              '''`  async toggle() {\n    this.playing ? this.pause() : await this.play();\n  }\n\n  async auditionSong(song, { startSeconds = 0 } = {}) {\n    if (!song) return false;\n    this.stop();\n    this.playbackSong = song;\n    this.position = clamp(Number(startSeconds) || 0, 0, totalSeconds(song));\n    return this.play();\n  }\n\n  async play() {\n    const song = this.playbackSong ?? state.song;\n    if (!song) return false;`''',
+          )
+          s = s.replace(
+              '''`    this.buildEvents(song);\n    const duration = totalSeconds(song);`''',
+              '''`    this.buildEvents();\n    const duration = totalSeconds(song);`''',
+          )
+          s = s.replace(
+              '''`  seek(position) {\n    const playbackSong = this.playbackSong ?? state.song;\n    const wasPlaying = this.playing;\n    this.pause();\n    this.position = clamp(position, 0, totalSeconds(playbackSong));\n    updatePlaybackUi(this.position, totalSeconds(playbackSong), {\n      view: this.playbackView ?? playbackViewForSong(playbackSong),\n    });\n    if (wasPlaying) this.play(playbackSong);\n  }\n\n  restart() {\n    const shouldPlay = this.playing;\n    const playbackSong = this.playbackSong ?? state.song;\n    this.stop();\n    if (shouldPlay) this.play(playbackSong);\n  }`''',
+              '''`  seek(position) {\n    const playbackSong = this.playbackSong ?? state.song;\n    const wasPlaying = this.playing;\n    this.pause();\n    this.position = clamp(position, 0, totalSeconds(playbackSong));\n    updatePlaybackUi(this.position, totalSeconds(playbackSong), {\n      view: this.playbackView ?? playbackViewForSong(playbackSong),\n    });\n    if (wasPlaying) this.play();\n  }\n\n  restart() {\n    const shouldPlay = this.playing;\n    const playbackSong = this.playbackSong;\n    this.stop();\n    if (shouldPlay) {\n      this.playbackSong = playbackSong;\n      this.play();\n    }\n  }`''',
+          )
+          s = s.replace(
+              'assert.match(playerClass, /buildEvents\\\\(song = this\\\\.playbackSong \\\\?\\\\? state\\\\.song\\\\)/);',
+              'assert.match(playerClass, /buildEvents\\\\(\\\\) \\\\{[\\\\s\\\\S]*?const song = this\\\\.playbackSong \\\\?\\\\? state\\\\.song/);',
+          )
+          s = s.replace(
+              'assert.match(playerClass, /async play\\\\(song = this\\\\.playbackSong \\\\?\\\\? state\\\\.song\\\\)/);',
+              'assert.match(playerClass, /async play\\\\(\\\\) \\\\{[\\\\s\\\\S]*?const song = this\\\\.playbackSong \\\\?\\\\? state\\\\.song/);',
+          )
+          p.write_text(s)
+          PY
+          node --check scripts/apply-track-a1-authority-fix.mjs
       - name: Apply bounded Track A1 authority patch
         run: node scripts/apply-track-a1-authority-fix.mjs
       - name: Verify source syntax
