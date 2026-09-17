@@ -5988,7 +5988,9 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
     const isLaidbackGenre = upgraded
       ? finite(humanization.laidBackOffsetBeats, 0) > 0
       : ["neoSoul", "loFiHipHop", "rnbSoul"].includes(genre);
-    const isGridGenre = ["house", "techno", "synthwave", "trap", "drill", "drumBass"].includes(genre);
+    const isGridGenre = upgraded
+      ? ["house", "techno", "synthwave", "trap", "drill", "drumBass"].includes(genre)
+      : ["house", "techno", "synthwave", "trap"].includes(genre);
     const isLaidbackNote = isLaidbackGenre && (
       (trackId === "drums" && [37, 38, 39].includes(note.pitch)) || trackId === "bass"
     );
