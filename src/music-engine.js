@@ -20,6 +20,10 @@ import {
 import {
   createSongDNA as createDeterministicSongDNA,
 } from "./core/song-dna.js";
+import {
+  curateTrackProgramPalette,
+  mergeTrackProgramPalettes,
+} from "./core/instrument-program-policy.js";
 
 export const PPQ = 480;
 
@@ -1064,7 +1068,9 @@ function normalizeTrack(id, input = {}, profile = GENRE_PROFILES[DEFAULT_CONFIG.
   input = input && typeof input === "object" ? input : {};
   const defaults = TRACK_DEFINITIONS[id];
   const explicitlyProgrammed = Object.prototype.hasOwnProperty.call(input, "program") && input.program != null;
-  const palette = profile.instrumentPrograms[id] ?? [defaults.program];
+  const palette = curateTrackProgramPalette(id, profile.instrumentPrograms[id] ?? [defaults.program], {
+    limit: (profile.instrumentPrograms[id] ?? []).length || 1,
+  });
   const paletteProgram = rng?.pick(palette) ?? palette[0] ?? defaults.program;
   const program = clamp(Math.round(finite(explicitlyProgrammed ? input.program : paletteProgram, defaults.program)), 0, 127);
   return {
@@ -1128,7 +1134,7 @@ export function createFusedGenreProfile(primaryGenreId, secondaryGenreId, blendR
     const pProgs = primary.instrumentPrograms?.[trackId] ?? [];
     const sProgs = secondary.instrumentPrograms?.[trackId] ?? [];
     const orderedProgs = ratio >= 0.6 ? [...sProgs, ...pProgs] : [...pProgs, ...sProgs];
-    instrumentPrograms[trackId] = Array.from(new Set(orderedProgs));
+    instrumentPrograms[trackId] = mergeTrackProgramPalettes(trackId, orderedProgs);
   }
 
   return {

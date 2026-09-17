@@ -31,6 +31,12 @@ import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
+  chooseAutoProgramRotation,
+  companionTrackIds,
+  curateTrackProgramPalette,
+  TRACK_SOUND_ROLE_GOALS,
+} from "./core/instrument-program-policy.js";
+import {
   characteristicTrackForPreview,
   clickSafeStopTime,
   rampAudioParamValue,
@@ -2714,7 +2720,14 @@ function programName(id, program) {
 function patchOptions(id, selectedProgram) {
   const profileChoices = profilePrograms(id);
   const baseChoices = (PATCHES[id] || []).map(([program]) => Number(program));
-  const programs = [...new Set([...profileChoices, ...baseChoices, Number(selectedProgram)].filter(Number.isFinite))];
+  const goal = TRACK_SOUND_ROLE_GOALS[id];
+  const selected = Number(selectedProgram);
+  let programs = curateTrackProgramPalette(id, [...profileChoices, ...baseChoices, selected], {
+    limit: Math.max(goal?.fallbackLimit ?? 6, profileChoices.length + 2, 6),
+  });
+  if (Number.isFinite(selected) && !programs.includes(selected)) {
+    programs = [selected, ...programs.filter((program) => program !== selected)];
+  }
   const auto = isTrackProgramAuto(id);
   const autoOption = `<option value="auto" ${auto ? "selected" : ""}>AUTO · Element decides</option>`;
   const manualOptions = programs.map((program) => {
@@ -3481,28 +3494,31 @@ function chooseNewGenrePrograms(seed) {
   for (const id of TRACK_ORDER) {
     if (!isTrackProgramAuto(id)) continue;
     const currentProgram = Number(state.trackSettings[id].program);
-    const genreChoices = profilePrograms(id, profile);
-    const fallbackChoices = (PATCHES[id] || []).map(([program]) => Number(program));
-    const currentCharacter = previewVoice(id, currentProgram).character;
-    const preferredAlternatives = genreChoices.filter((program) => (
-      program !== currentProgram
-      && previewVoice(id, program).character !== currentCharacter
-    ));
-    const expandedAlternatives = fallbackChoices.filter((program) => (
-      program !== currentProgram
-      && previewVoice(id, program).character !== currentCharacter
-    ));
-    // Most fresh ideas stay inside the genre palette. One in four explores the
-    // wider role-safe palette so repeated generations do not converge on two sounds.
-    const explorePalette = hashNumber(`${seed}:${selectedGenreId()}:${id}:palette-depth`) % 4 === 0;
-    const alternatives = explorePalette && expandedAlternatives.length
-      ? expandedAlternatives
-      : preferredAlternatives.length
-        ? preferredAlternatives
-        : expandedAlternatives;
-    if (alternatives.length) {
-      state.trackSettings[id].program = alternatives[hashNumber(`${seed}:${selectedGenreId()}:${id}`) % alternatives.length];
-    }
+    const goal = TRACK_SOUND_ROLE_GOALS[id];
+    const genreChoices = curateTrackProgramPalette(id, profilePrograms(id, profile), {
+      limit: goal?.paletteLimit ?? 3,
+    });
+    const fallbackChoices = curateTrackProgramPalette(id, (PATCHES[id] || []).map(([program]) => Number(program)), {
+      limit: goal?.fallbackLimit ?? 5,
+    });
+    const companionProgramsByTrack = Object.fromEntries(companionTrackIds(id).map((companionId) => [
+      companionId,
+      Number(state.trackSettings[companionId]?.program),
+    ]));
+    // Most fresh ideas stay inside the genre palette. One in six explores the
+    // wider role-safe palette after checking family contrast and lane spacing.
+    const explorePalette = hashNumber(`${seed}:${selectedGenreId()}:${id}:palette-depth`) % 6 === 0;
+    const nextProgram = chooseAutoProgramRotation({
+      trackId: id,
+      currentProgram,
+      genrePrograms: genreChoices,
+      fallbackPrograms: fallbackChoices,
+      companionProgramsByTrack,
+      explore: explorePalette,
+      seed: `${seed}:${selectedGenreId()}:${id}`,
+      getCharacter: (program) => previewVoice(id, program).character,
+    });
+    if (Number.isFinite(Number(nextProgram))) state.trackSettings[id].program = Number(nextProgram);
   }
 }
 
@@ -5923,7 +5939,6 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
-  $("#showcaseSimilarButton")?.addEventListener("click", () => runGeneration("songVariations"));
   $("#tasteRating")?.addEventListener("change", (event) => rateCurrentSong(event.target.value));
   $("#mixPlayButton")?.addEventListener("click", () => player.toggle());
   $("#previousButton").addEventListener("click", () => player.restart());

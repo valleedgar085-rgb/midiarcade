@@ -7,11 +7,13 @@ const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const sessionRuntime = fs.readFileSync(new URL("../src/core/session-runtime.js", import.meta.url), "utf8");
 
-test("Create mounts one neutral-by-default Creative Range selector without growing initial HTML", () => {
+test("Create mounts one neutral-by-default Creative Range selector near generation actions without growing initial HTML", () => {
   const block = presentation.match(/function mountCreativeRangeControl[\s\S]*?function moveGenerationEssentials/)?.[0] ?? "";
   assert.equal((html.match(/creativeRangeControl/g) || []).length, 0, "Creative Range must not consume the protected initial HTML budget");
   assert.equal((block.match(/id="creativeRangeControl"/g) || []).length, 1);
   assert.match(block, /<option value="" selected>Default · existing behavior<\/option>/);
+  assert.match(block, /VARIETY ENVELOPE/);
+  assert.match(block, /generationActions\.insertAdjacentElement\("beforebegin", label\)/);
   for (const value of ["familiar", "fresh", "wild"]) {
     assert.equal((block.match(new RegExp(`value="${value}"`, "g")) || []).length, 1);
   }

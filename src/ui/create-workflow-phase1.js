@@ -49,21 +49,22 @@ function upgradeWorkflowCopy(createPanel) {
 }
 
 function mountCreativeRangeControl(rootDocument, createPanel) {
-  const controls = createPanel.querySelector(".create-live-controls");
-  if (!controls || controls.querySelector("#creativeRangeControl") || typeof rootDocument?.createElement !== "function") return false;
+  const generationActions = createPanel.querySelector("#preGenSection .generation-actions-bar");
+  if (!generationActions || createPanel.querySelector("#creativeRangeControl") || typeof rootDocument?.createElement !== "function") return false;
 
   const label = rootDocument.createElement("label");
-  label.className = "create-live-select creative-range-control";
+  label.className = "select-control generation-envelope-select creative-range-control";
   label.innerHTML = `
-    <span>CREATIVE RANGE</span>
+    <span>CREATIVE RANGE <small>VARIETY ENVELOPE</small></span>
     <select id="creativeRangeControl" aria-label="Creative range">
       <option value="" selected>Default · existing behavior</option>
       <option value="familiar">Familiar · stay close</option>
       <option value="fresh">Fresh · balanced ideas</option>
       <option value="wild">Wild · explore safely</option>
     </select>
+    <small>Widens how boldly harmony, rhythm and instrument color can vary while key, scale and quality gates stay authoritative.</small>
   `;
-  controls.append(label);
+  generationActions.insertAdjacentElement("beforebegin", label);
   return true;
 }
 
@@ -89,8 +90,8 @@ function moveGenerationEssentials(rootDocument, createPanel) {
   heading.innerHTML = `
     <div>
       <p class="eyebrow">ESSENTIAL DIRECTION</p>
-      <h3 id="directionEssentialsTitle">Feel, pace &amp; song length</h3>
-      <p class="section-description">These controls stage the next generation. The song playing above remains your untouched reference until you press Generate.</p>
+      <h3 id="directionEssentialsTitle">Song frame, feel &amp; structure</h3>
+      <p class="section-description">Set the genre world, pace and pocket here. The song playing above remains your untouched reference until you press Generate.</p>
     </div>
   `;
   controls.setAttribute("aria-labelledby", "directionEssentialsTitle");
@@ -165,7 +166,7 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   setActionCopy(createPanel, "#generateSimilar .action-copy", {
     eyebrow: "KEEP THIS SONG DNA",
     title: "Create Fire / Electric / Drip",
-    detail: "Three related songs: impact · motion · space",
+    detail: "Three branch ideas from the same DNA: impact · motion · space",
   });
 
   const variationTitle = createPanel.querySelector("#songVariationTitle");

@@ -4,7 +4,6 @@ const selectorEntry = (key, selector, label, help, intent, event = "click") => O
 export const CREATE_CONTROL_CONTRACT = Object.freeze({
   renameButton: entry("Rename song", "Changes only the song title. Notes, sounds, arrangement and Element identity stay untouched.", "current-song", "click"),
   showcasePlayButton: entry("Play current song", "Starts or pauses the same full-song transport used everywhere else in MIDI Arcade.", "current-song", "click"),
-  showcaseSimilarButton: entry("Create related Element family", "Builds Fire, Electric and Drip from the current song DNA without changing the reference until a variation is chosen.", "current-song", "click"),
   tasteRating: entry("Teach Producer Brain", "Your reaction gently biases future Auto decisions. It never rewrites the song you are hearing.", "learning"),
   guidedModeButton: entry("Guided mode", "Shows or hides the four-step coach. Music controls and the song remain unchanged.", "guidance", "click"),
   workflowAction: entry("Recommended next action", "Runs the workflow coach's safest next step for the current stage of the song.", "guidance", "click"),
