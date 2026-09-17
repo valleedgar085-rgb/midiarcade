@@ -1805,6 +1805,13 @@ function createProducerIntentContract(
         && !["build", "payoff"].includes(purpose)
       ) role = "rest";
       if (
+        id === "pad"
+        && ["melody", "counterpoint"].includes(foregroundTrack)
+        && purpose !== "reset"
+        && purpose !== "contrast"
+        && role !== "foreground"
+      ) role = lane?.presence >= 0.72 ? "texture" : "rest";
+      if (
         id === "counterpoint"
         && role === "answer"
         && purpose === "establish"
@@ -5378,6 +5385,26 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         texture: 0.84,
         rest: 0.76,
       }[producerRole] ?? 0.9;
+      const melodicForeground = ["melody", "counterpoint"].includes(scene?.foregroundTrack);
+      const dialogueFocus = scene?.developmentAxis === "dialogue";
+      const conversationPresence = melodicForeground
+        ? id === scene?.answerTrack && producerRole === "answer"
+          ? (dialogueFocus ? 0.82 : 0.58)
+          : id === "chords"
+            ? 0.76
+            : id === "pad"
+              ? 0.52
+              : 1
+        : 1;
+      const conversationVelocity = melodicForeground
+        ? id === scene?.answerTrack && producerRole === "answer"
+          ? (dialogueFocus ? 0.92 : 0.86)
+          : id === "chords"
+            ? 0.82
+            : id === "pad"
+              ? 0.74
+              : 1
+        : 1;
       for (let index = 0; index < notes.length; index += 1) {
         const note = notes[index];
         if (id === "drums" && producerRole !== "rest") {
@@ -5407,10 +5434,10 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         ));
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
-        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
+        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence * conversationPresence, 0.04, 1))) continue;
         kept.push({
           ...note,
-          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity * conversationVelocity), 1, 127),
           orchestrationRole: lane.role,
           producerRole,
           producerScenePurpose: scene?.purpose ?? "develop",

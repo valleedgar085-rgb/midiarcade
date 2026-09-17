@@ -702,6 +702,9 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
       assert.equal(Object.values(scene.roles).filter((role) => role === "foreground").length, 1);
       assert.deepEqual(Object.keys(scene.roles), song.tracks.map((track) => track.id));
       assert.ok(scene.silenceBudget >= 0.05 && scene.silenceBudget <= 0.4);
+      if (["melody", "counterpoint"].includes(scene.foregroundTrack) && !["reset", "contrast"].includes(scene.purpose)) {
+        assert.ok(["texture", "rest", "foreground"].includes(scene.roles.pad));
+      }
       const section = song.structure.find((candidate) => candidate.id === scene.sectionId);
       const foreground = song.tracks.find((track) => track.id === scene.foregroundTrack).notes.filter((note) => (
         note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
