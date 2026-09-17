@@ -63,3 +63,13 @@ test("scale guide falls back to mode intervals when stored scale metadata is mal
   assert.deepEqual(guide.scaleIntervals, [0, 1, 3, 5, 7, 8, 10]);
   assert.deepEqual(guide.scaleNotes, ["E", "F", "G", "A", "B", "C", "D"]);
 });
+
+test("scale guide normalizes valid stored interval sets before using them", () => {
+  const guide = getScaleChordGuide({
+    global: { key: { tonic: "C", mode: "major" } },
+    meta: { scaleIntervals: [7, 2, 0, 11, 7, 4] },
+  });
+  assert.deepEqual(guide.scaleIntervals, [0, 2, 4, 7, 11]);
+  assert.deepEqual(guide.scalePitchClasses, [0, 2, 4, 7, 11]);
+  assert.deepEqual(guide.scaleNotes, ["C", "D", "E", "G", "B"]);
+});

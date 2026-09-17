@@ -46,6 +46,17 @@ function resolveMode(song) {
   return song?.global?.mode || song?.mode || song?.meta?.mode || song?.meta?.scale || "minor";
 }
 
+function sanitizeStoredIntervals(intervals) {
+  if (!Array.isArray(intervals)) return [];
+  const normalized = [...new Set(
+    intervals
+      .filter((interval) => interval != null && interval !== "")
+      .map((interval) => Number(interval))
+      .filter((interval) => Number.isInteger(interval) && interval >= 0 && interval < 12),
+  )].sort((a, b) => a - b);
+  return normalized.length >= 5 ? normalized : [];
+}
+
 export function getScaleChordGuide(song, startBeat = 0) {
   const key = resolveKey(song);
   const mode = resolveMode(song);
@@ -70,12 +81,7 @@ export function getScaleChordGuide(song, startBeat = 0) {
       : [key];
 
   const rootIndex = CHROMATIC.indexOf(key) >= 0 ? CHROMATIC.indexOf(key) : 0;
-  const storedIntervals = Array.isArray(song?.meta?.scaleIntervals)
-    ? song.meta.scaleIntervals
-      .filter((interval) => interval != null && interval !== "")
-      .map((interval) => Number(interval))
-      .filter(Number.isFinite)
-    : [];
+  const storedIntervals = sanitizeStoredIntervals(song?.meta?.scaleIntervals);
   const intervals = storedIntervals.length ? storedIntervals : MODE_INTERVALS[mode] || MODE_INTERVALS.minor;
   const scaleNotes = intervals.map((interval) => CHROMATIC[(rootIndex + interval) % 12]);
   const scalePitchClasses = intervals.map((interval) => (rootIndex + interval) % 12);
