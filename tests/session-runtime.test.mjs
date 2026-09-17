@@ -188,3 +188,64 @@ test("autosave controller persists preferences even when the song plate is empty
   assert.equal(controller.discard(), true);
   assert.deepEqual(calls.at(-1), ["discard"]);
 });
+
+
+test("Creative Range preferences round-trip through capture and select validation", () => {
+  const previousDocument = globalThis.document;
+  const validOptions = [
+    { value: "" },
+    { value: "familiar" },
+    { value: "fresh" },
+    { value: "wild" },
+  ];
+  const creativeRangeControl = {
+    tagName: "SELECT",
+    value: "fresh",
+    options: validOptions,
+  };
+  globalThis.document = {
+    getElementById(id) {
+      return id === "creativeRangeControl" ? creativeRangeControl : null;
+    },
+  };
+
+  try {
+    const snapshot = createPersistedSessionSnapshot({ song: null }, {
+      schema: 2,
+      now: () => new Date("2026-09-17T00:00:00.000Z"),
+    });
+    assert.equal(snapshot.generationPreferences.creativeRangeControl, "fresh");
+
+    const decoded = decodePersistedSession({ status: "ready", value: snapshot }, {
+      schema: 2,
+      trackOrder: TRACK_ORDER,
+      defaultTrackSettings: DEFAULTS,
+      genreIds: ["hipHop"],
+    });
+    assert.equal(decoded.status, "ready");
+    assert.equal(decoded.value.generationPreferences.creativeRangeControl, "fresh");
+
+    creativeRangeControl.value = "";
+    assert.equal(applyPersistedSessionState({}, decoded.value), true);
+    assert.equal(creativeRangeControl.value, "fresh");
+
+    creativeRangeControl.value = "";
+    const invalid = decodePersistedSession({
+      status: "ready",
+      value: {
+        ...snapshot,
+        generationPreferences: { creativeRangeControl: "unsupported" },
+      },
+    }, {
+      schema: 2,
+      trackOrder: TRACK_ORDER,
+      defaultTrackSettings: DEFAULTS,
+      genreIds: ["hipHop"],
+    });
+    assert.equal(invalid.status, "ready");
+    assert.equal(applyPersistedSessionState({}, invalid.value), true);
+    assert.equal(creativeRangeControl.value, "", "invalid select values must not overwrite the neutral default");
+  } finally {
+    globalThis.document = previousDocument;
+  }
+});

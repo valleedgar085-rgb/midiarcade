@@ -1455,39 +1455,41 @@ async function auditionSectionVariation(option) {
   if (!lab || !section) return;
   const candidate = option === 0 ? lab.base : lab.options?.[option - 1];
   if (!candidate) return;
-  state.song = deepClone(candidate);
   lab.activeOption = option;
-  applyTrackSettingsToSong(state.song);
-  renderAll();
+  renderSectionVariationLab(section);
   const range = editorBeatRange(section);
-  player.seek(range.start * 60 / songBpm());
-  if (!player.playing) await player.play();
+  await player.auditionSong(candidate, {
+    startSeconds: range.start * 60 / songBpm(candidate),
+  });
 }
 
 function keepSectionVariation() {
   const lab = state.sectionVariations;
   if (!lab) return;
-  if (lab.activeOption > 0) {
-    pushHistory({ ...createHistorySnapshot(), song: deepClone(lab.base) });
-    showToast(`Option ${String.fromCharCode(64 + lab.activeOption)} is now part of the song.`);
+  const option = Number(lab.activeOption || 0);
+  const candidate = option === 0 ? lab.base : lab.options?.[option - 1];
+  if (!candidate) return;
+  player.stop();
+  if (option > 0) {
+    pushHistory({ ...createHistorySnapshot(), song: deepClone(state.song) });
+    state.song = deepClone(candidate);
+    applyTrackSettingsToSong(state.song);
+    showToast(`Option ${String.fromCharCode(64 + option)} is now part of the song.`);
   } else {
     showToast("The original section is staying in the song.");
   }
   state.sectionVariations = null;
-  renderSectionVariationLab();
+  renderAll();
   scheduleSessionSave();
 }
 
 function cancelSectionVariations() {
-  const lab = state.sectionVariations;
-  if (!lab) return;
+  if (!state.sectionVariations) return;
   player.stop();
-  state.song = deepClone(lab.base);
-  applyTrackSettingsToSong(state.song);
   state.sectionVariations = null;
   renderAll();
   scheduleSessionSave();
-  showToast("The original section is restored. No variation was committed.");
+  showToast("No variation was committed.");
 }
 
 function renderArrangeWorkflow() {
@@ -4451,6 +4453,7 @@ export class PreviewPlayer {
     this.lastScheduleAt = 0;
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
+    this.playbackSong = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
   }
@@ -4613,7 +4616,8 @@ export class PreviewPlayer {
 
   currentSongTime() {
     if (!this.playing || !this.context) return this.position;
-    return clamp(this.offset + (this.context.currentTime - this.startedAt), 0, totalSeconds());
+    const song = this.playbackSong ?? state.song;
+    return clamp(this.offset + (this.context.currentTime - this.startedAt), 0, totalSeconds(song));
   }
 
   handleContextStateChange(context) {
@@ -4672,9 +4676,10 @@ export class PreviewPlayer {
   }
 
   buildEvents() {
-    this.events = buildPreviewEvents();
-    this.configureSongFx();
-    this.playbackView = playbackViewForSong();
+    const song = this.playbackSong ?? state.song;
+    this.events = buildPreviewEvents(song);
+    this.configureSongFx(song);
+    this.playbackView = playbackViewForSong(song);
     this.lastDetailRefreshAt = -Infinity;
   }
 
@@ -4707,7 +4712,7 @@ export class PreviewPlayer {
   }
 
   applyKickSidechain(when) {
-    const profile = previewSidechain(state.song ?? {}, state.mixAssistant);
+    const profile = previewSidechain(this.playbackSong ?? state.song ?? {}, state.mixAssistant);
     if (!profile.enabled) return;
     const gain = this.trackBusFor("bass")?.gain;
     if (!gain) return;
@@ -4724,8 +4729,17 @@ export class PreviewPlayer {
     this.playing ? this.pause() : await this.play();
   }
 
+  async auditionSong(song, { startSeconds = 0 } = {}) {
+    if (!song) return false;
+    this.stop();
+    this.playbackSong = song;
+    this.position = clamp(Number(startSeconds) || 0, 0, totalSeconds(song));
+    return this.play();
+  }
+
   async play() {
-    if (!state.song) return false;
+    const song = this.playbackSong ?? state.song;
+    if (!song) return false;
     if (this.playing) return true;
     const requestGeneration = ++this.playRequestGeneration;
     try {
@@ -4741,7 +4755,7 @@ export class PreviewPlayer {
       rampAudioParamValue(this.master.gain, 0.42, now, this.previewBudget.masterFadeSeconds);
     }
     this.buildEvents();
-    const duration = totalSeconds();
+    const duration = totalSeconds(song);
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
     this.startedAt = this.context.currentTime;
@@ -5380,13 +5394,14 @@ export class PreviewPlayer {
 
   updateFrame() {
     if (!this.playing || !this.context) return;
-    const duration = totalSeconds();
+    const playbackSong = this.playbackSong ?? state.song;
+    const duration = totalSeconds(playbackSong);
     this.position = this.offset + (this.context.currentTime - this.startedAt);
-    if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm())) {
+    if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm(playbackSong))) {
       const targetSec = state.queuedSection;
       state.queuedSection = null;
       syncMobileSectionJump(targetSec.targetSectionId);
-      this.seek(targetSec.targetStartBeat * 60 / songBpm());
+      this.seek(targetSec.targetStartBeat * 60 / songBpm(playbackSong));
       showToast(`Jumped to ${targetSec.targetSectionName}`);
       return;
     }
@@ -5444,6 +5459,7 @@ export class PreviewPlayer {
     this.events = [];
     this.eventIndex = 0;
     this.playbackView = null;
+    this.playbackSong = null;
     this.lastDetailRefreshAt = -Infinity;
   }
 
@@ -5474,7 +5490,7 @@ export class PreviewPlayer {
       const mobileText = $("#mobilePlayText");
       if (mobileText) mobileText.textContent = "Play";
     }
-    updateCreativeThreadPlayback(this.position, totalSeconds());
+    updateCreativeThreadPlayback(this.position, totalSeconds(this.playbackSong ?? state.song));
   }
 
   stop() {
@@ -5486,17 +5502,24 @@ export class PreviewPlayer {
   }
 
   seek(position) {
+    const playbackSong = this.playbackSong ?? state.song;
     const wasPlaying = this.playing;
     this.pause();
-    this.position = clamp(position, 0, totalSeconds());
-    updatePlaybackUi(this.position, totalSeconds());
+    this.position = clamp(position, 0, totalSeconds(playbackSong));
+    updatePlaybackUi(this.position, totalSeconds(playbackSong), {
+      view: this.playbackView ?? playbackViewForSong(playbackSong),
+    });
     if (wasPlaying) this.play();
   }
 
   restart() {
     const shouldPlay = this.playing;
+    const playbackSong = this.playbackSong;
     this.stop();
-    if (shouldPlay) this.play();
+    if (shouldPlay) {
+      this.playbackSong = playbackSong;
+      this.play();
+    }
   }
 
   dispose() {
@@ -5894,6 +5917,7 @@ function toggleFullscreen() {
     updateRangeDisplays();
     decorateAutoRangeControls();
     renderGenerationIntent();
+    scheduleSessionSave();
     showToast("Creative compass reset. The current idea stays untouched until you generate.");
   });
 

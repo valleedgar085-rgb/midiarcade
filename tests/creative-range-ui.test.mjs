@@ -29,5 +29,6 @@ test("Creative Range participates in staged direction, reset, change wiring and 
   assert.match(app, /GENERATION_SETTING_IDS[\s\S]*?creativeRangeControl/);
   assert.match(app, /creativeRangeControl[\s\S]*?addEventListener\("change"/);
   assert.match(app, /resetControlsButton[\s\S]*?creativeRangeControl\"\)\.value = \"\"/);
+  assert.match(app, /resetControlsButton[\s\S]*?creativeRangeControl[\s\S]*?renderGenerationIntent\(\);[\s\S]*?scheduleSessionSave\(\);/);
   assert.match(sessionRuntime, /GENERATION_PREFERENCE_IDS[\s\S]*?creativeRangeControl/);
 });
