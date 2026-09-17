@@ -172,6 +172,30 @@
   background: rgba(34, 211, 238, 0.045);
 }
 
+#preGenSection .generation-envelope-select {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(157, 111, 255, 0.16);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(157, 111, 255, 0.08), rgba(255, 255, 255, 0.018));
+}
+
+#preGenSection .generation-envelope-select > span {
+  display: block;
+}
+
+#preGenSection .generation-envelope-select > span small {
+  margin-left: 6px;
+}
+
+#preGenSection .generation-envelope-select > small {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-3);
+  font-size: 0.66rem;
+  line-height: 1.45;
+}
+
 #preGenSection .generation-actions-bar {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
@@ -395,6 +419,10 @@
 
   #preGenSection .generation-intent p {
     font-size: 0.7rem;
+  }
+
+  #preGenSection .generation-envelope-select {
+    padding: 12px;
   }
 
   #preGenSection .generation-actions-bar {

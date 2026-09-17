@@ -20,7 +20,6 @@ const createHtml = html.slice(createStart, createEnd);
 const EXPECTED_CREATE_IDS = [
   "renameButton",
   "showcasePlayButton",
-  "showcaseSimilarButton",
   "tasteRating",
   "guidedModeButton",
   "workflowAction",
@@ -82,7 +81,6 @@ const RANGE_IDS = [
 const ACTION_IDS = [
   "renameButton",
   "showcasePlayButton",
-  "showcaseSimilarButton",
   "guidedModeButton",
   "workflowAction",
   "resetControlsButton",
@@ -197,7 +195,6 @@ test("every first-class Create action is present in runtime wiring and classifie
     assert.equal(CREATE_CONTROL_CONTRACT[id].event, "click", `${id} must declare click wiring`);
   }
   assert.match(app, /showcasePlayButton[\s\S]*?player\.toggle\(\)/);
-  assert.match(app, /showcaseSimilarButton[\s\S]*?runGeneration\("songVariations"\)/);
   assert.match(app, /keyTransposeDown[\s\S]*?transposeKey\(-1\)/);
   assert.match(app, /keyTransposeUp[\s\S]*?transposeKey\(1\)/);
   assert.match(app, /newRecipeButton[\s\S]*?chooseRecipe/);

@@ -41,7 +41,7 @@ test("Create presentation can be imported without browser globals", async () => 
 });
 
 test("generation essentials move from Now Playing into Song Direction without duplicating controls", () => {
-  assert.match(presentation, /querySelector\("\.create-live-controls"\)/);
+  assert.match(presentation, /querySelector\("#preGenSection \.generation-actions-bar"\)/);
   assert.match(presentation, /className = "direction-essentials-heading section-heading"/);
   assert.match(presentation, /creatorMain\.insertBefore\(controls, shapeControls\)/);
   assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
@@ -64,6 +64,7 @@ test("Create copy explains reference, direction, generation and Elements without
   assert.match(presentation, /current song as your reference/i);
   assert.match(presentation, /Direct the next generation/);
   assert.match(presentation, /Genre establishes the writing rules/);
+  assert.match(presentation, /VARIETY ENVELOPE/);
   assert.match(presentation, /COMPOSE FROM THIS DIRECTION/);
   assert.match(presentation, /Create Fire \/ Electric \/ Drip/);
   assert.match(presentation, /Impact · punch · groove/);

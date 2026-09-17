@@ -56,7 +56,6 @@ export const CONTROL_HELP = Object.freeze({
   generateNew: ["New song idea", "Replace the entire composition: every instrument, chord progression, phrase, sound and section."],
   generateSimilar: ["More like this", "Keep the current musical DNA while creating a fresh recognizable variation."],
   showcasePlayButton: ["Play this song", "Audition the complete generated arrangement without leaving the Create workspace."],
-  showcaseSimilarButton: ["More like this", "Keep the song's recognizable musical identity while composing a new variation."],
   showcaseArrangeButton: ["Open arrangement", "Move to the song map where every section and instrument can be focused and edited."],
   mixPlayButton: ["Listen to the mix", "Play or pause the complete song while you balance and shape its instruments."],
   reorderButton: ["Change section order", "Reorder the song's sections and compose a related arrangement around the new journey."],

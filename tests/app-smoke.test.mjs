@@ -205,7 +205,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "threadSectionButton", "threadSectionName", "threadSectionMeta", "threadTrackButton",
     "threadTrackName", "threadTrackMeta", "threadLiveSection", "threadActionButton",
     "showcaseMonogram", "showcaseSeed", "showcaseTrackMeter", "showcasePlayButton",
-    "showcaseSimilarButton", "showcaseArc", "showcaseArcStatus",
+    "showcaseArc", "showcaseArcStatus",
     "arrangeWorkflow", "arrangeSectionStep", "arrangeNoteStep", "mixOverview",
     "mixFocusName", "mixFocusSound", "mixAudibleCount", "mixLockedCount", "mixPlayButton",
     "smartMixConsole", "mixEnhanceToggle", "spotlightTrackControl", "spotlightIntensityControl",

@@ -5923,7 +5923,6 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
-  $("#showcaseSimilarButton")?.addEventListener("click", () => runGeneration("songVariations"));
   $("#tasteRating")?.addEventListener("change", (event) => rateCurrentSong(event.target.value));
   $("#mixPlayButton")?.addEventListener("click", () => player.toggle());
   $("#previousButton").addEventListener("click", () => player.restart());
