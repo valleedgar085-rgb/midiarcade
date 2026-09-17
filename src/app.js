@@ -5917,6 +5917,7 @@ function toggleFullscreen() {
     updateRangeDisplays();
     decorateAutoRangeControls();
     renderGenerationIntent();
+    scheduleSessionSave();
     showToast("Creative compass reset. The current idea stays untouched until you generate.");
   });
 
