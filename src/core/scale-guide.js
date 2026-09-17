@@ -91,8 +91,10 @@ function resolveKey(song) {
 
 function resolveMode(song) {
   const globalKey = song?.global?.key;
+  if (song?.meta?.scale) return normalizeModeName(song.meta.scale);
+  if (song?.mode) return normalizeModeName(song.mode);
   if (globalKey && typeof globalKey === "object" && globalKey.mode) return normalizeModeName(globalKey.mode);
-  return normalizeModeName(song?.global?.mode || song?.mode || song?.meta?.mode || song?.meta?.scale || "minor");
+  return normalizeModeName(song?.global?.mode || song?.meta?.mode || "minor");
 }
 
 function sanitizeStoredIntervals(intervals) {

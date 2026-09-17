@@ -89,3 +89,12 @@ test("scale guide normalizes stored mode aliases before resolving intervals", ()
   assert.equal(guide.mode, "wholeTone");
   assert.deepEqual(guide.scaleIntervals, [0, 2, 4, 6, 8, 10]);
 });
+
+test("scale guide prefers canonical meta.scale over legacy mode fields", () => {
+  const guide = getScaleChordGuide({
+    global: { key: { tonic: "C", mode: "minor" } },
+    meta: { scale: "lydian", mode: "phrygian" },
+  });
+  assert.equal(guide.mode, "lydian");
+  assert.deepEqual(guide.scaleIntervals, [0, 2, 4, 6, 7, 9, 11]);
+});
