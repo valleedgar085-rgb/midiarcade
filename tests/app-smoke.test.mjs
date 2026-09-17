@@ -254,7 +254,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /function applySectionMacro[\s\S]*?commitArrangementCommand[\s\S]*?function simplifyFocusedSection/, "section macros must route through the shared arrangement command path");
   assert.match(htmlSource, /id="editorMusicalGuide"[\s\S]*?id="editorOverlayControl"/, "Phase 56 must expose harmony and relationship guidance");
   assert.match(appSource, /from "\.\/ui\/shape-logic\.js"[\s\S]*?export \{ nearestScalePitch, transposeScaleStep \}/, "manual note editing must share extracted scale-safe pitch helpers");
-  assert.match(appSource, /function cancelSectionVariations[\s\S]*?state\.song = deepClone\(lab\.base\)/, "the A/B lab must restore its exact original without committing");
+  assert.match(appSource, /async function auditionSectionVariation[\s\S]*?player\.auditionSong\(candidate/, "the A/B lab must audition candidates without installing them as canonical song state");
   assert.match(cssSource, /PHASES 56–58:[\s\S]*?prefers-contrast:more/, "advanced Shape guidance must include responsive and high-contrast styling");
   assert.match(htmlSource, /id="energyArcLane"[\s\S]*?id="harmonyMapLane"/, "Phase 59 must expose arrangement energy and harmony lanes");
   assert.match(appSource, /draggable="true"[\s\S]*?Alt plus an arrow key/, "Phase 60 section ordering must support pointer and keyboard interaction");
