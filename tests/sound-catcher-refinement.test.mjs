@@ -87,14 +87,18 @@ test("Sound Catcher preserves zero-off controls and rejects critic regressions",
   assert.equal(off.diagnostics.reason, "no-safe-catcher-opportunity");
 
   const rejected = applySoundCatcherRefinement(source, config, {
-    evaluateCandidate: () => ({
-      score: 70,
-      subscores: Object.fromEntries([
-        "groove", "performance", "repetition", "phraseResolution",
-        "density", "memory", "motif", "separation",
-      ].map((key) => [key, 60])),
-      diagnostics: { scaleFit: 1 },
-    }),
+    evaluateCandidate: (song) => {
+      const changed = song.tracks[0].notes.some((note, index) =>
+        note.start !== songFixture().tracks[0].notes[index].start);
+      return {
+        score: changed ? 70 : 90,
+        subscores: Object.fromEntries([
+          "groove", "performance", "repetition", "phraseResolution",
+          "density", "memory", "motif", "separation",
+        ].map((key) => [key, changed ? 60 : 90])),
+        diagnostics: { scaleFit: 1 },
+      };
+    },
     evaluateReleaseGate: release,
   });
   assert.strictEqual(rejected.song, source);
