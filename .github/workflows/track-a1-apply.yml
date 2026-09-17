@@ -1,0 +1,58 @@
+name: Track A1 Canonical Song Authority Patch
+
+on:
+  push:
+    branches: ['track-a1/canonical-workspace-context']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: track-a1-canonical-song-authority
+  cancel-in-progress: false
+
+jobs:
+  apply-validate-commit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out Track A1 branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Apply bounded Track A1 authority patch
+        run: node scripts/apply-track-a1-authority-fix.mjs
+      - name: Verify source syntax
+        run: node --check src/app.js
+      - name: Run focused authority regressions
+        run: node --test tests/section-variation-authority.test.mjs tests/app-smoke.test.mjs tests/generation-timeout-ownership.test.mjs
+      - name: Run mandatory repository quality gate
+        run: npm run quality
+      - name: Verify bounded source surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          expected=$(printf '%s\n' src/app.js tests/app-smoke.test.mjs tests/section-variation-authority.test.mjs | sort)
+          actual=$(printf '%s\n' "${changed[@]}")
+          test "$actual" = "$expected"
+          git diff --check
+      - name: Commit validated Track A1 implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/track-a1-apply.yml scripts/apply-track-a1-authority-fix.mjs
+          git add -A
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix section variation canonical song authority"
+          git push origin HEAD:track-a1/canonical-workspace-context
