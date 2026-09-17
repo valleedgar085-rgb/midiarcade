@@ -1,5 +1,6 @@
 import { continueElementLineage } from "./elemental-lineage.js";
 import { applySectionDrumEvolutionRefinement } from "./section-drum-evolution-refinement.js";
+import { applyTrapStagedBuildRefinement } from "./trap-staged-build-refinement.js";
 import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
 
 export function createGenerationRunner({
@@ -44,11 +45,13 @@ export function createGenerationRunner({
           : generated;
         const bounced = applySnareBounceRefinement(lineageSong, config);
         const evolved = applySectionDrumEvolutionRefinement(bounced.song, config);
-        const song = evolved.song;
+        const staged = applyTrapStagedBuildRefinement(evolved.song, config);
+        const song = staged.song;
         recorder?.mark?.(flightId, "diagnose", {
           candidateSearch: Boolean(song?.meta?.scoreDetails?.candidateSearch),
           snareBounce: bounced.diagnostics ?? null,
           sectionDrumEvolution: evolved.diagnostics ?? null,
+          trapStagedBuild: staged.diagnostics ?? null,
         });
         if (!validate(song)) throw new Error("The composition engine returned an incomplete song.");
         recorder?.mark?.(flightId, "finalize");
