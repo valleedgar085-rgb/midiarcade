@@ -115,7 +115,7 @@ function computeProtectedDeltas(before, after) {
 }
 
 function buildCandidate(song, config) {
-  if (config?.trapStagedBuild !== true) return null;
+  if (config?.trapStagedBuild === false) return null;
   if (String(config?.genre ?? song?.genre ?? song?.meta?.genre ?? "") !== "trap") return null;
   if (Number.isFinite(Number(config?.evolution)) && finite(config.evolution) <= 0.001) return null;
 
@@ -205,7 +205,7 @@ export function applyTrapStagedBuildRefinement(song, config = {}, {
     }),
   });
 
-  if (config?.trapStagedBuild !== true) return disabled("disabled");
+  if (config?.trapStagedBuild === false) return disabled("disabled");
   if (genre !== "trap") return disabled("genre-not-eligible");
   if (Number.isFinite(Number(config?.evolution)) && finite(config.evolution) <= 0.001) {
     return disabled("evolution-off");
