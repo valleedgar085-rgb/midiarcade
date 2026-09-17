@@ -191,7 +191,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 2.8, sustained: 2.2, arpeggio: 1.2, pulse: 0.7 },
     },
     swing: 0.28, syncopation: 0.58, humanize: 0.34, chordExtensions: 0.82, harmonicRhythm: 0.42,
-    instrumentPrograms: { drums: [0, 8], bass: [33, 35, 36], chords: [4, 5, 17], melody: [26, 73, 81], counterpoint: [25, 53, 85], pad: [88, 89, 91] },
+    instrumentPrograms: { drums: [0, 8], bass: [33, 35, 36], chords: [4, 5, 16, 17], melody: [26, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91] },
     tripletChance: 0.16, snareRollChance: 0.12, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.18, fillFrequency: 0.32, phraseBars: 4 },
   },
@@ -204,7 +204,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 2.6, offbeat: 1.7, pulse: 1.1, arpeggio: 0.55 },
     },
     swing: 0.2, syncopation: 0.54, humanize: 0.3, chordExtensions: 0.46, harmonicRhythm: 0.27,
-    instrumentPrograms: { drums: [0, 8, 24], bass: [38, 39, 34], chords: [4, 5, 16], melody: [54, 73, 80], counterpoint: [25, 53, 85], pad: [88, 89, 92] },
+    instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [54, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91, 92] },
     tripletChance: 0.38, snareRollChance: 0.24, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.4, phraseBars: 4 },
   },
@@ -217,7 +217,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 3.1, offbeat: 1.25, pulse: 0.8, arpeggio: 0.35 },
     },
     swing: 0.16, syncopation: 0.6, humanize: 0.27, chordExtensions: 0.34, harmonicRhythm: 0.22,
-    instrumentPrograms: { drums: [0, 8, 24], bass: [38, 39, 36], chords: [0, 4, 16], melody: [26, 54, 73], counterpoint: [25, 53, 80], pad: [88, 89, 91] },
+    instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 36], chords: [0, 4, 5, 16], melody: [26, 54, 73, 80], counterpoint: [25, 53, 73, 80], pad: [88, 89, 91, 92] },
     tripletChance: 0.24, snareRollChance: 0.18, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.12, fillFrequency: 0.34, phraseBars: 4 },
   },
@@ -230,7 +230,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 3.6, arpeggio: 1.8, pulse: 0.8, offbeat: 0.65 },
     },
     swing: 0.06, syncopation: 0.66, humanize: 0.14, chordExtensions: 0.28, harmonicRhythm: 0.2,
-    instrumentPrograms: { drums: [25, 24], bass: [38, 39, 33], chords: [0, 48, 89], melody: [80, 82, 85], counterpoint: [48, 73, 80], pad: [88, 89, 92] },
+    instrumentPrograms: { drums: [25, 24], bass: [38, 39, 33], chords: [0, 4, 48, 89], melody: [80, 81, 82, 85], counterpoint: [48, 73, 80, 85], pad: [88, 89, 90, 92] },
     tripletChance: 0.76, snareRollChance: 0.68, halfTime: true,
     arrangement: { form: "half-time", chorusLift: 0.22, fillFrequency: 0.72, phraseBars: 4 },
   },
@@ -243,7 +243,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 4.4, pulse: 2.2, sustained: 0.85, arpeggio: 0.7 },
     },
     swing: 0.08, syncopation: 0.48, humanize: 0.12, chordExtensions: 0.42, harmonicRhythm: 0.5,
-    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 36], chords: [4, 5, 17], melody: [81, 82, 85], counterpoint: [80, 84, 86], pad: [89, 90, 95] },
+    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 33, 36], chords: [4, 5, 16, 17], melody: [81, 82, 85, 86], counterpoint: [80, 81, 84, 85], pad: [89, 90, 95] },
     tripletChance: 0.07, snareRollChance: 0.14, halfTime: false,
     arrangement: { form: "club", chorusLift: 0.2, fillFrequency: 0.38, phraseBars: 8 },
   },
@@ -256,7 +256,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { pulse: 3.4, offbeat: 2.5, arpeggio: 1.8, sustained: 0.65 },
     },
     swing: 0.03, syncopation: 0.36, humanize: 0.07, chordExtensions: 0.2, harmonicRhythm: 0.38,
-    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 87], chords: [81, 89, 95], melody: [82, 84, 87], counterpoint: [80, 81, 86], pad: [89, 91, 99] },
+    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 87], chords: [81, 89, 90, 95], melody: [81, 82, 84, 87], counterpoint: [80, 81, 84, 86], pad: [89, 91, 95, 99] },
     tripletChance: 0.1, snareRollChance: 0.18, halfTime: false,
     arrangement: { form: "rave", chorusLift: 0.22, fillFrequency: 0.42, phraseBars: 8 },
   },
@@ -269,7 +269,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 2.2, offbeat: 1.7, arpeggio: 1.5, pulse: 1 },
     },
     swing: 0.04, syncopation: 0.7, humanize: 0.13, chordExtensions: 0.36, harmonicRhythm: 0.32,
-    instrumentPrograms: { drums: [0, 8, 24], bass: [38, 39, 87], chords: [4, 89, 90], melody: [80, 84, 85], counterpoint: [48, 73, 84], pad: [89, 91, 95] },
+    instrumentPrograms: { drums: [0, 8, 16, 24], bass: [38, 39, 87, 88], chords: [4, 5, 89, 90], melody: [80, 81, 84, 85], counterpoint: [48, 73, 80, 84], pad: [89, 90, 91, 95] },
     tripletChance: 0.48, snareRollChance: 0.46, halfTime: false,
     arrangement: { form: "breaks", chorusLift: 0.25, fillFrequency: 0.68, phraseBars: 4 },
   },
@@ -282,7 +282,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { arpeggio: 3.6, sustained: 2, pulse: 1.4, offbeat: 0.55 },
     },
     swing: 0.03, syncopation: 0.28, humanize: 0.1, chordExtensions: 0.3, harmonicRhythm: 0.3,
-    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 33], chords: [81, 90, 95], melody: [81, 85, 87], counterpoint: [80, 84, 85], pad: [89, 95, 99] },
+    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 33], chords: [81, 89, 90, 95], melody: [81, 82, 85, 87], counterpoint: [80, 81, 84, 85], pad: [89, 90, 95, 99] },
     tripletChance: 0.09, snareRollChance: 0.12, halfTime: false,
     arrangement: { form: "cinematic-pop", chorusLift: 0.24, fillFrequency: 0.34, phraseBars: 4 },
   },
@@ -295,7 +295,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { pulse: 2.2, sustained: 1.8, offbeat: 1.4, arpeggio: 1.1 },
     },
     swing: 0.1, syncopation: 0.34, humanize: 0.2, chordExtensions: 0.34, harmonicRhythm: 0.36,
-    instrumentPrograms: { drums: [0, 8, 16], bass: [33, 34, 38], chords: [0, 4, 25], melody: [73, 80, 85], counterpoint: [25, 53, 73], pad: [48, 88, 90] },
+    instrumentPrograms: { drums: [0, 8, 16], bass: [33, 34, 38], chords: [0, 4, 5, 25], melody: [73, 80, 81, 85], counterpoint: [25, 53, 73, 80], pad: [48, 88, 89, 90] },
     tripletChance: 0.13, snareRollChance: 0.16, halfTime: false,
     arrangement: { form: "pop", chorusLift: 0.2, fillFrequency: 0.38, phraseBars: 4 },
   },
@@ -311,7 +311,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 4, offbeat: 1.8, arpeggio: 0.8, pulse: 0.4 },
     },
     swing: 0.38, syncopation: 0.44, humanize: 0.55, chordExtensions: 0.78, harmonicRhythm: 0.22,
-    instrumentPrograms: { drums: [8, 0], bass: [35, 33, 36], chords: [4, 5, 17], melody: [73, 26, 11], counterpoint: [10, 11, 25], pad: [88, 89, 48] },
+    instrumentPrograms: { drums: [8, 0], bass: [35, 33, 36], chords: [4, 5, 0, 17], melody: [73, 26, 80, 11], counterpoint: [11, 10, 73, 25], pad: [88, 89, 91, 48] },
     tripletChance: 0.22, snareRollChance: 0.1, halfTime: false,
     arrangement: { form: "loop", chorusLift: 0.08, fillFrequency: 0.2, phraseBars: 4 },
   },
@@ -325,7 +325,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 3.2, offbeat: 2.4, arpeggio: 1.0, pulse: 0.5 },
     },
     swing: 0.3, syncopation: 0.62, humanize: 0.42, chordExtensions: 0.88, harmonicRhythm: 0.38,
-    instrumentPrograms: { drums: [0, 8], bass: [33, 35, 36], chords: [4, 16, 17], melody: [85, 73, 54], counterpoint: [53, 25, 73], pad: [89, 91, 92] },
+    instrumentPrograms: { drums: [0, 8], bass: [33, 35, 36], chords: [4, 5, 16, 17], melody: [85, 73, 54, 26], counterpoint: [53, 25, 73, 85], pad: [89, 91, 92, 88] },
     tripletChance: 0.2, snareRollChance: 0.14, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.16, fillFrequency: 0.28, phraseBars: 4 },
   },
@@ -339,7 +339,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 4.2, arpeggio: 1.4, pulse: 0.6, offbeat: 0.5 },
     },
     swing: 0.03, syncopation: 0.72, humanize: 0.1, chordExtensions: 0.22, harmonicRhythm: 0.16,
-    instrumentPrograms: { drums: [25, 24], bass: [38, 39, 87], chords: [0, 81, 89], melody: [80, 82, 87], counterpoint: [48, 80, 85], pad: [89, 92, 95] },
+    instrumentPrograms: { drums: [25, 24], bass: [38, 39, 87], chords: [0, 81, 89, 90], melody: [80, 81, 82, 87], counterpoint: [80, 48, 81, 85], pad: [89, 90, 95, 92] },
     tripletChance: 0.82, snareRollChance: 0.74, halfTime: true,
     arrangement: { form: "half-time", chorusLift: 0.24, fillFrequency: 0.78, phraseBars: 4 },
   },
@@ -353,7 +353,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 4.8, sustained: 2.0, pulse: 1.0, arpeggio: 0.6 },
     },
     swing: 0.05, syncopation: 0.52, humanize: 0.16, chordExtensions: 0.3, harmonicRhythm: 0.44,
-    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 33], chords: [4, 81, 89], melody: [54, 81, 85], counterpoint: [80, 84, 85], pad: [89, 90, 99] },
+    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 33], chords: [81, 4, 89, 90], melody: [81, 85, 54, 80], counterpoint: [80, 81, 84, 85], pad: [89, 90, 95, 99] },
     tripletChance: 0.08, snareRollChance: 0.16, halfTime: false,
     arrangement: { form: "club", chorusLift: 0.2, fillFrequency: 0.42, phraseBars: 8 },
   },
@@ -367,7 +367,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 3.8, sustained: 2.0, pulse: 1.4, arpeggio: 0.8 },
     },
     swing: 0.14, syncopation: 0.62, humanize: 0.28, chordExtensions: 0.38, harmonicRhythm: 0.46,
-    instrumentPrograms: { drums: [0, 8, 24], bass: [33, 36, 38], chords: [4, 25, 89], melody: [26, 54, 85], counterpoint: [25, 53, 73], pad: [48, 88, 91] },
+    instrumentPrograms: { drums: [0, 8, 16, 24], bass: [33, 36, 38], chords: [4, 5, 25, 89], melody: [73, 85, 54, 26], counterpoint: [25, 73, 53, 85], pad: [48, 88, 89, 91] },
     tripletChance: 0.2, snareRollChance: 0.18, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.18, fillFrequency: 0.44, phraseBars: 4 },
   },
@@ -381,7 +381,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 3.8, sustained: 2.4, arpeggio: 2.0, pulse: 0.6 },
     },
     swing: 0.55, syncopation: 0.68, humanize: 0.46, chordExtensions: 0.96, harmonicRhythm: 0.7,
-    instrumentPrograms: { drums: [8, 0], bass: [43, 33, 35], chords: [0, 4, 17], melody: [26, 66, 73], counterpoint: [11, 25, 53], pad: [48, 88, 89] },
+    instrumentPrograms: { drums: [8, 0], bass: [43, 33, 35], chords: [0, 4, 16, 17], melody: [26, 73, 68, 66], counterpoint: [25, 53, 11, 73], pad: [48, 88, 89, 91] },
     tripletChance: 0.55, snareRollChance: 0.34, halfTime: false,
     arrangement: { form: "head-solos", chorusLift: 0.14, fillFrequency: 0.58, phraseBars: 8 },
   },
@@ -395,7 +395,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { sustained: 6.5, arpeggio: 2.2, offbeat: 0.5, pulse: 0.3 },
     },
     swing: 0.06, syncopation: 0.18, humanize: 0.22, chordExtensions: 0.72, harmonicRhythm: 0.18,
-    instrumentPrograms: { drums: [0, 8], bass: [33, 88, 89], chords: [89, 90, 94], melody: [73, 82, 85], counterpoint: [14, 94, 98], pad: [92, 95, 99] },
+    instrumentPrograms: { drums: [0, 8], bass: [88, 89, 33], chords: [89, 90, 91, 94], melody: [73, 88, 82, 85], counterpoint: [14, 94, 98, 73], pad: [92, 94, 95, 99] },
     tripletChance: 0.06, snareRollChance: 0.06, halfTime: false,
     arrangement: { form: "evolving", chorusLift: 0.1, fillFrequency: 0.14, phraseBars: 8 },
   },
@@ -409,7 +409,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 5.0, pulse: 2.0, sustained: 1.0, arpeggio: 0.8 },
     },
     swing: 0.2, syncopation: 0.76, humanize: 0.36, chordExtensions: 0.54, harmonicRhythm: 0.54,
-    instrumentPrograms: { drums: [0, 8, 16], bass: [36, 33, 35], chords: [4, 5, 17], melody: [26, 73, 81], counterpoint: [25, 53, 85], pad: [48, 88, 89] },
+    instrumentPrograms: { drums: [0, 8, 16], bass: [36, 33, 35], chords: [4, 5, 16, 17], melody: [26, 73, 80, 81], counterpoint: [25, 73, 85, 53], pad: [48, 88, 89, 91] },
     tripletChance: 0.28, snareRollChance: 0.22, halfTime: false,
     arrangement: { form: "groove", chorusLift: 0.16, fillFrequency: 0.52, phraseBars: 4 },
   },
@@ -423,8 +423,8 @@ export const GENRE_PROFILES = deepFreeze({
     },
     swing: 0.16, syncopation: 0.3, humanize: 0.36, chordExtensions: 0.2, harmonicRhythm: 0.5,
     instrumentPrograms: {
-      drums: [0, 8], bass: [32, 33, 34], chords: [24, 25, 16],
-      melody: [25, 40, 56], counterpoint: [25, 40, 71], pad: [48, 51, 88],
+      drums: [0, 8], bass: [32, 33, 34], chords: [24, 25, 0, 16],
+      melody: [25, 40, 56, 73], counterpoint: [25, 40, 71, 73], pad: [48, 51, 88],
     },
     tripletChance: 0.13, snareRollChance: 0.2, halfTime: false,
     arrangement: { form: "story-song", chorusLift: 0.2, fillFrequency: 0.38, phraseBars: 4 },
@@ -439,8 +439,8 @@ export const GENRE_PROFILES = deepFreeze({
     },
     swing: 0.05, syncopation: 0.34, humanize: 0.28, chordExtensions: 0.12, harmonicRhythm: 0.48,
     instrumentPrograms: {
-      drums: [0, 16, 8], bass: [33, 34, 36], chords: [29, 30, 16],
-      melody: [29, 30, 40], counterpoint: [27, 40, 56], pad: [48, 51, 89],
+      drums: [0, 16, 8], bass: [33, 34, 36], chords: [29, 30, 27, 16],
+      melody: [29, 30, 26, 40], counterpoint: [27, 29, 40, 56], pad: [48, 51, 89],
     },
     tripletChance: 0.1, snareRollChance: 0.3, halfTime: false,
     arrangement: { form: "anthem", chorusLift: 0.26, fillFrequency: 0.56, phraseBars: 4 },
@@ -454,7 +454,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { offbeat: 3.8, pulse: 2.8, sustained: 1.8, arpeggio: 1.2 },
     },
     swing: 0.04, syncopation: 0.46, humanize: 0.16, chordExtensions: 0.38, harmonicRhythm: 0.5,
-    instrumentPrograms: { drums: [0, 8, 24], bass: [38, 39, 34], chords: [4, 5, 89], melody: [26, 80, 85], counterpoint: [80, 81, 84], pad: [88, 89, 92] },
+    instrumentPrograms: { drums: [0, 8, 24], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [80, 81, 85, 26], counterpoint: [80, 81, 84, 85], pad: [88, 89, 90, 92] },
     tripletChance: 0.12, snareRollChance: 0.18, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.26, fillFrequency: 0.45, phraseBars: 4 },
   },
@@ -467,7 +467,7 @@ export const GENRE_PROFILES = deepFreeze({
       chordMotion: { pulse: 4.2, offbeat: 3.2, arpeggio: 2.4, sustained: 1.2 },
     },
     swing: 0.02, syncopation: 0.42, humanize: 0.1, chordExtensions: 0.32, harmonicRhythm: 0.5,
-    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 87], chords: [81, 89, 95], melody: [80, 82, 87], counterpoint: [80, 84, 86], pad: [88, 91, 95] },
+    instrumentPrograms: { drums: [24, 25, 16], bass: [38, 39, 87], chords: [81, 89, 90, 95], melody: [80, 81, 82, 87], counterpoint: [80, 81, 84, 86], pad: [88, 89, 91, 95] },
     tripletChance: 0.08, snareRollChance: 0.22, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.28, fillFrequency: 0.48, phraseBars: 4 },
   },
@@ -1804,13 +1804,6 @@ function createProducerIntentContract(
         && finite(matrix?.featureOccurrence, 0) === 0
         && !["build", "payoff"].includes(purpose)
       ) role = "rest";
-      if (
-        id === "pad"
-        && ["melody", "counterpoint"].includes(foregroundTrack)
-        && purpose !== "reset"
-        && purpose !== "contrast"
-        && role !== "foreground"
-      ) role = lane?.presence >= 0.72 ? "texture" : "rest";
       if (
         id === "counterpoint"
         && role === "answer"
@@ -5385,26 +5378,6 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         texture: 0.84,
         rest: 0.76,
       }[producerRole] ?? 0.9;
-      const melodicForeground = ["melody", "counterpoint"].includes(scene?.foregroundTrack);
-      const dialogueFocus = scene?.developmentAxis === "dialogue";
-      const conversationPresence = melodicForeground
-        ? id === scene?.answerTrack && producerRole === "answer"
-          ? (dialogueFocus ? 0.82 : 0.58)
-          : id === "chords"
-            ? 0.76
-            : id === "pad"
-              ? 0.52
-              : 1
-        : 1;
-      const conversationVelocity = melodicForeground
-        ? id === scene?.answerTrack && producerRole === "answer"
-          ? (dialogueFocus ? 0.92 : 0.86)
-          : id === "chords"
-            ? 0.82
-            : id === "pad"
-              ? 0.74
-              : 1
-        : 1;
       for (let index = 0; index < notes.length; index += 1) {
         const note = notes[index];
         if (id === "drums" && producerRole !== "rest") {
@@ -5434,10 +5407,10 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         ));
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
-        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence * conversationPresence, 0.04, 1))) continue;
+        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
         kept.push({
           ...note,
-          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity * conversationVelocity), 1, 127),
+          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
           orchestrationRole: lane.role,
           producerRole,
           producerScenePurpose: scene?.purpose ?? "develop",

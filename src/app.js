@@ -2721,9 +2721,13 @@ function patchOptions(id, selectedProgram) {
   const profileChoices = profilePrograms(id);
   const baseChoices = (PATCHES[id] || []).map(([program]) => Number(program));
   const goal = TRACK_SOUND_ROLE_GOALS[id];
-  const programs = curateTrackProgramPalette(id, [...profileChoices, ...baseChoices, Number(selectedProgram)], {
+  const selected = Number(selectedProgram);
+  let programs = curateTrackProgramPalette(id, [...profileChoices, ...baseChoices, selected], {
     limit: Math.max(goal?.fallbackLimit ?? 6, profileChoices.length + 2, 6),
   });
+  if (Number.isFinite(selected) && !programs.includes(selected)) {
+    programs = [selected, ...programs.filter((program) => program !== selected)];
+  }
   const auto = isTrackProgramAuto(id);
   const autoOption = `<option value="auto" ${auto ? "selected" : ""}>AUTO · Element decides</option>`;
   const manualOptions = programs.map((program) => {
