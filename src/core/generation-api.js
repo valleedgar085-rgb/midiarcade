@@ -7,6 +7,7 @@ import { dispatchGenerationRequest } from "./generation-dispatch.js";
 import { continueElementLineage } from "./elemental-lineage.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
 import { applySectionDrumEvolutionRefinement } from "./section-drum-evolution-refinement.js";
+import { applyTrapStagedBuildRefinement } from "./trap-staged-build-refinement.js";
 import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
 
 function generateSongVariations(sourceSong, config = {}) {
@@ -34,7 +35,8 @@ export function runGenerationRequest(kind, payload = {}) {
   const config = payload.config ?? {};
   const bounced = applySnareBounceRefinement(result.song, config);
   const evolved = applySectionDrumEvolutionRefinement(bounced.song, config);
-  return evolved.song === result.song ? result : { ...result, song: evolved.song };
+  const staged = applyTrapStagedBuildRefinement(evolved.song, config);
+  return staged.song === result.song ? result : { ...result, song: staged.song };
 }
 
 export const generationEngineApi = ENGINE_API;
