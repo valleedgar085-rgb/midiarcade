@@ -174,18 +174,6 @@
 
 #preGenSection .generation-envelope-select {
   margin-top: 12px;
-  padding: 14px 16px;
-  border: 1px solid rgba(157, 111, 255, 0.16);
-  border-radius: 16px;
-  background: linear-gradient(135deg, rgba(157, 111, 255, 0.08), rgba(255, 255, 255, 0.018));
-}
-
-#preGenSection .generation-envelope-select > span {
-  display: block;
-}
-
-#preGenSection .generation-envelope-select > span small {
-  margin-left: 6px;
 }
 
 #preGenSection .generation-envelope-select > small {
@@ -419,10 +407,6 @@
 
   #preGenSection .generation-intent p {
     font-size: 0.7rem;
-  }
-
-  #preGenSection .generation-envelope-select {
-    padding: 12px;
   }
 
   #preGenSection .generation-actions-bar {
