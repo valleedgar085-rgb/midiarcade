@@ -1,3 +1,9 @@
+import {
+  curateTrackProgramPalette,
+  elementFamilyPriorities,
+  programFamilyForTrack,
+} from "./instrument-program-policy.js";
+
 function hashNumber(value) {
   let hash = 2166136261;
   const text = String(value ?? "");
@@ -12,10 +18,6 @@ function clamp01(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 0;
   return Math.min(1, Math.max(0, numeric));
-}
-
-function uniquePrograms(values = []) {
-  return [...new Set(values.map(Number).filter((value) => Number.isFinite(value) && value >= 0 && value <= 127))];
 }
 
 export const ELEMENT_PROGRAM_PRIORITIES = Object.freeze({
@@ -46,11 +48,21 @@ export const ELEMENT_PROGRAM_PRIORITIES = Object.freeze({
 });
 
 export function elementProgramCandidates(trackId, elementId, palette = []) {
-  const safePalette = uniquePrograms(palette);
+  const safePalette = curateTrackProgramPalette(trackId, palette, {
+    limit: palette.length || 128,
+    familyOrder: elementFamilyPriorities(trackId, elementId),
+  });
   if (!safePalette.length) return [];
   const priorities = ELEMENT_PROGRAM_PRIORITIES[String(elementId || "").toLowerCase()]?.[trackId] ?? [];
   const preferred = priorities.filter((program) => safePalette.includes(program));
-  const remaining = safePalette.filter((program) => !preferred.includes(program));
+  const familyOrder = elementFamilyPriorities(trackId, elementId);
+  const currentPriority = new Map(safePalette.map((program, index) => [program, index]));
+  const remaining = safePalette
+    .filter((program) => !preferred.includes(program))
+    .sort((left, right) => (
+      familyOrder.indexOf(programFamilyForTrack(trackId, left)) - familyOrder.indexOf(programFamilyForTrack(trackId, right))
+      || currentPriority.get(left) - currentPriority.get(right)
+    ));
   return [...preferred, ...remaining];
 }
 
@@ -73,8 +85,11 @@ export function chooseElementProgram({
   if (!candidates.length) return Number.isFinite(Number(currentProgram)) ? Number(currentProgram) : null;
 
   const current = Number(currentProgram);
+  const currentFamily = programFamilyForTrack(trackId, current);
   const alternatives = candidates.filter((program) => program !== current);
   if (alternatives.length) candidates = alternatives;
+  const familyAlternatives = candidates.filter((program) => programFamilyForTrack(trackId, program) !== currentFamily);
+  if (familyAlternatives.length) candidates = familyAlternatives;
 
   const strength = clamp01(intensity);
   if (strength >= 0.8) return candidates[0];
