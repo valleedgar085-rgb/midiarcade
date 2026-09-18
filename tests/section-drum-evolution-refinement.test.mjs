@@ -92,13 +92,51 @@ test("section drum evolution is deterministic, bounded, and develops later secti
   assert.notEqual(first.song, song);
   assert.ok(first.diagnostics.edits >= 3);
   assert.ok(first.diagnostics.edits <= MAX_SECTION_DRUM_EDITS);
+  assert.ok(first.diagnostics.editTypes.includes("opening-restraint"));
   assert.ok(first.diagnostics.editTypes.includes("kick-response"));
   assert.ok(first.diagnostics.editTypes.includes("ghost-snare"));
   assert.ok(first.diagnostics.editTypes.includes("transition-pickup"));
+  assert.ok(first.diagnostics.sections.some((entry) => entry.sectionId === "intro-1" && entry.type === "opening-restraint"));
   assert.ok(first.diagnostics.sections.some((entry) => entry.sectionId === "verse-2"));
   assert.ok(first.diagnostics.sections.some((entry) => entry.sectionId === "chorus-2"));
+  assert.equal(first.song.idea.sectionDrumOpeningRestraints, 1);
   assert.ok(evolutionNotes(first.song).every((note) => note.sectionId));
   assert.ok(first.song.idea.rhythmicFeatures.includes("Section-aware drum evolution"));
+});
+
+test("opening restraint softens one safe offbeat hat without changing the opening kick/snare backbone", () => {
+  const song = fixtureSong("hipHop");
+  const before = structuredClone(song.tracks.find((track) => track.id === "drums").notes);
+  const result = applySectionDrumEvolutionRefinement(song, {
+    genre: "hipHop",
+    seed: "opening-restraint-proof",
+    evolution: 0.9,
+    drumFills: 0.7,
+    energy: 0.78,
+  }, acceptEvaluators);
+
+  assert.equal(result.diagnostics.accepted, true);
+  const after = result.song.tracks.find((track) => track.id === "drums").notes;
+  const beforeByKey = new Map(before.map((note) => [`${note.pitch}:${note.start}`, note]));
+  const velocityChanges = after
+    .filter((note) => beforeByKey.has(`${note.pitch}:${note.start}`))
+    .map((note) => ({ before: beforeByKey.get(`${note.pitch}:${note.start}`), after: note }))
+    .filter(({ before: original, after: updated }) => original.velocity !== updated.velocity);
+
+  assert.equal(velocityChanges.length, 1);
+  const [{ before: original, after: updated }] = velocityChanges;
+  assert.ok([42, 44].includes(Number(updated.pitch)));
+  assert.ok(updated.start >= 0 && updated.start < 8);
+  assert.ok(Math.abs((updated.start % 1) - 0.5) <= 0.08);
+  assert.ok(updated.velocity <= original.velocity - 8);
+  assert.equal(updated.drumEvolutionRole, "opening-restraint");
+
+  const backbone = [36, 38, 40];
+  for (const pitch of backbone) {
+    const beforeNotes = before.filter((note) => note.pitch === pitch && note.start < 16);
+    const afterNotes = after.filter((note) => note.pitch === pitch && note.start < 16);
+    assert.deepEqual(afterNotes.map(({ start, velocity }) => ({ start, velocity })), beforeNotes.map(({ start, velocity }) => ({ start, velocity })));
+  }
 });
 
 test("Evolution=0 remains a hard off switch", () => {
