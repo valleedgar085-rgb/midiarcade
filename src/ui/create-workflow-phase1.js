@@ -99,6 +99,43 @@ function moveGenerationEssentials(rootDocument, createPanel) {
   creatorMain.insertBefore(controls, shapeControls);
 }
 
+function organizePrimaryDirection(rootDocument, createPanel) {
+  const genre = createPanel.querySelector(".genre-direction");
+  const controls = createPanel.querySelector(".create-live-controls");
+  const generationActions = createPanel.querySelector(".generation-actions-bar");
+  if (!genre || !controls || !generationActions || controls.querySelector('[data-create-stage="feel"]')) return;
+  if (typeof rootDocument?.createElement !== "function") return;
+
+  const heading = (id, label, copy) => {
+    const element = rootDocument.createElement("div");
+    element.className = "direction-essentials-heading section-heading create-stage-heading";
+    element.dataset.createStage = id;
+    element.innerHTML = `<div><p class="eyebrow">${label}</p><h3>${copy}</h3></div>`;
+    return element;
+  };
+
+  genre.insertAdjacentElement("afterbegin", heading("song", "1 · SONG", "Choose the musical world"));
+
+  const feelControls = ["tempoControl", "energyControl", "complexityControl", "grooveControl"]
+    .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
+    .filter(Boolean);
+  const structureControls = ["barsControl"]
+    .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
+    .filter(Boolean);
+
+  controls.append(
+    heading("feel", "2 · FEEL", "Set pace, energy, detail and pocket"),
+    ...feelControls,
+    heading("structure", "3 · STRUCTURE", "Choose how much room the song gets"),
+    ...structureControls,
+  );
+
+  generationActions.insertAdjacentElement(
+    "beforebegin",
+    heading("generate", "4 · GENERATE", "Compose from this direction"),
+  );
+}
+
 function consolidateAdvancedDirection(rootDocument, createPanel) {
   const creator = createPanel.querySelector("#preGenSection");
   const creatorGrid = creator?.querySelector(".creator-grid");
@@ -198,6 +235,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   mountCreativeRangeControl(rootDocument, createPanel);
   upgradeStaticCreateCopy(rootDocument, createPanel);
   moveGenerationEssentials(rootDocument, createPanel);
+  organizePrimaryDirection(rootDocument, createPanel);
   consolidateAdvancedDirection(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);

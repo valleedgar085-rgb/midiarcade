@@ -62,9 +62,42 @@ test("lead and pad envelopes stay expressive without overlapping later phrases",
 test("mixer values explain level, velocity, and note length in musical units", () => {
   assert.equal(formatLevel(1), "0.0 dB · 100%");
   assert.equal(formatLevel(0), "−∞ dB · muted");
-  assert.equal(formatVelocityScale(1), "×1.00 · MIDI 1–127");
+  assert.equal(formatVelocityScale(1), "×1.00 · balanced");
   assert.equal(formatGate(0.65), "65% · short");
   assert.equal(formatMidiVelocity(100), "100 · strong");
+});
+
+
+test("A4 keeps musical balance controls primary and deeper sound design disclosed", () => {
+  const rack = appSource.match(/function renderTrackRack\(\)[\s\S]*?const MOBILE_WORKSPACE_BUTTONS/)?.[0] ?? "";
+  assert.match(rack, /class="track-expression-grid mix-primary-balance"/);
+  assert.match(rack, />LEVEL <output>/);
+  assert.match(rack, />IMPACT <output>/);
+  assert.match(rack, />NOTE LENGTH <output>/);
+  assert.ok(rack.indexOf('data-control="velocity"') < rack.indexOf('<details class="track-expression track-shaping">'));
+  assert.ok(rack.indexOf('data-control="gate"') < rack.indexOf('<details class="track-expression track-shaping">'));
+  assert.equal((rack.match(/data-control="velocity"/g) || []).length, 1);
+  assert.equal((rack.match(/data-control="gate"/g) || []).length, 1);
+  assert.match(rack, /AUTO SOUND/);
+  assert.match(rack, /STYLE PICK/);
+  assert.match(rack, /CUSTOM SOUND/);
+  assert.match(rack, /MORE INSTRUMENT CONTROL/);
+});
+
+
+test("A5 Finish exposes track list, section journey, and explicit default handoff intent", () => {
+  const finish = appSource.match(/function renderFinishWorkspace\(\)[\s\S]*?async function saveCoverArtwork/)?.[0] ?? "";
+  assert.match(finish, /TRACKS ·/);
+  assert.match(finish, /SECTIONS ·/);
+  assert.match(finish, /finishTrackNames/);
+  assert.match(finish, /finishSectionNames/);
+  assert.match(finish, /DAW-ready default · Full song/);
+  assert.match(finish, /focused export/);
+  assert.match(finish, /original groove and human feel/);
+  assert.match(finish, /exportTrackCount/);
+  const exportFlow = appSource.match(/async function exportSong\(\)[\s\S]*?function expressionPoints/)?.[0] ?? "";
+  assert.match(exportFlow, /buildExportSongSnapshot\(\)/);
+  assert.match(exportFlow, /prepareMidiExport\(clone, currentExportSetup\(\)\)/);
 });
 
 test("preview drum characters respond musically to velocity without losing bounds", () => {
@@ -262,7 +295,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /function renderArrangeWorkflow\(\)[\s\S]*?data-arrange-step/, "arrangement guidance must follow real section and note focus");
   assert.match(cssSource, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy");
   assert.match(appSource, /function renderMixOverview\(\)[\s\S]*?mixAudibleCount/, "the mix overview must render from live mixer state");
-  assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?SHAPE INSTRUMENT/, "deep track controls must use progressive disclosure");
+  assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?MORE INSTRUMENT CONTROL/, "deep track controls must use progressive disclosure");
   assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationRunner[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the Phase 10 core modules");
   assert.match(appSource, /createGenerationExecutor[\s\S]*?new Worker\(new URL\("\.\/generation-worker\.js"/, "candidate search must run outside the UI thread when workers are available");
   assert.match(appSource, /resolveControlHelp[\s\S]*?from "\.\/ui\/control-catalog\.js"/, "Phase 21 must keep the control catalog outside the application shell");

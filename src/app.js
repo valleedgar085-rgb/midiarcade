@@ -64,7 +64,7 @@ import {
   nearestScalePitch,
   transposeScaleStep,
 } from "./ui/shape-logic.js";
-import { SHAPE_QUICK_DIRECTIONS, createShapeIntent } from "./core/shape-director-policy.js";
+import { SHAPE_QUICK_DIRECTIONS, createShapeIntent, rankShapeSuggestions } from "./core/shape-director-policy.js";
 import { auditionShapeCandidate, createShapeCandidate } from "./core/shape-director-engine.js";
 import { executeArrangementCommand } from "./ui/arrangement-logic.js";
 import { coverArtworkDataUrl, coverArtworkFinish, createCoverArtworkSvg } from "./cover-art.js";
@@ -2423,6 +2423,32 @@ function renderShapeDirector(section = editorSection()) {
       .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
       .join("");
   }
+  const recommendations = rankShapeSuggestions({
+    song: state.song,
+    section,
+    target: director.target,
+    elementId: state.song?.variationSet?.element?.id,
+  });
+  if (directions) {
+    const rankedIds = new Set(recommendations.map((entry) => entry.directionId));
+    for (const entry of recommendations) {
+      const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
+      if (!button) continue;
+      button.textContent = "★ " + entry.direction.label;
+      button.dataset.shapeRank = String(entry.rank);
+      button.title = entry.reason;
+      directions.append(button);
+    }
+    for (const entry of Object.values(SHAPE_QUICK_DIRECTIONS)) {
+      if (rankedIds.has(entry.id)) continue;
+      const button = directions.querySelector('[data-shape-direction="' + entry.id + '"]');
+      if (!button) continue;
+      button.textContent = entry.label;
+      delete button.dataset.shapeRank;
+      button.removeAttribute("title");
+      directions.append(button);
+    }
+  }
   if (auditionControls && !auditionControls.childElementCount) {
     auditionControls.innerHTML = '<button type="button" data-shape-audition="before">Before</button><button type="button" data-shape-audition="after">After</button>';
   }
@@ -2440,9 +2466,12 @@ function renderShapeDirector(section = editorSection()) {
   });
   if (!director.transaction) {
     if (candidate) candidate.hidden = true;
+    const topSuggestion = recommendations[0];
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
       ? "Select notes in the piano roll first, or use Section / Current instrument scope."
-      : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
+      : topSuggestion
+        ? `Suggested: ${topSuggestion.direction.label} — ${topSuggestion.reason}. Choose any direction to stage a local Before / After candidate; nothing commits automatically.`
+        : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
     return;
   }
   const summary = director.transaction.summary;
@@ -3125,16 +3154,20 @@ function renderTrackRack() {
       <div class="track-card-header">
         <div class="track-identity">
           <span class="track-icon" aria-hidden="true">${meta.icon}</span>
-          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName}</small></span>
+          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName} · ${isTrackProgramAuto(id) ? "AUTO SOUND" : profilePick ? "STYLE PICK" : "CUSTOM SOUND"}</small></span>
         </div>
         <div class="track-primary-actions" aria-label="${meta.name} quick controls">
         <button class="track-toggle" data-action="mute" type="button" aria-label="Mute ${meta.name}" aria-pressed="${muted}" title="Mute">M</button>
         <button class="track-toggle" data-action="solo" type="button" aria-label="Solo ${meta.name}" aria-pressed="${solo}" title="Solo">S</button>
         </div>
       </div>
-      <label class="track-control track-level-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">Channel gain before the master output</small></label>
+      <div class="track-expression-grid mix-primary-balance" aria-label="${meta.name} musical balance">
+        <label class="track-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">How loud this instrument sits in preview and export controllers</small></label>
+        <label class="track-control"><span>IMPACT <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity impact" /><small class="parameter-note">Soft ↔ strong note attack; MIDI velocity remains bounded</small></label>
+        <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Short ↔ connected articulation used by preview and MIDI handoff</small></label>
+      </div>
       <details class="track-expression track-shaping">
-        <summary><span><b>SHAPE INSTRUMENT</b><small>Sound · performance · space</small></span><i aria-hidden="true">+</i></summary>
+        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound · pattern · pan · tone</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
           <label class="track-patch"><span><b>SOUND</b><em>${isTrackProgramAuto(id) ? "AUTO" : profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
           <div class="track-secondary-actions">
@@ -3155,9 +3188,7 @@ function renderTrackRack() {
             <section class="track-control-group performance-group" aria-label="${meta.name} performance controls">
               <header><b>PERFORMANCE</b><small>impact and placement</small></header>
               <div class="track-expression-grid">
-                <label class="track-control"><span>NOTE VELOCITY <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /><small class="parameter-note">Scales note impact; export stays within MIDI 1–127</small></label>
-                <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Held length without adding a long release tail</small></label>
-                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /></label>
+                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /><small class="parameter-note">Stereo placement; the note performance itself stays unchanged</small></label>
               </div>
             </section>
             <section class="track-control-group tone-group" aria-label="${meta.name} tone controls">
@@ -3295,13 +3326,16 @@ function renderFinishWorkspace() {
   $("#finishCoverImage").dataset.finish = finish.id;
   $("#finishCoverTitle").textContent = deriveTitle();
   if ($("#finishCoverLabel")) $("#finishCoverLabel").textContent = `${finish.label.toUpperCase()} FINISH`;
+  const finishTrackNames = songTracks().map((track, index) => (
+    TRACK_META[trackId(track, index)]?.name ?? track.name ?? track.id ?? `Track ${index + 1}`
+  ));
+  const finishSectionNames = normalizeSections().map((section) => section.name || section.id).filter(Boolean);
   $("#finishFacts").innerHTML = [
-    `${songTracks().length} named tracks`,
-    `${songKey()} ${songMode().replace(/([a-z])([A-Z])/g, "$1 $2")}`,
-    `${Math.round(songBpm())} BPM`,
-    `${songBars()} bars`,
-    "Velocity + articulation",
-    "CC expression + sustain + modulation",
+    `TRACKS · ${finishTrackNames.join(" · ")}`,
+    `SECTIONS · ${finishSectionNames.join(" → ")}`,
+    `${songKey()} ${songMode().replace(/([a-z])([A-Z])/g, "$1 $2")} · ${Math.round(songBpm())} BPM · ${songBars()} bars`,
+    "PERFORMANCE · velocity + articulation + CC expression",
+    "HANDOFF · Type-1 multitrack MIDI with section markers",
   ].map((fact) => `<span>${fact}</span>`).join("");
   renderExportSetup();
 }
@@ -3320,8 +3354,16 @@ function renderExportSetup() {
   const setup = currentExportSetup();
   const profile = resolveMidiExportProfile(setup.profile, setup.selectedTrackId);
   const selectedName = TRACK_META[setup.selectedTrackId]?.name ?? "instrument";
-  const trackCount = profile.trackIds?.length ?? songTracks().length;
-  summary.innerHTML = `<strong>${profile.id === "selected" ? selectedName : profile.label}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel"}</span>`;
+  const sourceTracks = songTracks();
+  const trackIds = profile.trackIds ?? sourceTracks.map((track, index) => trackId(track, index));
+  const trackCount = trackIds.length;
+  const trackNames = trackIds.map((id) => TRACK_META[id]?.name ?? id);
+  const timingLabel = setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel";
+  const isDefaultHandoff = profile.id === "full" && setup.timing === "performance";
+  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default · Full song" : profile.id === "selected" ? selectedName + " · focused export" : profile.label + " · focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${timingLabel} · ${trackNames.join(" + ")}</span>`;
+  if ($("#exportTrackCount")) {
+    $("#exportTrackCount").textContent = `${trackCount} ${trackCount === 1 ? "MIDI TRACK" : "MIDI TRACKS"} · ${setup.timing === "tight" ? "TIGHT" : "GROOVE"}`;
+  }
 }
 
 async function saveCoverArtwork() {

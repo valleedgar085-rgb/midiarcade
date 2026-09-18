@@ -8,7 +8,8 @@ export function formatLevel(value) {
 
 export function formatVelocityScale(value) {
   const scale = Math.min(1.5, Math.max(0.5, Number(value) || 1));
-  return `×${scale.toFixed(2)} · MIDI 1–127`;
+  const feel = scale < 0.82 ? "soft" : scale > 1.12 ? "strong" : "balanced";
+  return `×${scale.toFixed(2)} · ${feel}`;
 }
 
 export function formatGate(value) {

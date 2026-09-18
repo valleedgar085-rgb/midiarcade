@@ -10,21 +10,22 @@ The product rule is simple: musical improvements only stay when they remain dete
 
 ## Current production state
 
-`main` is currently at **Phase 9I**.
+The current production line combines the **Core hardening** baseline with **Track A workflow convergence** across Create → Shape → Mix → Finish.
 
-The latest merged work adds critic-gated section-aware drum evolution for Hip-Hop, Rap, and Trap on top of the Phase 9H snare-bounce grammar. The Phase 9I PR validation recorded **518 / 518 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and Preview APK assembly.
+The core-hardening baseline entering Track A recorded **569 / 569 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and install-safe Preview APK assembly. Track A adds cross-workspace authority coverage and product-convergence contracts on top of that baseline.
 
-Recent production milestones also include:
+Important production work now includes:
 
-- **Phase 9E — Creative Range UI**: neutral default plus explicit Familiar / Fresh / Wild Creative Genome envelopes.
-- **Phase 9F — Rhythm Topology + Performance Feel**: Creative Genome rhythm and feel are consumed through the existing calibrated groove/humanization controls.
-- **Phase 9G — Surprise Budget**: deterministic surprise capacity is consumed through Producer Brain without unseeded randomness.
-- **Phase 9H — Snare Bounce**: critic-gated snare-bounce grammar with hard roll/fill switches preserved.
-- **Phase 9I — Section Drum Evolution**: bounded section-aware kick responses, ghost snares, and transition pickups for Hip-Hop/Rap/Trap.
-- **Generation ownership hardening**: timed-out or disposed generation work cannot overwrite a newer song or clear newer loading, progress, watchdog, or history state.
-- **Accepted Shape authority**: committed Shape revisions are authoritative for subsequent generation and lineage.
+- **Phase 9E–9I** — Creative Range, broader Creative Genome consumption, Surprise Budget, Snare Bounce, and section-aware drum evolution;
+- **Track A1 authority work** — accepted Shape revisions remain canonical and section-variation audition stays outside committed song state;
+- **Solar Pop UI foundation** — the existing Create → Shape → Mix → Finish workflow now shares one visual system;
+- **role-safe instrument policy** and **profile-driven genre arrangement/layering**;
+- **Track Aura v1** and smarter deterministic song naming;
+- **core hardening** — shared generation finalization, canonical genre/note contracts, preference-only session persistence, worker recovery, deterministic helpers, quality-stage execution, diagnostics, telemetry isolation, and safer store/session boundaries.
 
-No critic/release thresholds, candidate ceilings, repair budgets, scale/MIDI safety contracts, fusion calibration, timeout ownership, or Android audio budgets should be weakened to extend the app.
+Phase 9I is now a historical engine milestone rather than the current production label.
+
+No critic/release thresholds, candidate ceilings, repair budgets, scale/MIDI safety contracts, fusion calibration, timeout ownership, deterministic behavior, or Android audio budgets should be weakened to extend the app.
 
 ## Product direction
 
@@ -37,7 +38,7 @@ The north-star workflow is:
 3. **Mix** — judge and balance the composition with producer-readable level, velocity, gate, pan/space, mute/solo, and instrument controls.
 4. **Finish** — export/share predictable Type-1 multitrack MIDI for FL Studio or another DAW.
 
-The next major roadmap is **Track A: Workflow Convergence**. It focuses on one canonical song context across workspaces, a simpler Create hierarchy, smarter but advisory Shape suggestions, a more focused Mix workspace, and a clearer Finish/export handoff. Track naming intentionally avoids reusing historical phase numbers already present in the codebase. Engine expansion resumes only after the product experience is coherent and physical Android validation is repeatable.
+**Track A: Workflow Convergence is implemented.** A1 now has executable Create → Shape → Mix → Finish → Create → Similar authority/history coverage; A2 presents Song → Feel → Structure → Generate; A3 adds contextual advisory Shape recommendations; A4 promotes Level / Impact / Note Length while disclosing deeper sound design; and A5 makes the exact MIDI handoff visible before export. The active next gate is **Track C physical Android validation**. Measured Track B engine expansion resumes only after that device discipline is repeatable.
 
 See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
 
