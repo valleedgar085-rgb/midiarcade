@@ -6,6 +6,7 @@ import {
 import { normalizeGenreId } from "./genre-contract.js";
 import { clampMidiVelocity } from "./note-contract.js";
 import { hash32, seededUnit } from "./deterministic-rng.js";
+import { cloneValue } from "./clone-value.js";
 
 export const SECTION_DRUM_EVOLUTION_VERSION = 1;
 export const MAX_SECTION_DRUM_EDITS = 6;
@@ -32,11 +33,6 @@ const round = (value, digits = 4) => {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
 };
-
-function cloneSong(song) {
-  if (typeof structuredClone === "function") return structuredClone(song);
-  return JSON.parse(JSON.stringify(song));
-}
 
 
 function resolveGenre(song, config) {
@@ -174,7 +170,7 @@ function appendRhythmicFeature(song, feature) {
 }
 
 function buildCandidate(song, config, genre) {
-  const candidate = cloneSong(song);
+  const candidate = cloneValue(song);
   const drumTrack = findDrumTrack(candidate);
   const sections = Array.isArray(candidate?.structure) ? candidate.structure : candidate?.sections;
   if (!drumTrack || !Array.isArray(drumTrack.notes) || !Array.isArray(sections) || sections.length < 3) return null;
