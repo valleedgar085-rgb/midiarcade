@@ -1,5 +1,6 @@
 import { clamp, finite } from "../utils.js";
 import { createShapeIntent } from "./shape-director-policy.js";
+import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -42,7 +43,7 @@ function eventVelocity(note) {
 }
 
 function setEventVelocity(note, value) {
-  const safe = Math.round(clamp(finite(value, 90), 1, 120));
+  const safe = clampMidiVelocity(value, 90);
   if (Object.prototype.hasOwnProperty.call(note, "vel") && finite(note.vel, 90) <= 1) {
     note.vel = safe / 127;
   } else {
@@ -308,7 +309,7 @@ function validateCandidate(sourceSong, candidate, intent, beforeDigest) {
     for (const note of track?.notes ?? []) {
       const pitch = note?.pitch ?? note?.note ?? note?.midi;
       if (pitch != null && (eventPitch(note) < 0 || eventPitch(note) > 127)) return { valid: false, error: "midi-pitch-out-of-range" };
-      if (eventVelocity(note) < 1 || eventVelocity(note) > 120) return { valid: false, error: "midi-velocity-out-of-range" };
+      if (eventVelocity(note) < 1 || eventVelocity(note) > MIDI_NOTE_VELOCITY_MAX) return { valid: false, error: "midi-velocity-out-of-range" };
       if (eventDuration(note) <= 0) return { valid: false, error: "invalid-note-duration" };
     }
   }
