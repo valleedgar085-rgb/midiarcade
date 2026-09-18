@@ -5443,15 +5443,50 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
   return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
 }
 
+const MELODIC_ANSWER_DELAY_BY_GENRE = Object.freeze({
+  pop: 0.25,
+  hipHop: 0.375,
+  rap: 0.375,
+  trap: 0.25,
+});
+
+export function melodicAnswerStart({
+  genre,
+  bars,
+  secondaryGenre = null,
+  noteStart,
+  noteDuration = 0.25,
+  leadStart,
+  leadDuration = 0.25,
+  sectionStart,
+  sectionEnd,
+  protectedAnchor = false,
+} = {}) {
+  const original = finite(noteStart, 0);
+  if (secondaryGenre || protectedAnchor || finite(bars, 0) < 12) return round(original);
+  const delay = MELODIC_ANSWER_DELAY_BY_GENRE[String(genre ?? "")];
+  if (!Number.isFinite(delay)) return round(original);
+  const lead = finite(leadStart, original);
+  if (Math.abs(original - lead) >= 0.105) return round(original);
+  const start = finite(sectionStart, 0);
+  const end = finite(sectionEnd, start);
+  if (end - start < 1.5 || original >= end - 0.75) return round(original);
+  const responseDelay = Math.max(delay, Math.min(0.5, Math.max(0, finite(leadDuration, 0.25)) * 0.45));
+  const latestStart = end - Math.max(0.12, Math.min(0.5, finite(noteDuration, 0.25)));
+  const shifted = clamp(lead + responseDelay, start, latestStart);
+  return shifted > original + 0.04 ? round(shifted) : round(original);
+}
+
 function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, structure) {
   const melody = [...(melodyNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   const counterpoint = [...(counterNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   if (!melody.length || !counterpoint.length) {
-    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0 } };
+    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0, timedAnswers: 0 } };
   }
   let previousCounter = null;
   let contrary = 0;
   let oblique = 0;
+  let timedAnswers = 0;
   const shapedCounterpoint = counterpoint.map((note) => {
     const priorIndex = melody.findLastIndex((lead) => lead.start <= note.start + 0.001);
     const lead = melody[Math.max(0, priorIndex)];
@@ -5480,12 +5515,41 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
     if (relationship === "contrary") contrary += 1;
     else oblique += 1;
     const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6);
+    const protectedAnchor = Boolean(
+      note.phraseAnchor
+      || note.resolutionRole
+      || note.transitionRole
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.memoryRole
+      || note.motifHandoffRole
+      || note.ensembleAccent
+      || note.finalAssemblyRole
+      || note.phraseRole === "turnaround"
+    );
+    const answerStart = section && lead
+      ? melodicAnswerStart({
+        genre: config.genre,
+        bars: config.bars,
+        secondaryGenre: config.secondaryGenre,
+        noteStart: note.start,
+        noteDuration: note.duration,
+        leadStart: lead.start,
+        leadDuration: lead.duration,
+        sectionStart: section.startBeat,
+        sectionEnd: section.endBeat,
+        protectedAnchor,
+      })
+      : round(note.start);
+    if (answerStart > note.start + 0.04) timedAnswers += 1;
     const shaped = {
       ...note,
       pitch,
+      start: answerStart,
       counterMelodyRole: "answer",
       melodicRelationship: relationship,
       answerToBeat: round(lead?.start ?? note.start),
+      answerDelayBeats: round(Math.max(0, answerStart - finite(lead?.start, answerStart))),
       dialogueSectionId: section?.id ?? null,
     };
     previousCounter = shaped;
@@ -5498,7 +5562,7 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
   return {
     melody: shapedMelody,
     counterpoint: shapedCounterpoint,
-    report: { version: 1, answers: shapedCounterpoint.length, contrary, oblique },
+    report: { version: 1, answers: shapedCounterpoint.length, contrary, oblique, timedAnswers },
   };
 }
 
