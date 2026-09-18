@@ -4804,6 +4804,7 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
   let triggers = 0;
   for (const layer of arrangementProfile.optionalLayers ?? []) {
     if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
     for (const section of structure) {
       if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
       for (let localBar = 0; localBar < section.bars; localBar += 1) {
