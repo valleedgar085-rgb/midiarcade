@@ -1,18 +1,10 @@
 import { clamp, finite } from "../utils.js";
 import { createShapeIntent } from "./shape-director-policy.js";
 import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
+import { hash32 } from "./deterministic-rng.js";
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
-}
-
-function hash32(value) {
-  let hash = 2166136261;
-  for (const char of String(value ?? "")) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
 }
 
 function eventStart(note) {
