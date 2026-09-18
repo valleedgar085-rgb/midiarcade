@@ -11554,7 +11554,8 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
     candidateScores: candidates.map((candidate) => {
-      const { index, evaluation, novelty, selectionScore, song } = candidate;\n      const diversity = candidate.diversity ?? evaluateSongDiversity(song, [], song.generation);
+      const { index, evaluation, novelty, selectionScore, song } = candidate;
+      const diversity = candidate.diversity ?? evaluateSongDiversity(song, [], song.generation);
       const candidateBalance = evaluateCandidateBalance(evaluation);
       return {
         index,
