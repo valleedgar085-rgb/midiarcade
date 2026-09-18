@@ -12,13 +12,13 @@ import {
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
-test("Hip-Hop pocket is less trap-like while keeping deterministic sample-pocket feel", () => {
+test("Hip-Hop pocket keeps its calibrated writing budget while timing feel changes independently", () => {
   const profile = GENRE_PROFILES.hipHop;
-  assert.equal(profile.swing, 0.22);
-  assert.equal(profile.humanize, 0.32);
-  assert.equal(profile.tripletChance, 0.3);
-  assert.equal(profile.snareRollChance, 0.18);
-  assert.equal(profile.arrangement.fillFrequency, 0.34);
+  assert.equal(profile.swing, 0.2);
+  assert.equal(profile.humanize, 0.3);
+  assert.equal(profile.tripletChance, 0.38);
+  assert.equal(profile.snareRollChance, 0.24);
+  assert.equal(profile.arrangement.fillFrequency, 0.4);
   assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "sparseEcho"]);
   assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.9);
 });
@@ -60,4 +60,11 @@ test("Shape shows three recommendations first and progressively discloses the re
   assert.match(app, /Tap one of the three suggested moves to preview it/);
   assert.match(app, /More directions/);
   assert.match(app, /Fewer directions/);
+});
+
+
+test("fusion and protected cadence landings bypass the standalone pocket nudge", () => {
+  const source = fs.readFileSync(new URL("../src/music-engine.js", import.meta.url), "utf8");
+  assert.match(source, /const protectedLanding = Boolean\(note\.resolutionRole \|\| note\.ensembleCadenceRole \|\| note\.transitionHandoffRole\)/);
+  assert.match(source, /const microOffset = config\.secondaryGenre \|\| protectedLanding\s*\? 0/);
 });
