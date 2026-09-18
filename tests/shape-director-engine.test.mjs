@@ -216,3 +216,39 @@ test("Before and After audition return isolated snapshots", () => {
   assert.notEqual(transaction.before.title, "mutated audition");
   assert.notEqual(transaction.after.title, "other mutation");
 });
+
+
+test("Shape mutations preserve the final-master velocity ceiling of 120", () => {
+  const source = fixtureSong();
+  const transaction = createShapeCandidate(source, {
+    selection: { target: "track", sectionId: "chorus", trackId: "drums" },
+    size: "transform",
+    direction: "harder",
+  }, { seed: "velocity-cap" });
+
+  assert.equal(transaction.status, "candidate");
+  const velocities = transaction.after.tracks
+    .flatMap((track) => track.notes ?? [])
+    .map((entry) => entry.velocity)
+    .filter((value) => Number.isFinite(value));
+  assert.ok(velocities.length > 0);
+  assert.ok(Math.max(...velocities) <= 120);
+});
+
+test("Calm Down reduces density instead of being consumed by the build-up branch", () => {
+  const source = fixtureSong();
+  const before = source.tracks.find((track) => track.id === "melody").notes
+    .filter((entry) => entry.start < 8);
+  const transaction = createShapeCandidate(source, {
+    selection: { target: "track", sectionId: "verse", trackId: "melody" },
+    size: "transform",
+    direction: "calmDown",
+  }, { seed: "calm-down-density" });
+
+  assert.equal(transaction.status, "candidate");
+  assert.ok(transaction.summary.deletedNoteCount > 0);
+  const after = transaction.after.tracks.find((track) => track.id === "melody").notes
+    .filter((entry) => entry.start < 8);
+  assert.ok(after.length < before.length);
+  assert.ok(Math.max(...after.map((entry) => entry.velocity)) <= Math.max(...before.map((entry) => entry.velocity)));
+});
