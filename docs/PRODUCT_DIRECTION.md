@@ -209,6 +209,8 @@ Acceptance evidence:
 - history tests across Create → Shape → Mix → Finish → back;
 - no duplicate source of truth for current song or accepted Shape revision.
 
+**Status: complete.** The dedicated Track A1 authority acceptance now exercises Create → Shape candidate → Accept → Mix → Finish → Create → Similar, proves Similar receives the accepted Shape song, and proves Undo returns first to the accepted Shape snapshot and then to the pre-Shape parent. The acceptance passed the repository-quality gate without requiring a runtime authority repair.
+
 #### A2. Create simplification
 
 Reorganize Create around **Song / Feel / Structure / Generate** instead of exposing implementation-oriented controls at the same visual level.
