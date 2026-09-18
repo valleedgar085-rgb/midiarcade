@@ -778,7 +778,7 @@ test("Trap full-song rendering keeps support out of the opening pocket until its
   let gatedTracksWithNotes = 0;
   for (const track of song.tracks) {
     const role = firstScene?.roles?.[track.id];
-    const gate = engine.producerRoleGateWindow(firstSection, song.structure, firstScene, track.id, role, song.config ?? input);
+    const gate = engine.producerRoleGateWindow(firstSection, song.structure, firstScene, track.id, role, { genre: "trap", timeSignature: [4, 4] });
     if (gate?.entryBeat == null) continue;
     const notes = track.notes.filter((note) => (
       note.start >= firstSection.startBeat - 1e-6
