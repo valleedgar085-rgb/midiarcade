@@ -34,51 +34,73 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
   const genre = String(song?.meta?.genreLabel || song?.genre || "Original composition");
   const key = String(song?.meta?.key || song?.key || "C");
   const mode = String(song?.meta?.scale || song?.mode || "major").replace(/([a-z])([A-Z])/g, "$1 $2");
-  // The song owns one permanent composition. Finish variations alter only the
-  // simulated surface treatment, never its palette, geometry, or typography.
-  const seed = hash(`${song?.seed}:${title}`);
+  const bpm = Math.round(Number(song?.bpm ?? song?.tempo ?? song?.meta?.bpm ?? song?.songDNA?.tempo ?? 120));
+  const dna = song?.songDNA ?? song?.songBlueprint?.songDNA ?? {};
+  const identity = dna?.identity ?? {};
+  const seed = hash(`${dna?.familyId ?? song?.seed}:${title}:${identity.signatureBias ?? ""}`);
   const finish = coverArtworkFinish(variation);
   const finishSeed = hash(`${seed}:finish:${finish.id}`);
-  const hue = seed % 360;
-  const hue2 = (hue + 62 + ((seed >>> 8) % 96)) % 360;
-  const hue3 = (hue2 + 78) % 360;
-  const x = 28 + (seed % 45);
-  const y = 24 + ((seed >>> 7) % 48);
+  const genreSeed = hash(String(identity.genre ?? song?.genre ?? genre));
+  const hue = (seed + genreSeed) % 360;
+  const hue2 = (hue + 48 + ((seed >>> 8) % 88)) % 360;
+  const hue3 = (hue2 + 72) % 360;
+  const centerX = 600 + ((seed % 101) - 50);
+  const centerY = 510 + (((seed >>> 7) % 81) - 40);
+  const energyArc = Array.isArray(dna?.arrangement?.energyArc) ? dna.arrangement.energyArc : [];
+  const energy = energyArc.length ? energyArc.reduce((sum, value) => sum + Number(value || 0), 0) / energyArc.length : 0.62;
+  const pulseRadius = Math.round(330 + Math.max(0, Math.min(1, energy)) * 105);
   const words = title.split(/\s+/);
   const midpoint = Math.ceil(words.length / 2);
   const lineOne = escapeXml(words.slice(0, midpoint).join(" "));
   const lineTwo = escapeXml(words.slice(midpoint).join(" "));
-  const subtitle = escapeXml(`${genre.toUpperCase()} · ${key} ${mode}`.toUpperCase());
-
+  const subtitle = escapeXml(`${genre.toUpperCase()} · ${key} ${mode} · ${bpm} BPM`.toUpperCase());
   const foilAngle = 18 + (finishSeed % 54);
+  const spikes = Array.from({ length: 48 }, (_, index) => {
+    const local = hash(`${seed}:aura:${index}`);
+    const angle = (index / 48) * Math.PI * 2;
+    const inner = pulseRadius + 12;
+    const outer = inner + 18 + (local % 82) * (0.35 + energy * 0.65);
+    const x1 = centerX + Math.cos(angle) * inner;
+    const y1 = centerY + Math.sin(angle) * inner;
+    const x2 = centerX + Math.cos(angle) * outer;
+    const y2 = centerY + Math.sin(angle) * outer;
+    return `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}"/>`;
+  }).join("");
+  const prismTop = 245 - Math.round(energy * 35);
+  const prismBottom = 790 + Math.round(energy * 20);
+  const prismLeft = 330 - (seed % 46);
+  const prismRight = 875 + ((seed >>> 5) % 46);
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1200 1200" role="img" aria-label="${escapeXml(title)} cover artwork" data-cover-finish="${finish.id}">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1200 1200" role="img" aria-label="${escapeXml(title)} cover artwork" data-cover-finish="${finish.id}" data-track-aura="v1">
     <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue} 64% 10%)"/><stop offset=".55" stop-color="hsl(${hue2} 70% 17%)"/><stop offset="1" stop-color="#050508"/></linearGradient>
-      <radialGradient id="orb"><stop stop-color="hsl(${hue3} 98% 76%)" stop-opacity=".96"/><stop offset=".42" stop-color="hsl(${hue2} 92% 58%)" stop-opacity=".56"/><stop offset="1" stop-color="hsl(${hue} 90% 48%)" stop-opacity="0"/></radialGradient>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue} 72% 8%)"/><stop offset=".48" stop-color="hsl(${hue2} 72% 14%)"/><stop offset="1" stop-color="#03040b"/></linearGradient>
+      <radialGradient id="aura"><stop stop-color="hsl(${hue3} 100% 72%)" stop-opacity=".68"/><stop offset=".48" stop-color="hsl(${hue2} 96% 58%)" stop-opacity=".25"/><stop offset="1" stop-color="hsl(${hue} 96% 48%)" stop-opacity="0"/></radialGradient>
+      <linearGradient id="prism" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue3} 100% 88%)"/><stop offset=".35" stop-color="hsl(${hue2} 96% 64%)"/><stop offset=".7" stop-color="hsl(${hue} 96% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 25) % 360} 100% 70%)"/></linearGradient>
       <linearGradient id="finishSheen" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${foilAngle} .5 .5)"><stop stop-color="white" stop-opacity="0"/><stop offset=".48" stop-color="white" stop-opacity="${finish.gloss}"/><stop offset=".58" stop-color="hsl(${hue3} 100% 82%)" stop-opacity="${finish.id === "foil" ? 0.2 : finish.gloss * 0.35}"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
-      <filter id="blur"><feGaussianBlur stdDeviation="42"/></filter>
+      <filter id="blur"><feGaussianBlur stdDeviation="48"/></filter>
+      <filter id="glow"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="${finishSeed % 97}"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 ${finish.grain} 0"/></filter>
-      <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="white" stroke-opacity="${finish.grid}"/></pattern>
+      <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="white" stroke-opacity="${finish.grid * 0.55}"/></pattern>
     </defs>
     <rect width="1200" height="1200" rx="48" fill="url(#bg)"/>
     <rect width="1200" height="1200" rx="48" fill="url(#grid)"/>
-    <circle cx="${x * 12}" cy="${y * 12}" r="430" fill="url(#orb)" filter="url(#blur)"/>
-    <g fill="none" stroke="white" stroke-opacity=".32">
-      <ellipse cx="${x * 12}" cy="${y * 12}" rx="430" ry="190" transform="rotate(${seed % 160} ${x * 12} ${y * 12})"/>
-      <ellipse cx="${x * 12}" cy="${y * 12}" rx="330" ry="510" transform="rotate(${(seed >>> 5) % 150} ${x * 12} ${y * 12})"/>
+    <circle cx="${centerX}" cy="${centerY}" r="${pulseRadius + 120}" fill="url(#aura)" filter="url(#blur)"/>
+    <g fill="none" stroke="white" stroke-opacity=".42" stroke-linecap="round" filter="url(#glow)">${spikes}</g>
+    <circle cx="${centerX}" cy="${centerY}" r="${pulseRadius}" fill="none" stroke="hsl(${hue3} 100% 76%)" stroke-opacity=".62" stroke-width="3"/>
+    <g filter="url(#glow)">
+      <path d="M${centerX} ${prismTop} L${prismRight} ${prismBottom} L${centerX} ${prismBottom - 105} L${prismLeft} ${prismBottom} Z" fill="url(#prism)" fill-opacity=".22" stroke="url(#prism)" stroke-width="10"/>
+      <path d="M${centerX} ${prismTop} L${centerX} ${prismBottom - 105} L${prismLeft} ${prismBottom} Z" fill="hsl(${hue} 88% 34%)" fill-opacity=".45" stroke="white" stroke-opacity=".22"/>
+      <path d="M${centerX} ${prismTop} L${prismRight} ${prismBottom} L${centerX} ${prismBottom - 105} Z" fill="hsl(${hue3} 96% 66%)" fill-opacity=".34" stroke="white" stroke-opacity=".3"/>
     </g>
     ${finish.grain > 0 ? '<rect width="1200" height="1200" rx="48" filter="url(#grain)" opacity=".72"/>' : ""}
     <rect width="1200" height="1200" rx="48" fill="url(#finishSheen)"/>
     <rect x="12" y="12" width="1176" height="1176" rx="40" fill="none" stroke="white" stroke-opacity="${finish.edge}"/>
-    <path d="M90 118H1110" stroke="white" stroke-opacity=".28"/>
-    <text x="90" y="92" fill="white" fill-opacity=".74" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="700" letter-spacing="8">MIDI ARCADE · ORIGINAL ${String(seed).slice(0, 7)}</text>
-    <text x="90" y="${lineTwo ? 910 : 960}" fill="white" font-family="Outfit,Arial,sans-serif" font-size="${title.length > 28 ? 86 : 108}" font-weight="800" letter-spacing="-3">${lineOne}</text>
-    ${lineTwo ? `<text x="90" y="1012" fill="white" font-family="Outfit,Arial,sans-serif" font-size="${title.length > 28 ? 86 : 108}" font-weight="800" letter-spacing="-3">${lineTwo}</text>` : ""}
-    <text x="94" y="1100" fill="white" fill-opacity=".72" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="650" letter-spacing="5">${subtitle}</text>
+    <text x="72" y="82" fill="white" fill-opacity=".7" font-family="Inter,Arial,sans-serif" font-size="22" font-weight="700" letter-spacing="7">MIDI ARCADE · TRACK AURA</text>
+    <text x="72" y="${lineTwo ? 925 : 970}" fill="white" font-family="Outfit,Arial,sans-serif" font-size="${title.length > 28 ? 80 : 102}" font-weight="800" letter-spacing="-3">${lineOne}</text>
+    ${lineTwo ? `<text x="72" y="1018" fill="white" font-family="Outfit,Arial,sans-serif" font-size="${title.length > 28 ? 80 : 102}" font-weight="800" letter-spacing="-3">${lineTwo}</text>` : ""}
+    <text x="76" y="1100" fill="white" fill-opacity=".76" font-family="Inter,Arial,sans-serif" font-size="23" font-weight="650" letter-spacing="4">${subtitle}</text>
   </svg>`;
 }
-
 export function coverArtworkDataUrl(song, options = {}) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(createCoverArtworkSvg(song, options))}`;
 }
