@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 const SUPPORT_TRACK_PRIORITY = ["chords", "counterpoint", "pad"];
 const SPLITS_PER_BAR = [0.25, 0.5, 1];
 const DEEP_ARTICULATION_DEFICIT_PER_BAR = 6;
@@ -11,12 +12,6 @@ function finite(value, fallback = 0) {
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function songBars(song) {
@@ -88,7 +83,7 @@ function splitSupportNote(note, splitIndex, parts) {
 }
 
 function articulateSupport(song, splitCount, parts) {
-  const candidate = clone(song);
+  const candidate = cloneValue(song);
   const eligible = eligibleSplitNotes(candidate).slice(0, splitCount);
   const selected = new Map();
   eligible.forEach((entry, index) => {
