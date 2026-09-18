@@ -1,3 +1,6 @@
+import { hash32 } from "./deterministic-rng.js";
+import { normalizeGenreId } from "./genre-contract.js";
+
 export const CREATIVE_GENOME_VERSION = 1;
 
 const RANGE = new Set(["familiar", "fresh", "wild"]);
@@ -31,16 +34,6 @@ function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, finite(value, min)));
 }
 
-function hash32(value) {
-  const text = String(value ?? "");
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619) >>> 0;
-  }
-  return hash >>> 0;
-}
-
 function unit(seed, salt) {
   return hash32(`${seed}:${salt}`) / 0xffffffff;
 }
@@ -59,7 +52,7 @@ function normalizeRange(value) {
 }
 
 function normalizedGenre(config = {}) {
-  return String(config.genre ?? "pop").trim() || "pop";
+  return normalizeGenreId(config.genre ?? "pop") || "pop";
 }
 
 function formPool(genre, range) {
