@@ -1,3 +1,5 @@
+import { normalizeGenreId } from "./genre-contract.js";
+
 function hash(text) {
   let value = 2166136261;
   for (const character of String(text ?? "")) {
@@ -30,7 +32,7 @@ function wordsForGenre(genre) {
 export function deriveSongTitle(song = {}) {
   if (song?.title) return String(song.title);
   const dna = song?.songDNA ?? song?.songBlueprint?.songDNA;
-  const genre = String(song?.meta?.genre ?? song?.genre ?? dna?.identity?.genre ?? "original");
+  const genre = normalizeGenreId(song?.meta?.genre ?? song?.genre ?? dna?.identity?.genre ?? "original");
   const identity = dna?.identity ?? {};
   const seed = hash([dna?.familyId, dna?.id, song?.seed, genre, identity.signatureBias, identity.narrative].filter(Boolean).join("|"));
   const [leftWords, rightWords] = wordsForGenre(genre);
