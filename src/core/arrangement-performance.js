@@ -1,5 +1,5 @@
 import { cloneValue } from "./clone-value.js";
-export const ARRANGEMENT_PERFORMANCE_VERSION = 1;
+export const ARRANGEMENT_PERFORMANCE_VERSION = 2;
 
 const SAFE_TRACKS = new Set(["drums", "chords", "counterpoint", "pad"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme"]);
@@ -100,7 +100,47 @@ function markArrival(note, transition, velocityDelta) {
   return Math.abs(noteVelocity(note) - before) > 1e-6;
 }
 
-function shapeTransition(song, transition, profile) {
+function wantsLocalizedVacuum(song, transition, options = {}) {
+  if (options.spaceStrategy !== "vacuum-before-payoff") return false;
+  if (song?.meta?.isFusion === true) return false;
+  const bars = finite(song?.meta?.bars ?? song?.meta?.totalBars, 0);
+  if (bars > 0 && bars < 12) return false;
+  const destination = sectionById(song, transition.toSectionId);
+  return PAYOFF_NAMES.has(sectionName(destination));
+}
+
+function applyLocalizedVacuum(song, transition, boundary, pickupBeats) {
+  const id = transitionId(transition);
+  let changedNotes = 0;
+  let vacuumNotes = 0;
+  if (payoff && wantsLocalizedVacuum(song, transition, options)) {
+    const vacuum = applyLocalizedVacuum(song, transition, boundary, pickupBeats);
+    changedNotes += vacuum.changedNotes;
+    vacuumNotes += vacuum.vacuumNotes;
+  }
+
+  for (const { track, trackId } of safeTrackEntries(song)) {
+    if (trackId === "drums") continue;
+    const candidates = (track.notes ?? [])
+      .filter((note) => {
+        const start = noteStart(note);
+        return start >= boundary - Math.min(1, pickupBeats) - 1e-6 && start < boundary - 1e-6;
+      })
+      .sort((left, right) => noteStart(right) - noteStart(left) || notePitch(left) - notePitch(right))
+      .slice(0, 1);
+    for (const note of candidates) {
+      const before = noteVelocity(note);
+      setNoteVelocity(note, before - 10);
+      note.arrangementPerformanceRole = "pre-payoff-vacuum";
+      note.arrangementPerformanceTransitionId = id;
+      vacuumNotes += 1;
+      if (Math.abs(noteVelocity(note) - before) > 1e-6) changedNotes += 1;
+    }
+  }
+  return { changedNotes, vacuumNotes };
+}
+
+function shapeTransition(song, transition, profile, options = {}) {
   const boundary = transitionBoundary(song, transition);
   if (!Number.isFinite(boundary)) return { changedNotes: 0, pickups: 0, arrivals: 0, payoff: false };
 
@@ -113,6 +153,7 @@ function shapeTransition(song, transition, profile) {
   let changedNotes = 0;
   let pickups = 0;
   let arrivals = 0;
+  let vacuumNotes = 0;
 
   for (const { track, trackId } of safeTrackEntries(song)) {
     const notes = track.notes ?? [];
@@ -156,7 +197,7 @@ function shapeTransition(song, transition, profile) {
     }
   }
 
-  return { changedNotes, pickups, arrivals, payoff };
+  return { changedNotes, pickups, arrivals, payoff, vacuumNotes };
 }
 
 const PROFILES = Object.freeze({
@@ -196,7 +237,7 @@ const PROFILES = Object.freeze({
  * onset, duration, note count, section order and song length remain untouched.
  * The caller still owns critic/release acceptance of the resulting candidate.
  */
-export function applyArrangementPerformance(sourceSong, { profile = "balanced" } = {}) {
+export function applyArrangementPerformance(sourceSong, { profile = "balanced", spaceStrategy = null } = {}) {
   const transitions = Array.isArray(sourceSong?.arrangementTransitions)
     ? sourceSong.arrangementTransitions
     : [];
@@ -212,12 +253,14 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced" }
   let pickups = 0;
   let arrivals = 0;
   let payoffTransitions = 0;
+  let vacuumNotes = 0;
 
   for (const transition of song.arrangementTransitions) {
-    const shaped = shapeTransition(song, transition, selectedProfile);
+    const shaped = shapeTransition(song, transition, selectedProfile, { spaceStrategy });
     changedNotes += shaped.changedNotes;
     pickups += shaped.pickups;
     arrivals += shaped.arrivals;
+    vacuumNotes += shaped.vacuumNotes ?? 0;
     if (shaped.payoff) payoffTransitions += 1;
   }
 
@@ -238,6 +281,8 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced" }
     pickups,
     arrivals,
     payoffTransitions,
+    spaceStrategy,
+    vacuumNotes,
     safeTracks: Object.freeze([...SAFE_TRACKS]),
   });
   song.outputQualityEvolution = {
