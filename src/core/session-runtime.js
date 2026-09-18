@@ -1,7 +1,6 @@
 import {
   sanitizePersistedTrackSettings,
   sanitizeTasteProfile,
-  validPersistedSong,
 } from "./session-contract.js";
 import { createDefaultAutoControls, sanitizeAutoControls } from "./auto-control-policy.js";
 
@@ -138,9 +137,8 @@ function restoredPreferenceState({
   defaultToAuto = false,
 } = {}) {
   return {
-    // Reopening the studio intentionally starts with an empty plate. The last
-    // song can remain in persisted storage for migration/debug context, but it
-    // is never silently restored into the active workspace.
+    // Reopening the studio intentionally starts with an empty plate. Persisted
+    // preferences are restored independently from any legacy song payload.
     song: null,
     trackSettings: sanitizePersistedTrackSettings(parsed.trackSettings, {
       defaults: defaultTrackSettings,
@@ -173,7 +171,6 @@ export function createPersistedSessionSnapshot(state = {}, {
   return {
     schema,
     savedAt: stamp,
-    song: state.song,
     trackSettings: state.trackSettings,
     muted: [...(state.muted ?? [])],
     solo: [...(state.solo ?? [])],
@@ -218,10 +215,6 @@ export function decodePersistedSession(stored, {
   if (!parsed || parsed.schema !== schema) {
     return { status: "rejected", value: null };
   }
-  if (parsed.song != null && !validPersistedSong(parsed.song, { trackOrder })) {
-    return { status: "rejected", value: null };
-  }
-
   return {
     status: "ready",
     value: restoredPreferenceState({
