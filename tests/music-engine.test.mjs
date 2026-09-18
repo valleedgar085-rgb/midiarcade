@@ -897,6 +897,60 @@ test("Song DNA hook memory strengthens full-song hook returns without changing s
   }
 });
 
+test("full-song Pop and Hip-Hop family counterpoint prefers the next available answer gap", () => {
+  const targets = [
+    { beat: 3.5, sectionId: "verse-1", gapEnd: 3.9 },
+    { beat: 4.75, sectionId: "verse-1", gapEnd: 5.2 },
+    { beat: 5.5, sectionId: "verse-1", gapEnd: 6 },
+  ];
+  const selected = engine.chooseCounterpointGapTarget(targets, {
+    genre: "pop",
+    bars: 20,
+    noteStart: 4,
+  });
+  assert.equal(selected.beat, 4.75);
+
+  assert.equal(engine.chooseCounterpointGapTarget(targets, {
+    genre: "rock",
+    bars: 20,
+    noteStart: 4,
+  }).beat, 3.5);
+  assert.equal(engine.chooseCounterpointGapTarget(targets, {
+    genre: "pop",
+    bars: 8,
+    noteStart: 4,
+  }).beat, 3.5);
+  assert.equal(engine.chooseCounterpointGapTarget(targets, {
+    genre: "pop",
+    bars: 20,
+    secondaryGenre: "hipHop",
+    noteStart: 4,
+  }).beat, 3.5);
+  assert.equal(engine.chooseCounterpointGapTarget([], {
+    genre: "pop",
+    bars: 20,
+    noteStart: 4,
+  }), null);
+
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "pop",
+    seed: "forward-counterpoint-answer-proof",
+    bars: 20,
+    complexity: 0.9,
+    variation: 0.82,
+    candidateCount: 1,
+    tracks: {
+      melody: { density: 0.92, variation: 0.82 },
+      counterpoint: { density: 0.92, variation: 0.82 },
+    },
+  });
+  assert.ok(song.melodicDialogue.forwardAnswers > 0, "full-song fixture should produce at least one forward gap answer before mastering");
+  assert.ok(song.producerIntentReport.metrics.answerCollisionRate <= 0.28);
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
 test("fresh and chained generation advance to distinct arrangements", () => {
   const first = engine.generateNew({ bars: 4, candidateCount: 1 });
   const second = engine.generateNew({ bars: 4, candidateCount: 1 });
