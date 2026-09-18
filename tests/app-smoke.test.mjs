@@ -969,35 +969,27 @@ test("browser app initializes against the engine contract", async () => {
     );
   }
 
-  assert.equal(app.saveSessionNow(), true, "a valid song session must save locally on demand");
+  assert.equal(app.saveSessionNow(), true, "valid session preferences must save locally on demand");
   const savedSession = JSON.parse(storedValues.get("midi-arcade/session-v2"));
   assert.equal(savedSession.schema, 2);
   assert.ok(savedSession.autoControls.includes("chordPathControl"), "Reset must persist chord path auto selection");
   assert.ok(savedSession.autoControls.includes("track:drums:program"), "Reset must persist instrument program Auto authority");
-  assert.deepEqual(savedSession.song, app.getAppStateSnapshot().song);
+  assert.equal("song" in savedSession, false, "autosave must not persist the inactive song payload");
   const restoredApp = await import(`../src/app.js?restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 25));
   assert.equal(restoredApp.getAppStateSnapshot().song, null, "a fresh app boot must restore preferences but open on an empty plate");
 
-  const damagedSession = structuredClone(savedSession);
-  damagedSession.song.sections = [null];
-  damagedSession.song.structure = [null];
-  storedValues.set("midi-arcade/session-v2", JSON.stringify(damagedSession));
-  const recoveredApp = await import(`../src/app.js?damaged-restore=${Date.now()}`);
+  const legacySession = structuredClone(savedSession);
+  legacySession.song = { sections: [null], structure: [null], tracks: [null] };
+  storedValues.set("midi-arcade/session-v2", JSON.stringify(legacySession));
+  const recoveredApp = await import(`../src/app.js?legacy-song-restore=${Date.now()}`);
   await new Promise((resolve) => setTimeout(resolve, 40));
-  const recoveredSong = recoveredApp.getAppStateSnapshot().song;
-  assert.equal(recoveredSong.tracks.length, 6, "a damaged session must be replaced with a complete song in the same launch");
-  assert.ok(recoveredSong.tracks.every((track) => track && Array.isArray(track.notes)));
-  const postRecoverySession = storedValues.get("midi-arcade/session-v2");
-  if (postRecoverySession) {
-    const recoveredSave = JSON.parse(postRecoverySession);
-    assert.ok(
-      Array.isArray(recoveredSave.song?.sections)
-        && recoveredSave.song.sections.every((section) => section && typeof section === "object"),
-      "a concurrent autosave may persist only a healthy replacement, never the rejected session",
-    );
-  }
-  assert.match(elementFor("#toast").textContent, /damaged saved session.*fresh idea/i);
+  assert.equal(
+    recoveredApp.getAppStateSnapshot().song,
+    null,
+    "a damaged legacy song payload must be ignored without discarding valid preferences or generating implicitly",
+  );
+  assert.equal(elementFor("#genreControl").value, "neoSoul");
 
   const nativeCalls = [];
   globalThis.Capacitor = {
