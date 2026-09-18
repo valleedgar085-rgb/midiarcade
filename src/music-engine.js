@@ -827,14 +827,14 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.13, leapChance: 0.14, ornamentChance: 0.08, durationScale: 0.94 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.11, leapChance: 0.16, ornamentChance: 0.1, durationScale: 0.9 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
   techno: { phraseShapes: ["staircase", "syncopatedLoop"], contours: ["pedalLaunch", "wave"], restBias: 0.03, leapChance: 0.12, ornamentChance: 0.04, durationScale: 0.72 },
   drumBass: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["climbFall", "fallRebound"], restBias: 0.06, leapChance: 0.3, ornamentChance: 0.12, durationScale: 0.7 },
   synthwave: { phraseShapes: ["staircase", "longShort"], contours: ["climbFall", "arch", "pedalLaunch"], restBias: 0.05, leapChance: 0.28, ornamentChance: 0.08, durationScale: 0.94 },
-  pop: { phraseShapes: ["questionAnswer", "longShort", "syncopatedLoop"], contours: ["arch", "climbFall", "wave"], restBias: 0.035, leapChance: 0.2, ornamentChance: 0.14, durationScale: 0.96 },
+  pop: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "climbFall"], restBias: 0.04, leapChance: 0.24, ornamentChance: 0.1, durationScale: 0.92 },
   loFiHipHop: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["wave", "fallRebound"], restBias: 0.16, leapChance: 0.12, ornamentChance: 0.14, durationScale: 1.12 },
   rnbSoul: { phraseShapes: ["questionAnswer", "longShort"], contours: ["arch", "wave", "fallRebound"], restBias: 0.12, leapChance: 0.18, ornamentChance: 0.24, durationScale: 1.14 },
   drill: { phraseShapes: ["sparseEcho", "staircase"], contours: ["fallRebound", "pedalLaunch"], restBias: 0.15, leapChance: 0.3, ornamentChance: 0.06, durationScale: 0.72 },
