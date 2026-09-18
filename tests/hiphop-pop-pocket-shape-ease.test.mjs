@@ -1,0 +1,64 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import test from "node:test";
+
+import {
+  GENRE_MELODY_GRAMMARS,
+  GENRE_PROFILES,
+  generateNew,
+  genreMicroTimingOffset,
+} from "../src/music-engine.js";
+
+const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+test("Hip-Hop pocket is less trap-like while keeping deterministic sample-pocket feel", () => {
+  const profile = GENRE_PROFILES.hipHop;
+  assert.equal(profile.swing, 0.22);
+  assert.equal(profile.humanize, 0.32);
+  assert.equal(profile.tripletChance, 0.3);
+  assert.equal(profile.snareRollChance, 0.18);
+  assert.equal(profile.arrangement.fillFrequency, 0.34);
+  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes.includes("questionAnswer"));
+  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.durationScale > 0.9);
+});
+
+test("Hip-Hop micro timing keeps kick and bass anchored while creating controlled push-pull", () => {
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "bass", start: 1 }), 0);
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 36, start: 1 }), 0);
+  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 38, start: 1 }) > 0);
+  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1 }) < 0);
+  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1.25 }) > 0);
+  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "melody", start: 2 }) > 0);
+  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "counterpoint", start: 2 }) < 0);
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 38, start: 1, exactSubdivision: true }), 0);
+});
+
+test("Pop keeps the hook forward and supporting lanes slightly behind", () => {
+  const grammar = GENRE_MELODY_GRAMMARS.pop;
+  assert.ok(grammar.phraseShapes.includes("longShort"));
+  assert.ok(grammar.contours.includes("wave"));
+  assert.ok(grammar.ornamentChance >= 0.14);
+  assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "melody", start: 2 }) < 0);
+  assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "counterpoint", start: 2 }) > 0);
+  assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "drums", pitch: 38, start: 2 }) > 0);
+});
+
+test("fixed-seed Hip-Hop and Pop generation remain deterministic after pocket changes", () => {
+  for (const genre of ["hipHop", "pop"]) {
+    const config = { genre, seed: `pocket-pass-${genre}`, bars: 16, professionalUpgrade: true };
+    assert.deepEqual(generateNew(config), generateNew(config));
+  }
+});
+
+test("Shape shows three recommendations first and progressively discloses the rest", () => {
+  assert.match(html, /Pick what should feel better/);
+  assert.match(html, /WHAT TO CHANGE/);
+  assert.match(html, /HOW MUCH/);
+  assert.match(html, /Small · polish[\s\S]*?Medium · reshape[\s\S]*?Big · transform/);
+  assert.match(app, /data-shape-more/);
+  assert.match(app, /button\.hidden = panel\.dataset\.shapeMore !== "true"/);
+  assert.match(app, /Tap one of the three suggested moves to preview it/);
+  assert.match(app, /More directions/);
+  assert.match(app, /Fewer directions/);
+});
