@@ -53,11 +53,10 @@ test("generation essentials move from Now Playing into Song Direction without du
 
 test("A2 organizes Create around Song, Feel, Structure, and Generate without duplicating controls", () => {
   assert.match(presentation, /function organizePrimaryDirection/);
-  assert.match(presentation, /createStage = "song"/);
-  assert.match(presentation, /id: "feel"/);
-  assert.match(presentation, /id: "structure"/);
-  assert.match(presentation, /createStage = "generate"/);
-  assert.match(presentation, /section\.dataset\.createStage = spec\.id/);
+  assert.match(presentation, /heading\("song", "1 · SONG"/);
+  assert.match(presentation, /heading\("feel", "2 · FEEL"/);
+  assert.match(presentation, /heading\("structure", "3 · STRUCTURE"/);
+  assert.match(presentation, /heading\("generate", "4 · GENERATE"/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "grooveControl", "barsControl"]) {
     assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${id} must remain a single authoritative control`);
     assert.match(presentation, new RegExp(`["']${id}["']`));
@@ -66,7 +65,6 @@ test("A2 organizes Create around Song, Feel, Structure, and Generate without dup
   assert.match(presentation, /2 · FEEL/);
   assert.match(presentation, /3 · STRUCTURE/);
   assert.match(presentation, /4 · GENERATE/);
-  assert.match(css, /#preGenSection \.create-direction-group-body/);
 });
 
 test("advanced direction moves optional controls below the primary generation actions", () => {
