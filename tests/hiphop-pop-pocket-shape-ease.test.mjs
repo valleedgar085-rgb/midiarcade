@@ -19,8 +19,8 @@ test("Hip-Hop pocket is less trap-like while keeping deterministic sample-pocket
   assert.equal(profile.tripletChance, 0.3);
   assert.equal(profile.snareRollChance, 0.18);
   assert.equal(profile.arrangement.fillFrequency, 0.34);
-  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes.includes("questionAnswer"));
-  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.durationScale > 0.9);
+  assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "sparseEcho"]);
+  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.9);
 });
 
 test("Hip-Hop micro timing keeps kick and bass anchored while creating controlled push-pull", () => {
@@ -36,9 +36,8 @@ test("Hip-Hop micro timing keeps kick and bass anchored while creating controlle
 
 test("Pop keeps the hook forward and supporting lanes slightly behind", () => {
   const grammar = GENRE_MELODY_GRAMMARS.pop;
-  assert.ok(grammar.phraseShapes.includes("longShort"));
-  assert.ok(grammar.contours.includes("wave"));
-  assert.ok(grammar.ornamentChance >= 0.14);
+  assert.deepEqual(grammar.phraseShapes, ["questionAnswer", "syncopatedLoop"]);
+  assert.deepEqual(grammar.contours, ["arch", "climbFall"]);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "melody", start: 2 }) < 0);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "counterpoint", start: 2 }) > 0);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "drums", pitch: 38, start: 2 }) > 0);
