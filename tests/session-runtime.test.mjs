@@ -6,6 +6,18 @@ import {
   createSessionAutosaveController,
   decodePersistedSession,
 } from "../src/core/session-runtime.js";
+import {
+  applyGenerationPreferences,
+  captureGenerationPreferences,
+  deferEmptyCanvasFacts,
+  syncAutoPresentation,
+} from "../src/ui/session-preferences.js";
+
+const SESSION_UI = {
+  applyGenerationPreferences,
+  syncAutoPresentation,
+  deferEmptyCanvasFacts,
+};
 
 const TRACK_ORDER = ["drums"];
 const DEFAULTS = {
@@ -70,6 +82,7 @@ test("session snapshots preserve preferences even before a song exists", () => {
       schema: 2,
       now: () => new Date("2026-09-12T03:00:00.000Z"),
       normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled), normalized: true }),
+      captureGenerationPreferences,
     });
 
     assert.equal(snapshot.schema, 2);
@@ -148,7 +161,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
   assert.equal(decoded.value.generationPreferences.unknown, undefined);
 
   const target = {};
-  assert.equal(applyPersistedSessionState(target, decoded.value), true);
+  assert.equal(applyPersistedSessionState(target, decoded.value, SESSION_UI), true);
   assert.equal(target.song, null);
 });
 
@@ -214,6 +227,7 @@ test("Creative Range preferences round-trip through capture and select validatio
     const snapshot = createPersistedSessionSnapshot({ song: null }, {
       schema: 2,
       now: () => new Date("2026-09-17T00:00:00.000Z"),
+      captureGenerationPreferences,
     });
     assert.equal(snapshot.generationPreferences.creativeRangeControl, "fresh");
 
@@ -227,7 +241,7 @@ test("Creative Range preferences round-trip through capture and select validatio
     assert.equal(decoded.value.generationPreferences.creativeRangeControl, "fresh");
 
     creativeRangeControl.value = "";
-    assert.equal(applyPersistedSessionState({}, decoded.value), true);
+    assert.equal(applyPersistedSessionState({}, decoded.value, SESSION_UI), true);
     assert.equal(creativeRangeControl.value, "fresh");
 
     creativeRangeControl.value = "";
@@ -244,7 +258,7 @@ test("Creative Range preferences round-trip through capture and select validatio
       genreIds: ["hipHop"],
     });
     assert.equal(invalid.status, "ready");
-    assert.equal(applyPersistedSessionState({}, invalid.value), true);
+    assert.equal(applyPersistedSessionState({}, invalid.value, SESSION_UI), true);
     assert.equal(creativeRangeControl.value, "", "invalid select values must not overwrite the neutral default");
   } finally {
     globalThis.document = previousDocument;
