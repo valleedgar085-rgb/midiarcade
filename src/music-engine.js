@@ -5532,7 +5532,7 @@ function generatePad(
 
 const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
 
-function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
+export function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
   if (!STAGGERED_ENTRY_GENRES.has(config.genre)) return null;
   if (!section || !scene || ["foreground", "foundation", "rest"].includes(producerRole)) return null;
   const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
