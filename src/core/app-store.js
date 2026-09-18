@@ -71,10 +71,17 @@ export function createAppStore(initialState) {
   if (!isObject(initialState)) throw new TypeError("createAppStore requires an initial state object");
   const listeners = new Set();
   let revision = 0;
+  let lastSubscriberError = null;
 
   function notify(label) {
     const event = Object.freeze({ label: String(label || "update"), revision, state: initialState });
-    for (const listener of listeners) listener(event);
+    for (const listener of listeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        lastSubscriberError = error;
+      }
+    }
   }
 
   return Object.freeze({
@@ -83,6 +90,9 @@ export function createAppStore(initialState) {
     },
     getRevision() {
       return revision;
+    },
+    getLastSubscriberError() {
+      return lastSubscriberError;
     },
     transaction(label, mutation) {
       if (typeof mutation !== "function") throw new TypeError("store transactions require a mutation function");

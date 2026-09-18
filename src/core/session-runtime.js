@@ -1,11 +1,11 @@
 import {
   sanitizePersistedTrackSettings,
   sanitizeTasteProfile,
-  validPersistedSong,
 } from "./session-contract.js";
 import { createDefaultAutoControls, sanitizeAutoControls } from "./auto-control-policy.js";
+import { cloneValue } from "./clone-value.js";
 
-const GENERATION_PREFERENCE_IDS = Object.freeze([
+export const GENERATION_PREFERENCE_IDS = Object.freeze([
   "genreControl",
   "keyControl",
   "modeControl",
@@ -25,37 +25,7 @@ const GENERATION_PREFERENCE_IDS = Object.freeze([
   "surpriseControl",
 ]);
 
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
-}
-
-function boundedIndex(value, maxExclusive) {
-  const numeric = Number(value);
-  const rounded = Number.isFinite(numeric) ? Math.round(numeric) : 0;
-  return Math.max(0, Math.min(Math.max(0, maxExclusive - 1), rounded));
-}
-
-function elementById(id) {
-  const doc = globalThis?.document;
-  if (!doc) return null;
-  if (typeof doc.getElementById === "function") return doc.getElementById(id);
-  if (typeof doc.querySelector === "function") return doc.querySelector(`#${id}`);
-  return null;
-}
-
-function captureGenerationPreferences() {
-  const preferences = {};
-  for (const id of GENERATION_PREFERENCE_IDS) {
-    const control = elementById(id);
-    if (!control || control.value == null) continue;
-    preferences[id] = String(control.value).slice(0, 80);
-  }
-  return preferences;
-}
-
-function sanitizeGenerationPreferences(value) {
+export function sanitizeGenerationPreferences(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const preferences = {};
   for (const id of GENERATION_PREFERENCE_IDS) {
@@ -65,67 +35,25 @@ function sanitizeGenerationPreferences(value) {
   return preferences;
 }
 
-function applyGenerationPreferences(preferences = {}) {
-  for (const [id, value] of Object.entries(sanitizeGenerationPreferences(preferences))) {
-    const control = elementById(id);
-    if (!control) continue;
-    if (control.tagName === "SELECT") {
-      const valid = [...(control.options ?? [])].some((option) => String(option.value) === value);
-      if (!valid) continue;
-    }
-    control.value = value;
-  }
+function boundedIndex(value, maxExclusive) {
+  const numeric = Number(value);
+  const rounded = Number.isFinite(numeric) ? Math.round(numeric) : 0;
+  return Math.max(0, Math.min(Math.max(0, maxExclusive - 1), rounded));
 }
 
-function syncAutoPresentation(autoControls = new Set()) {
-  const doc = globalThis?.document;
-  if (!doc?.querySelectorAll) return;
-  for (const button of doc.querySelectorAll("[data-auto-key]")) {
-    const key = String(button.dataset?.autoKey ?? "");
-    const active = autoControls.has(key);
-    button.classList?.toggle?.("is-active", active);
-    button.setAttribute?.("aria-pressed", String(active));
-    button.textContent = active ? "AUTO ✓" : "AUTO";
-    const label = button.closest?.("label");
-    const input = label?.querySelector?.('input[type="range"]');
-    if (!input) continue;
-    input.disabled = active;
-    input.classList?.toggle?.("is-auto", active);
-    if (active) {
-      const output = label.querySelector?.("output");
-      if (output) output.textContent = "AUTO";
-    }
+export function migratePersistedSessionRecord(value, schema) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const targetSchema = Number(schema);
+  const sourceSchema = Number(value.schema);
+  if (!Number.isFinite(targetSchema) || !Number.isFinite(sourceSchema)) return null;
+  if (sourceSchema === targetSchema) return value;
+  if (sourceSchema >= 1 && sourceSchema < targetSchema) {
+    return {
+      ...value,
+      schema: targetSchema,
+    };
   }
-}
-
-function syncEmptyCanvasFacts() {
-  const tempo = Number(elementById("tempoControl")?.value);
-  const factTempo = elementById("factTempo");
-  if (factTempo && Number.isFinite(tempo)) factTempo.textContent = `${Math.round(tempo)} BPM`;
-
-  const bars = Number(elementById("barsControl")?.value);
-  const factBars = elementById("factBars");
-  if (factBars && Number.isFinite(bars) && bars > 0) factBars.textContent = `${Math.round(bars)} BARS`;
-
-  const key = String(elementById("keyControl")?.value ?? "");
-  const mode = String(elementById("modeControl")?.value ?? "");
-  const factKey = elementById("factKey");
-  if (factKey && key && key !== "auto" && mode && mode !== "auto") {
-    factKey.textContent = `${key} ${mode.replace(/([a-z])([A-Z])/g, "$1 $2")}`.toUpperCase();
-  }
-}
-
-function deferEmptyCanvasFacts() {
-  const task = () => syncEmptyCanvasFacts();
-  // Initial app hydration can render once after session restore. Reconcile the
-  // staged empty-canvas facts both immediately and after that first render so
-  // a placeholder song fallback never overwrites the user's staged settings.
-  if (typeof globalThis?.queueMicrotask === "function") globalThis.queueMicrotask(task);
-  else Promise.resolve().then(task);
-  if (typeof globalThis?.setTimeout === "function") {
-    globalThis.setTimeout(task, 0);
-    globalThis.setTimeout(task, 20);
-  }
+  return null;
 }
 
 function restoredPreferenceState({
@@ -138,9 +66,8 @@ function restoredPreferenceState({
   defaultToAuto = false,
 } = {}) {
   return {
-    // Reopening the studio intentionally starts with an empty plate. The last
-    // song can remain in persisted storage for migration/debug context, but it
-    // is never silently restored into the active workspace.
+    // Reopening the studio intentionally starts with an empty plate. Persisted
+    // preferences are restored independently from any legacy song payload.
     song: null,
     trackSettings: sanitizePersistedTrackSettings(parsed.trackSettings, {
       defaults: defaultTrackSettings,
@@ -166,6 +93,7 @@ export function createPersistedSessionSnapshot(state = {}, {
   schema,
   normalizeMixAssistant = (value) => value,
   now = () => new Date(),
+  captureGenerationPreferences = () => ({}),
 } = {}) {
   if (!Number.isFinite(Number(schema))) throw new TypeError("session snapshot requires a schema");
   const savedAt = now();
@@ -173,7 +101,6 @@ export function createPersistedSessionSnapshot(state = {}, {
   return {
     schema,
     savedAt: stamp,
-    song: state.song,
     trackSettings: state.trackSettings,
     muted: [...(state.muted ?? [])],
     solo: [...(state.solo ?? [])],
@@ -184,7 +111,7 @@ export function createPersistedSessionSnapshot(state = {}, {
     recipeIndex: state.recipeIndex,
     mixAssistant: normalizeMixAssistant(state.mixAssistant),
     tasteProfile: state.tasteProfile,
-    generationPreferences: captureGenerationPreferences(),
+    generationPreferences: sanitizeGenerationPreferences(captureGenerationPreferences()),
   };
 }
 
@@ -214,14 +141,10 @@ export function decodePersistedSession(stored, {
     return { status: "rejected", value: null, error: stored?.error ?? null };
   }
 
-  const parsed = stored.value;
-  if (!parsed || parsed.schema !== schema) {
+  const parsed = migratePersistedSessionRecord(stored.value, schema);
+  if (!parsed) {
     return { status: "rejected", value: null };
   }
-  if (parsed.song != null && !validPersistedSong(parsed.song, { trackOrder })) {
-    return { status: "rejected", value: null };
-  }
-
   return {
     status: "ready",
     value: restoredPreferenceState({
@@ -236,7 +159,11 @@ export function decodePersistedSession(stored, {
   };
 }
 
-export function applyPersistedSessionState(state, restored) {
+export function applyPersistedSessionState(state, restored, {
+  applyGenerationPreferences = () => {},
+  syncAutoPresentation = () => {},
+  deferEmptyCanvasFacts = () => {},
+} = {}) {
   if (!state || !restored || typeof restored !== "object") return false;
   Object.assign(state, restored);
   applyGenerationPreferences(restored.generationPreferences);

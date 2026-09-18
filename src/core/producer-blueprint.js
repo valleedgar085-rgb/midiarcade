@@ -1,4 +1,5 @@
 import { clampFinite as clamp, finite } from "../utils.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 function round(value, digits = 4) {
   const factor = 10 ** digits;
@@ -66,7 +67,7 @@ export function createSongBlueprint(config = {}, {
     version: 1,
     id: "producer-blueprint-v1",
     kind: String(kind),
-    genre: String(config.genre ?? "pop"),
+    genre: normalizeGenreId(config.genre ?? "pop") || "pop",
     bars,
     intent: Object.freeze({
       energyArc: Object.freeze({

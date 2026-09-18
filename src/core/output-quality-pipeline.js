@@ -12,9 +12,11 @@ import {
   MAX_PHRASE_RESOLUTION_CANDIDATES,
 } from "./phrase-resolution-refinement.js";
 import {
-  applyResultOutputQualityPostprocess,
-  applySongOutputQualityPostprocess,
+  applyArrangementPostprocess,
+  applyGroovePocketPostprocess,
+  applyReturnDevelopmentPostprocess,
 } from "./output-quality-postprocess.js";
+import { createQualityEvaluationContext, runQualityStageSequence } from "./output-quality-stage-runner.js";
 
 const DENSITY_ATTEMPT_CEILING = 86;
 const PHRASE_RESOLUTION_ATTEMPT_CEILING = 86;
@@ -137,7 +139,7 @@ function densityDiagnosticsFor(assessment, before, candidatesEvaluated, candidat
   });
 }
 
-function applyDensityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyDensityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.densityRefinement !== true) {
     return { song, diagnostics: disabledDensityDiagnostics() };
   }
@@ -319,7 +321,7 @@ function phraseDiagnosticsFor(assessment, before, candidatesEvaluated, candidate
   });
 }
 
-function applyPhraseResolutionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyPhraseResolutionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.phraseResolutionRefinement !== true) {
     return { song, diagnostics: disabledPhraseDiagnostics() };
   }
@@ -398,58 +400,48 @@ export function applySongOutputQualityPipeline(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
 } = {}) {
-  const base = applySongOutputQualityPostprocess(song, config, {
-    evaluateCandidate,
-    evaluateReleaseGate,
-  });
-  const density = applyDensityRefinement(
-    base.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
-  const phrase = applyPhraseResolutionRefinement(
-    density.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
+  const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
+  const evaluate = evaluators.evaluateCandidate;
+  const release = evaluators.evaluateReleaseGate;
+  const sequence = runQualityStageSequence(song, [
+    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
+    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
+    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
+    { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
+    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
+  ]);
   return {
-    ...base,
-    song: phrase.song,
-    densityDiagnostics: density.diagnostics,
-    phraseResolutionDiagnostics: phrase.diagnostics,
+    song: sequence.song,
+    diagnostics: sequence.diagnostics.arrangement,
+    returnDiagnostics: sequence.diagnostics.returnDevelopment,
+    grooveDiagnostics: sequence.diagnostics.groovePocket,
+    densityDiagnostics: sequence.diagnostics.densityRefinement,
+    phraseResolutionDiagnostics: sequence.diagnostics.phraseResolutionRefinement,
   };
 }
 
 export function applyResultOutputQualityPipeline(result, config = {}, evaluators = {}) {
   if (!result?.song) return result;
-  const baseResult = applyResultOutputQualityPostprocess(result, config, evaluators);
-  const evaluateCandidate = evaluators.evaluateCandidate ?? evaluateSongCandidate;
-  const evaluateReleaseGate = evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate;
+  const processed = applySongOutputQualityPipeline(result.song, config, {
+    evaluateCandidate: evaluators.evaluateCandidate ?? evaluateSongCandidate,
+    evaluateReleaseGate: evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate,
+  });
+  if (processed.song === result.song) return result;
 
-  const density = applyDensityRefinement(
-    baseResult.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
-  const phrase = applyPhraseResolutionRefinement(
-    density.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
-  const densityAccepted = Boolean(density.diagnostics?.accepted && density.song !== baseResult.song);
-  const phraseAccepted = Boolean(phrase.diagnostics?.accepted && phrase.song !== density.song);
-  if (!densityAccepted && !phraseAccepted) return baseResult;
-
-  const diagnostics = { ...(baseResult.outputQualityDiagnostics ?? {}) };
-  if (densityAccepted) diagnostics.densityRefinement = density.diagnostics;
-  if (phraseAccepted) diagnostics.phraseResolutionRefinement = phrase.diagnostics;
+  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
+  const acceptedStages = [
+    ["arrangement", processed.diagnostics],
+    ["returnDevelopment", processed.returnDiagnostics],
+    ["groovePocket", processed.grooveDiagnostics],
+    ["densityRefinement", processed.densityDiagnostics],
+    ["phraseResolutionRefinement", processed.phraseResolutionDiagnostics],
+  ];
+  for (const [key, diagnostics] of acceptedStages) {
+    if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
+  }
   return {
-    ...baseResult,
-    song: phrase.song,
-    outputQualityDiagnostics: diagnostics,
+    ...result,
+    song: processed.song,
+    outputQualityDiagnostics,
   };
 }

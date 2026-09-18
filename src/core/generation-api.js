@@ -4,22 +4,16 @@ import {
   generateSimilar,
 } from "../music-engine.js";
 import { dispatchGenerationRequest } from "./generation-dispatch.js";
-import { continueElementLineage } from "./elemental-lineage.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
-import { applySectionDrumEvolutionRefinement } from "./section-drum-evolution-refinement.js";
-import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
+import { finalizeGeneratedSong } from "./generation-finalizer.js";
 
 function generateSongVariations(sourceSong, config = {}) {
   return generateProducerVariationSet(sourceSong, config, { generateSimilar });
 }
 
-function generateSimilarWithElementLineage(sourceSong, config = {}) {
-  return continueElementLineage(sourceSong, generateSimilar(sourceSong, config));
-}
-
 const ENGINE_API = Object.freeze({
   generateNew,
-  generateSimilar: generateSimilarWithElementLineage,
+  generateSimilar,
   generateSectionVariations,
   generateSongVariations,
 });
@@ -31,10 +25,12 @@ const ENGINE_API = Object.freeze({
 export function runGenerationRequest(kind, payload = {}) {
   const result = dispatchGenerationRequest(kind, payload, ENGINE_API);
   if (!result?.song || !["new", "similar"].includes(String(kind))) return result;
-  const config = payload.config ?? {};
-  const bounced = applySnareBounceRefinement(result.song, config);
-  const evolved = applySectionDrumEvolutionRefinement(bounced.song, config);
-  return evolved.song === result.song ? result : { ...result, song: evolved.song };
+  const finalized = finalizeGeneratedSong(result.song, {
+    kind,
+    sourceSong: payload.sourceSong ?? null,
+    config: payload.config ?? {},
+  });
+  return finalized.song === result.song ? result : { ...result, song: finalized.song };
 }
 
 export const generationEngineApi = ENGINE_API;

@@ -1,4 +1,5 @@
 import { clamp, finite } from "../utils.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 const EDIT_BUDGETS = Object.freeze([1, 2, 3]);
 const MAX_SHIFT = 0.5;
@@ -20,9 +21,9 @@ function melody(song) {
 }
 
 export function repetitionRefinementFamily(song) {
-  const primary = String(song?.genre ?? song?.meta?.genre ?? "");
+  const primary = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   if (primary === "rnbSoul") return "rnb";
-  const secondary = String(song?.meta?.secondaryGenre ?? song?.secondaryGenre ?? "");
+  const secondary = normalizeGenreId(song?.meta?.secondaryGenre ?? song?.secondaryGenre);
   if (song?.meta?.isFusion !== true) return null;
   const hipHopRap = (primary === "hipHop" && secondary === "rap")
     || (primary === "rap" && secondary === "hipHop");

@@ -1,5 +1,5 @@
+import { cloneValue } from "./clone-value.js";
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
-const clone = (value) => typeof structuredClone === "function" ? structuredClone(value) : JSON.parse(JSON.stringify(value));
 const round6 = (value) => Math.round((finite(value) + Number.EPSILON) * 1e6) / 1e6;
 const mod = (value, divisor) => ((value % divisor) + divisor) % divisor;
 
@@ -77,7 +77,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   if (String(sourceSong?.genre ?? sourceSong?.meta?.genre ?? "") !== "jazz") return null;
   const drums = sourceSong?.tracks?.find((track) => track.id === "drums");
   if (!drums?.notes?.length) return null;
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const targetDrums = song.tracks.find((track) => track.id === "drums");
   const barBeats = finite(song?.meta?.beatsPerBar, 4);
   for (const { origin, target } of sectionPairs(song)) {
@@ -96,7 +96,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       const targetNotes = new Set(notesForBar(song, targetBar));
       const delta = (targetBar - sourceBar) * barBeats;
       targetDrums.notes = targetDrums.notes.filter((note) => !targetNotes.has(note));
-      targetDrums.notes.push(...sourceNotes.map((note) => ({ ...clone(note), start: round6(finite(note.start) + delta) })));
+      targetDrums.notes.push(...sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) })));
       targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
       return Object.freeze({
         id: "jazz-return-groove-recall",

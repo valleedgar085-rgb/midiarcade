@@ -1,11 +1,5 @@
-function hash(text) {
-  let value = 2166136261;
-  for (const character of String(text ?? "")) {
-    value ^= character.charCodeAt(0);
-    value = Math.imul(value, 16777619);
-  }
-  return value >>> 0;
-}
+import { normalizeGenreId } from "./genre-contract.js";
+import { hash32 } from "./deterministic-rng.js";
 
 const GENRE_WORDS = Object.freeze({
   trap: [["Pressure", "Chrome", "Night", "Red", "Ghost", "Cold", "Black", "Static"], ["Season", "Signal", "Motion", "Theory", "Run", "Vision", "Hours", "District"]],
@@ -30,9 +24,9 @@ function wordsForGenre(genre) {
 export function deriveSongTitle(song = {}) {
   if (song?.title) return String(song.title);
   const dna = song?.songDNA ?? song?.songBlueprint?.songDNA;
-  const genre = String(song?.meta?.genre ?? song?.genre ?? dna?.identity?.genre ?? "original");
+  const genre = normalizeGenreId(song?.meta?.genre ?? song?.genre ?? dna?.identity?.genre ?? "original");
   const identity = dna?.identity ?? {};
-  const seed = hash([dna?.familyId, dna?.id, song?.seed, genre, identity.signatureBias, identity.narrative].filter(Boolean).join("|"));
+  const seed = hash32([dna?.familyId, dna?.id, song?.seed, genre, identity.signatureBias, identity.narrative].filter(Boolean).join("|"));
   const [leftWords, rightWords] = wordsForGenre(genre);
   let left = leftWords[seed % leftWords.length];
   let right = rightWords[(seed >>> 8) % rightWords.length];

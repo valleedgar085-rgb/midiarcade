@@ -32,18 +32,32 @@ export function createGenerationExecutor({
   workerFactory = null,
   timeoutMs = 60000,
   recorder = null,
+  now = () => Date.now(),
+  workerRetryBaseMs = 1000,
+  workerRetryMaxMs = 30000,
 } = {}) {
   if (typeof fallback !== "function") throw new TypeError("generation executor requires a fallback");
 
   const flightRecorder = recorder ?? createGenerationFlightRecorder();
   let worker = null;
   let workerUnavailable = typeof workerFactory !== "function";
+  let workerFailures = 0;
+  let workerRetryAt = 0;
   let requestId = 0;
   let lifecycle = 0;
   const pending = new Map();
 
   function requireCurrentLifecycle(expected) {
     if (expected !== lifecycle) throw new Error("Background generation was canceled.");
+  }
+
+  function markWorkerFailure() {
+    workerFailures += 1;
+    const base = Math.max(100, Number(workerRetryBaseMs) || 1000);
+    const max = Math.max(base, Number(workerRetryMaxMs) || 30000);
+    const delay = Math.min(max, base * (2 ** Math.min(8, workerFailures - 1)));
+    workerRetryAt = Number(now()) + delay;
+    workerUnavailable = true;
   }
 
   function runFallback(request) {
@@ -89,7 +103,9 @@ export function createGenerationExecutor({
   }
 
   function ensureWorker() {
-    if (workerUnavailable) return null;
+    if (typeof workerFactory !== "function") return null;
+    if (workerUnavailable && Number(now()) < workerRetryAt) return null;
+    if (workerUnavailable) workerUnavailable = false;
     if (worker) return worker;
     try {
       worker = workerFactory();
@@ -99,22 +115,25 @@ export function createGenerationExecutor({
         if (worker !== createdWorker) return;
         const request = takePending(event.data?.requestId);
         if (!request) return;
-        if (event.data?.ok) request.resolve(event.data.result);
-        else {
-          workerUnavailable = true;
+        if (event.data?.ok) {
+          workerFailures = 0;
+          workerRetryAt = 0;
+          request.resolve(event.data.result);
+        } else {
+          markWorkerFailure();
           disposeWorker();
           runFallback(request);
         }
       });
       worker.addEventListener("error", () => {
         if (worker !== createdWorker) return;
-        workerUnavailable = true;
+        markWorkerFailure();
         disposeWorker();
         recoverPendingWithFallback();
       });
       return worker;
     } catch {
-      workerUnavailable = true;
+      markWorkerFailure();
       disposeWorker();
       return null;
     }
@@ -132,7 +151,7 @@ export function createGenerationExecutor({
       const timer = setTimeout(() => {
         const request = takePending(id);
         if (!request) return;
-        workerUnavailable = true;
+        markWorkerFailure();
         disposeWorker();
         runFallback(request);
       }, Math.max(1000, Number(timeoutMs) || 60000));
@@ -141,7 +160,7 @@ export function createGenerationExecutor({
         activeWorker.postMessage({ requestId: id, kind, payload: adaptedPayload });
       } catch {
         const request = takePending(id);
-        workerUnavailable = true;
+        markWorkerFailure();
         disposeWorker();
         if (request) runFallback(request);
       }

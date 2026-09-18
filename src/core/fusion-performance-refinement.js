@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const clamp = (value, min, max) => Math.max(min, Math.min(max, finite(value, min)));
 
@@ -8,10 +9,6 @@ function round(value, digits = 2) {
 
 function average(values, fallback = 0) {
   return values.length ? values.reduce((sum, value) => sum + finite(value), 0) / values.length : fallback;
-}
-
-function clone(value) {
-  return value == null ? value : JSON.parse(JSON.stringify(value));
 }
 
 function velocitySpread(notes) {
@@ -27,8 +24,8 @@ function velocitySpread(notes) {
  * candidate through the full critic and release gate before it can commit.
  */
 export function createFusionPerformanceRebalanceCandidate(song) {
-  const repaired = clone(song);
-  const profile = clone(repaired?.performanceProfile ?? {});
+  const repaired = cloneValue(song);
+  const profile = cloneValue(repaired?.performanceProfile ?? {});
   profile.timingJitter = Math.min(0.035, Math.abs(finite(profile.timingJitter, 0)));
   profile.trackOffsets = Object.fromEntries(
     Object.entries(profile.trackOffsets ?? {}).map(([id, offset]) => [id, clamp(offset, -0.045, 0.045)]),

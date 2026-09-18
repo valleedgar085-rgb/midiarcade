@@ -1,0 +1,45 @@
+export function createQualityEvaluationContext({
+  evaluateCandidate,
+  evaluateReleaseGate,
+} = {}) {
+  if (typeof evaluateCandidate !== "function" || typeof evaluateReleaseGate !== "function") {
+    throw new TypeError("quality evaluation context requires candidate and release evaluators");
+  }
+
+  const evaluationCache = new WeakMap();
+  const releaseCache = new WeakMap();
+
+  function evaluate(song) {
+    if (!song || typeof song !== "object") return evaluateCandidate(song);
+    if (evaluationCache.has(song)) return evaluationCache.get(song);
+    const value = evaluateCandidate(song);
+    evaluationCache.set(song, value);
+    return value;
+  }
+
+  function release(song, evaluation = evaluate(song)) {
+    if (!song || typeof song !== "object") return evaluateReleaseGate(song, evaluation);
+    const cached = releaseCache.get(song);
+    if (cached?.evaluation === evaluation) return cached.value;
+    const value = evaluateReleaseGate(song, evaluation);
+    releaseCache.set(song, { evaluation, value });
+    return value;
+  }
+
+  return Object.freeze({
+    evaluateCandidate: evaluate,
+    evaluateReleaseGate: release,
+  });
+}
+
+export function runQualityStageSequence(song, stages = []) {
+  let current = song;
+  const diagnostics = {};
+  for (const stage of stages) {
+    if (!stage || typeof stage.run !== "function") continue;
+    const result = stage.run(current);
+    diagnostics[stage.id] = result?.diagnostics ?? null;
+    if (result?.song) current = result.song;
+  }
+  return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });
+}

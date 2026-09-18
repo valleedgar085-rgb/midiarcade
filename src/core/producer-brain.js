@@ -23,6 +23,25 @@ import {
 } from "./producer-policy.js";
 import { createSongBlueprint } from "./producer-blueprint.js";
 
+function applyGenomeConfigStages(config, genome, options) {
+  const stages = [
+    ["creativeGenomeSteering", applyCreativeGenomeSteering],
+    ["creativeGenomeRhythmSteering", applyCreativeGenomeRhythmSteering],
+    ["creativeGenomeSurpriseSteering", applyCreativeGenomeSurpriseSteering],
+  ];
+  let current = config;
+  const diagnostics = {};
+  for (const [id, applyStage] of stages) {
+    const result = applyStage(current, genome, options);
+    current = result.config;
+    diagnostics[id] = result.diagnostics;
+  }
+  return Object.freeze({
+    config: current,
+    diagnostics: Object.freeze(diagnostics),
+  });
+}
+
 /**
  * Producer Brain is an orchestration layer, not a second composition engine.
  * It decides how deeply to audition, whether to expand/repair, and which
@@ -115,15 +134,7 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
     ...options,
     consumeCreativeGenome,
   });
-  const steering = applyCreativeGenomeSteering(source, plan.creativeGenome, {
-    kind: plan.kind,
-    enabled: Boolean(requestedConsumption),
-  });
-  const rhythmSteering = applyCreativeGenomeRhythmSteering(steering.config, plan.creativeGenome, {
-    kind: plan.kind,
-    enabled: Boolean(requestedConsumption),
-  });
-  const surpriseSteering = applyCreativeGenomeSurpriseSteering(rhythmSteering.config, plan.creativeGenome, {
+  const steeringStages = applyGenomeConfigStages(source, plan.creativeGenome, {
     kind: plan.kind,
     enabled: Boolean(requestedConsumption),
   });
@@ -133,16 +144,16 @@ export function applyProducerBrainConfig(config = {}, options = {}) {
   });
   const motifStrategy = motifSteering.strategy;
   const out = {
-    ...surpriseSteering.config,
+    ...steeringStages.config,
     thinkingDepth: source.thinkingDepth ?? plan.search.depth,
     adaptiveCandidates: source.adaptiveCandidates ?? plan.search.adaptive,
     weaknessAwareSearch: source.weaknessAwareSearch ?? plan.search.weaknessAwareSearch,
     targetedRepair: source.targetedRepair ?? plan.search.targetedRepair,
     repairAttempts: source.repairAttempts ?? plan.search.repairAttempts,
     producerBrain: plan,
-    creativeGenomeSteering: steering.diagnostics,
-    creativeGenomeRhythmSteering: rhythmSteering.diagnostics,
-    creativeGenomeSurpriseSteering: surpriseSteering.diagnostics,
+    creativeGenomeSteering: steeringStages.diagnostics.creativeGenomeSteering,
+    creativeGenomeRhythmSteering: steeringStages.diagnostics.creativeGenomeRhythmSteering,
+    creativeGenomeSurpriseSteering: steeringStages.diagnostics.creativeGenomeSurpriseSteering,
     creativeGenomeMotifSteering: motifSteering.diagnostics,
     ...(motifStrategy ? {
       creativeMotifMutation: motifStrategy.motifMutation,

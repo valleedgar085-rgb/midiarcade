@@ -1,4 +1,5 @@
 import { clampFinite as clamp, finite } from "../utils.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 /**
  * Deterministic Song DNA contract.
@@ -100,7 +101,7 @@ export function createSongDNA({
   phraseBars = 4,
 } = {}) {
   const seedText = String(seed ?? "0");
-  const normalizedGenre = String(genre ?? "pop");
+  const normalizedGenre = normalizeGenreId(genre ?? "pop") || "pop";
   const normalizedKey = String(key ?? "C");
   const normalizedScale = String(scale ?? "major");
   const sourceIdentity = immutableIdentity(sourceDNA);

@@ -1,5 +1,7 @@
 import { clampFinite as clamp, finite } from "../utils.js";
 import { fusionDevelopment, popHipHopRapFusionContext } from "./genre-fusion-steering.js";
+import { hash32 } from "./deterministic-rng.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 const DEFAULT_DEVELOPMENT = Object.freeze({
   grooveEvolution: 0.62,
@@ -47,16 +49,6 @@ function cloneRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? { ...value } : {};
 }
 
-function hash32(value) {
-  let hash = 2166136261;
-  const text = String(value ?? "");
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 function centeredSeedUnit(seed, salt) {
   return (hash32(`${seed}:${salt}`) / 0xffffffff) * 2 - 1;
 }
@@ -64,12 +56,12 @@ function centeredSeedUnit(seed, salt) {
 export function outputQualityDevelopment(genre = "") {
   return Object.freeze({
     ...DEFAULT_DEVELOPMENT,
-    ...(GENRE_DEVELOPMENT[String(genre)] ?? {}),
+    ...(GENRE_DEVELOPMENT[normalizeGenreId(genre)] ?? {}),
   });
 }
 
 export function createOutputQualityProfile(config = {}, { kind = "new" } = {}) {
-  const genre = String(config.genre ?? "pop");
+  const genre = normalizeGenreId(config.genre ?? "pop") || "pop";
   const fusion = popHipHopRapFusionContext(config);
   const development = fusionDevelopment(config, outputQualityDevelopment, { kind }) ?? outputQualityDevelopment(genre);
   const seed = String(config.seed ?? `${genre}:default`);

@@ -4,6 +4,7 @@ import {
   evaluateSongReleaseGate,
   GENRE_CRITIC_PROFILES,
 } from "../music-engine.js";
+import { normalizeGenreId } from "./genre-contract.js";
 import { createFusionPerformanceRebalanceCandidate } from "./fusion-performance-refinement.js";
 import { createJazzDrumMemoryCandidate } from "./jazz-drum-memory-refinement.js";
 import {
@@ -16,9 +17,18 @@ import {
   repetitionRefinementFamily,
 } from "./repetition-refinement.js";
 import {
-  applyResultOutputQualityPipeline as applyBaseResultOutputQualityPipeline,
-  applySongOutputQualityPipeline as applyBaseSongOutputQualityPipeline,
+  applyDensityRefinement,
+  applyPhraseResolutionRefinement,
 } from "./output-quality-pipeline.js";
+import {
+  applyArrangementPostprocess,
+  applyGroovePocketPostprocess,
+  applyReturnDevelopmentPostprocess,
+} from "./output-quality-postprocess.js";
+import {
+  createQualityEvaluationContext,
+  runQualityStageSequence,
+} from "./output-quality-stage-runner.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
@@ -70,7 +80,7 @@ function disabledDiagnostics(candidateLimit, reason = "disabled", patch = {}) {
 }
 
 function repetitionTargetForSong(song) {
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "pop");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre ?? "pop");
   const profile = GENRE_CRITIC_PROFILES[genre] ?? GENRE_CRITIC_PROFILES.pop;
   return average([
     finite(song?.songBlueprint?.qualityTargets?.repetition, profile.repetition),
@@ -252,11 +262,11 @@ function repetitionDiagnosticsFor(assessment, before, candidatesEvaluated, candi
   });
 }
 
-function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.repetitionRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES) };
   }
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   const family = repetitionRefinementFamily(song);
   if (!family) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES, "calibrated-genre-only", { genre }) };
@@ -313,7 +323,7 @@ function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateRele
   return { song: selected.song, diagnostics };
 }
 
-function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.registerHealthRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_REGISTER_HEALTH_CANDIDATES) };
   }
@@ -366,11 +376,11 @@ function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluate
   return { song: selected.song, diagnostics };
 }
 
-function applyGenreIdentityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyGenreIdentityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   const enabled = config.genreIdentityRefinement === true
     || (config.genreIdentityRefinement !== false && config.outputQuality?.kind === "new");
   if (!enabled) return { song, diagnostics: disabledDiagnostics(GENRE_IDENTITY_CANDIDATE_LIMIT) };
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   if (genre !== "jazz") {
     return { song, diagnostics: disabledDiagnostics(GENRE_IDENTITY_CANDIDATE_LIMIT, "calibrated-genre-only", { genre }) };
   }
@@ -458,9 +468,9 @@ function noteTopologySignature(song) {
   })));
 }
 
-function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
-  const primaryGenre = String(config.genre ?? song?.genre ?? song?.meta?.genre ?? "");
-  const secondaryGenre = String(config.secondaryGenre ?? song?.meta?.secondaryGenre ?? "");
+export function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  const primaryGenre = normalizeGenreId(config.genre ?? song?.genre ?? song?.meta?.genre);
+  const secondaryGenre = normalizeGenreId(config.secondaryGenre ?? song?.meta?.secondaryGenre);
   const calibratedFusion = config.outputQuality?.kind === "new"
     && song?.meta?.isFusion === true
     && FUSION_PERFORMANCE_FAMILY.has(primaryGenre)
@@ -589,43 +599,62 @@ export function applySongOutputQualityPipeline(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
 } = {}) {
-  const base = applyBaseSongOutputQualityPipeline(song, config, { evaluateCandidate, evaluateReleaseGate });
-  const repetition = applyRepetitionRefinement(base.song, config, evaluateCandidate, evaluateReleaseGate);
-  const register = applyRegisterHealthRefinement(repetition.song, config, evaluateCandidate, evaluateReleaseGate);
-  const identity = applyGenreIdentityRefinement(register.song, config, evaluateCandidate, evaluateReleaseGate);
-  const performance = applyFusionPerformanceRefinement(identity.song, config, evaluateCandidate, evaluateReleaseGate);
+  const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
+  const evaluate = evaluators.evaluateCandidate;
+  const release = evaluators.evaluateReleaseGate;
+  const sequence = runQualityStageSequence(song, [
+    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
+    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
+    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
+    { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
+    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
+    { id: "repetitionRefinement", run: (current) => applyRepetitionRefinement(current, config, evaluate, release) },
+    { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, config, evaluate, release) },
+    { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
+    { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
+  ]);
+  const diagnostics = sequence.diagnostics;
   return {
-    ...base,
-    song: performance.song,
-    repetitionDiagnostics: repetition.diagnostics,
-    registerHealthDiagnostics: register.diagnostics,
-    genreIdentityDiagnostics: identity.diagnostics,
-    fusionPerformanceDiagnostics: performance.diagnostics,
+    song: sequence.song,
+    diagnostics: diagnostics.arrangement,
+    returnDiagnostics: diagnostics.returnDevelopment,
+    grooveDiagnostics: diagnostics.groovePocket,
+    densityDiagnostics: diagnostics.densityRefinement,
+    phraseResolutionDiagnostics: diagnostics.phraseResolutionRefinement,
+    repetitionDiagnostics: diagnostics.repetitionRefinement,
+    registerHealthDiagnostics: diagnostics.registerHealthRefinement,
+    genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
+    fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
   };
 }
 
 export function applyResultOutputQualityPipeline(result, config = {}, evaluators = {}) {
   if (!result?.song) return result;
-  const baseResult = applyBaseResultOutputQualityPipeline(result, config, evaluators);
-  const evaluateCandidate = evaluators.evaluateCandidate ?? evaluateSongCandidate;
-  const evaluateReleaseGate = evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate;
-  const repetition = applyRepetitionRefinement(baseResult.song, config, evaluateCandidate, evaluateReleaseGate);
-  const register = applyRegisterHealthRefinement(repetition.song, config, evaluateCandidate, evaluateReleaseGate);
-  const identity = applyGenreIdentityRefinement(register.song, config, evaluateCandidate, evaluateReleaseGate);
-  const performance = applyFusionPerformanceRefinement(identity.song, config, evaluateCandidate, evaluateReleaseGate);
-  const repetitionAccepted = Boolean(repetition.diagnostics?.accepted && repetition.song !== baseResult.song);
-  const registerAccepted = Boolean(register.diagnostics?.accepted && register.song !== repetition.song);
-  const identityAccepted = Boolean(identity.diagnostics?.accepted && identity.song !== register.song);
-  const performanceAccepted = Boolean(performance.diagnostics?.accepted && performance.song !== identity.song);
-  if (!repetitionAccepted && !registerAccepted && !identityAccepted && !performanceAccepted) return baseResult;
-  const diagnostics = { ...(baseResult.outputQualityDiagnostics ?? {}) };
-  if (repetitionAccepted) diagnostics.repetitionRefinement = repetition.diagnostics;
-  if (registerAccepted) diagnostics.registerHealthRefinement = register.diagnostics;
-  if (identityAccepted) diagnostics.genreIdentityRefinement = identity.diagnostics;
-  if (performanceAccepted) diagnostics.fusionPerformanceRefinement = performance.diagnostics;
+  const processed = applySongOutputQualityPipeline(result.song, config, {
+    evaluateCandidate: evaluators.evaluateCandidate ?? evaluateSongCandidate,
+    evaluateReleaseGate: evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate,
+  });
+  if (processed.song === result.song) return result;
+
+  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
+  const acceptedStages = [
+    ["arrangement", processed.diagnostics],
+    ["returnDevelopment", processed.returnDiagnostics],
+    ["groovePocket", processed.grooveDiagnostics],
+    ["densityRefinement", processed.densityDiagnostics],
+    ["phraseResolutionRefinement", processed.phraseResolutionDiagnostics],
+    ["repetitionRefinement", processed.repetitionDiagnostics],
+    ["registerHealthRefinement", processed.registerHealthDiagnostics],
+    ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
+    ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
+  ];
+  for (const [key, diagnostics] of acceptedStages) {
+    if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
+  }
+
   return {
-    ...baseResult,
-    song: performance.song,
-    outputQualityDiagnostics: diagnostics,
+    ...result,
+    song: processed.song,
+    outputQualityDiagnostics,
   };
 }

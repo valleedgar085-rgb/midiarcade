@@ -1,4 +1,5 @@
 import { clamp } from "../utils.js";
+import { cloneValue } from "./clone-value.js";
 
 export function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -56,18 +57,12 @@ export function finiteSetting(value, fallback, min, max, { integer = false } = {
   return integer ? Math.round(bounded) : bounded;
 }
 
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
-}
-
 export function sanitizePersistedTrackSettings(value, {
   defaults = {},
   trackOrder = [],
 } = {}) {
   const source = isRecord(value) ? value : {};
-  const result = clone(defaults);
+  const result = cloneValue(defaults);
   for (const id of trackOrder) {
     const saved = isRecord(source[id]) ? source[id] : {};
     const fallback = result[id] ?? {};

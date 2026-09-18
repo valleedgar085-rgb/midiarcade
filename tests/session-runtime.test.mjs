@@ -6,6 +6,18 @@ import {
   createSessionAutosaveController,
   decodePersistedSession,
 } from "../src/core/session-runtime.js";
+import {
+  applyGenerationPreferences,
+  captureGenerationPreferences,
+  deferEmptyCanvasFacts,
+  syncAutoPresentation,
+} from "../src/ui/session-preferences.js";
+
+const SESSION_UI = {
+  applyGenerationPreferences,
+  syncAutoPresentation,
+  deferEmptyCanvasFacts,
+};
 
 const TRACK_ORDER = ["drums"];
 const DEFAULTS = {
@@ -70,9 +82,11 @@ test("session snapshots preserve preferences even before a song exists", () => {
       schema: 2,
       now: () => new Date("2026-09-12T03:00:00.000Z"),
       normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled), normalized: true }),
+      captureGenerationPreferences,
     });
 
     assert.equal(snapshot.schema, 2);
+    assert.equal("song" in snapshot, false, "session snapshots should not spend storage on an inactive song payload");
     assert.equal(snapshot.savedAt, "2026-09-12T03:00:00.000Z");
     assert.deepEqual(snapshot.muted, ["drums"]);
     assert.deepEqual(snapshot.locked, ["drums"]);
@@ -97,6 +111,28 @@ test("first-run decode starts empty with supported controls automatic", () => {
   assert.ok(decoded.value.autoControls.has("track:drums:density"));
 });
 
+test("older session schemas migrate through current sanitizers instead of losing preferences", () => {
+  const decoded = decodePersistedSession({
+    status: "ready",
+    value: {
+      schema: 1,
+      generationPreferences: { tempoControl: "98" },
+      autoControls: ["tempoControl"],
+      selectedTrack: "drums",
+    },
+  }, {
+    schema: 2,
+    trackOrder: TRACK_ORDER,
+    defaultTrackSettings: DEFAULTS,
+    genreIds: ["hipHop"],
+  });
+
+  assert.equal(decoded.status, "ready");
+  assert.equal(decoded.value.song, null);
+  assert.equal(decoded.value.generationPreferences.tempoControl, "98");
+  assert.ok(decoded.value.autoControls.has("tempoControl"));
+});
+
 test("session decode rejects corruption, sanitizes preferences, and never auto-restores the last song", () => {
   const invalid = decodePersistedSession({ status: "ready", value: { schema: 999, song: null } }, {
     schema: 2,
@@ -110,7 +146,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
     status: "ready",
     value: {
       schema: 2,
-      song: song(),
+      song: { corrupted: true },
       trackSettings: { drums: { density: 999, program: -10 } },
       muted: ["drums", "ghost"],
       solo: ["ghost"],
@@ -132,7 +168,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
     normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled) }),
   });
 
-  assert.equal(decoded.status, "ready");
+  assert.equal(decoded.status, "ready", "legacy/corrupt song payloads must not block valid preference restore");
   assert.equal(decoded.value.song, null, "relaunch should start with an empty plate");
   assert.deepEqual([...decoded.value.muted], ["drums"]);
   assert.deepEqual([...decoded.value.solo], []);
@@ -147,7 +183,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
   assert.equal(decoded.value.generationPreferences.unknown, undefined);
 
   const target = {};
-  assert.equal(applyPersistedSessionState(target, decoded.value), true);
+  assert.equal(applyPersistedSessionState(target, decoded.value, SESSION_UI), true);
   assert.equal(target.song, null);
 });
 
@@ -213,6 +249,7 @@ test("Creative Range preferences round-trip through capture and select validatio
     const snapshot = createPersistedSessionSnapshot({ song: null }, {
       schema: 2,
       now: () => new Date("2026-09-17T00:00:00.000Z"),
+      captureGenerationPreferences,
     });
     assert.equal(snapshot.generationPreferences.creativeRangeControl, "fresh");
 
@@ -226,7 +263,7 @@ test("Creative Range preferences round-trip through capture and select validatio
     assert.equal(decoded.value.generationPreferences.creativeRangeControl, "fresh");
 
     creativeRangeControl.value = "";
-    assert.equal(applyPersistedSessionState({}, decoded.value), true);
+    assert.equal(applyPersistedSessionState({}, decoded.value, SESSION_UI), true);
     assert.equal(creativeRangeControl.value, "fresh");
 
     creativeRangeControl.value = "";
@@ -243,7 +280,7 @@ test("Creative Range preferences round-trip through capture and select validatio
       genreIds: ["hipHop"],
     });
     assert.equal(invalid.status, "ready");
-    assert.equal(applyPersistedSessionState({}, invalid.value), true);
+    assert.equal(applyPersistedSessionState({}, invalid.value, SESSION_UI), true);
     assert.equal(creativeRangeControl.value, "", "invalid select values must not overwrite the neutral default");
   } finally {
     globalThis.document = previousDocument;

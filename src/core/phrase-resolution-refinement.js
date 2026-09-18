@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
 export const MAX_PHRASE_RESOLUTION_EDITS = 3;
 
@@ -16,12 +17,6 @@ function clamp(value, min, max) {
 
 function mod(value, modulus) {
   return ((finite(value) % modulus) + modulus) % modulus;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function harmonyAt(harmony, beat) {
@@ -137,7 +132,7 @@ function selectedEntries(song, limit, hold, payoff) {
 }
 
 function refineLandingCandidate(song, limit, { hold = false, payoff = false } = {}) {
-  const candidate = clone(song);
+  const candidate = cloneValue(song);
   const melody = (candidate.tracks ?? []).find((track) => track?.id === "melody");
   if (!melody) return { song: candidate, edits: 0, pitchEdits: 0, durationEdits: 0 };
 

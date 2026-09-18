@@ -6,13 +6,21 @@ export function appendWithinLimit(entries, value, limit = HISTORY_LIMIT) {
   return [...(Array.isArray(entries) ? entries : []), value].slice(-safeLimit);
 }
 
+function recentSongIdentity(song) {
+  const fingerprint = song?.meta?.ideaFingerprint;
+  if (fingerprint && Number(fingerprint.version) >= 2) {
+    return `fingerprint:${JSON.stringify(fingerprint)}`;
+  }
+  return String(song?.id ?? `${song?.seed}:${song?.title}`);
+}
+
 export function compactRecentSongs(candidates, limit = RECENT_IDEA_LIMIT) {
   const safeLimit = Math.max(1, Math.round(Number(limit) || RECENT_IDEA_LIMIT));
   const seen = new Set();
   const result = [];
   for (const song of Array.isArray(candidates) ? candidates : []) {
     if (!song?.meta || !Array.isArray(song.tracks)) continue;
-    const identity = String(song.id ?? `${song.seed}:${song.title}`);
+    const identity = recentSongIdentity(song);
     if (seen.has(identity)) continue;
     seen.add(identity);
     const fingerprint = song.meta.ideaFingerprint;

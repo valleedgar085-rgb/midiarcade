@@ -1,3 +1,5 @@
+import { normalizeGenreId } from "./genre-contract.js";
+
 function defaultClock() {
   if (typeof performance !== "undefined" && typeof performance.now === "function") return performance.now();
   return Date.now();
@@ -17,7 +19,7 @@ function summarizeConfig(config = {}) {
   const brain = config?.producerBrain;
   return Object.freeze({
     seed: config?.seed == null ? null : String(config.seed),
-    genre: config?.genre == null ? null : String(config.genre),
+    genre: config?.genre == null ? null : normalizeGenreId(config.genre),
     bars: Number.isFinite(Number(config?.bars)) ? Number(config.bars) : null,
     thinkingDepth: config?.thinkingDepth == null ? null : String(config.thinkingDepth),
     candidateCount: Number.isFinite(Number(config?.candidateCount)) ? Number(config.candidateCount) : null,
@@ -77,7 +79,9 @@ export function createGenerationFlightRecorder({
   function publish(entry) {
     entries.push(Object.freeze(entry));
     trim();
-    if (typeof sink === "function") sink(entries.at(-1));
+    if (typeof sink === "function") {
+      try { sink(entries.at(-1)); } catch { /* telemetry must never fail generation */ }
+    }
   }
 
   return Object.freeze({

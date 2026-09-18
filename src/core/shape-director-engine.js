@@ -1,18 +1,8 @@
 import { clamp, finite } from "../utils.js";
 import { createShapeIntent } from "./shape-director-policy.js";
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
-
-function hash32(value) {
-  let hash = 2166136261;
-  for (const char of String(value ?? "")) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
+import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
+import { hash32 } from "./deterministic-rng.js";
+import { cloneValue } from "./clone-value.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -42,7 +32,7 @@ function eventVelocity(note) {
 }
 
 function setEventVelocity(note, value) {
-  const safe = Math.round(clamp(finite(value, 90), 1, 127));
+  const safe = clampMidiVelocity(value, 90);
   if (Object.prototype.hasOwnProperty.call(note, "vel") && finite(note.vel, 90) <= 1) {
     note.vel = safe / 127;
   } else {
@@ -199,7 +189,7 @@ function applyDirection(candidate, intent, eligible, seed) {
       if (direction === "darker") raiseVelocity(entry, -4);
       else raiseVelocity(entry, 4);
     });
-  } else if (direction === "buildUp" || direction === "calmDown") {
+  } else if (direction === "buildUp") {
     const span = Math.max(0.001, eligible.range.end - eligible.range.start);
     selected.forEach((entry) => {
       const position = clamp((eventStart(entry.note) - eligible.range.start) / span, 0, 1);
@@ -241,7 +231,7 @@ function applyDirection(candidate, intent, eligible, seed) {
     selected.forEach((entry, index) => {
       raiseVelocity(entry, direction === "catchier" ? 6 : 3);
       if (!rhythmUnlocked || index % 2 !== 0) return;
-      const copy = clone(entry.note);
+      const copy = cloneValue(entry.note);
       const offset = direction === "catchier" ? 1 : 0.5;
       const start = eventStart(entry.note) + offset;
       if (start >= eligible.range.end - 0.05) return;
@@ -270,7 +260,7 @@ function scopeSnapshot(song, selection) {
       const id = noteIdentity(note, index);
       if (start < range.start - 1e-7 || start >= range.end - 1e-7) return [];
       if (allowedIds && !allowedIds.has(id)) return [];
-      return [{ trackId, id, note: clone(note) }];
+      return [{ trackId, id, note: cloneValue(note) }];
     });
   });
 }
@@ -308,7 +298,7 @@ function validateCandidate(sourceSong, candidate, intent, beforeDigest) {
     for (const note of track?.notes ?? []) {
       const pitch = note?.pitch ?? note?.note ?? note?.midi;
       if (pitch != null && (eventPitch(note) < 0 || eventPitch(note) > 127)) return { valid: false, error: "midi-pitch-out-of-range" };
-      if (eventVelocity(note) < 1 || eventVelocity(note) > 127) return { valid: false, error: "midi-velocity-out-of-range" };
+      if (eventVelocity(note) < 1 || eventVelocity(note) > MIDI_NOTE_VELOCITY_MAX) return { valid: false, error: "midi-velocity-out-of-range" };
       if (eventDuration(note) <= 0) return { valid: false, error: "invalid-note-duration" };
     }
   }
@@ -340,7 +330,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
   }
 
   if (!intent.direction) return { status: "rejected", error: "direction-required", intent };
-  const candidate = clone(sourceSong);
+  const candidate = cloneValue(sourceSong);
   const eligible = collectEligible(candidate, intent.selection);
   if (eligible.error) return { status: "rejected", error: eligible.error, intent, missing: eligible.missing ?? [] };
 
@@ -369,7 +359,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
     status: "candidate",
     id: `shape-${hash32(`${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}:${intent.selection.sectionId}:${intent.direction.id}:${intent.size.id}`).toString(16)}`,
     intent,
-    before: clone(sourceSong),
+    before: cloneValue(sourceSong),
     after: candidate,
     summary: {
       changedNoteCount: mutation.changedIds.length,
@@ -383,7 +373,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
 export function auditionShapeCandidate(transaction, side = "after") {
   if (transaction?.status !== "candidate") return null;
-  return clone(side === "before" ? transaction.before : transaction.after);
+  return cloneValue(side === "before" ? transaction.before : transaction.after);
 }
 
 export function acceptShapeCandidate(transaction) {

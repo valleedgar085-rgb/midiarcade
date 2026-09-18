@@ -1,4 +1,6 @@
 import { repetitionBalance } from "./repetition-refinement.js";
+import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
+import { cloneValue } from "./clone-value.js";
 
 const RETURN_RELATIONSHIPS = new Set(["recall", "return"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme", "idea"]);
@@ -16,12 +18,6 @@ function clamp(value, min, max) {
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function sectionsOf(song) {
@@ -78,7 +74,7 @@ function noteVelocity(note) {
 
 function setNoteVelocity(note, value) {
   const key = Object.prototype.hasOwnProperty.call(note, "vel") ? "vel" : "velocity";
-  const bounded = Math.round(clamp(value, 1, 127));
+  const bounded = clampMidiVelocity(value);
   note[key] = finite(note?.[key], 90) <= 1 ? round(bounded / 127) : bounded;
 }
 
@@ -186,7 +182,7 @@ function applyCadencePayoff(song, pairs) {
     if (pitchChanged) setNotePitch(landing, targetPitch);
     if (durationChanged) setNoteDuration(landing, desiredDuration);
     if (pitchChanged || durationChanged) {
-      setNoteVelocity(landing, Math.min(120, noteVelocity(landing) + (relationship === "return" ? 4 : 2)));
+      setNoteVelocity(landing, Math.min(MIDI_NOTE_VELOCITY_MAX, noteVelocity(landing) + (relationship === "return" ? 4 : 2)));
       landing.returnDevelopmentRole = "cadence-payoff";
       landing.returnDevelopmentOriginSectionId = String(pairs.find((pair) => pair.target.id === target.id)?.origin?.id ?? "");
       changed += 1;
@@ -377,7 +373,7 @@ function applyReturnSpotlight(song, pairs) {
     for (const note of ordered) {
       const before = noteVelocity(note);
       const lift = note?.motifHandoffRole ? 7 : 4;
-      const after = clamp(before + lift, 1, 120);
+      const after = clamp(before + lift, 1, MIDI_NOTE_VELOCITY_MAX);
       if (after <= before + 1e-6) continue;
       setNoteVelocity(note, after);
       note.returnDevelopmentSpotlightRole = `feature-${featuredTrackId}`;
@@ -517,7 +513,7 @@ function applyReturnEvolution(song, pairs) {
 }
 
 function makeCandidate(sourceSong, pairs, id, apply) {
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const changedNotes = apply(song, returnPairs(song));
   if (!changedNotes) return null;
   song.outputQualityEvolution = {

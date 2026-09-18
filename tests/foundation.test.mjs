@@ -29,6 +29,23 @@ test("app store creates isolated state and reports named transactions", () => {
   assert.deepEqual(events, [["generation:commit", 1]]);
 });
 
+test("app store isolates subscriber failures from committed state", () => {
+  const state = createInitialAppState();
+  const store = createAppStore(state);
+  store.subscribe(() => {
+    throw new Error("render listener failed");
+  });
+
+  assert.doesNotThrow(() => {
+    store.transaction("safe-commit", (draft) => {
+      draft.generationCount += 1;
+    });
+  });
+  assert.equal(store.getState().generationCount, 1);
+  assert.equal(store.getRevision(), 1);
+  assert.match(store.getLastSubscriberError()?.message ?? "", /render listener failed/);
+});
+
 test("session storage isolates JSON access and rejects stale schemas", () => {
   const values = new Map();
   const storage = {
@@ -67,8 +84,9 @@ test("generation memory keeps bounded undo state and compacts scored recent song
     meta: { ideaFingerprint: { version: 2, motifContour: [0, 2, 1] } },
     tracks: [{ id: "melody", notes: Array.from({ length: 200 }, (_, pitch) => ({ pitch })) }],
   };
-  const compact = compactRecentSongs([fullSong, fullSong]);
-  assert.equal(compact.length, 1);
+  const aliasSong = { ...fullSong, id: "song-one-alias", title: "One alternate label" };
+  const compact = compactRecentSongs([fullSong, aliasSong, fullSong]);
+  assert.equal(compact.length, 1, "the same musical fingerprint should dedupe even when ids differ");
   assert.deepEqual(compact[0].tracks, []);
   assert.equal(compact[0].meta.ideaFingerprint, fullSong.meta.ideaFingerprint);
 });
@@ -152,6 +170,45 @@ test("generation executor recovers the same request when a running worker fails"
   });
   assert.equal(executor.activeRequests, 0);
   assert.equal(executor.usingWorker, false);
+});
+
+test("generation executor retries a transiently failed worker after backoff", async () => {
+  let clock = 0;
+  let workerCreates = 0;
+  const executor = createGenerationExecutor({
+    now: () => clock,
+    workerRetryBaseMs: 100,
+    workerRetryMaxMs: 100,
+    workerFactory() {
+      workerCreates += 1;
+      const listeners = new Map();
+      return {
+        addEventListener(type, listener) { listeners.set(type, listener); },
+        postMessage(message) {
+          if (workerCreates === 1) {
+            queueMicrotask(() => listeners.get("error")?.(new Error("transient crash")));
+          } else {
+            queueMicrotask(() => listeners.get("message")?.({
+              data: {
+                requestId: message.requestId,
+                ok: true,
+                result: { status: "committed", song: { id: "worker-recovered" } },
+              },
+            }));
+          }
+        },
+        terminate() {},
+      };
+    },
+    fallback: () => ({ status: "committed", song: { id: "fallback-during-backoff" } }),
+  });
+
+  assert.equal((await executor.run("new")).song.id, "fallback-during-backoff");
+  assert.equal(workerCreates, 1);
+  clock = 101;
+  assert.equal((await executor.run("new")).song.id, "worker-recovered");
+  assert.equal(workerCreates, 2);
+  assert.equal(executor.usingWorker, true);
 });
 
 test("generation executor recovers worker-declared errors without double-settling", async () => {
