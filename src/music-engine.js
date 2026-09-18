@@ -5985,6 +5985,41 @@ function applyCoordinatedTransitions(rawTracks, structure, songBlueprint) {
   return result;
 }
 
+export function genreMicroTimingOffset({
+  genre,
+  trackId,
+  pitch = null,
+  start = 0,
+  exactSubdivision = false,
+} = {}) {
+  if (exactSubdivision) return 0;
+  const beat = finite(start, 0);
+  const lane = String(trackId ?? "");
+  const id = String(genre ?? "");
+  if (id === "hipHop") {
+    if (lane === "drums") {
+      if ([38, 39].includes(Math.round(finite(pitch, -1)))) return 0.012;
+      if ([42, 44, 46].includes(Math.round(finite(pitch, -1)))) {
+        return Math.floor(beat * 4 + 1e-6) % 2 === 0 ? -0.005 : 0.005;
+      }
+      return 0;
+    }
+    if (lane === "melody") return 0.008 + (Math.floor(beat / 2) % 2 === 0 ? -0.002 : 0.002);
+    if (lane === "counterpoint") return -0.006;
+    if (lane === "chords") return 0.004;
+    if (lane === "pad") return 0.003;
+    return 0;
+  }
+  if (id === "pop") {
+    if (lane === "drums" && [38, 39].includes(Math.round(finite(pitch, -1)))) return 0.006;
+    if (lane === "melody") return -0.006;
+    if (lane === "counterpoint") return 0.006;
+    if (lane === "chords") return 0.002;
+    if (lane === "pad") return 0.004;
+  }
+  return 0;
+}
+
 function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null) {
   const totalBeats = config.bars * beatsPerBar(config);
   const upgraded = Boolean(config.professionalUpgrade);
