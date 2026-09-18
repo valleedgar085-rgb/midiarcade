@@ -287,6 +287,8 @@ Every change remains bounded and critic/release gated. Prefer improving existing
 
 Treat physical Android validation as a repeatable release discipline instead of an occasional final check.
 
+The executable pre-device contract gate is `npm run test:android-release`; physical evidence is recorded in `docs/ANDROID_RELEASE_CHECKLIST.md`. This does **not** replace device validation or mark Track C complete by itself.
+
 Required device checks should cover:
 
 - sustained playback;

@@ -42,6 +42,8 @@ The north-star workflow is:
 
 See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
 
+For the physical-device release gate, use [docs/ANDROID_RELEASE_CHECKLIST.md](docs/ANDROID_RELEASE_CHECKLIST.md) and run `npm run test:android-release` before installing the candidate APK.
+
 ## Producer Brain and generation
 
 Generation is deterministic and multi-candidate. Producer Brain can diagnose weak musical dimensions, steer bounded search toward the weakness, and attempt targeted repairs without bypassing explicit user controls.
