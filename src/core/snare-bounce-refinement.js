@@ -3,6 +3,7 @@ import {
   evaluateSongCandidate,
   evaluateSongReleaseGate,
 } from "../music-engine.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 export const SNARE_BOUNCE_REFINEMENT_VERSION = 1;
 export const MAX_SNARE_BOUNCE_FIGURES = 3;
@@ -57,7 +58,7 @@ function randomUnit(seed, salt) {
 }
 
 function resolveGenre(song, config) {
-  return String(config?.genre ?? song?.genre ?? song?.meta?.genre ?? "");
+  return normalizeGenreId(config?.genre ?? song?.genre ?? song?.meta?.genre);
 }
 
 function resolveSeed(song, config) {
