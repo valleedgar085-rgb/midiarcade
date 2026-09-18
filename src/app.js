@@ -64,7 +64,7 @@ import {
   nearestScalePitch,
   transposeScaleStep,
 } from "./ui/shape-logic.js";
-import { SHAPE_QUICK_DIRECTIONS, createShapeIntent } from "./core/shape-director-policy.js";
+import { SHAPE_QUICK_DIRECTIONS, createShapeIntent, rankShapeSuggestions } from "./core/shape-director-policy.js";
 import { auditionShapeCandidate, createShapeCandidate } from "./core/shape-director-engine.js";
 import { executeArrangementCommand } from "./ui/arrangement-logic.js";
 import { coverArtworkDataUrl, coverArtworkFinish, createCoverArtworkSvg } from "./cover-art.js";
@@ -2423,6 +2423,32 @@ function renderShapeDirector(section = editorSection()) {
       .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
       .join("");
   }
+  const recommendations = rankShapeSuggestions({
+    song: state.song,
+    section,
+    target: director.target,
+    elementId: state.song?.variationSet?.element?.id,
+  });
+  if (directions) {
+    const rankedIds = new Set(recommendations.map((entry) => entry.directionId));
+    for (const entry of recommendations) {
+      const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
+      if (!button) continue;
+      button.textContent = "★ " + entry.direction.label;
+      button.dataset.shapeRank = String(entry.rank);
+      button.title = entry.reason;
+      directions.append(button);
+    }
+    for (const entry of Object.values(SHAPE_QUICK_DIRECTIONS)) {
+      if (rankedIds.has(entry.id)) continue;
+      const button = directions.querySelector('[data-shape-direction="' + entry.id + '"]');
+      if (!button) continue;
+      button.textContent = entry.label;
+      delete button.dataset.shapeRank;
+      button.removeAttribute("title");
+      directions.append(button);
+    }
+  }
   if (auditionControls && !auditionControls.childElementCount) {
     auditionControls.innerHTML = '<button type="button" data-shape-audition="before">Before</button><button type="button" data-shape-audition="after">After</button>';
   }
@@ -2440,9 +2466,12 @@ function renderShapeDirector(section = editorSection()) {
   });
   if (!director.transaction) {
     if (candidate) candidate.hidden = true;
+    const topSuggestion = recommendations[0];
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
       ? "Select notes in the piano roll first, or use Section / Current instrument scope."
-      : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
+      : topSuggestion
+        ? `Suggested: ${topSuggestion.direction.label} — ${topSuggestion.reason}. Choose any direction to stage a local Before / After candidate; nothing commits automatically.`
+        : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
     return;
   }
   const summary = director.transaction.summary;
