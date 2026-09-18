@@ -10,9 +10,9 @@ The product rule is simple: musical improvements only stay when they remain dete
 
 ## Current production state
 
-`main` is currently at **9a89f03**, the merged **Core hardening** checkpoint.
+The current production line combines the **Core hardening** baseline with **Track A workflow convergence** across Create → Shape → Mix → Finish.
 
-The latest fully validated branch recorded **569 / 569 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and install-safe Preview APK assembly.
+The core-hardening baseline entering Track A recorded **569 / 569 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and install-safe Preview APK assembly. Track A adds cross-workspace authority coverage and product-convergence contracts on top of that baseline.
 
 Important production work now includes:
 
@@ -38,7 +38,7 @@ The north-star workflow is:
 3. **Mix** — judge and balance the composition with producer-readable level, velocity, gate, pan/space, mute/solo, and instrument controls.
 4. **Finish** — export/share predictable Type-1 multitrack MIDI for FL Studio or another DAW.
 
-The active roadmap is **Track A: Workflow Convergence**. A1 authority work is substantially implemented; the current checkpoint is explicit end-to-end proof that Create → Shape → Mix → Finish → back → Similar all observe the same committed song and coherent history. After that, work advances in order through A2 Create simplification, A3 Shape intelligence, A4 Mix balance, and A5 Finish/export handoff. Engine expansion resumes only after the product experience is coherent and physical Android validation is repeatable.
+**Track A: Workflow Convergence is implemented.** A1 now has executable Create → Shape → Mix → Finish → Create → Similar authority/history coverage; A2 presents Song → Feel → Structure → Generate; A3 adds contextual advisory Shape recommendations; A4 promotes Level / Impact / Note Length while disclosing deeper sound design; and A5 makes the exact MIDI handoff visible before export. The active next gate is **Track C physical Android validation**. Measured Track B engine expansion resumes only after that device discipline is repeatable.
 
 See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
 
