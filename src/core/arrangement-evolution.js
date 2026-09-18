@@ -1,4 +1,7 @@
 import { finite } from "../utils.js";
+import { cloneValue } from "./clone-value.js";
+import { hash32 } from "./deterministic-rng.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 const ELECTRONIC_GENRES = new Set(["house", "techno", "drumBass"]);
 const LOOP_GENRES = new Set(["loFiHipHop", "ambient"]);
@@ -30,24 +33,8 @@ const FAMILIES = Object.freeze({
   loopDevelopment: Object.freeze({ id: "loop-development", label: "Loop development", character: "Keep the core loop identity while changing its surrounding context." }),
 });
 
-function hash32(value) {
-  let hash = 2166136261;
-  const text = String(value ?? "");
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 function pick(values, seed) {
   return values[hash32(seed) % values.length];
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function cloneLayout(layout = []) {
@@ -70,7 +57,7 @@ function songFamilyCandidates(genre) {
 }
 
 export function createArrangementEvolution(config = {}) {
-  const genre = String(config.genre ?? "pop");
+  const genre = normalizeGenreId(config.genre ?? "pop") || "pop";
   const bars = Math.max(1, Math.round(finite(config.bars, 16)));
   const seed = String(config.seed ?? `${genre}:arrangement`);
   const enabled = config.arrangementEvolution === true && bars >= 8;
@@ -197,7 +184,7 @@ function lastIndex(sections, predicate) {
 }
 
 function evolvedSectionOrder(sourceSections, family) {
-  const sections = clone(sourceSections);
+  const sections = cloneValue(sourceSections);
   if (sections.length < 4) return sections;
   const introOffset = sectionName(sections[0]) === "intro" ? 1 : 0;
   const outroOffset = sectionName(sections.at(-1)) === "outro" ? 1 : 0;
@@ -335,7 +322,7 @@ function recontextualizeTransitions(song) {
   const transitions = buildTransitionContext(song);
   song.songBlueprint = {
     ...(song.songBlueprint ?? {}),
-    transitions: clone(transitions),
+    transitions: cloneValue(transitions),
   };
   song.arrangementTransitions = transitions.map((transition) => ({
     ...transition,
@@ -370,10 +357,10 @@ export function evolveSongArrangement(sourceSong, config = {}) {
     return { changed: false, song: sourceSong, evolution };
   }
 
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const beatsPerBar = Math.max(1, finite(song.meta?.beatsPerBar, 4));
-  const original = clone(sourceSections);
-  const reordered = clone(ordered);
+  const original = cloneValue(sourceSections);
+  const reordered = cloneValue(ordered);
   let cursorBars = 0;
   for (const section of reordered) {
     const bars = sectionBars(section);
@@ -397,7 +384,7 @@ export function evolveSongArrangement(sourceSong, config = {}) {
   };
   const relocateArray = (events) => Array.isArray(events)
     ? events.map((event) => {
-        const next = clone(event);
+        const next = cloneValue(event);
         relocate(next);
         return next;
       }).sort((left, right) => eventStart(left) - eventStart(right))
@@ -410,7 +397,7 @@ export function evolveSongArrangement(sourceSong, config = {}) {
   }));
   song.harmony = relocateArray(song.harmony);
   song.structure = reordered;
-  song.sections = clone(reordered);
+  song.sections = cloneValue(reordered);
   song.bars = cursorBars;
   song.meta = {
     ...(song.meta ?? {}),
