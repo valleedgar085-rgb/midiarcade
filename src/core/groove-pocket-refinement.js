@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 export const MAX_GROOVE_POCKET_CANDIDATES = 3;
 
 const POCKET_PROFILES = Object.freeze([
@@ -13,12 +14,6 @@ function finite(value, fallback = 0) {
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function noteStart(note) {
@@ -89,7 +84,7 @@ function hasBassCollision(notes, moving, desired) {
 }
 
 function createPocketCandidate(sourceSong, profile) {
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const bass = bassNotes(song);
   const kicks = kickNotes(song);
   if (!bass.length || !kicks.length) return null;
