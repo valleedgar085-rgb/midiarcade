@@ -11,6 +11,7 @@ import {
   TRACK_DEFINITIONS,
 } from "./music-engine.js";
 import { clamp } from "./utils.js";
+import { deriveSongTitle } from "./core/song-title.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
@@ -178,8 +179,6 @@ const RECIPES = [
   },
 ];
 
-const TITLE_LEFT = ["Velvet", "Satellite", "Electric", "Midnight", "Paper", "Golden", "Chrome", "Soft", "Neon", "Pocket", "Quiet", "Summer"];
-const TITLE_RIGHT = ["Polaroid", "Daydream", "Mirage", "Frequency", "Firefly", "Arcade", "Afterglow", "Parade", "Weather", "Blueprint", "Comet", "Cinema"];
 const SESSION_STORAGE_KEY = "midi-arcade/session-v2";
 const SESSION_SCHEMA = 2;
 let rejectedPersistedSession = false;
@@ -1010,9 +1009,7 @@ function noteVelocity(note) {
 }
 
 function deriveTitle(song = state.song) {
-  if (song?.title) return song.title;
-  const hash = hashNumber(songSeed(song));
-  return `${TITLE_LEFT[hash % TITLE_LEFT.length]} ${TITLE_RIGHT[(hash >>> 8) % TITLE_RIGHT.length]}`;
+  return deriveSongTitle(song);
 }
 
 function normalizeSections(song = state.song) {
