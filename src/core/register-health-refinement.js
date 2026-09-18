@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 const CANDIDATE_BLOCK_SIZES = Object.freeze([2, 3, 4]);
 const SCORE_EPSILON = 1e-6;
 
@@ -15,12 +16,6 @@ function round(value, digits = 4) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, finite(value, min)));
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 /**
@@ -130,7 +125,7 @@ function createCandidate(song, blockSize, candidateIndex) {
   const semitones = chooseDirection(sourceEntries, selected);
   if (!semitones) return null;
 
-  const candidate = clone(song);
+  const candidate = cloneValue(song);
   const melody = (candidate.tracks ?? []).find((track) => track?.id === "melody");
   if (!melody) return null;
 
