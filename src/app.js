@@ -50,6 +50,12 @@ import {
 } from "./core/preview-audio.js";
 import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "./ui/value-formatters.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
+import {
+  applyGenerationPreferences as applySessionGenerationPreferences,
+  captureGenerationPreferences,
+  deferEmptyCanvasFacts,
+  syncAutoPresentation,
+} from "./ui/session-preferences.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
@@ -232,6 +238,7 @@ const sessionRuntime = createSessionAutosaveController({
   snapshot: () => createPersistedSessionSnapshot(shapeDirectorPersistenceState(), {
     schema: SESSION_SCHEMA,
     normalizeMixAssistant,
+    captureGenerationPreferences,
   }),
   onSaved() {
     const status = $("#autosaveStatus");
@@ -280,7 +287,11 @@ export function restorePersistedSession() {
     discardPersistedSession();
     return false;
   }
-  applyPersistedSessionState(state, restored.value);
+  applyPersistedSessionState(state, restored.value, {
+    applyGenerationPreferences: applySessionGenerationPreferences,
+    syncAutoPresentation,
+    deferEmptyCanvasFacts,
+  });
   return true;
 }
 
