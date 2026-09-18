@@ -25,6 +25,16 @@ export const GENERATION_PREFERENCE_IDS = Object.freeze([
   "surpriseControl",
 ]);
 
+export function sanitizeGenerationPreferences(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const preferences = {};
+  for (const id of GENERATION_PREFERENCE_IDS) {
+    if (typeof value[id] !== "string") continue;
+    preferences[id] = value[id].slice(0, 80);
+  }
+  return preferences;
+}
+
 function boundedIndex(value, maxExclusive) {
   const numeric = Number(value);
   const rounded = Number.isFinite(numeric) ? Math.round(numeric) : 0;
