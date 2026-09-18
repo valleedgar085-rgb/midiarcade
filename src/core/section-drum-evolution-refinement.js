@@ -25,6 +25,7 @@ const PROTECTED_DIMENSIONS = Object.freeze([
 const PAYOFF_SECTIONS = new Set(["chorus", "drop", "theme"]);
 const BUILD_SECTIONS = new Set(["prechorus", "build"]);
 const VERSE_SECTIONS = new Set(["verse", "idea", "solo"]);
+const OPENING_SECTIONS = new Set(["intro", "verse", "idea"]);
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : null;
@@ -92,6 +93,52 @@ function snareNotes(notes, window) {
   return notes
     .filter((note) => [38, 40].includes(Number(note?.pitch)) && inWindow(note, window))
     .sort((left, right) => finite(left.start) - finite(right.start));
+}
+
+function protectedOpeningHat(note) {
+  const feature = String(note?.rhythmicFeature ?? "").toLowerCase();
+  return Boolean(
+    note?.drumFillId
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.transitionHandoffId
+    || feature.includes("fill")
+    || feature.includes("roll")
+  );
+}
+
+function softenOpeningHat(notes, window, section, seed, occurrence, evolution) {
+  const openingLength = Math.min(8, Math.max(1, (window.end - window.start) * 0.5));
+  const hats = notes
+    .filter((note) => {
+      if (![42, 44].includes(Number(note?.pitch)) || !inWindow(note, window) || protectedOpeningHat(note)) return false;
+      const local = finite(note.start) - window.start;
+      if (local < 0 || local >= openingLength - 1e-6) return false;
+      const beatPhase = ((local % 1) + 1) % 1;
+      return Math.abs(beatPhase - 0.5) <= 0.08;
+    })
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  if (!hats.length) return null;
+
+  const note = hats[hash32(`${seed}|opening-hat|${section.id}|${occurrence}`) % hats.length];
+  const beforeVelocity = clampMidiVelocity(note.velocity);
+  const afterVelocity = Math.max(
+    36,
+    Math.min(beforeVelocity - 8, clampMidiVelocity(beforeVelocity * (0.7 - clamp(evolution) * 0.08))),
+  );
+  if (!(afterVelocity < beforeVelocity)) return null;
+
+  note.velocity = afterVelocity;
+  note.drumEvolutionRole = "opening-restraint";
+  note.sectionId = section.id ?? null;
+  note.sectionName = sectionName(section);
+  return {
+    type: "opening-restraint",
+    start: round(note.start),
+    pitch: Number(note.pitch),
+    fromVelocity: beforeVelocity,
+    toVelocity: afterVelocity,
+  };
 }
 
 function addGhostResponse(notes, window, section, seed, occurrence, evolution) {
@@ -193,6 +240,11 @@ function buildCandidate(song, config, genre) {
     const window = sectionWindow(section, index, sections, candidate);
     if (window.end - window.start < 2) continue;
 
+    if (index === 0 && OPENING_SECTIONS.has(name) && edits.length < maxEdits) {
+      const restraint = softenOpeningHat(notes, window, section, seed, occurrence, evolution);
+      if (restraint) edits.push({ ...restraint, sectionId: section.id ?? null, sectionName: name, occurrence });
+    }
+
     if (BUILD_SECTIONS.has(name) && fills > 0.001) {
       const pickup = addTransitionPickup(notes, window, section, energy, evolution);
       if (pickup) edits.push({ ...pickup, sectionId: section.id ?? null, sectionName: name, occurrence });
@@ -220,6 +272,7 @@ function buildCandidate(song, config, genre) {
   appendRhythmicFeature(candidate, "Section-aware drum evolution");
   candidate.idea.sectionDrumEvolutionHits = edits.length;
   candidate.idea.sectionDrumEvolutionSections = [...new Set(edits.map((edit) => edit.sectionId).filter(Boolean))].length;
+  candidate.idea.sectionDrumOpeningRestraints = edits.filter((edit) => edit.type === "opening-restraint").length;
   return { song: candidate, edits, evolution, energy, fills };
 }
 
