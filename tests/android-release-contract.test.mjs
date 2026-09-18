@@ -54,13 +54,14 @@ test("app lifecycle invalidates generation ownership before worker disposal", ()
 });
 
 test("native MIDI handoff stays clone-only and uses Capacitor cache + Share", () => {
+  const nativeHandoff = between("export async function exportSongNative", "/**\n * Prune the midi-exports cache");
   const exportFlow = between("export function buildExportSongSnapshot", "function expressionPoints");
   assert.match(exportFlow, /const clone = deepClone\(song\)/);
   assert.match(exportFlow, /const clone = buildExportSongSnapshot\(\)/);
   assert.match(exportFlow, /prepareMidiExport\(clone, currentExportSetup\(\)\)/);
-  assert.match(exportFlow, /Filesystem\.writeFile\(\{[\s\S]*?directory: "CACHE"[\s\S]*?recursive: true/);
-  assert.match(exportFlow, /Share\.share\(\{[\s\S]*?url: result\.uri[\s\S]*?dialogTitle: "Save MIDI Song Idea"/);
-  assert.match(exportFlow, /pruneMidiExportsCache\(\)\.catch/);
+  assert.match(nativeHandoff, /Filesystem\.writeFile\(\{[\s\S]*?directory: "CACHE"[\s\S]*?recursive: true/);
+  assert.match(nativeHandoff, /Share\.share\(\{[\s\S]*?url: result\.uri[\s\S]*?dialogTitle: "Save MIDI Song Idea"/);
+  assert.match(nativeHandoff, /pruneMidiExportsCache\(\)\.catch/);
 });
 
 test("focused Android release command runs the protected contract suites", () => {
