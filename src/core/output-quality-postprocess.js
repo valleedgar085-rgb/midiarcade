@@ -290,7 +290,7 @@ function grooveDiagnosticsFor(assessment, {
   });
 }
 
-function applyArrangementPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyArrangementPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
   const evolution = createArrangementEvolution(config);
   if (!evolution.enabled) {
     return {
@@ -369,7 +369,7 @@ function applyArrangementPostprocess(song, config, evaluateCandidate, evaluateRe
   return { song: selected.song, diagnostics };
 }
 
-function applyReturnDevelopmentPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyReturnDevelopmentPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.returnDevelopment !== true) {
     return {
       song,
@@ -438,7 +438,7 @@ function applyReturnDevelopmentPostprocess(song, config, evaluateCandidate, eval
   return { song: selected.song, diagnostics };
 }
 
-function applyGroovePocketPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyGroovePocketPostprocess(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.groovePocketRefinement !== true) {
     return {
       song,
