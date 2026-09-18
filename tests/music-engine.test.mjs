@@ -3209,3 +3209,23 @@ test("multi-seed generation produces dynamic arrangement variety without note-le
   const titles = new Set(songs.map((s) => s.title));
   assert.equal(titles.size, 5, "each random seed must produce a unique title");
 });
+
+
+test("Track B diversity QC rejects a recent exact output clone without weakening quality gates", () => {
+  const source = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-source", candidateCount: 1 });
+  const clone = structuredClone(source);
+  const report = engine.evaluateSongDiversity(clone, [source], "new");
+  assert.equal(report.passed, false);
+  assert.equal(report.reason, "too-close-to-recent-output");
+  assert.ok(report.nearCloneDimensions.includes("groove"));
+  assert.ok(report.nearCloneDimensions.includes("melody"));
+});
+
+test("Track B diversity QC remains deterministic for fresh Hip-Hop output", () => {
+  const recent = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-recent", candidateCount: 1 });
+  const candidate = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-candidate", candidateCount: 1 });
+  assert.deepEqual(
+    engine.evaluateSongDiversity(candidate, [recent], "new"),
+    engine.evaluateSongDiversity(candidate, [recent], "new"),
+  );
+});
