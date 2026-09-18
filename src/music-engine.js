@@ -5530,6 +5530,58 @@ function generatePad(
   return notes;
 }
 
+const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
+
+function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
+  if (!STAGGERED_ENTRY_GENRES.has(config.genre)) return null;
+  if (!section || !scene || ["foreground", "foundation", "rest"].includes(producerRole)) return null;
+  const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
+  if (span < 1.5) return null;
+  const barBeats = Math.max(1, beatsPerBar(config));
+  let entryBeat = null;
+  let exitBeat = null;
+
+  if (section.id === structure[0]?.id && scene.purpose === "establish") {
+    const delayFraction = {
+      answer: 0.24,
+      support: 0.14,
+      texture: 0.34,
+    }[producerRole] ?? 0;
+    const maxBars = {
+      answer: 1,
+      support: 0.5,
+      texture: 1.5,
+    }[producerRole] ?? 0;
+    if (delayFraction > 0 && maxBars > 0) {
+      const delay = Math.min(span * delayFraction, barBeats * maxBars);
+      entryBeat = round(section.startBeat + Math.max(0.5, delay));
+    }
+  }
+
+  if (
+    section.id === structure.at(-1)?.id
+    && scene.purpose === "resolve"
+    && !["chords"].includes(trackId)
+  ) {
+    const tailFraction = {
+      answer: 0.18,
+      support: 0.12,
+      texture: 0.24,
+    }[producerRole] ?? 0;
+    const maxTail = {
+      answer: 1.5,
+      support: 1,
+      texture: 2,
+    }[producerRole] ?? 0;
+    if (tailFraction > 0 && maxTail > 0) {
+      const tail = Math.min(span * tailFraction, maxTail);
+      exitBeat = round(section.endBeat - Math.max(0.5, tail));
+    }
+  }
+
+  return entryBeat != null || exitBeat != null ? { entryBeat, exitBeat } : null;
+}
+
 function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
   const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
@@ -5540,6 +5592,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       const lane = matrix.get(section.id)?.lanes?.[id];
       const scene = scenes.get(section.id);
       const producerRole = scene?.roles?.[id] ?? lane?.role ?? "support";
+      const roleGate = producerRoleGateWindow(section, structure, scene, id, producerRole, config);
       if (!lane || !notes.length) {
         result.push(...notes.map((note) => ({
           ...note,
@@ -5594,7 +5647,15 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           || note.resolutionRole
           || note.transitionRole
           || note.transitionFeature
-          || note.ensembleAccent;
+          || note.transitionHandoffRole
+          || note.memoryRole
+          || note.motifHandoffRole
+          || note.ensembleAccent
+          || note.finalAssemblyRole;
+        const outsideRoleGate = !protectedAnchor && Boolean(
+          (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
+          || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
+        );
         const structuralAnchor = (producerRole !== "rest" && index === 0)
           || protectedAnchor
           || (id === "drums" && ([36, 38, 39].includes(note.pitch) || Math.abs(barPosition) < 0.04))
@@ -5604,6 +5665,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
           Math.abs(foreground.start - note.start) < 0.105
         ));
+        if (outsideRoleGate) continue;
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
         if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
@@ -5616,13 +5678,30 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         });
       }
       if (!kept.length && notes.length && producerRole !== "rest") {
-        const anchor = [...notes].sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
-        kept.push({
-          ...anchor,
-          orchestrationRole: lane.role,
-          producerRole,
-          producerScenePurpose: scene?.purpose ?? "develop",
+        const fallbackNotes = notes.filter((note) => {
+          const protectedAnchor = note.phraseAnchor
+            || note.resolutionRole
+            || note.transitionRole
+            || note.transitionFeature
+            || note.transitionHandoffRole
+            || note.memoryRole
+            || note.motifHandoffRole
+            || note.ensembleAccent
+            || note.finalAssemblyRole;
+          if (protectedAnchor) return true;
+          if (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6) return false;
+          if (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6) return false;
+          return true;
         });
+        const anchor = [...fallbackNotes].sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
+        if (anchor) {
+          kept.push({
+            ...anchor,
+            orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
+          });
+        }
       }
       result.push(...kept);
     }
