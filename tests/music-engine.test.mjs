@@ -3229,3 +3229,16 @@ test("Track B diversity QC remains deterministic for fresh Hip-Hop output", () =
     engine.evaluateSongDiversity(candidate, [recent], "new"),
   );
 });
+
+
+test("Track B diversity QC blocks a complete Similar clone even when novelty target score alone would pass", () => {
+  const source = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-similar-source", candidateCount: 1 });
+  const clone = structuredClone(source);
+  clone.generation = "similar";
+  clone.settings = { ...(clone.settings ?? {}), similarity: 0.82 };
+  const novelty = engine.evaluateSongNovelty(clone, [source], "similar");
+  const diversity = engine.evaluateSongDiversity(clone, [source], "similar");
+  assert.ok(novelty.score >= 55);
+  assert.equal(diversity.passed, false);
+  assert.equal(diversity.reason, "too-close-to-recent-output");
+});
