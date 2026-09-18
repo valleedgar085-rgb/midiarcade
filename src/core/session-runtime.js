@@ -31,6 +31,21 @@ function boundedIndex(value, maxExclusive) {
   return Math.max(0, Math.min(Math.max(0, maxExclusive - 1), rounded));
 }
 
+export function migratePersistedSessionRecord(value, schema) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const targetSchema = Number(schema);
+  const sourceSchema = Number(value.schema);
+  if (!Number.isFinite(targetSchema) || !Number.isFinite(sourceSchema)) return null;
+  if (sourceSchema === targetSchema) return value;
+  if (sourceSchema >= 1 && sourceSchema < targetSchema) {
+    return {
+      ...value,
+      schema: targetSchema,
+    };
+  }
+  return null;
+}
+
 function restoredPreferenceState({
   parsed = {},
   trackOrder = [],
@@ -116,8 +131,8 @@ export function decodePersistedSession(stored, {
     return { status: "rejected", value: null, error: stored?.error ?? null };
   }
 
-  const parsed = stored.value;
-  if (!parsed || parsed.schema !== schema) {
+  const parsed = migratePersistedSessionRecord(stored.value, schema);
+  if (!parsed) {
     return { status: "rejected", value: null };
   }
   return {
