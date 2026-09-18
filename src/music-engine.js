@@ -26,6 +26,7 @@ import {
 } from "./core/instrument-program-policy.js";
 import {
   genreArrangementProfile,
+  legatoIntervalBias,
   layerDensityMode,
   moodFromEnergy,
   pickGenreRhythmTemplate,
@@ -4759,7 +4760,7 @@ function harmonyAtBeat(harmony = [], beat = 0) {
   )) ?? harmony[harmony.length - 1] ?? null;
 }
 
-function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng) {
+function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCeiling = null) {
   if (trackId === "drums") {
     const drumPitches = Array.isArray(layer.drumPitches) && layer.drumPitches.length
       ? layer.drumPitches
@@ -4782,8 +4783,8 @@ function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng) {
   }[trackId] ?? 5;
   const pitch = baseOctave * 12 + pc;
   if (trackId === "bass") return clamp(pitch, 34, 64);
-  if (trackId === "pad") return clamp(pitch, 48, 92);
-  if (trackId === "chords") return clamp(pitch, 50, 86);
+  if (trackId === "pad") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48, 92);
+  if (trackId === "chords") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 50, 86);
   if (trackId === "counterpoint") return clamp(pitch, 60, 96);
   return clamp(pitch, 62, 103);
 }
@@ -4804,6 +4805,7 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
   let triggers = 0;
   for (const layer of arrangementProfile.optionalLayers ?? []) {
     if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
     for (const section of structure) {
       if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
       for (let localBar = 0; localBar < section.bars; localBar += 1) {
@@ -4822,8 +4824,6 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
         const offset = triggerRng.pick(offsets);
         const start = round(section.startBeat + localBar * barBeats + clamp(finite(offset, 0), 0, Math.max(0, barBeats - 0.05)));
         if (start >= section.endBeat - 0.02) continue;
-        const chord = harmonyAtBeat(harmony, start);
-        const pitch = layeredPitchForTrack(layer.trackId, layer, chord, config, triggerRng.fork("pitch"));
         const velocityRange = Array.isArray(layer.velocityRange) ? layer.velocityRange : [52, 86];
         const velocity = clamp(
           Math.round(
@@ -4835,6 +4835,20 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
         );
         const maxDuration = Math.max(0.06, section.endBeat - start);
         const duration = clamp(finite(layer.durationBeats, 0.5), 0.06, maxDuration);
+        const bassCeiling = (rawTracks.bass ?? []).reduce((highest, note) => (
+          start < note.start + note.duration && note.start < start + duration
+            ? Math.max(highest, note.pitch)
+            : highest
+        ), -Infinity);
+        const chord = harmonyAtBeat(harmony, start);
+        const pitch = layeredPitchForTrack(
+          layer.trackId,
+          layer,
+          chord,
+          config,
+          triggerRng.fork("pitch"),
+          Number.isFinite(bassCeiling) ? bassCeiling : null,
+        );
         result[layer.trackId].push({
           pitch,
           start,
@@ -6203,6 +6217,7 @@ function articulatePerformance(notes, id, config, rng) {
   const melodic = ["bass", "melody", "counterpoint"].includes(id);
   const upgraded = Boolean(config.professionalUpgrade);
   const melodyMotion = upgraded ? genreArrangementProfile(config.genre).melodyMotion ?? {} : {};
+  const stepBias = clamp(finite(melodyMotion.stepBias, 0.72), 0.05, 0.95);
   const legatoBias = clamp(finite(melodyMotion.legatoBias, 0.34), 0.05, 0.9);
   const staccatoBias = clamp(finite(melodyMotion.staccatoBias, 0.2), 0.05, 0.9);
   for (let index = 0; index < result.length; index += 1) {
@@ -6213,12 +6228,13 @@ function articulatePerformance(notes, id, config, rng) {
       : note.phraseRole === "development" ? 1.015
         : note.phraseRole === "turnaround" ? 1.035 : 1;
     note.velocity = clamp(Math.round(note.velocity * phraseFactor), 1, 127);
+    const intervalToNext = next ? Math.abs(next.pitch - note.pitch) : Infinity;
     const connected = next
       && next.start - (note.start + note.duration) < 0.16
-      && Math.abs(next.pitch - note.pitch) <= 5;
+      && intervalToNext <= 5;
     const legatoChoice = upgraded
       ? melodic && connected
-        && rng.fork(`${id}-legato-${index}`).bool(clamp(legatoBias + tension * 0.18, 0.08, 0.96))
+        && rng.fork(`${id}-legato-${index}`).bool(clamp(legatoBias + legatoIntervalBias(stepBias, intervalToNext) + tension * 0.18, 0.08, 0.96))
       : melodic && connected;
     const staccatoChoice = upgraded
       ? melodic

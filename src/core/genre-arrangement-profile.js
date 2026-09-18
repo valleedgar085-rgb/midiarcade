@@ -278,6 +278,16 @@ export function pickGenreRhythmTemplate(profile, rng, syncopation = 0.4) {
   return pickWeighted(weighted, rng) ?? DEFAULT_PROFILE.rhythmTemplates[0];
 }
 
+export function legatoIntervalBias(stepBias = 0.72, interval = 0) {
+  const bias = clamp(Number(stepBias) || 0.72, 0.05, 0.95);
+  const semitones = Math.abs(Math.round(Number(interval) || 0));
+  if (semitones <= 1) return 0.06 + bias * 0.18;
+  if (semitones === 2) return bias * 0.1;
+  if (semitones === 3) return bias * 0.03 - 0.02;
+  if (semitones === 4) return -0.04 - (1 - bias) * 0.05;
+  return -0.1 - (1 - bias) * 0.08;
+}
+
 export function layerDensityMode(mode, variation = 0.5, averageTrackDensity = 0.5) {
   const key = String(mode || "auto").toLowerCase();
   const manual = {

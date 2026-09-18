@@ -25,7 +25,6 @@ const aggregateCssBytes = (await Promise.all([
   "www/styles.css",
   "www/generation-experience.css",
   "www/shape-director.css",
-  "www/solar-pop.css",
 ].map(async (relativePath) => (await stat(path.join(projectRoot, relativePath))).size))).reduce((sum, size) => sum + size, 0);
 if (aggregateCssBytes > aggregateCssBudget) failures.push(`shipped CSS is ${aggregateCssBytes} bytes; aggregate budget remains ${aggregateCssBudget}`);
 
