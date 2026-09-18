@@ -19,7 +19,7 @@ test("cover artwork is deterministic, safe, and can produce bounded visual varia
   assert.match(original, /BPM/);
   assert.match(createCoverArtworkSvg(song, { variation: 1 }), /data-cover-finish="matte"/);
   assert.equal(coverArtworkFinish(5).id, "original");
-  const originalIdentity = original.match(/MIDI ARCADE · ORIGINAL \d+/)?.[0];
+  const originalIdentity = original.match(/MIDI ARCADE · TRACK AURA/)?.[0];
   assert.ok(originalIdentity);
   assert.match(createCoverArtworkSvg(song, { variation: 4 }), new RegExp(originalIdentity));
   assert.match(original, /^<svg/);
