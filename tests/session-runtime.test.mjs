@@ -73,6 +73,7 @@ test("session snapshots preserve preferences even before a song exists", () => {
     });
 
     assert.equal(snapshot.schema, 2);
+    assert.equal("song" in snapshot, false, "session snapshots should not spend storage on an inactive song payload");
     assert.equal(snapshot.savedAt, "2026-09-12T03:00:00.000Z");
     assert.deepEqual(snapshot.muted, ["drums"]);
     assert.deepEqual(snapshot.locked, ["drums"]);
@@ -110,7 +111,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
     status: "ready",
     value: {
       schema: 2,
-      song: song(),
+      song: { corrupted: true },
       trackSettings: { drums: { density: 999, program: -10 } },
       muted: ["drums", "ghost"],
       solo: ["ghost"],
@@ -132,7 +133,7 @@ test("session decode rejects corruption, sanitizes preferences, and never auto-r
     normalizeMixAssistant: (value) => ({ enabled: Boolean(value?.enabled) }),
   });
 
-  assert.equal(decoded.status, "ready");
+  assert.equal(decoded.status, "ready", "legacy/corrupt song payloads must not block valid preference restore");
   assert.equal(decoded.value.song, null, "relaunch should start with an empty plate");
   assert.deepEqual([...decoded.value.muted], ["drums"]);
   assert.deepEqual([...decoded.value.solo], []);
