@@ -295,7 +295,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /function renderArrangeWorkflow\(\)[\s\S]*?data-arrange-step/, "arrangement guidance must follow real section and note focus");
   assert.match(cssSource, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy");
   assert.match(appSource, /function renderMixOverview\(\)[\s\S]*?mixAudibleCount/, "the mix overview must render from live mixer state");
-  assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?SHAPE INSTRUMENT/, "deep track controls must use progressive disclosure");
+  assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?MORE INSTRUMENT CONTROL/, "deep track controls must use progressive disclosure");
   assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationRunner[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the Phase 10 core modules");
   assert.match(appSource, /createGenerationExecutor[\s\S]*?new Worker\(new URL\("\.\/generation-worker\.js"/, "candidate search must run outside the UI thread when workers are available");
   assert.match(appSource, /resolveControlHelp[\s\S]*?from "\.\/ui\/control-catalog\.js"/, "Phase 21 must keep the control catalog outside the application shell");
