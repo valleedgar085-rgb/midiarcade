@@ -897,6 +897,56 @@ test("Song DNA hook memory strengthens full-song hook returns without changing s
   }
 });
 
+test("Pop and Hip-Hop family counter melodies answer after colliding lead calls in full songs", () => {
+  const common = {
+    bars: 20,
+    noteStart: 4,
+    noteDuration: 0.35,
+    leadStart: 4,
+    leadDuration: 0.4,
+    sectionStart: 0,
+    sectionEnd: 8,
+  };
+
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "pop" }), 4.25);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "hipHop" }), 4.375);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "rap" }), 4.375);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "trap" }), 4.25);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "trap", bars: 8 }), 4);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "trap", secondaryGenre: "hipHop" }), 4);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "trap", protectedAnchor: true }), 4);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "rock" }), 4);
+  assert.equal(engine.melodicAnswerStart({ ...common, genre: "pop", noteStart: 4.3 }), 4.3);
+  assert.equal(engine.melodicAnswerStart({
+    ...common,
+    genre: "pop",
+    noteStart: 7.4,
+    leadStart: 7.4,
+  }), 7.4);
+
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "pop",
+    seed: "timed-melodic-call-response",
+    bars: 20,
+    complexity: 0.9,
+    variation: 0.82,
+    candidateCount: 1,
+    tracks: {
+      melody: { density: 0.92, variation: 0.82 },
+      counterpoint: { density: 0.92, variation: 0.82 },
+    },
+  });
+  assert.ok(song.melodicDialogue.timedAnswers > 0, "full-song fixture should produce delayed counter-melody answers");
+  const delayed = song.tracks.find((track) => track.id === "counterpoint").notes
+    .filter((note) => Number(note.answerDelayBeats) > 0);
+  assert.ok(delayed.length > 0);
+  assert.ok(delayed.every((note) => note.answerDelayBeats <= 0.5));
+  assert.ok(song.producerIntentReport.metrics.answerCollisionRate <= 0.28);
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
 test("fresh and chained generation advance to distinct arrangements", () => {
   const first = engine.generateNew({ bars: 4, candidateCount: 1 });
   const second = engine.generateNew({ bars: 4, candidateCount: 1 });
