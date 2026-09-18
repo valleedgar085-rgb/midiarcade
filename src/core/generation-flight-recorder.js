@@ -77,7 +77,9 @@ export function createGenerationFlightRecorder({
   function publish(entry) {
     entries.push(Object.freeze(entry));
     trim();
-    if (typeof sink === "function") sink(entries.at(-1));
+    if (typeof sink === "function") {
+      try { sink(entries.at(-1)); } catch { /* telemetry must never fail generation */ }
+    }
   }
 
   return Object.freeze({
