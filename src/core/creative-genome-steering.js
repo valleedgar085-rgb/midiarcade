@@ -1,3 +1,5 @@
+import { normalizeGenreId } from "./genre-contract.js";
+
 export const CREATIVE_GENOME_STEERING_VERSION = 1;
 
 const ENERGY_STEERING = Object.freeze({
@@ -44,8 +46,8 @@ function cloneRecord(value) {
 }
 
 export function isCreativeGenomeFusionProtected(config = {}) {
-  const primary = String(config.genre ?? "");
-  const secondary = String(config.secondaryGenre ?? "");
+  const primary = normalizeGenreId(config.genre);
+  const secondary = normalizeGenreId(config.secondaryGenre);
   return Boolean(secondary && secondary !== primary);
 }
 
