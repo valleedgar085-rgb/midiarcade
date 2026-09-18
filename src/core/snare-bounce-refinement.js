@@ -5,6 +5,7 @@ import {
 } from "../music-engine.js";
 import { normalizeGenreId } from "./genre-contract.js";
 import { clampMidiVelocity } from "./note-contract.js";
+import { seededUnit } from "./deterministic-rng.js";
 
 export const SNARE_BOUNCE_REFINEMENT_VERSION = 1;
 export const MAX_SNARE_BOUNCE_FIGURES = 3;
@@ -40,23 +41,6 @@ function cloneSong(song) {
   return JSON.parse(JSON.stringify(song));
 }
 
-function hash32(text) {
-  let hash = 2166136261;
-  const source = String(text ?? "snare-bounce");
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function randomUnit(seed, salt) {
-  let state = hash32(`${seed}|${salt}`) || 0x9e3779b9;
-  state ^= state << 13;
-  state ^= state >>> 17;
-  state ^= state << 5;
-  return (state >>> 0) / 4294967296;
-}
 
 function resolveGenre(song, config) {
   return normalizeGenreId(config?.genre ?? song?.genre ?? song?.meta?.genre);
@@ -154,13 +138,13 @@ function buildCandidate(song, config, genre) {
 
   for (const boundaryBar of boundaries) {
     if (figures >= maxFigures) break;
-    const gate = randomUnit(seed, `gate:${boundaryBar}`);
+    const gate = seededUnit(seed, `gate:${boundaryBar}`);
     const threshold = clamp(0.12 + intent * 0.52, 0, 0.72);
     const forceFirst = figures === 0 && intent >= 0.7 && boundaryBar === boundaries[0];
     if (!forceFirst && gate >= threshold) continue;
 
     const boundaryBeat = boundaryBar * 4;
-    const shape = randomUnit(seed, `shape:${boundaryBar}`);
+    const shape = seededUnit(seed, `shape:${boundaryBar}`);
     const baseVelocity = 70 + Math.round(energy * 19 + complexity * 7);
     let figureNotes = 0;
 
@@ -190,7 +174,7 @@ function buildCandidate(song, config, genre) {
         }
       }
     } else {
-      const step = randomUnit(seed, `subdivision:${boundaryBar}`) < 0.55 ? 1 / 6 : 1 / 8;
+      const step = seededUnit(seed, `subdivision:${boundaryBar}`) < 0.55 ? 1 / 6 : 1 / 8;
       const count = step === 1 / 6 ? 3 : 4;
       const start = boundaryBeat - step * count;
       for (let index = 0; index < count; index += 1) {
