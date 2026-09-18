@@ -33,6 +33,8 @@ export function applyModalInterchange(progression = [], mode = "major", seed = 1
   if (!Array.isArray(progression) || !progression.length) return [];
   const rng = createRng(seed);
   const result = [...progression];
+  const normalizedMode = String(mode ?? "major").trim().toLowerCase();
+  if (!["major", "ionian"].includes(normalizedMode)) return result;
 
   // Modal interchange substitutions for major keys:
   // Sub 4 -> minor iv (b6), Sub 6 -> bVI, Sub 7 -> bVII
