@@ -721,7 +721,7 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
 test("Hip-Hop family producer gates stagger opening support and clear resolving layers", () => {
   const structure = [
     { id: "intro-gate", name: "intro", startBeat: 0, endBeat: 16 },
-    { id: "outro-gate", name: "outro", startBeat: 16, endBeat: 32 },
+    { id: "outro-gate", name: "outro", startBeat: 16, endBeat: 48 },
   ];
   const establish = { purpose: "establish" };
   const resolve = { purpose: "resolve" };
@@ -737,7 +737,7 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
 
     const supportExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "melody", "support", config);
     const textureExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "pad", "texture", config);
-    assert.ok(supportExit.exitBeat <= 31.5);
+    assert.ok(supportExit.exitBeat <= 47.5);
     assert.ok(textureExit.exitBeat < supportExit.exitBeat);
     assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config), null);
     assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "foreground", config), null);
@@ -746,6 +746,16 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
   assert.equal(
     engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", { genre: "pop", timeSignature: [4, 4] }),
     null,
+  );
+
+  const shortStructure = [
+    { id: "short-intro", name: "intro", startBeat: 0, endBeat: 8 },
+    { id: "short-outro", name: "outro", startBeat: 8, endBeat: 32 },
+  ];
+  assert.equal(
+    engine.producerRoleGateWindow(shortStructure[0], shortStructure, establish, "chords", "support", { genre: "trap", timeSignature: [4, 4] }),
+    null,
+    "8-bar calibration and loop forms should preserve their established immediate arrangement behavior",
   );
 });
 
