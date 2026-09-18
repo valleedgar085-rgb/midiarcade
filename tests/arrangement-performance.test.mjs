@@ -161,3 +161,42 @@ test("Phase 8B defers audible boundary shaping for calibrated fusion songs", () 
     assert.equal(candidate.song.outputQualityEvolution.arrangement.audition.performanceReason, "fusion-contract-protected");
   }
 });
+
+
+test("Track B vacuum-before-payoff creates a localized deterministic breath without moving notes", () => {
+  const { evolved } = evolvedFixture();
+  const before = structuredClone(evolved.song);
+  const first = applyArrangementPerformance(evolved.song, { profile: "balanced", spaceStrategy: "vacuum-before-payoff" });
+  const repeated = applyArrangementPerformance(evolved.song, { profile: "balanced", spaceStrategy: "vacuum-before-payoff" });
+
+  assert.deepEqual(first, repeated, "localized vacuum must be exact-repeat deterministic");
+  assert.deepEqual(evolved.song, before, "localized vacuum must remain source-immutable");
+  assert.ok(first.diagnostics.vacuumNotes > 0, "qualifying payoff transitions must expose an audible pre-payoff breath");
+
+  const payoffBoundaries = new Set(first.song.arrangementTransitions
+    .filter((transition) => {
+      const destination = first.song.structure.find((section) => String(section.id) === String(transition.toSectionId));
+      return /^(chorus|drop|theme)$/i.test(String(destination?.name ?? destination?.type ?? ""));
+    })
+    .map((transition) => Number(first.song.structure.find((section) => String(section.id) === String(transition.fromSectionId))?.endBeat)));
+
+  const vacuum = first.song.tracks.flatMap((track) => (track.notes ?? []).map((note) => ({ trackId: track.id, note })))
+    .filter(({ note }) => note.arrangementPerformanceRole === "pre-payoff-vacuum");
+  assert.ok(vacuum.length > 0);
+  for (const { trackId, note } of vacuum) {
+    assert.notEqual(trackId, "drums", "kick/snare backbone must not be consumed by the vacuum");
+    const start = startOf(note);
+    assert.ok([...payoffBoundaries].some((boundary) => start < boundary && start >= boundary - 1 - 1e-6),
+      "vacuum edits must stay inside the final beat before a payoff");
+  }
+
+  for (const sourceTrack of before.tracks) {
+    const afterTrack = first.song.tracks.find((track) => track.id === sourceTrack.id);
+    assert.equal(afterTrack.notes.length, sourceTrack.notes.length);
+    for (let index = 0; index < sourceTrack.notes.length; index += 1) {
+      assert.equal(startOf(afterTrack.notes[index]), startOf(sourceTrack.notes[index]));
+      assert.equal(durationOf(afterTrack.notes[index]), durationOf(sourceTrack.notes[index]));
+      assert.equal(pitchOf(afterTrack.notes[index]), pitchOf(sourceTrack.notes[index]));
+    }
+  }
+});
