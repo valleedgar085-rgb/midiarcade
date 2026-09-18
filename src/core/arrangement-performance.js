@@ -113,12 +113,6 @@ function applyLocalizedVacuum(song, transition, boundary, pickupBeats) {
   const id = transitionId(transition);
   let changedNotes = 0;
   let vacuumNotes = 0;
-  if (payoff && wantsLocalizedVacuum(song, transition, options)) {
-    const vacuum = applyLocalizedVacuum(song, transition, boundary, pickupBeats);
-    changedNotes += vacuum.changedNotes;
-    vacuumNotes += vacuum.vacuumNotes;
-  }
-
   for (const { track, trackId } of safeTrackEntries(song)) {
     if (trackId === "drums") continue;
     const candidates = (track.notes ?? [])
@@ -154,6 +148,12 @@ function shapeTransition(song, transition, profile, options = {}) {
   let pickups = 0;
   let arrivals = 0;
   let vacuumNotes = 0;
+
+  if (payoff && wantsLocalizedVacuum(song, transition, options)) {
+    const vacuum = applyLocalizedVacuum(song, transition, boundary, pickupBeats);
+    changedNotes += vacuum.changedNotes;
+    vacuumNotes += vacuum.vacuumNotes;
+  }
 
   for (const { track, trackId } of safeTrackEntries(song)) {
     const notes = track.notes ?? [];
