@@ -808,6 +808,95 @@ test("Trap full-song rendering keeps support out of the opening pocket until its
   assertAllGeneratedPitchesInScale(song);
 });
 
+test("Song DNA hook memory strengthens full-song hook returns without changing short loops or non-hook sections", () => {
+  const low = engine.hookReturnRecallStrength({
+    genre: "trap",
+    bars: 32,
+    sectionName: "chorus",
+    relationship: "recall",
+    isHookReturn: true,
+    baseStrength: 0.78,
+    hookMemory: 0.68,
+  });
+  const high = engine.hookReturnRecallStrength({
+    genre: "trap",
+    bars: 32,
+    sectionName: "chorus",
+    relationship: "recall",
+    isHookReturn: true,
+    baseStrength: 0.78,
+    hookMemory: 0.88,
+  });
+  assert.ok(high > low);
+  assert.ok(low >= 0.78 && high <= 0.92);
+
+  assert.equal(engine.hookReturnRecallStrength({
+    genre: "trap",
+    bars: 8,
+    sectionName: "chorus",
+    relationship: "recall",
+    isHookReturn: true,
+    baseStrength: 0.78,
+    hookMemory: 0.88,
+  }), 0.78);
+  assert.equal(engine.hookReturnRecallStrength({
+    genre: "trap",
+    bars: 32,
+    sectionName: "verse",
+    relationship: "recall",
+    isHookReturn: false,
+    baseStrength: 0.78,
+    hookMemory: 0.88,
+  }), 0.78);
+  assert.equal(engine.hookReturnRecallStrength({
+    genre: "rock",
+    bars: 32,
+    sectionName: "chorus",
+    relationship: "recall",
+    isHookReturn: true,
+    baseStrength: 0.78,
+    hookMemory: 0.88,
+  }), 0.78);
+
+  for (const genre of ["pop", "trap"]) {
+    const song = engine.generateNew({
+      ...CONFIG,
+      genre,
+      seed: `song-dna-hook-memory-${genre}`,
+      bars: 32,
+      candidateCount: 1,
+      evolution: 0.8,
+    });
+    const hookId = song.songBlueprint.hookSectionId;
+    const hook = song.structure.find((section) => section.id === hookId);
+    const returns = song.memoryMap.filter((entry) => (
+      entry.originSectionId === hookId
+      && entry.sectionId !== hookId
+      && entry.relationship !== "contrast"
+    ));
+    assert.ok(hook, `${genre} should expose a hook section`);
+    assert.ok(returns.length > 0, `${genre} full-song fixture should return to its hook`);
+    for (const entry of returns) {
+      const baseStrength = entry.relationship === "return" ? 0.88 : 0.78;
+      assert.equal(entry.recallStrength, engine.hookReturnRecallStrength({
+        genre,
+        bars: 32,
+        sectionName: hook.name,
+        relationship: entry.relationship,
+        isHookReturn: true,
+        baseStrength,
+        hookMemory: song.songDNA.melodic.hookMemory,
+      }));
+      assert.ok(entry.recallStrength >= baseStrength);
+    }
+    const phraseReturns = song.phraseMemory.sections.filter((entry) => returns.some((memory) => memory.sectionId === entry.sectionId));
+    assert.equal(phraseReturns.length, returns.length);
+    assert.ok(phraseReturns.every((entry) => entry.recallStrength >= 0.78));
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
 test("fresh and chained generation advance to distinct arrangements", () => {
   const first = engine.generateNew({ bars: 4, candidateCount: 1 });
   const second = engine.generateNew({ bars: 4, candidateCount: 1 });
