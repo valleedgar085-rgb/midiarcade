@@ -3,6 +3,7 @@ import {
   sanitizeTasteProfile,
 } from "./session-contract.js";
 import { createDefaultAutoControls, sanitizeAutoControls } from "./auto-control-policy.js";
+import { cloneValue } from "./clone-value.js";
 
 const GENERATION_PREFERENCE_IDS = Object.freeze([
   "genreControl",
@@ -23,12 +24,6 @@ const GENERATION_PREFERENCE_IDS = Object.freeze([
   "evolutionControl",
   "surpriseControl",
 ]);
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
-}
 
 function boundedIndex(value, maxExclusive) {
   const numeric = Number(value);
