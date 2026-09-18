@@ -62,9 +62,26 @@ test("lead and pad envelopes stay expressive without overlapping later phrases",
 test("mixer values explain level, velocity, and note length in musical units", () => {
   assert.equal(formatLevel(1), "0.0 dB · 100%");
   assert.equal(formatLevel(0), "−∞ dB · muted");
-  assert.equal(formatVelocityScale(1), "×1.00 · MIDI 1–127");
+  assert.equal(formatVelocityScale(1), "×1.00 · balanced");
   assert.equal(formatGate(0.65), "65% · short");
   assert.equal(formatMidiVelocity(100), "100 · strong");
+});
+
+
+test("A4 keeps musical balance controls primary and deeper sound design disclosed", () => {
+  const rack = appSource.match(/function renderTrackRack\(\)[\s\S]*?const MOBILE_WORKSPACE_BUTTONS/)?.[0] ?? "";
+  assert.match(rack, /class="track-expression-grid mix-primary-balance"/);
+  assert.match(rack, />LEVEL <output>/);
+  assert.match(rack, />IMPACT <output>/);
+  assert.match(rack, />NOTE LENGTH <output>/);
+  assert.ok(rack.indexOf('data-control="velocity"') < rack.indexOf('<details class="track-expression track-shaping">'));
+  assert.ok(rack.indexOf('data-control="gate"') < rack.indexOf('<details class="track-expression track-shaping">'));
+  assert.equal((rack.match(/data-control="velocity"/g) || []).length, 1);
+  assert.equal((rack.match(/data-control="gate"/g) || []).length, 1);
+  assert.match(rack, /AUTO SOUND/);
+  assert.match(rack, /STYLE PICK/);
+  assert.match(rack, /CUSTOM SOUND/);
+  assert.match(rack, /MORE INSTRUMENT CONTROL/);
 });
 
 test("preview drum characters respond musically to velocity without losing bounds", () => {
