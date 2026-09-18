@@ -53,9 +53,11 @@ test("generation essentials move from Now Playing into Song Direction without du
 
 test("A2 organizes Create around Song, Feel, Structure, and Generate without duplicating controls", () => {
   assert.match(presentation, /function organizePrimaryDirection/);
-  for (const stage of ["song", "feel", "structure", "generate"]) {
-    assert.match(presentation, new RegExp(`createStage = ["']${stage}["']|data-create-stage`));
-  }
+  assert.match(presentation, /createStage = "song"/);
+  assert.match(presentation, /id: "feel"/);
+  assert.match(presentation, /id: "structure"/);
+  assert.match(presentation, /createStage = "generate"/);
+  assert.match(presentation, /section\.dataset\.createStage = spec\.id/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "grooveControl", "barsControl"]) {
     assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${id} must remain a single authoritative control`);
     assert.match(presentation, new RegExp(`["']${id}["']`));
