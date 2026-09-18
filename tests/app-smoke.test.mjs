@@ -84,6 +84,22 @@ test("A4 keeps musical balance controls primary and deeper sound design disclose
   assert.match(rack, /MORE INSTRUMENT CONTROL/);
 });
 
+
+test("A5 Finish exposes track list, section journey, and explicit default handoff intent", () => {
+  const finish = appSource.match(/function renderFinishWorkspace\(\)[\s\S]*?async function saveCoverArtwork/)?.[0] ?? "";
+  assert.match(finish, /TRACKS ·/);
+  assert.match(finish, /SECTIONS ·/);
+  assert.match(finish, /finishTrackNames/);
+  assert.match(finish, /finishSectionNames/);
+  assert.match(finish, /DAW-ready default · Full song/);
+  assert.match(finish, /focused export/);
+  assert.match(finish, /original groove and human feel/);
+  assert.match(finish, /exportTrackCount/);
+  const exportFlow = appSource.match(/async function exportSong\(\)[\s\S]*?function expressionPoints/)?.[0] ?? "";
+  assert.match(exportFlow, /buildExportSongSnapshot\(\)/);
+  assert.match(exportFlow, /prepareMidiExport\(clone, currentExportSetup\(\)\)/);
+});
+
 test("preview drum characters respond musically to velocity without losing bounds", () => {
   for (const kit of ONE_SHOT_KITS) {
     const quietSnare = previewDrumCharacter(kit.preview, 38, 32, 4.5);
