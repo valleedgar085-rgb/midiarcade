@@ -42,7 +42,7 @@ function eventVelocity(note) {
 }
 
 function setEventVelocity(note, value) {
-  const safe = Math.round(clamp(finite(value, 90), 1, 127));
+  const safe = Math.round(clamp(finite(value, 90), 1, 120));
   if (Object.prototype.hasOwnProperty.call(note, "vel") && finite(note.vel, 90) <= 1) {
     note.vel = safe / 127;
   } else {
@@ -199,7 +199,7 @@ function applyDirection(candidate, intent, eligible, seed) {
       if (direction === "darker") raiseVelocity(entry, -4);
       else raiseVelocity(entry, 4);
     });
-  } else if (direction === "buildUp" || direction === "calmDown") {
+  } else if (direction === "buildUp") {
     const span = Math.max(0.001, eligible.range.end - eligible.range.start);
     selected.forEach((entry) => {
       const position = clamp((eventStart(entry.note) - eligible.range.start) / span, 0, 1);
@@ -308,7 +308,7 @@ function validateCandidate(sourceSong, candidate, intent, beforeDigest) {
     for (const note of track?.notes ?? []) {
       const pitch = note?.pitch ?? note?.note ?? note?.midi;
       if (pitch != null && (eventPitch(note) < 0 || eventPitch(note) > 127)) return { valid: false, error: "midi-pitch-out-of-range" };
-      if (eventVelocity(note) < 1 || eventVelocity(note) > 127) return { valid: false, error: "midi-velocity-out-of-range" };
+      if (eventVelocity(note) < 1 || eventVelocity(note) > 120) return { valid: false, error: "midi-velocity-out-of-range" };
       if (eventDuration(note) <= 0) return { valid: false, error: "invalid-note-duration" };
     }
   }
