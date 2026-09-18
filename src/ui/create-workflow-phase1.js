@@ -99,6 +99,55 @@ function moveGenerationEssentials(rootDocument, createPanel) {
   creatorMain.insertBefore(controls, shapeControls);
 }
 
+function organizePrimaryDirection(rootDocument, createPanel) {
+  const genre = createPanel.querySelector(".genre-direction");
+  const controls = createPanel.querySelector(".create-live-controls");
+  const generationActions = createPanel.querySelector(".generation-actions-bar");
+  if (!genre || !controls || !generationActions || controls.querySelector(".create-direction-group")) return;
+  if (typeof rootDocument?.createElement !== "function") return;
+
+  const songHeading = rootDocument.createElement("div");
+  songHeading.className = "create-stage-heading";
+  songHeading.dataset.createStage = "song";
+  songHeading.innerHTML = "<small>1 · SONG</small><strong>Choose the musical world</strong>";
+  genre.insertAdjacentElement("afterbegin", songHeading);
+
+  const groups = [
+    {
+      id: "feel",
+      title: "2 · FEEL",
+      copy: "Set pace, energy, detail and pocket",
+      controls: ["tempoControl", "energyControl", "complexityControl", "grooveControl"],
+    },
+    {
+      id: "structure",
+      title: "3 · STRUCTURE",
+      copy: "Choose how much room the song gets",
+      controls: ["barsControl"],
+    },
+  ];
+
+  for (const spec of groups) {
+    const section = rootDocument.createElement("section");
+    section.className = `create-direction-group is-${spec.id}`;
+    section.dataset.createStage = spec.id;
+    section.innerHTML = `<header><small>${spec.title}</small><strong>${spec.copy}</strong></header><div class="create-direction-group-body"></div>`;
+    const body = section.querySelector(".create-direction-group-body");
+    for (const id of spec.controls) {
+      const control = controls.querySelector(`#${id}`);
+      const label = control?.closest?.("label");
+      if (label) body.append(label);
+    }
+    controls.append(section);
+  }
+
+  const generateHeading = rootDocument.createElement("div");
+  generateHeading.className = "create-stage-heading create-generate-heading";
+  generateHeading.dataset.createStage = "generate";
+  generateHeading.innerHTML = "<small>4 · GENERATE</small><strong>Compose from this direction</strong>";
+  generationActions.insertAdjacentElement("beforebegin", generateHeading);
+}
+
 function consolidateAdvancedDirection(rootDocument, createPanel) {
   const creator = createPanel.querySelector("#preGenSection");
   const creatorGrid = creator?.querySelector(".creator-grid");
@@ -198,6 +247,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   mountCreativeRangeControl(rootDocument, createPanel);
   upgradeStaticCreateCopy(rootDocument, createPanel);
   moveGenerationEssentials(rootDocument, createPanel);
+  organizePrimaryDirection(rootDocument, createPanel);
   consolidateAdvancedDirection(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);
