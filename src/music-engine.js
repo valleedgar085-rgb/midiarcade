@@ -5354,6 +5354,33 @@ function generateLead(
   return notes;
 }
 
+const FORWARD_COUNTER_ANSWER_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
+
+export function chooseCounterpointGapTarget(targets = [], {
+  genre,
+  bars,
+  secondaryGenre = null,
+  noteStart = 0,
+  maxDistance = 2.5,
+} = {}) {
+  const start = finite(noteStart, 0);
+  const available = [...targets]
+    .filter((target) => Number.isFinite(Number(target?.beat)))
+    .sort((left, right) => Math.abs(left.beat - start) - Math.abs(right.beat - start) || left.beat - right.beat);
+  if (!available.length) return null;
+  const nearest = available.find((target) => Math.abs(target.beat - start) <= maxDistance) ?? available[0];
+  if (
+    secondaryGenre
+    || finite(bars, 0) < 12
+    || !FORWARD_COUNTER_ANSWER_GENRES.has(String(genre ?? ""))
+  ) return nearest;
+
+  const forward = available
+    .filter((target) => target.beat >= start + 0.1)
+    .sort((left, right) => Math.abs(left.beat - start) - Math.abs(right.beat - start) || left.beat - right.beat);
+  return forward.find((target) => Math.abs(target.beat - start) <= maxDistance) ?? nearest;
+}
+
 function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, harmony) {
   if (!counterNotes.length || !melodyNotes.length) return counterNotes;
   const totalBeats = config.bars * beatsPerBar(config);
@@ -5391,13 +5418,18 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
     const note = ordered[index];
     const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6)
       ?? structure[structure.length - 1];
+    const originalStart = note.start;
     let start = note.start;
     let gapEnd = section.endBeat;
     if (attackCollision(start) || melodySoundsAt(start)) {
       const available = targets
-        .filter((target) => target.sectionId === section.id && !used.has(target.beat) && !attackCollision(target.beat) && !melodySoundsAt(target.beat))
-        .sort((a, b) => Math.abs(a.beat - note.start) - Math.abs(b.beat - note.start) || a.beat - b.beat);
-      const chosen = available.find((target) => Math.abs(target.beat - note.start) <= 2.5) ?? available[0];
+        .filter((target) => target.sectionId === section.id && !used.has(target.beat) && !attackCollision(target.beat) && !melodySoundsAt(target.beat));
+      const chosen = chooseCounterpointGapTarget(available, {
+        genre: config.genre,
+        bars: config.bars,
+        secondaryGenre: config.secondaryGenre,
+        noteStart: note.start,
+      });
       if (!chosen) continue;
       start = chosen.beat;
       gapEnd = chosen.gapEnd;
@@ -5424,6 +5456,7 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
       ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
       ...(note.plannedTension == null ? {} : { plannedTension: note.plannedTension }),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
+      ...(start >= originalStart + 0.1 ? { counterResponseRole: "forward-gap-answer" } : {}),
     });
   }
 
