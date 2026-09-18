@@ -1,3 +1,4 @@
+import { cloneValue } from "./clone-value.js";
 export const ARRANGEMENT_PERFORMANCE_VERSION = 1;
 
 const SAFE_TRACKS = new Set(["drums", "chords", "counterpoint", "pad"]);
@@ -14,12 +15,6 @@ function clamp(value, min, max) {
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function sectionsOf(song) {
@@ -210,7 +205,7 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced" }
   }
 
   const selectedProfile = PROFILES[profile] ?? PROFILES.balanced;
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const validIds = new Set(transitions.map(transitionId));
   const staleMarkersCleared = clearStaleHandoffMetadata(song, validIds);
   let changedNotes = 0;
