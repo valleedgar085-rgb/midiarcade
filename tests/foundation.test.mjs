@@ -84,8 +84,9 @@ test("generation memory keeps bounded undo state and compacts scored recent song
     meta: { ideaFingerprint: { version: 2, motifContour: [0, 2, 1] } },
     tracks: [{ id: "melody", notes: Array.from({ length: 200 }, (_, pitch) => ({ pitch })) }],
   };
-  const compact = compactRecentSongs([fullSong, fullSong]);
-  assert.equal(compact.length, 1);
+  const aliasSong = { ...fullSong, id: "song-one-alias", title: "One alternate label" };
+  const compact = compactRecentSongs([fullSong, aliasSong, fullSong]);
+  assert.equal(compact.length, 1, "the same musical fingerprint should dedupe even when ids differ");
   assert.deepEqual(compact[0].tracks, []);
   assert.equal(compact[0].meta.ideaFingerprint, fullSong.meta.ideaFingerprint);
 });
