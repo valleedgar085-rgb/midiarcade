@@ -214,7 +214,7 @@ function arrangementDiagnosticsFor(assessment, {
   return Object.freeze({
     attempted: true,
     accepted: Boolean(assessment?.accepted),
-    changed: true,
+    changed: Boolean(assessment?.accepted),
     reason: assessment?.reason ?? "critic-regression",
     family: assessment?.evolution?.family ?? null,
     label: assessment?.evolution?.label ?? null,
@@ -242,7 +242,7 @@ function returnDiagnosticsFor(assessment, {
   return Object.freeze({
     attempted: true,
     accepted: Boolean(assessment?.accepted),
-    changed: true,
+    changed: Boolean(assessment?.accepted),
     reason: assessment?.reason ?? "critic-regression",
     id: assessment?.id ?? null,
     changedNotes: finite(assessment?.changedNotes),
@@ -269,7 +269,7 @@ function grooveDiagnosticsFor(assessment, {
   return Object.freeze({
     attempted: true,
     accepted: Boolean(assessment?.accepted),
-    changed: true,
+    changed: Boolean(assessment?.accepted),
     reason: assessment?.reason ?? "critic-regression",
     id: assessment?.id ?? null,
     changedNotes: finite(assessment?.changedNotes),
