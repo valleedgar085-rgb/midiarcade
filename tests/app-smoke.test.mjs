@@ -269,6 +269,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(htmlSource, /class="hero-panel song-showcase panel"/, "the current song must be presented as the Phase 13 showcase");
   assert.match(appSource, /function renderSongShowcase\(\)[\s\S]*?data-showcase-section/, "the showcase arc must render from live song sections");
   assert.match(appSource, /function setPlaybackPresentation\(playing\)[\s\S]*?showcasePlayButton/, "showcase playback must share transport state");
+  assert.match(appSource, /showcaseArc[^\n]*addEventListener\("click"[\s\S]*?data-showcase-section[\s\S]*?auditionSong\(state\.song, \{ startSeconds \}\)/, "live section arc taps must restart the shared transport from the selected section");
   assert.match(cssSource, /\.song-showcase \.title-row>div\{flex:1;min-width:0\}/, "long generated titles need a shrink-safe container");
   assert.match(cssSource, /\.song-showcase h1\{[\s\S]*?max-width:100%;[\s\S]*?overflow-wrap:anywhere;/, "long generated titles must wrap instead of clipping");
   assert.match(cssSource, /\.finish-cover figcaption strong\{[^}]*min-width:0;[^}]*overflow-wrap:anywhere/, "finish artwork titles must remain readable");

@@ -6016,6 +6016,19 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
+  $("#showcaseArc")?.addEventListener("click", async (event) => {
+    const segment = event.target.closest?.("[data-showcase-section]");
+    if (!segment || !state.song) return;
+    const section = normalizeSections().find((candidate) => candidate.id === segment.dataset.showcaseSection);
+    if (!section) return;
+    const startSeconds = editorBeatRange(section).start * 60 / songBpm();
+    state.queuedSection = null;
+    syncMobileSectionJump(section.id);
+    // A section tap is an immediate transport seek. Use auditionSong instead of
+    // seek()+play() so Android gets one serialized stop/cache/rebuild/play cycle.
+    await player.auditionSong(state.song, { startSeconds });
+    showToast(`Playing from ${section.name}.`);
+  });
   $("#tasteRating")?.addEventListener("change", (event) => rateCurrentSong(event.target.value));
   $("#mixPlayButton")?.addEventListener("click", () => player.toggle());
   $("#previousButton").addEventListener("click", () => player.restart());
