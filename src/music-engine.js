@@ -5480,7 +5480,7 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
   const melody = [...(melodyNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   const counterpoint = [...(counterNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   if (!melody.length || !counterpoint.length) {
-    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0 } };
+    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0, forwardAnswers: 0 } };
   }
   let previousCounter = null;
   let contrary = 0;
@@ -5531,7 +5531,13 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
   return {
     melody: shapedMelody,
     counterpoint: shapedCounterpoint,
-    report: { version: 1, answers: shapedCounterpoint.length, contrary, oblique },
+    report: {
+      version: 1,
+      answers: shapedCounterpoint.length,
+      contrary,
+      oblique,
+      forwardAnswers: shapedCounterpoint.filter((note) => note.counterResponseRole === "forward-gap-answer").length,
+    },
   };
 }
 
