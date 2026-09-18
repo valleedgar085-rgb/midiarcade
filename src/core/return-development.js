@@ -1,4 +1,5 @@
 import { repetitionBalance } from "./repetition-refinement.js";
+import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
 
 const RETURN_RELATIONSHIPS = new Set(["recall", "return"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme", "idea"]);
@@ -78,7 +79,7 @@ function noteVelocity(note) {
 
 function setNoteVelocity(note, value) {
   const key = Object.prototype.hasOwnProperty.call(note, "vel") ? "vel" : "velocity";
-  const bounded = Math.round(clamp(value, 1, 127));
+  const bounded = clampMidiVelocity(value);
   note[key] = finite(note?.[key], 90) <= 1 ? round(bounded / 127) : bounded;
 }
 
@@ -186,7 +187,7 @@ function applyCadencePayoff(song, pairs) {
     if (pitchChanged) setNotePitch(landing, targetPitch);
     if (durationChanged) setNoteDuration(landing, desiredDuration);
     if (pitchChanged || durationChanged) {
-      setNoteVelocity(landing, Math.min(120, noteVelocity(landing) + (relationship === "return" ? 4 : 2)));
+      setNoteVelocity(landing, Math.min(MIDI_NOTE_VELOCITY_MAX, noteVelocity(landing) + (relationship === "return" ? 4 : 2)));
       landing.returnDevelopmentRole = "cadence-payoff";
       landing.returnDevelopmentOriginSectionId = String(pairs.find((pair) => pair.target.id === target.id)?.origin?.id ?? "");
       changed += 1;
@@ -377,7 +378,7 @@ function applyReturnSpotlight(song, pairs) {
     for (const note of ordered) {
       const before = noteVelocity(note);
       const lift = note?.motifHandoffRole ? 7 : 4;
-      const after = clamp(before + lift, 1, 120);
+      const after = clamp(before + lift, 1, MIDI_NOTE_VELOCITY_MAX);
       if (after <= before + 1e-6) continue;
       setNoteVelocity(note, after);
       note.returnDevelopmentSpotlightRole = `feature-${featuredTrackId}`;
