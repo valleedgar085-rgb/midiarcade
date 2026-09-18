@@ -5559,6 +5559,7 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
     ...note,
     melodyRole: index % 2 === 0 ? "call" : "development",
   }));
+  shapedCounterpoint.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   return {
     melody: shapedMelody,
     counterpoint: shapedCounterpoint,
