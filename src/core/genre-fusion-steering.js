@@ -1,4 +1,5 @@
 import { clampFinite as clamp, finite } from "../utils.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 const TARGET_GENRES = Object.freeze(["pop", "hipHop", "rap"]);
 const TARGET_SET = new Set(TARGET_GENRES);
@@ -9,8 +10,8 @@ const round = (value, digits = 4) => {
 };
 
 export function popHipHopRapFusionContext(config = {}) {
-  const primaryGenre = String(config?.genre ?? "pop");
-  const secondaryGenre = String(config?.secondaryGenre ?? "");
+  const primaryGenre = normalizeGenreId(config?.genre ?? "pop");
+  const secondaryGenre = normalizeGenreId(config?.secondaryGenre);
   if (!TARGET_SET.has(primaryGenre) || !TARGET_SET.has(secondaryGenre) || primaryGenre === secondaryGenre) return null;
   const blend = round(clamp(finite(config?.fusionBlend, 0.5), 0, 1));
   return Object.freeze({
