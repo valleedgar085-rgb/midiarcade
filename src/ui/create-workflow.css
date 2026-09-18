@@ -153,6 +153,69 @@
   font-size: 0.72rem;
 }
 
+
+#preGenSection .create-stage-heading {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 10px;
+}
+
+#preGenSection .create-stage-heading small,
+#preGenSection .create-direction-group > header small {
+  color: var(--text-3);
+  font: 800 0.56rem var(--font-data);
+  letter-spacing: 0.15em;
+}
+
+#preGenSection .create-stage-heading strong,
+#preGenSection .create-direction-group > header strong {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+#preGenSection .genre-direction > .create-stage-heading {
+  margin-bottom: 12px;
+}
+
+#preGenSection .create-live-controls {
+  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.5fr);
+  align-items: stretch;
+}
+
+#preGenSection .create-direction-group {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 13px;
+  background: rgba(255,255,255,.018);
+}
+
+#preGenSection .create-direction-group > header {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+#preGenSection .create-direction-group-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+#preGenSection .create-direction-group.is-feel .create-live-control:first-child,
+#preGenSection .create-direction-group.is-feel .create-live-select {
+  grid-column: span 1;
+}
+
+#preGenSection .create-direction-group.is-structure .create-direction-group-body {
+  grid-template-columns: 1fr;
+}
+
+#preGenSection .create-generate-heading {
+  margin: 14px 0 -2px;
+}
+
+
 #preGenSection .genre-direction {
   padding: 16px;
   border: 1px solid rgba(157, 111, 255, 0.18);
@@ -263,6 +326,10 @@
 
 @media (max-width: 900px) {
   #tab-create .create-live-controls {
+    grid-template-columns: 1fr;
+  }
+
+  #preGenSection .create-direction-group-body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -363,9 +430,17 @@
   }
 
   #tab-create .create-live-controls {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 8px;
     padding: 10px;
+  }
+
+  #preGenSection .create-direction-group {
+    padding: 10px;
+  }
+
+  #preGenSection .create-direction-group-body {
+    grid-template-columns: 1fr 1fr;
   }
 
   #tab-create .create-live-control:first-child {
