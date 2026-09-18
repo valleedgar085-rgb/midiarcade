@@ -2421,7 +2421,7 @@ function renderShapeDirector(section = editorSection()) {
   if (directions && !directions.childElementCount) {
     directions.innerHTML = Object.values(SHAPE_QUICK_DIRECTIONS)
       .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
-      .join("");
+      .join("") + '<button type="button" class="shape-more-directions" data-shape-more aria-expanded="false">More directions</button>';
   }
   const recommendations = rankShapeSuggestions({
     song: state.song,
@@ -2434,9 +2434,10 @@ function renderShapeDirector(section = editorSection()) {
     for (const entry of recommendations) {
       const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
       if (!button) continue;
-      button.textContent = "★ " + entry.direction.label;
+      button.textContent = entry.rank + " · " + entry.direction.label;
       button.dataset.shapeRank = String(entry.rank);
       button.title = entry.reason;
+      button.hidden = false;
       directions.append(button);
     }
     for (const entry of Object.values(SHAPE_QUICK_DIRECTIONS)) {
@@ -2446,7 +2447,15 @@ function renderShapeDirector(section = editorSection()) {
       button.textContent = entry.label;
       delete button.dataset.shapeRank;
       button.removeAttribute("title");
+      button.hidden = panel.dataset.shapeMore !== "true";
       directions.append(button);
+    }
+    const moreButton = directions.querySelector("[data-shape-more]");
+    if (moreButton) {
+      const expanded = panel.dataset.shapeMore === "true";
+      moreButton.textContent = expanded ? "Fewer directions" : "More directions";
+      moreButton.setAttribute("aria-expanded", String(expanded));
+      directions.append(moreButton);
     }
   }
   if (auditionControls && !auditionControls.childElementCount) {
@@ -2470,8 +2479,8 @@ function renderShapeDirector(section = editorSection()) {
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
       ? "Select notes in the piano roll first, or use Section / Current instrument scope."
       : topSuggestion
-        ? `Suggested: ${topSuggestion.direction.label} — ${topSuggestion.reason}. Choose any direction to stage a local Before / After candidate; nothing commits automatically.`
-        : "Choose a musical direction. MIDI Arcade will prepare a local Before / After candidate without committing it.";
+        ? `Recommended: ${topSuggestion.direction.label} — ${topSuggestion.reason}. Tap one of the three suggested moves to preview it; nothing changes until Accept.`
+        : "Pick a musical direction to preview. Nothing changes until Accept.";
     return;
   }
   const summary = director.transaction.summary;
@@ -5915,6 +5924,12 @@ function toggleFullscreen() {
     if (control) applySectionMacro(control.dataset.sectionMacro, control.value);
   });
   $("#sectionShaper")?.addEventListener("click", (event) => {
+    if (event.target.closest?.("[data-shape-more]")) {
+      const panel = $("#shapeDirectorPanel");
+      if (panel) panel.dataset.shapeMore = panel.dataset.shapeMore === "true" ? "false" : "true";
+      renderShapeDirector();
+      return;
+    }
     const direction = event.target.closest?.("[data-shape-direction]")?.dataset.shapeDirection;
     if (direction) {
       prepareShapeDirectorCandidate(direction);
