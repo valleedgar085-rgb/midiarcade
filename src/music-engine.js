@@ -5538,6 +5538,13 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
   if (span < 1.5) return null;
   const barBeats = Math.max(1, beatsPerBar(config));
+  const totalArrangementBeats = Math.max(
+    0,
+    ...structure.map((candidate) => finite(candidate?.endBeat, 0)),
+  ) - Math.min(
+    ...structure.map((candidate) => finite(candidate?.startBeat, 0)),
+  );
+  if (totalArrangementBeats < barBeats * 12 - 1e-6) return null;
   let entryBeat = null;
   let exitBeat = null;
 
