@@ -1,6 +1,6 @@
 # MIDI Arcade — Product Direction
 
-**Canonical product plan · refreshed September 16, 2026**
+**Canonical product plan · refreshed September 18, 2026**
 
 This document is the forward-looking source of truth for MIDI Arcade. Merged pull requests remain the authoritative implementation history; this file defines what the app is becoming, what matters next, and which contracts future work must preserve.
 
@@ -30,33 +30,44 @@ The product wins by making **high-quality MIDI composition, variation, shaping, 
 
 ## 2. Current production baseline
 
-`main` is currently at **Phase 9I**. The Phase 9I merge adds critic-gated section-aware drum evolution for Hip-Hop, Rap, and Trap on top of the existing Phase 9H snare-bounce grammar.
+`main` is currently at **9a89f03** (`Core hardening: unify generation contracts and fix Shape/session risks (#56)`). Phase 9I remains an important historical engine milestone, but it is no longer the production baseline.
 
-The latest Phase 9I PR validation recorded:
+Since Phase 9I, production has also absorbed:
 
-- 518 / 518 repository tests passing;
-- Music Quality Lab: 94 overall / 92 musical / 100 technical;
-- creative floor 77;
-- release 100%;
-- generated-output uniqueness 100%;
-- Android asset sync and Preview APK assembly passing.
+- **Track A1 authority work** that keeps section-variation audition outside canonical song state and protects accepted Shape authority;
+- the **Solar Pop UI foundation** across the existing Create → Shape → Mix → Finish shell;
+- shared, role-safe instrument program selection;
+- profile-driven genre arrangement and deterministic probabilistic layering;
+- **Track Aura v1** plus smarter deterministic song naming;
+- GitHub Actions APK job repair;
+- a broad **core hardening pass** that unified generation finalization, genre/note contracts, session boundaries, worker recovery, deterministic helpers, quality-stage execution, diagnostics, and telemetry isolation.
 
-The current engine already includes the major foundations needed for the next product stage:
+The latest fully validated core-hardening branch recorded:
+
+- **569 / 569 repository tests passing**;
+- Music Quality Lab: **94 overall / 92 musical / 100 technical**;
+- creative floor **77**;
+- release **100%**;
+- generated-output uniqueness **100%**;
+- Android asset sync and install-safe Preview APK assembly passing.
+
+The current production foundation therefore already includes:
 
 - deterministic Song DNA and Creative Genome;
 - New, Similar, producer variations, section variations, and track rerolls;
 - Fire / Electric / Drip producer personalities;
 - Creative Range with neutral default plus Familiar / Fresh / Wild opt-in;
-- phrase, groove, arrangement, return, repetition, density, register, and performance refinement;
-- Phase 9F rhythm-topology and performance-feel consumption;
-- Phase 9G Surprise Budget consumption;
-- Phase 9H critic-gated snare-bounce grammar;
-- Phase 9I section-aware drum evolution;
+- phrase, groove, arrangement, return, repetition, density, register, performance, snare-bounce, and section-drum refinement;
+- profile-driven genre arrangement and deterministic layering;
 - accepted Shape revisions as authoritative musical state;
-- generation timeout ownership so stale work cannot overwrite newer songs or newer UI state;
+- generation timeout ownership plus recoverable worker fallback;
+- shared generation finalization across worker and synchronous paths;
+- canonical genre aliases and MIDI velocity ceiling contracts;
+- preference-only session persistence with UI/session boundary separation;
+- Track Aura and deterministic smarter song naming;
 - Android-constrained preview audio and multitrack MIDI export.
 
-This means the next stage should **converge the product experience around the engine we already built**, rather than continuing to add isolated generation subsystems without a stronger producer workflow.
+The next stage remains **product convergence**. The immediate checkpoint is to close Track A1 with explicit end-to-end cross-workspace authority/history evidence, then advance A2 → A3 → A4 → A5 without opening another parallel engine phase.
 
 ## 3. North-star workflow
 
@@ -364,13 +375,14 @@ We should judge future work using evidence in four buckets.
 
 ## 10. Immediate execution order
 
-1. **Refresh canonical docs and repository hygiene.**
-2. **Finish any outstanding physical Android validation tied to already-merged/proven ownership and playback contracts.**
-3. **Begin Track A1 canonical workspace/song-context audit.**
-4. **Simplify Create without removing capability.**
-5. **Tighten Shape suggestions and accepted-lineage authority.**
-6. **Refocus Mix on musical balance and Android audition.**
-7. **Refocus Finish on trusted MIDI handoff.**
-8. **Only then resume measured engine expansion under Track B.**
+1. **Refresh canonical docs to the actual merged-main baseline.**
+2. **Close Track A1 with executable Create → Shape → Mix → Finish → back → Similar authority/history coverage.**
+3. **Repair only any state fork exposed by that acceptance test; otherwise leave runtime behavior unchanged.**
+4. **Advance A2 Create simplification without removing supported capability.**
+5. **Advance A3 Shape intelligence and accepted-lineage authority.**
+6. **Advance A4 Mix around producer-readable musical balance and reliable audition.**
+7. **Advance A5 Finish around trusted default MIDI handoff and explicit export intent.**
+8. **Complete repeatable physical Android validation under Track C.**
+9. **Only then resume measured engine expansion under Track B.**
 
-That order is intentional: MIDI Arcade already has substantial composition intelligence. The highest-leverage next step is to make the whole product feel like one instrument.
+That order is intentional: MIDI Arcade already has substantial composition intelligence. The highest-leverage work is to make the whole product behave and read like one instrument while preserving every frozen deterministic, musical, export, and Android contract.
