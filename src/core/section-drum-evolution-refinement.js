@@ -3,6 +3,7 @@ import {
   evaluateSongCandidate,
   evaluateSongReleaseGate,
 } from "../music-engine.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 export const SECTION_DRUM_EVOLUTION_VERSION = 1;
 export const MAX_SECTION_DRUM_EDITS = 6;
@@ -54,7 +55,7 @@ function randomUnit(seed, salt) {
 }
 
 function resolveGenre(song, config) {
-  return String(config?.genre ?? song?.genre ?? song?.meta?.genre ?? "");
+  return normalizeGenreId(config?.genre ?? song?.genre ?? song?.meta?.genre);
 }
 
 function resolveSeed(song, config) {
