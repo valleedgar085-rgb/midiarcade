@@ -5,6 +5,7 @@ import {
 } from "../music-engine.js";
 import { normalizeGenreId } from "./genre-contract.js";
 import { clampMidiVelocity } from "./note-contract.js";
+import { hash32, seededUnit } from "./deterministic-rng.js";
 
 export const SECTION_DRUM_EVOLUTION_VERSION = 1;
 export const MAX_SECTION_DRUM_EDITS = 6;
@@ -37,23 +38,6 @@ function cloneSong(song) {
   return JSON.parse(JSON.stringify(song));
 }
 
-function hash32(text) {
-  let hash = 2166136261;
-  const source = String(text ?? "section-drums");
-  for (let index = 0; index < source.length; index += 1) {
-    hash ^= source.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function randomUnit(seed, salt) {
-  let state = hash32(`${seed}|${salt}`) || 0x9e3779b9;
-  state ^= state << 13;
-  state ^= state >>> 17;
-  state ^= state << 5;
-  return (state >>> 0) / 4294967296;
-}
 
 function resolveGenre(song, config) {
   return normalizeGenreId(config?.genre ?? song?.genre ?? song?.meta?.genre);
@@ -119,7 +103,7 @@ function addGhostResponse(notes, window, section, seed, occurrence, evolution) {
   if (!snares.length) return null;
   const referenceIndex = hash32(`${seed}|ghost-ref|${section.id}|${occurrence}`) % snares.length;
   const reference = snares[referenceIndex];
-  const preferBefore = randomUnit(seed, `ghost-side:${section.id}:${occurrence}`) < 0.62;
+  const preferBefore = seededUnit(seed, `ghost-side:${section.id}:${occurrence}`) < 0.62;
   const offsets = preferBefore ? [-0.25, 0.25] : [0.25, -0.25];
   for (const offset of offsets) {
     const start = round(finite(reference.start) + offset);
@@ -140,7 +124,7 @@ function addKickResponse(notes, window, section, seed, occurrence, energy, evolu
   const snares = snareNotes(notes, window);
   if (!snares.length) return null;
   const reference = snares[hash32(`${seed}|kick-ref|${section.id}|${occurrence}`) % snares.length];
-  const offsets = randomUnit(seed, `kick-offset:${section.id}:${occurrence}`) < 0.72 ? [0.5, 0.75] : [0.75, 0.5];
+  const offsets = seededUnit(seed, `kick-offset:${section.id}:${occurrence}`) < 0.72 ? [0.5, 0.75] : [0.75, 0.5];
   for (const offset of offsets) {
     const start = round(finite(reference.start) + offset);
     if (start <= window.start + 0.05 || start >= window.end - 0.05 || noteAt(notes, 36, start)) continue;
