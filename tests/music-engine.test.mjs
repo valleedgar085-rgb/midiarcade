@@ -718,6 +718,96 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
   }
 });
 
+test("Hip-Hop family producer gates stagger opening support and clear resolving layers", () => {
+  const structure = [
+    { id: "intro-gate", name: "intro", startBeat: 0, endBeat: 16 },
+    { id: "outro-gate", name: "outro", startBeat: 16, endBeat: 48 },
+  ];
+  const establish = { purpose: "establish" };
+  const resolve = { purpose: "resolve" };
+
+  for (const genre of ["hipHop", "rap", "trap"]) {
+    const config = { genre, timeSignature: [4, 4] };
+    const support = engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", config);
+    const answer = engine.producerRoleGateWindow(structure[0], structure, establish, "counterpoint", "answer", config);
+    const texture = engine.producerRoleGateWindow(structure[0], structure, establish, "pad", "texture", config);
+    assert.ok(support.entryBeat >= 0.5);
+    assert.ok(answer.entryBeat > support.entryBeat);
+    assert.ok(texture.entryBeat > answer.entryBeat);
+
+    const supportExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "melody", "support", config);
+    const textureExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "pad", "texture", config);
+    assert.ok(supportExit.exitBeat <= 47.5);
+    assert.ok(textureExit.exitBeat < supportExit.exitBeat);
+    assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config), null);
+    assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "foreground", config), null);
+  }
+
+  assert.equal(
+    engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", { genre: "pop", timeSignature: [4, 4] }),
+    null,
+  );
+
+  const shortStructure = [
+    { id: "short-intro", name: "intro", startBeat: 0, endBeat: 8 },
+    { id: "short-outro", name: "outro", startBeat: 8, endBeat: 32 },
+  ];
+  assert.equal(
+    engine.producerRoleGateWindow(shortStructure[0], shortStructure, establish, "chords", "support", { genre: "trap", timeSignature: [4, 4] }),
+    null,
+    "8-bar calibration and loop forms should preserve their established immediate arrangement behavior",
+  );
+});
+
+test("Trap full-song rendering keeps support out of the opening pocket until its producer gate", () => {
+  const input = {
+    ...CONFIG,
+    genre: "trap",
+    seed: "trap-staggered-entry-full-pipeline",
+    bars: 32,
+    candidateCount: 1,
+    evolution: 0.8,
+  };
+  const song = engine.generateNew(input);
+  const firstSection = song.structure[0];
+  const firstScene = song.producerIntent.scenes.find((scene) => scene.sectionId === firstSection.id);
+  assert.equal(firstScene?.purpose, "establish");
+
+  const protectedAnchor = (note) => Boolean(
+    note.phraseAnchor
+    || note.resolutionRole
+    || note.transitionRole
+    || note.transitionFeature
+    || note.transitionHandoffRole
+    || note.memoryRole
+    || note.motifHandoffRole
+    || note.ensembleAccent
+    || note.finalAssemblyRole
+  );
+
+  let gatedTracksWithNotes = 0;
+  for (const track of song.tracks) {
+    const role = firstScene?.roles?.[track.id];
+    const gate = engine.producerRoleGateWindow(firstSection, song.structure, firstScene, track.id, role, { genre: "trap", timeSignature: [4, 4] });
+    if (gate?.entryBeat == null) continue;
+    const notes = track.notes.filter((note) => (
+      note.start >= firstSection.startBeat - 1e-6
+      && note.start < firstSection.endBeat - 1e-6
+      && !protectedAnchor(note)
+    ));
+    if (!notes.length) continue;
+    gatedTracksWithNotes += 1;
+    assert.ok(
+      notes.every((note) => note.start >= gate.entryBeat - 1e-6),
+      `${track.id} should enter no earlier than ${gate.entryBeat}`,
+    );
+  }
+  assert.ok(gatedTracksWithNotes > 0, "fixture should retain at least one staggered support lane");
+  assert.deepEqual(song, engine.generateNew(input));
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
 test("fresh and chained generation advance to distinct arrangements", () => {
   const first = engine.generateNew({ bars: 4, candidateCount: 1 });
   const second = engine.generateNew({ bars: 4, candidateCount: 1 });
