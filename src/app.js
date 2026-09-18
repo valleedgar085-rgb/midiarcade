@@ -3154,16 +3154,20 @@ function renderTrackRack() {
       <div class="track-card-header">
         <div class="track-identity">
           <span class="track-icon" aria-hidden="true">${meta.icon}</span>
-          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName}</small></span>
+          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName} · ${isTrackProgramAuto(id) ? "AUTO SOUND" : profilePick ? "STYLE PICK" : "CUSTOM SOUND"}</small></span>
         </div>
         <div class="track-primary-actions" aria-label="${meta.name} quick controls">
         <button class="track-toggle" data-action="mute" type="button" aria-label="Mute ${meta.name}" aria-pressed="${muted}" title="Mute">M</button>
         <button class="track-toggle" data-action="solo" type="button" aria-label="Solo ${meta.name}" aria-pressed="${solo}" title="Solo">S</button>
         </div>
       </div>
-      <label class="track-control track-level-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">Channel gain before the master output</small></label>
+      <div class="track-expression-grid mix-primary-balance" aria-label="${meta.name} musical balance">
+        <label class="track-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">How loud this instrument sits in preview and export controllers</small></label>
+        <label class="track-control"><span>IMPACT <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity impact" /><small class="parameter-note">Soft ↔ strong note attack; MIDI velocity remains bounded</small></label>
+        <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Short ↔ connected articulation used by preview and MIDI handoff</small></label>
+      </div>
       <details class="track-expression track-shaping">
-        <summary><span><b>SHAPE INSTRUMENT</b><small>Sound · performance · space</small></span><i aria-hidden="true">+</i></summary>
+        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound · pattern · pan · tone</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
           <label class="track-patch"><span><b>SOUND</b><em>${isTrackProgramAuto(id) ? "AUTO" : profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
           <div class="track-secondary-actions">
@@ -3184,9 +3188,7 @@ function renderTrackRack() {
             <section class="track-control-group performance-group" aria-label="${meta.name} performance controls">
               <header><b>PERFORMANCE</b><small>impact and placement</small></header>
               <div class="track-expression-grid">
-                <label class="track-control"><span>NOTE VELOCITY <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity scale" /><small class="parameter-note">Scales note impact; export stays within MIDI 1–127</small></label>
-                <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Held length without adding a long release tail</small></label>
-                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /></label>
+                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /><small class="parameter-note">Stereo placement; the note performance itself stays unchanged</small></label>
               </div>
             </section>
             <section class="track-control-group tone-group" aria-label="${meta.name} tone controls">
