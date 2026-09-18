@@ -127,3 +127,126 @@ export function createShapeIntent({
     preserve: Object.freeze(locks),
   });
 }
+
+const SHAPE_SUGGESTION_ORDER = Object.freeze(Object.keys(SHAPE_QUICK_DIRECTIONS));
+
+const CRITIC_DIRECTION = Object.freeze({
+  groove: "moreBounce",
+  transitions: "buildUp",
+  harmony: "moreEmotional",
+  phraseResolution: "catchier",
+  hook: "catchier",
+  arrangement: "buildUp",
+  production: "moreSpace",
+  performance: "harder",
+});
+
+const ELEMENT_DIRECTIONS = Object.freeze({
+  fire: Object.freeze(["harder", "moreBounce", "buildUp"]),
+  electric: Object.freeze(["catchier", "busier", "buildUp"]),
+  drip: Object.freeze(["moreSpace", "moreEmotional", "darker"]),
+});
+
+function sectionSuggestion(section = {}) {
+  const label = String(section?.role ?? section?.name ?? section?.id ?? "").toLowerCase();
+  if (/intro|opening/.test(label)) return ["moreSpace", "let the opening establish identity without overcrowding it"];
+  if (/pre.?chorus|build|riser|lift/.test(label)) return ["buildUp", "shape a clearer rise into the next payoff"];
+  if (/chorus|hook|drop|payoff/.test(label)) return ["catchier", "make the payoff easier to recognize and remember"];
+  if (/bridge|break|middle/.test(label)) return ["moreEmotional", "create contrast before the song returns"];
+  if (/outro|ending|release/.test(label)) return ["calmDown", "let the ending release energy instead of adding another peak"];
+  if (/verse/.test(label)) return ["moreBounce", "strengthen pocket while leaving room for later sections to lift"];
+  return ["buildUp", "clarify this section's role in the surrounding song arc"];
+}
+
+function criticWeakness(song = {}) {
+  const subscores = song?.meta?.scoreDetails?.subscores;
+  if (!subscores || typeof subscores !== "object") return null;
+  return Object.entries(subscores)
+    .filter(([, value]) => Number.isFinite(Number(value)))
+    .sort((a, b) => Number(a[1]) - Number(b[1]))[0]?.[0] ?? null;
+}
+
+function normalizedElementId(song, explicit) {
+  return String(
+    explicit
+      ?? song?.variationSet?.element?.id
+      ?? song?.element?.id
+      ?? song?.elementId
+      ?? "",
+  ).trim().toLowerCase();
+}
+
+export function rankShapeSuggestions({
+  song = {},
+  section = {},
+  target = "section",
+  elementId = null,
+  limit = 3,
+} = {}) {
+  const ranked = new Map();
+  const add = (id, weight, reason, signal) => {
+    if (!SHAPE_QUICK_DIRECTIONS[id]) return;
+    const current = ranked.get(id) ?? { id, score: 0, reasons: [], signals: [] };
+    current.score += weight;
+    if (reason && !current.reasons.includes(reason)) current.reasons.push(reason);
+    if (signal && !current.signals.includes(signal)) current.signals.push(signal);
+    ranked.set(id, current);
+  };
+
+  const weakness = criticWeakness(song);
+  const criticDirection = CRITIC_DIRECTION[weakness];
+  if (criticDirection) {
+    add(
+      criticDirection,
+      6,
+      `the critic's weakest current dimension is ${String(weakness).replace(/([a-z])([A-Z])/g, "$1 $2")}`,
+      "critic",
+    );
+  }
+
+  const [sectionDirection, sectionReason] = sectionSuggestion(section);
+  add(sectionDirection, 5, sectionReason, "section");
+
+  const element = normalizedElementId(song, elementId);
+  for (const [index, id] of (ELEMENT_DIRECTIONS[element] ?? []).entries()) {
+    add(id, 4 - index, `${element} identity favors this kind of local change`, "element");
+  }
+
+  const targetDirection = target === "notes"
+    ? "catchier"
+    : target === "track"
+      ? "moreBounce"
+      : "buildUp";
+  add(
+    targetDirection,
+    2,
+    target === "notes"
+      ? "selected-note scope benefits from a clear motif-level intention"
+      : target === "track"
+        ? "instrument scope benefits from a focused performance/pocket move"
+        : "whole-section scope can carry an arrangement-level energy decision",
+    "target",
+  );
+
+  for (const [index, id] of ["moreBounce", "catchier", "moreSpace"].entries()) {
+    add(id, 0.5 - index * 0.05, "safe starting point when no stronger signal wins", "fallback");
+  }
+
+  return Object.freeze(
+    [...ranked.values()]
+      .sort((a, b) => (
+        b.score - a.score
+        || SHAPE_SUGGESTION_ORDER.indexOf(a.id) - SHAPE_SUGGESTION_ORDER.indexOf(b.id)
+      ))
+      .slice(0, Math.max(1, Number(limit) || 3))
+      .map((entry, index) => Object.freeze({
+        rank: index + 1,
+        directionId: entry.id,
+        direction: SHAPE_QUICK_DIRECTIONS[entry.id],
+        score: entry.score,
+        reason: entry.reasons.slice(0, 2).join("; "),
+        signals: Object.freeze([...entry.signals]),
+      })),
+  );
+}
+
