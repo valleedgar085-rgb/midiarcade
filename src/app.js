@@ -3326,13 +3326,16 @@ function renderFinishWorkspace() {
   $("#finishCoverImage").dataset.finish = finish.id;
   $("#finishCoverTitle").textContent = deriveTitle();
   if ($("#finishCoverLabel")) $("#finishCoverLabel").textContent = `${finish.label.toUpperCase()} FINISH`;
+  const finishTrackNames = songTracks().map((track, index) => (
+    TRACK_META[trackId(track, index)]?.name ?? track.name ?? track.id ?? `Track ${index + 1}`
+  ));
+  const finishSectionNames = normalizeSections().map((section) => section.name || section.id).filter(Boolean);
   $("#finishFacts").innerHTML = [
-    `${songTracks().length} named tracks`,
-    `${songKey()} ${songMode().replace(/([a-z])([A-Z])/g, "$1 $2")}`,
-    `${Math.round(songBpm())} BPM`,
-    `${songBars()} bars`,
-    "Velocity + articulation",
-    "CC expression + sustain + modulation",
+    `TRACKS · ${finishTrackNames.join(" · ")}`,
+    `SECTIONS · ${finishSectionNames.join(" → ")}`,
+    `${songKey()} ${songMode().replace(/([a-z])([A-Z])/g, "$1 $2")} · ${Math.round(songBpm())} BPM · ${songBars()} bars`,
+    "PERFORMANCE · velocity + articulation + CC expression",
+    "HANDOFF · Type-1 multitrack MIDI with section markers",
   ].map((fact) => `<span>${fact}</span>`).join("");
   renderExportSetup();
 }
@@ -3351,8 +3354,16 @@ function renderExportSetup() {
   const setup = currentExportSetup();
   const profile = resolveMidiExportProfile(setup.profile, setup.selectedTrackId);
   const selectedName = TRACK_META[setup.selectedTrackId]?.name ?? "instrument";
-  const trackCount = profile.trackIds?.length ?? songTracks().length;
-  summary.innerHTML = `<strong>${profile.id === "selected" ? selectedName : profile.label}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel"}</span>`;
+  const sourceTracks = songTracks();
+  const trackIds = profile.trackIds ?? sourceTracks.map((track, index) => trackId(track, index));
+  const trackCount = trackIds.length;
+  const trackNames = trackIds.map((id) => TRACK_META[id]?.name ?? id);
+  const timingLabel = setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel";
+  const isDefaultHandoff = profile.id === "full" && setup.timing === "performance";
+  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default · Full song" : profile.id === "selected" ? selectedName + " · focused export" : profile.label + " · focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${timingLabel} · ${trackNames.join(" + ")}</span>`;
+  if ($("#exportTrackCount")) {
+    $("#exportTrackCount").textContent = `${trackCount} ${trackCount === 1 ? "MIDI TRACK" : "MIDI TRACKS"} · ${setup.timing === "tight" ? "TIGHT" : "GROOVE"}`;
+  }
 }
 
 async function saveCoverArtwork() {
