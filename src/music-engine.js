@@ -9835,6 +9835,33 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   };
 }
 
+export function evaluateSongDiversity(song, recentSongs = [], generation = song?.generation ?? "new") {
+  const novelty = evaluateSongNovelty(song, recentSongs, generation);
+  const components = novelty.components ?? {};
+  const identityKeys = ["groove", "bass", "melody", "motifContour", "motifRhythm", "orchestration", "structure"];
+  const identitySimilarities = identityKeys
+    .map((key) => finite(components[key], 0))
+    .filter((value) => Number.isFinite(value));
+  const identitySimilarity = identitySimilarities.length
+    ? identitySimilarities.reduce((sum, value) => sum + value, 0) / identitySimilarities.length
+    : 0;
+  const nearCloneDimensions = identityKeys.filter((key) => finite(components[key], 0) >= 0.9);
+  const freshEnough = generation === "similar"
+    ? novelty.score >= 55 && nearCloneDimensions.length < identityKeys.length
+    : novelty.score >= 65 && novelty.maxSimilarity < 0.9 && nearCloneDimensions.length < 5;
+  return {
+    version: 1,
+    generation,
+    passed: !novelty.compared || freshEnough,
+    score: novelty.score,
+    identitySimilarity: round(identitySimilarity),
+    nearCloneDimensions,
+    reason: !novelty.compared
+      ? "no-history"
+      : freshEnough ? "distinct-enough" : "too-close-to-recent-output",
+  };
+}
+
 const DEFAULT_CANDIDATE_COUNT = 4;
 const MAX_CANDIDATE_COUNT = 12;
 const DEFAULT_ADAPTIVE_CANDIDATES = 3;
@@ -11527,7 +11554,7 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
     candidateScores: candidates.map((candidate) => {
-      const { index, evaluation, novelty, selectionScore, song } = candidate;
+      const { index, evaluation, novelty, selectionScore, song } = candidate;\n      const diversity = candidate.diversity ?? evaluateSongDiversity(song, [], song.generation);
       const candidateBalance = evaluateCandidateBalance(evaluation);
       return {
         index,
