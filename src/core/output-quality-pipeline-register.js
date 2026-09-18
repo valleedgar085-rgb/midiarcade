@@ -4,6 +4,7 @@ import {
   evaluateSongReleaseGate,
   GENRE_CRITIC_PROFILES,
 } from "../music-engine.js";
+import { normalizeGenreId } from "./genre-contract.js";
 import { createFusionPerformanceRebalanceCandidate } from "./fusion-performance-refinement.js";
 import { createJazzDrumMemoryCandidate } from "./jazz-drum-memory-refinement.js";
 import {
@@ -70,7 +71,7 @@ function disabledDiagnostics(candidateLimit, reason = "disabled", patch = {}) {
 }
 
 function repetitionTargetForSong(song) {
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "pop");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre ?? "pop");
   const profile = GENRE_CRITIC_PROFILES[genre] ?? GENRE_CRITIC_PROFILES.pop;
   return average([
     finite(song?.songBlueprint?.qualityTargets?.repetition, profile.repetition),
@@ -256,7 +257,7 @@ function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateRele
   if (config.repetitionRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES) };
   }
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   const family = repetitionRefinementFamily(song);
   if (!family) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES, "calibrated-genre-only", { genre }) };
@@ -459,8 +460,8 @@ function noteTopologySignature(song) {
 }
 
 function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
-  const primaryGenre = String(config.genre ?? song?.genre ?? song?.meta?.genre ?? "");
-  const secondaryGenre = String(config.secondaryGenre ?? song?.meta?.secondaryGenre ?? "");
+  const primaryGenre = normalizeGenreId(config.genre ?? song?.genre ?? song?.meta?.genre);
+  const secondaryGenre = normalizeGenreId(config.secondaryGenre ?? song?.meta?.secondaryGenre);
   const calibratedFusion = config.outputQuality?.kind === "new"
     && song?.meta?.isFusion === true
     && FUSION_PERFORMANCE_FAMILY.has(primaryGenre)
