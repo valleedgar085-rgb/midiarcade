@@ -1887,7 +1887,33 @@ function createProducerIntentContract(
   };
 }
 
-function createMemoryMap(structure, sectionPlans, hookSectionId, source = null) {
+const HOOK_MEMORY_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
+const HOOK_SECTION_NAMES = new Set(["chorus", "drop", "theme", "idea"]);
+
+export function hookReturnRecallStrength({
+  genre,
+  bars,
+  sectionName,
+  relationship,
+  isHookReturn = false,
+  baseStrength = 0.78,
+  hookMemory = 0.78,
+} = {}) {
+  const base = clamp(finite(baseStrength, 0.78), 0, 1);
+  if (
+    !HOOK_MEMORY_GENRES.has(String(genre ?? ""))
+    || finite(bars, 0) < 12
+    || !HOOK_SECTION_NAMES.has(String(sectionName ?? "").toLowerCase())
+    || !["recall", "return"].includes(String(relationship ?? ""))
+    || !isHookReturn
+  ) return round(base);
+
+  const memory = clamp(finite(hookMemory, 0.78), 0, 1);
+  const dnaTarget = clamp(0.78 + memory * 0.14, base, 0.92);
+  return round(Math.max(base, dnaTarget));
+}
+
+function createMemoryMap(structure, sectionPlans, hookSectionId, source = null, config = null, songDNA = null) {
   const firstByName = new Map();
   return structure.map((section, index) => {
     const inherited = source?.memoryMap?.find((entry) => entry.sectionId === section.id);
@@ -1897,11 +1923,21 @@ function createMemoryMap(structure, sectionPlans, hookSectionId, source = null) 
     if (!origin) firstByName.set(section.name, section);
     const contrastAxis = ["rhythm", "register", "density", "harmony"][index % 4];
     if (origin) {
+      const relationship = plan.role === "peak" ? "return" : "recall";
+      const baseRecallStrength = plan.role === "peak" ? 0.88 : 0.78;
       return {
         sectionId: section.id,
         originSectionId: origin.id,
-        relationship: plan.role === "peak" ? "return" : "recall",
-        recallStrength: plan.role === "peak" ? 0.88 : 0.78,
+        relationship,
+        recallStrength: hookReturnRecallStrength({
+          genre: config?.genre,
+          bars: config?.bars,
+          sectionName: section.name,
+          relationship,
+          isHookReturn: origin.id === hookSectionId,
+          baseStrength: baseRecallStrength,
+          hookMemory: songDNA?.melodic?.hookMemory,
+        }),
         contrastAxis,
       };
     }
@@ -2088,7 +2124,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     peakSection?.id,
     songDNA,
   );
-  const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source);
+  const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source, config, songDNA);
   const phraseMemory = createPhraseMemoryContract({
     structure,
     sectionPlans,
