@@ -211,10 +211,10 @@ export const GENRE_PROFILES = deepFreeze({
       bassGroove: { syncopated: 3.2, rootFifth: 2.2, pulse: 1.1, walking: 0.55 },
       chordMotion: { sustained: 2.6, offbeat: 1.7, pulse: 1.1, arpeggio: 0.55 },
     },
-    swing: 0.22, syncopation: 0.54, humanize: 0.32, chordExtensions: 0.46, harmonicRhythm: 0.27,
+    swing: 0.2, syncopation: 0.54, humanize: 0.3, chordExtensions: 0.46, harmonicRhythm: 0.27,
     instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [54, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91, 92] },
-    tripletChance: 0.3, snareRollChance: 0.18, halfTime: false,
-    arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.34, phraseBars: 4 },
+    tripletChance: 0.38, snareRollChance: 0.24, halfTime: false,
+    arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.4, phraseBars: 4 },
   },
   rap: {
     id: "rap", label: "Rap", bpm: { min: 76, max: 104, default: 90 },
@@ -6051,13 +6051,16 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       : jitterRange;
     const jitter = exactSubdivision ? 0 : (rng.float() * 2 - 1) * effectiveJitterRange * settings.humanize;
     const pocketOffset = exactSubdivision ? 0 : finite(performanceProfile?.trackOffsets?.[trackId], 0) * settings.feel;
-    const microOffset = genreMicroTimingOffset({
-      genre,
-      trackId,
-      pitch: note.pitch,
-      start: note.start,
-      exactSubdivision,
-    }) * settings.feel * (0.6 + clamp(config.humanize, 0, 1) * 0.4);
+    const protectedLanding = Boolean(note.resolutionRole || note.ensembleCadenceRole || note.transitionHandoffRole);
+    const microOffset = config.secondaryGenre || protectedLanding
+      ? 0
+      : genreMicroTimingOffset({
+        genre,
+        trackId,
+        pitch: note.pitch,
+        start: note.start,
+        exactSubdivision,
+      }) * settings.feel * (0.6 + clamp(config.humanize, 0, 1) * 0.4);
     const start = clamp(note.start + swingDelay + pocketOffset + laidbackOffset + microOffset + jitter, 0, Math.max(0, totalBeats - 0.02));
     const durationJitter = exactSubdivision ? 1 : 1 + (rng.float() * 2 - 1) * jitterRange * settings.humanize;
     const duration = clamp(note.duration * settings.gate * durationJitter, 0.02, Math.max(0.02, totalBeats - start));
