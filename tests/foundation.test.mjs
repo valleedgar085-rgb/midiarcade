@@ -29,6 +29,23 @@ test("app store creates isolated state and reports named transactions", () => {
   assert.deepEqual(events, [["generation:commit", 1]]);
 });
 
+test("app store isolates subscriber failures from committed state", () => {
+  const state = createInitialAppState();
+  const store = createAppStore(state);
+  store.subscribe(() => {
+    throw new Error("render listener failed");
+  });
+
+  assert.doesNotThrow(() => {
+    store.transaction("safe-commit", (draft) => {
+      draft.generationCount += 1;
+    });
+  });
+  assert.equal(store.getState().generationCount, 1);
+  assert.equal(store.getRevision(), 1);
+  assert.match(store.getLastSubscriberError()?.message ?? "", /render listener failed/);
+});
+
 test("session storage isolates JSON access and rejects stale schemas", () => {
   const values = new Map();
   const storage = {
