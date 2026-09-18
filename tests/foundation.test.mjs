@@ -154,6 +154,45 @@ test("generation executor recovers the same request when a running worker fails"
   assert.equal(executor.usingWorker, false);
 });
 
+test("generation executor retries a transiently failed worker after backoff", async () => {
+  let clock = 0;
+  let workerCreates = 0;
+  const executor = createGenerationExecutor({
+    now: () => clock,
+    workerRetryBaseMs: 100,
+    workerRetryMaxMs: 100,
+    workerFactory() {
+      workerCreates += 1;
+      const listeners = new Map();
+      return {
+        addEventListener(type, listener) { listeners.set(type, listener); },
+        postMessage(message) {
+          if (workerCreates === 1) {
+            queueMicrotask(() => listeners.get("error")?.(new Error("transient crash")));
+          } else {
+            queueMicrotask(() => listeners.get("message")?.({
+              data: {
+                requestId: message.requestId,
+                ok: true,
+                result: { status: "committed", song: { id: "worker-recovered" } },
+              },
+            }));
+          }
+        },
+        terminate() {},
+      };
+    },
+    fallback: () => ({ status: "committed", song: { id: "fallback-during-backoff" } }),
+  });
+
+  assert.equal((await executor.run("new")).song.id, "fallback-during-backoff");
+  assert.equal(workerCreates, 1);
+  clock = 101;
+  assert.equal((await executor.run("new")).song.id, "worker-recovered");
+  assert.equal(workerCreates, 2);
+  assert.equal(executor.usingWorker, true);
+});
+
 test("generation executor recovers worker-declared errors without double-settling", async () => {
   const listeners = new Map();
   let fallbackCalls = 0;
