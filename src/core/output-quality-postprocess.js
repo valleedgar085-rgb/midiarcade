@@ -16,6 +16,7 @@ import {
   createReturnDevelopmentCandidates,
   MAX_RETURN_DEVELOPMENT_CANDIDATES,
 } from "./return-development.js";
+import { createQualityEvaluationContext, runQualityStageSequence } from "./output-quality-stage-runner.js";
 
 const ARRANGEMENT_DIMENSIONS = Object.freeze([
   "storyArc",
@@ -535,24 +536,19 @@ export function applySongOutputQualityPostprocess(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
 } = {}) {
-  const arrangement = applyArrangementPostprocess(song, config, evaluateCandidate, evaluateReleaseGate);
-  const returnDevelopment = applyReturnDevelopmentPostprocess(
-    arrangement.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
-  const groovePocket = applyGroovePocketPostprocess(
-    returnDevelopment.song,
-    config,
-    evaluateCandidate,
-    evaluateReleaseGate,
-  );
+  const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
+  const evaluate = evaluators.evaluateCandidate;
+  const release = evaluators.evaluateReleaseGate;
+  const sequence = runQualityStageSequence(song, [
+    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
+    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
+    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
+  ]);
   return {
-    song: groovePocket.song,
-    diagnostics: arrangement.diagnostics,
-    returnDiagnostics: returnDevelopment.diagnostics,
-    grooveDiagnostics: groovePocket.diagnostics,
+    song: sequence.song,
+    diagnostics: sequence.diagnostics.arrangement,
+    returnDiagnostics: sequence.diagnostics.returnDevelopment,
+    grooveDiagnostics: sequence.diagnostics.groovePocket,
   };
 }
 
