@@ -4,6 +4,7 @@ import {
   evaluateSongReleaseGate,
 } from "../music-engine.js";
 import { normalizeGenreId } from "./genre-contract.js";
+import { clampMidiVelocity } from "./note-contract.js";
 
 export const SECTION_DRUM_EVOLUTION_VERSION = 1;
 export const MAX_SECTION_DRUM_EDITS = 6;
@@ -101,7 +102,7 @@ function addHit(notes, pitch, start, velocity, duration, metadata) {
     pitch,
     start: round(start),
     duration: round(duration),
-    velocity: Math.max(1, Math.min(120, Math.round(velocity))),
+    velocity: clampMidiVelocity(velocity),
     ...metadata,
   });
   return true;
