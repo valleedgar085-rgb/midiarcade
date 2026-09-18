@@ -137,7 +137,7 @@ function densityDiagnosticsFor(assessment, before, candidatesEvaluated, candidat
   });
 }
 
-function applyDensityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyDensityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.densityRefinement !== true) {
     return { song, diagnostics: disabledDensityDiagnostics() };
   }
@@ -319,7 +319,7 @@ function phraseDiagnosticsFor(assessment, before, candidatesEvaluated, candidate
   });
 }
 
-function applyPhraseResolutionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyPhraseResolutionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.phraseResolutionRefinement !== true) {
     return { song, diagnostics: disabledPhraseDiagnostics() };
   }
