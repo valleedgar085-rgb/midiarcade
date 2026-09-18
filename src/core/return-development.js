@@ -1,5 +1,6 @@
 import { repetitionBalance } from "./repetition-refinement.js";
 import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
+import { cloneValue } from "./clone-value.js";
 
 const RETURN_RELATIONSHIPS = new Set(["recall", "return"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme", "idea"]);
@@ -17,12 +18,6 @@ function clamp(value, min, max) {
 function round(value, digits = 4) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
-}
-
-function clone(value) {
-  return typeof structuredClone === "function"
-    ? structuredClone(value)
-    : JSON.parse(JSON.stringify(value));
 }
 
 function sectionsOf(song) {
@@ -518,7 +513,7 @@ function applyReturnEvolution(song, pairs) {
 }
 
 function makeCandidate(sourceSong, pairs, id, apply) {
-  const song = clone(sourceSong);
+  const song = cloneValue(sourceSong);
   const changedNotes = apply(song, returnPairs(song));
   if (!changedNotes) return null;
   song.outputQualityEvolution = {
