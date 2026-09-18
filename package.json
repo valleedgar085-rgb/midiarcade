@@ -16,7 +16,8 @@
     "quality": "npm test && npm run build && node scripts/check-build-quality.js",
     "android:sync": "npm run build && cap sync android",
     "android:verify": "npm run android:sync && cd android && .\\gradlew.bat :app:lintRelease :app:testReleaseUnitTest",
-    "android:bundle": "npm run android:sync && cd android && .\\gradlew.bat :app:bundleRelease"
+    "android:bundle": "npm run android:sync && cd android && .\\gradlew.bat :app:bundleRelease",
+    "test:android-release": "node --test tests/android-release-contract.test.mjs tests/generation-timeout-ownership.test.mjs tests/preview-loop-continuity-contract.test.mjs tests/phase7-audio-runtime.test.mjs tests/section-variation-authority.test.mjs"
   },
   "engines": {
     "node": ">=22.0.0"
