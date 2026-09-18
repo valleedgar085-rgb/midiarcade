@@ -111,6 +111,28 @@ test("first-run decode starts empty with supported controls automatic", () => {
   assert.ok(decoded.value.autoControls.has("track:drums:density"));
 });
 
+test("older session schemas migrate through current sanitizers instead of losing preferences", () => {
+  const decoded = decodePersistedSession({
+    status: "ready",
+    value: {
+      schema: 1,
+      generationPreferences: { tempoControl: "98" },
+      autoControls: ["tempoControl"],
+      selectedTrack: "drums",
+    },
+  }, {
+    schema: 2,
+    trackOrder: TRACK_ORDER,
+    defaultTrackSettings: DEFAULTS,
+    genreIds: ["hipHop"],
+  });
+
+  assert.equal(decoded.status, "ready");
+  assert.equal(decoded.value.song, null);
+  assert.equal(decoded.value.generationPreferences.tempoControl, "98");
+  assert.ok(decoded.value.autoControls.has("tempoControl"));
+});
+
 test("session decode rejects corruption, sanitizes preferences, and never auto-restores the last song", () => {
   const invalid = decodePersistedSession({ status: "ready", value: { schema: 999, song: null } }, {
     schema: 2,
