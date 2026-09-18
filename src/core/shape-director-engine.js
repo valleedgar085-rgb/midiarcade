@@ -2,10 +2,7 @@ import { clamp, finite } from "../utils.js";
 import { createShapeIntent } from "./shape-director-policy.js";
 import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
 import { hash32 } from "./deterministic-rng.js";
-
-function clone(value) {
-  return JSON.parse(JSON.stringify(value));
-}
+import { cloneValue } from "./clone-value.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -234,7 +231,7 @@ function applyDirection(candidate, intent, eligible, seed) {
     selected.forEach((entry, index) => {
       raiseVelocity(entry, direction === "catchier" ? 6 : 3);
       if (!rhythmUnlocked || index % 2 !== 0) return;
-      const copy = clone(entry.note);
+      const copy = cloneValue(entry.note);
       const offset = direction === "catchier" ? 1 : 0.5;
       const start = eventStart(entry.note) + offset;
       if (start >= eligible.range.end - 0.05) return;
@@ -263,7 +260,7 @@ function scopeSnapshot(song, selection) {
       const id = noteIdentity(note, index);
       if (start < range.start - 1e-7 || start >= range.end - 1e-7) return [];
       if (allowedIds && !allowedIds.has(id)) return [];
-      return [{ trackId, id, note: clone(note) }];
+      return [{ trackId, id, note: cloneValue(note) }];
     });
   });
 }
@@ -333,7 +330,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
   }
 
   if (!intent.direction) return { status: "rejected", error: "direction-required", intent };
-  const candidate = clone(sourceSong);
+  const candidate = cloneValue(sourceSong);
   const eligible = collectEligible(candidate, intent.selection);
   if (eligible.error) return { status: "rejected", error: eligible.error, intent, missing: eligible.missing ?? [] };
 
@@ -362,7 +359,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
     status: "candidate",
     id: `shape-${hash32(`${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}:${intent.selection.sectionId}:${intent.direction.id}:${intent.size.id}`).toString(16)}`,
     intent,
-    before: clone(sourceSong),
+    before: cloneValue(sourceSong),
     after: candidate,
     summary: {
       changedNoteCount: mutation.changedIds.length,
@@ -376,7 +373,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
 export function auditionShapeCandidate(transaction, side = "after") {
   if (transaction?.status !== "candidate") return null;
-  return clone(side === "before" ? transaction.before : transaction.after);
+  return cloneValue(side === "before" ? transaction.before : transaction.after);
 }
 
 export function acceptShapeCandidate(transaction) {
