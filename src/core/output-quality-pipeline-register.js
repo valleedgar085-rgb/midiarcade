@@ -253,7 +253,7 @@ function repetitionDiagnosticsFor(assessment, before, candidatesEvaluated, candi
   });
 }
 
-function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.repetitionRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES) };
   }
@@ -314,7 +314,7 @@ function applyRepetitionRefinement(song, config, evaluateCandidate, evaluateRele
   return { song: selected.song, diagnostics };
 }
 
-function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.registerHealthRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_REGISTER_HEALTH_CANDIDATES) };
   }
@@ -367,11 +367,11 @@ function applyRegisterHealthRefinement(song, config, evaluateCandidate, evaluate
   return { song: selected.song, diagnostics };
 }
 
-function applyGenreIdentityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyGenreIdentityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   const enabled = config.genreIdentityRefinement === true
     || (config.genreIdentityRefinement !== false && config.outputQuality?.kind === "new");
   if (!enabled) return { song, diagnostics: disabledDiagnostics(GENRE_IDENTITY_CANDIDATE_LIMIT) };
-  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
+  const genre = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   if (genre !== "jazz") {
     return { song, diagnostics: disabledDiagnostics(GENRE_IDENTITY_CANDIDATE_LIMIT, "calibrated-genre-only", { genre }) };
   }
@@ -459,7 +459,7 @@ function noteTopologySignature(song) {
   })));
 }
 
-function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+export function applyFusionPerformanceRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   const primaryGenre = normalizeGenreId(config.genre ?? song?.genre ?? song?.meta?.genre);
   const secondaryGenre = normalizeGenreId(config.secondaryGenre ?? song?.meta?.secondaryGenre);
   const calibratedFusion = config.outputQuality?.kind === "new"
