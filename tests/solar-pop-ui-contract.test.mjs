@@ -55,9 +55,9 @@ test("Create polish defines a scoped soda-pop red accent and stronger visual hie
 
 
 test("Create polish keeps the workflow order legible and carries soda-pop red through interaction states", () => {
-  assert.match(css, /#tab-create>\.create-console\{order:1\}/);
-  assert.match(css, /#tab-create>#preGenSection\{order:2\}/);
-  assert.match(css, /#tab-create>\.workflow-panel\{order:3\}/);
+  assert.match(css, /#tab-create>\.create-console\{order:1;display:flex;flex-direction:column;gap:24px\}/);
+  assert.match(css, /#tab-create>\.create-console>#preGenSection\{order:2\}/);
+  assert.match(css, /#tab-create>\.create-console>\.workflow-panel\{order:3\}/);
   assert.match(css, /#tab-create :is\(button,select,input\):focus-visible\{[\s\S]*?var\(--soda-pop-red\)/);
   assert.match(css, /#tab-create :is\(\.showcase-action,\.generation-button\):active\{[\s\S]*?translateY\(1px\)/);
 });
