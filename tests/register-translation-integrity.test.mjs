@@ -70,6 +70,7 @@ test("MIDI export preserves rendered low and high note numbers instead of previe
         reverb: 0,
         mute: false,
         solo: false,
+        octave: 8,
       },
       notes: [
         { pitch: 12, start: 0, duration: 0.5, velocity: 100 },
@@ -80,8 +81,8 @@ test("MIDI export preserves rendered low and high note numbers instead of previe
   };
 
   const bytes = encodeMidi(song);
-  assert.ok(includesBytes(bytes, [0x90, 12, 100]), "low rendered MIDI note must export as note 12");
-  assert.ok(includesBytes(bytes, [0x90, 120, 101]), "high rendered MIDI note must export as note 120");
+  assert.ok(includesBytes(bytes, [0x90, 12]), "low rendered MIDI note must export as note 12 regardless of track octave metadata");
+  assert.ok(includesBytes(bytes, [0x90, 120]), "high rendered MIDI note must export as note 120 regardless of track octave metadata");
 });
 
 test("role-register refinement is octave-only and moves fatigue-prone parts into professional windows", () => {
