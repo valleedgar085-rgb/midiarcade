@@ -1076,6 +1076,9 @@ function normalizeTrack(id, input = {}, profile = GENRE_PROFILES[DEFAULT_CONFIG.
   input = input && typeof input === "object" ? input : {};
   const defaults = TRACK_DEFINITIONS[id];
   const explicitlyProgrammed = Object.prototype.hasOwnProperty.call(input, "program") && input.program != null;
+  const explicitlyOctaved = id !== "drums"
+    && (Boolean(input.octaveExplicit)
+      || (Object.prototype.hasOwnProperty.call(input, "octave") && input.octave != null));
   const palette = curateTrackProgramPalette(id, profile.instrumentPrograms[id] ?? [defaults.program], {
     limit: (profile.instrumentPrograms[id] ?? []).length || 1,
   });
@@ -1089,6 +1092,7 @@ function normalizeTrack(id, input = {}, profile = GENRE_PROFILES[DEFAULT_CONFIG.
     octave: id === "drums"
       ? 0
       : clamp(Math.round(finite(input.octave, defaults.octave)), 0, 8),
+    octaveExplicit: explicitlyOctaved,
     density: unit(input.density, defaults.density),
     variation: unit(input.variation, defaults.variation),
     volume: unit(input.volume, defaults.volume),
@@ -2186,6 +2190,7 @@ function applySongBlueprint(structure, blueprint) {
         energy: plan.energy,
         tension: plan.tension,
         density: plan.density,
+        registerLift: plan.registerLift,
         cadence: plan.cadence,
         motifTransform: plan.motifTransform,
         harmonicRole: plan.harmonicRole,
@@ -6544,6 +6549,7 @@ function makeTrack(id, settings, notes, automation = []) {
       density: settings.density,
       variation: settings.variation,
       octave: settings.octave,
+      octaveExplicit: Boolean(settings.octaveExplicit),
       volume: settings.volume,
       velocity: settings.velocity,
       pan: settings.pan,
