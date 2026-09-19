@@ -62,9 +62,7 @@ function generationConfig(genre, seed, secondaryGenre = null, fusionBlend = 0.5)
 function generate(genre, seed, secondaryGenre = null, fusionBlend = 0.5) {
   const config = generationConfig(genre, seed, secondaryGenre, fusionBlend);
   const generated = engine.generateNew(config);
-  const processed = applySongOutputQualityPipeline(generated, config);
-  processed.song.__fusionPerformanceDiagnostics = processed.fusionPerformanceDiagnostics;
-  return processed.song;
+  return applySongOutputQualityPipeline(generated, config).song;
 }
 
 test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical quality", { timeout: 120_000 }, () => {
@@ -101,12 +99,6 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
       });
 
       const label = `${primary}+${secondary} ${seed}`;
-      console.log("DAW_FUSION_DEBUG", JSON.stringify({
-        label,
-        fused,
-        dawRegister: song.dawRegister ?? null,
-        fusionPerformanceDiagnostics: song.__fusionPerformanceDiagnostics ?? null,
-      }));
       assert.equal(song.meta.isFusion, true);
       assert.equal(song.meta.secondaryGenre, secondary);
       assert.equal(fused.scaleFit, 1);
