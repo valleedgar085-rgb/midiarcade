@@ -337,11 +337,14 @@ export function rankAutoProgramCandidates({
 export function chooseAutoProgramRotation(options = {}) {
   const ranked = rankAutoProgramCandidates(options);
   if (!ranked.length) return Number.isFinite(Number(options.currentProgram)) ? Number(options.currentProgram) : null;
+  const currentProgram = Number(options.currentProgram);
+  const alternatives = ranked.filter((program) => program !== currentProgram);
+  const rotationPool = alternatives.length ? alternatives : ranked;
   const foreground = ["melody", "counterpoint"].includes(String(options.trackId));
   const windowSize = foreground
     ? (options.explore ? 4 : 3)
     : (options.explore ? 3 : 2);
-  const topWindow = ranked.slice(0, windowSize);
+  const topWindow = rotationPool.slice(0, windowSize);
   if (topWindow.length === 1) return topWindow[0];
   return topWindow[hashNumber(`${options.seed}:${options.trackId}:rotation`) % topWindow.length];
 }
