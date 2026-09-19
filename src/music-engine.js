@@ -12552,11 +12552,13 @@ export function generateNew(input = {}) {
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "new");
+    const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
       song: candidateSong,
       evaluation,
       novelty,
+      sectionOutcome,
       selectionScore: candidateSelectionScore(evaluation, novelty, "new"),
     });
   };
@@ -12661,11 +12663,13 @@ export function generateSimilar(current, input = {}) {
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "similar");
+    const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
       song: candidateSong,
       evaluation,
       novelty,
+      sectionOutcome,
       targetTrack,
       contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
