@@ -3595,7 +3595,7 @@ function shapeRenderedMelodicFlow(sourceTracks, structure) {
     }
     const candidates = [-24, -12, 0, 12, 24]
       .map((offset) => originalPitch + offset)
-      .filter((pitch) => pitch >= 48 && pitch <= 96);
+      .filter((pitch) => pitch >= DAW_REGISTER_POLICIES.melody.min && pitch <= DAW_REGISTER_POLICIES.melody.peakMax);
     candidates.sort((left, right) => {
       const score = (pitch) => {
         const motion = pitch - previous.pitch;
@@ -4859,7 +4859,7 @@ function generateBass(
   if (settings.density <= 0.001) return notes;
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
-  const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
+  const bassOctave = settings.octave;
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -5077,9 +5077,7 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
 
     const nextChord = harmonyAt(harmony, Math.min(totalBeats - 0.02, boundary + 0.01));
     if (!nextChord) continue;
-    const bassOctave = config.genre === "trap"
-      ? Math.max(0, config.tracks.bass.octave - 1)
-      : config.tracks.bass.octave;
+    const bassOctave = config.tracks.bass.octave;
     const destination = rootMidi(nextChord, bassOctave);
     const candidates = bass
       .filter((note) => note.start >= boundary - 1.0 && note.start < boundary - 0.04)
@@ -5149,11 +5147,23 @@ function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCei
     pad: 4,
   }[trackId] ?? 5;
   const pitch = baseOctave * 12 + pc;
-  if (trackId === "bass") return clamp(pitch, 34, 64);
-  if (trackId === "pad") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48, 92);
-  if (trackId === "chords") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 50, 86);
-  if (trackId === "counterpoint") return clamp(pitch, 60, 96);
-  return clamp(pitch, 62, 103);
+  if (trackId === "bass") return clamp(pitch, DAW_REGISTER_POLICIES.bass.min, DAW_REGISTER_POLICIES.bass.max);
+  if (trackId === "pad") return clamp(
+    pitch,
+    bassCeiling != null ? Math.max(DAW_REGISTER_POLICIES.pad.min, bassCeiling + 7) : DAW_REGISTER_POLICIES.pad.min,
+    DAW_REGISTER_POLICIES.pad.peakMax,
+  );
+  if (trackId === "chords") return clamp(
+    pitch,
+    bassCeiling != null ? Math.max(DAW_REGISTER_POLICIES.chords.min, bassCeiling + 7) : DAW_REGISTER_POLICIES.chords.min,
+    DAW_REGISTER_POLICIES.chords.peakMax,
+  );
+  if (trackId === "counterpoint") return clamp(
+    pitch,
+    DAW_REGISTER_POLICIES.counterpoint.min,
+    DAW_REGISTER_POLICIES.counterpoint.peakMax,
+  );
+  return clamp(pitch, DAW_REGISTER_POLICIES.melody.min, DAW_REGISTER_POLICIES.melody.peakMax);
 }
 
 function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, rng) {
@@ -7729,8 +7739,8 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
       const target = nearestPitchClass(
         note.pitch,
         targetClasses,
-        id === "bass" ? 28 : 55,
-        id === "bass" ? 59 : 96,
+        id === "bass" ? DAW_REGISTER_POLICIES.bass.min : DAW_REGISTER_POLICIES.melody.min,
+        id === "bass" ? DAW_REGISTER_POLICIES.bass.max : DAW_REGISTER_POLICIES.melody.peakMax,
       );
       if (target !== note.pitch) {
         note.pitch = target;
