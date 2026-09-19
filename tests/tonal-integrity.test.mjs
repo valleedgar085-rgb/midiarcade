@@ -94,3 +94,27 @@ test("generated songs carry a final tonal-integrity audit without weakening rele
     assert.equal(song.meta.qualityGate.scaleSafe, true, `${genre} release scale contract must remain intact`);
   }
 });
+
+
+test("tonal repair never creates overlapping unisons inside a pitched track", () => {
+  const tracks = [
+    baseTrack("melody", [
+      { pitch: 64, start: 0, duration: 1.5 },
+      { pitch: 65, start: 1, duration: 1 },
+    ]),
+  ];
+  const harmony = [{ start: 0, duration: 4, rootPc: 0, tones: [0, 4, 7] }];
+  const meta = { keyPc: 0, scaleIntervals: [0, 2, 4, 5, 7, 9, 11], beatsPerBar: 4 };
+  const structure = [{ id: "verse-1", startBeat: 0, endBeat: 4 }];
+
+  const result = refineTonalIntegrity(tracks, harmony, meta, structure);
+  const melody = result.tracks[0].notes;
+  assert.equal(melody[0].pitch, 64);
+  assert.notEqual(melody[1].pitch, 64, "repair must not retune an overlapping note onto an occupied pitch");
+  const byPitch = new Map();
+  for (const note of melody) {
+    const previous = byPitch.get(note.pitch);
+    if (previous) assert.ok(previous.start + previous.duration <= note.start + 1e-6);
+    byPitch.set(note.pitch, note);
+  }
+});
