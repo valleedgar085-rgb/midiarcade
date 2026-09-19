@@ -58,6 +58,7 @@ function octaveCandidates(sourcePitch, window, notes, currentNote) {
 function nearestPreferredCandidate(trackId, note, trackNotes, previousPitch, {
   forceHardWindow = false,
   allowPreferredException = false,
+  preferredMaxOverride = null,
 } = {}) {
   const hard = roleRegisterWindow(trackId);
   const preferred = rolePreferredRegisterWindow(trackId);
@@ -67,7 +68,10 @@ function nearestPreferredCandidate(trackId, note, trackNotes, previousPitch, {
   if (!candidates.length) return source;
 
   const targetMin = forceHardWindow || allowPreferredException ? hard.min : preferred.min;
-  const targetMax = forceHardWindow || allowPreferredException ? hard.max : preferred.max;
+  const boundedPreferredMax = Number.isFinite(Number(preferredMaxOverride))
+    ? Math.min(preferred.max, Number(preferredMaxOverride))
+    : preferred.max;
+  const targetMax = forceHardWindow || allowPreferredException ? hard.max : boundedPreferredMax;
   const center = (preferred.min + preferred.max) / 2;
 
   candidates.sort((left, right) => {
@@ -143,8 +147,16 @@ export function refineRoleRegisters(tracks = [], structure = []) {
       const section = sectionForNote(structure, note);
       const hardViolation = source < hard.min || source > hard.max;
       const tooLowBass = track.id === "bass" && source < preferred.min;
+      const releaseSection = ["melody", "counterpoint"].includes(track.id)
+        && (
+          String(section?.intent?.role ?? "") === "release"
+          || section?.id === structure?.at?.(-1)?.id
+        );
+      const foregroundPreferredMax = releaseSection
+        ? Math.min(preferred.max, track.id === "melody" ? 76 : 74)
+        : preferred.max;
       const tooHighForeground = ["melody", "counterpoint"].includes(track.id)
-        && source > preferred.max
+        && source > foregroundPreferredMax
         && !intentionalRegisterLift(track.id, note, section);
 
       if (!hardViolation && !tooLowBass && !tooHighForeground) {
@@ -155,6 +167,7 @@ export function refineRoleRegisters(tracks = [], structure = []) {
       const selected = nearestPreferredCandidate(track.id, note, track.notes, previousPitch, {
         forceHardWindow: hardViolation,
         allowPreferredException: intentionalRegisterLift(track.id, note, section),
+        preferredMaxOverride: foregroundPreferredMax,
       });
       if (selected !== source) {
         note.pitch = selected;
