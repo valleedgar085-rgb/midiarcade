@@ -8,8 +8,8 @@ export const PREVIEW_TRANSITION = Object.freeze({
   // Android/WebView output buffers can expose abrupt voice teardown as a click.
   // Keep these fades short enough to preserve timing while spanning multiple
   // hardware buffers on typical 44.1/48 kHz mobile devices.
-  startSeconds: 0.012,
-  stopSeconds: 0.055,
+  startSeconds: 0.01,
+  stopSeconds: 0.04,
   sourceTailSeconds: 0.024,
 });
 
