@@ -3433,6 +3433,74 @@ function recenterHarmonicRegisterTrack(track, structure, bassNotes = []) {
   return { track: { ...track, notes }, adjusted };
 }
 
+function registerCollisionPriority(note = {}) {
+  const protectedRole = Boolean(
+    note.ensembleCadenceRole
+    || note.transitionHandoffRole
+    || note.motifHandoffRole
+    || note.memoryRole
+    || note.finalAssemblyRole
+    || note.phraseAnchor
+    || note.dawRegisterRole
+  );
+  return (protectedRole ? 10000 : 0)
+    + finite(note.velocity, 0) * 10
+    + finite(note.duration, 0);
+}
+
+function cleanupRegisterPitchCollisions(track) {
+  const sorted = [...(track?.notes ?? [])]
+    .map((note) => ({ ...note }))
+    .sort((left, right) => (
+      left.start - right.start
+      || left.pitch - right.pitch
+      || right.velocity - left.velocity
+      || right.duration - left.duration
+    ));
+  const unique = new Map();
+  let mergedDuplicates = 0;
+  for (const note of sorted) {
+    const key = `${round(finite(note.start, 0), 6)}:${Math.round(finite(note.pitch, 60))}`;
+    const existing = unique.get(key);
+    if (!existing) {
+      unique.set(key, note);
+      continue;
+    }
+    const preferred = registerCollisionPriority(note) > registerCollisionPriority(existing)
+      ? note
+      : existing;
+    const merged = {
+      ...preferred,
+      duration: Math.max(finite(existing.duration, 0.1), finite(note.duration, 0.1)),
+      velocity: Math.max(Math.round(finite(existing.velocity, 80)), Math.round(finite(note.velocity, 80))),
+      dawRegisterMerged: true,
+    };
+    unique.set(key, merged);
+    mergedDuplicates += 1;
+  }
+
+  const notes = [...unique.values()].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const lastByPitch = new Map();
+  let overlapsTrimmed = 0;
+  for (const note of notes) {
+    const previous = lastByPitch.get(note.pitch);
+    if (previous && previous.start + previous.duration > note.start - 0.015) {
+      const repaired = Math.max(0.02, note.start - previous.start - 0.015);
+      if (repaired < previous.duration - 0.001) {
+        previous.duration = round(repaired);
+        previous.dawRegisterOverlapTrimmed = true;
+        overlapsTrimmed += 1;
+      }
+    }
+    lastByPitch.set(note.pitch, note);
+  }
+  return {
+    track: { ...track, notes },
+    mergedDuplicates,
+    overlapsTrimmed,
+  };
+}
+
 export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
@@ -3465,11 +3533,24 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
     adjustedByTrack[id] = result.adjusted;
   }
 
+  let mergedDuplicates = 0;
+  let overlapsTrimmed = 0;
+  for (const id of ["bass", "chords", "melody", "counterpoint", "pad"]) {
+    const source = byId.get(id);
+    if (!source) continue;
+    const cleaned = cleanupRegisterPitchCollisions(source);
+    byId.set(id, cleaned.track);
+    mergedDuplicates += cleaned.mergedDuplicates;
+    overlapsTrimmed += cleaned.overlapsTrimmed;
+  }
+
   const resultTracks = tracks.map((track) => byId.get(track.id) ?? track);
   const report = {
     version: 1,
     status: "complete",
     adjustedNotes: Object.values(adjustedByTrack).reduce((sum, value) => sum + value, 0),
+    mergedDuplicates,
+    overlapsTrimmed,
     adjustedByTrack,
     manualTracks: [...new Set(manualTracks)],
     maximumLeapBefore,
