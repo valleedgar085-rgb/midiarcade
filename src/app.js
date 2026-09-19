@@ -30,6 +30,7 @@ import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
+import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   chooseAutoProgramRotation,
@@ -4292,7 +4293,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         id,
         oneShotKitId,
         program: Number(track.program ?? uiSettings.program ?? 0),
-        pitch: notePitch(note),
+        pitch: canonicalMidiPitch(notePitch(note)),
         velocity: clamp(baseVelocity * expressionStart, 1, 127),
         baseVelocity,
         time: startBeat * secondsPerBeat,
@@ -5174,7 +5175,7 @@ export class PreviewPlayer {
     const resonanceScale = 0.65 + clamp(Number(event.resonance ?? 0.2), 0, 1) * 1.75;
     const velocityScale = 0.76 + (clamp(Number(event.velocity ?? 90), 1, 127) / 127) * 0.44;
     const filterBase = clamp(voice.filter * cutoffScale * velocityScale, 120, 15000);
-    const targetFrequency = 440 * 2 ** ((clamp(event.pitch, 24, 108) - 69) / 12);
+    const targetFrequency = midiPitchToFrequency(event.pitch);
     const periodicWave = this.periodicWaveForVoice(voice, event);
     if (periodicWave) oscillator.setPeriodicWave(periodicWave);
     else oscillator.type = voice.type;
