@@ -14,6 +14,7 @@ import {
   genreArrangementProfile,
 } from "../src/core/genre-arrangement-profile.js";
 import { outputQualityDevelopment } from "../src/core/output-quality-evolution.js";
+import { roleRegisterWindow } from "../src/core/role-register-policy.js";
 
 const GENRES = Object.keys(GENRE_PROFILES).sort();
 
@@ -125,6 +126,17 @@ test("all genres remain release-safe while different seeds produce different ful
       assert.equal(song.meta?.scoreDetails?.releaseGate?.passed, true, `${genre} selected song must carry a passing release gate`);
       assert.ok(song.finalMaster && Object.values(song.finalMaster.checks ?? {}).every(Boolean), `${genre} must pass final-master checks`);
       assert.ok(song.finalAssembly && Object.values(song.finalAssembly.checks ?? {}).every(Boolean), `${genre} must pass final-assembly checks`);
+      assert.equal(song.registerIntegrity?.after?.hardViolations, 0, `${genre} must finish with no hard role-register violations`);
+      for (const track of song.tracks) {
+        const window = roleRegisterWindow(track.id);
+        if (!window) continue;
+        for (const note of track.notes ?? []) {
+          assert.ok(
+            note.pitch >= window.min && note.pitch <= window.max,
+            `${genre}/${track.id} pitch ${note.pitch} escaped professional register ${window.min}-${window.max}`,
+          );
+        }
+      }
     }
 
     assert.notEqual(
