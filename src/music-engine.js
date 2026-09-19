@@ -3296,6 +3296,54 @@ function registerBassCeilingAt(bassNotes = [], start = 0, duration = 0.1) {
   return sounding.length ? Math.max(...sounding.map((note) => finite(note?.pitch, 36))) : null;
 }
 
+function preserveStructuralRegisterContrast(notes = [], structure = [], trackId = "") {
+  if (!["melody", "counterpoint"].includes(trackId) || !notes.length) {
+    return { notes, adjusted: 0 };
+  }
+  const policy = DAW_REGISTER_POLICIES[trackId];
+  const peak = structure.find((section) => section?.intent?.role === "peak");
+  const release = [...structure].reverse().find((section) => (
+    section?.intent?.role === "release" || String(section?.name ?? "") === "outro"
+  ));
+  if (!policy || !peak || !release) return { notes, adjusted: 0 };
+
+  const notesInSection = (section) => notes.filter((note) => (
+    note.start >= finite(section.startBeat, 0) - 1e-6
+    && note.start < finite(section.endBeat, 0) - 1e-6
+  ));
+  const peakNotes = notesInSection(peak);
+  const releaseNotes = notesInSection(release);
+  if (!peakNotes.length || !releaseNotes.length) return { notes, adjusted: 0 };
+
+  const meanPitch = (items) => average(items.map((note) => finite(note.pitch, policy.center)), policy.center);
+  const hasRequiredContrast = () => meanPitch(peakNotes) >= meanPitch(releaseNotes) + 8 - 1e-6;
+  if (hasRequiredContrast()) return { notes, adjusted: 0 };
+
+  let adjusted = 0;
+  const shiftSection = (items, semitones, minimum, maximum, role) => {
+    if (!items.every((note) => note.pitch + semitones >= minimum && note.pitch + semitones <= maximum)) {
+      return false;
+    }
+    for (const note of items) {
+      note.pitch += semitones;
+      note.dawRegisterShift = finite(note.dawRegisterShift, 0) + semitones;
+      note.dawRegisterAdjusted = true;
+      note.dawRegisterRole = role;
+      note.dawRegisterContrastShift = semitones;
+      adjusted += 1;
+    }
+    return true;
+  };
+
+  // Preserve the existing tension-conductor contract with one coherent section
+  // move, never random per-note octave jumps. Prefer settling the release first.
+  shiftSection(releaseNotes, -12, policy.min, policy.max, "structural-settle");
+  if (!hasRequiredContrast()) {
+    shiftSection(peakNotes, 12, policy.min, policy.peakMax, "structural-lift");
+  }
+  return { notes, adjusted };
+}
+
 function recenterLinearRegisterTrack(track, structure) {
   const policy = DAW_REGISTER_POLICIES[track.id];
   const notes = [...(track.notes ?? [])]
@@ -3357,8 +3405,10 @@ function recenterLinearRegisterTrack(track, structure) {
     previousSectionId = section?.id ?? null;
   }
 
+  const structuralContrast = preserveStructuralRegisterContrast(notes, structure, track.id);
+  adjusted += structuralContrast.adjusted;
   return {
-    track: { ...track, notes },
+    track: { ...track, notes: structuralContrast.notes },
     adjusted,
     maximumLeapBefore,
     maximumLeapAfter,
