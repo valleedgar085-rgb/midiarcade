@@ -3244,9 +3244,16 @@ function registerIntentShift(section, trackId, note = null) {
     return 0;
   }
   if (["melody", "counterpoint"].includes(trackId)) {
+    const sectionRole = String(section?.intent?.role ?? "");
+    const sectionName = String(section?.name ?? "");
     if (registerLift > 0 || strategy === "lift") return 12;
-    if (registerLift < 0 || ["drop", "settle"].includes(strategy)) return -7;
-    if (section?.intent?.role === "peak") return 7;
+    if (
+      registerLift < 0
+      || ["drop", "settle"].includes(strategy)
+      || sectionRole === "release"
+      || sectionName === "outro"
+    ) return -7;
+    if (sectionRole === "peak") return 7;
     return 0;
   }
   if (["chords", "pad"].includes(trackId)) {
@@ -3262,7 +3269,7 @@ function registerBoundsForNote(trackId, section, note = null, bassFloor = null) 
   const intentShift = registerIntentShift(section, trackId, note);
   const structuralLift = intentShift > 0;
   const maximum = structuralLift ? policy.peakMax : policy.max;
-  const minimum = trackId === "chords" && Number.isFinite(bassFloor)
+  const minimum = ["chords", "pad"].includes(trackId) && Number.isFinite(bassFloor)
     ? Math.min(maximum, Math.max(policy.min, Math.round(bassFloor + 7)))
     : policy.min;
   return {
@@ -3608,7 +3615,7 @@ export function evaluateDawRegisterQuality(song) {
         rangeViolations += 1;
         trackRangeViolations += 1;
       }
-      if (track.id === "chords" && Number.isFinite(bassCeiling) && note.pitch - bassCeiling < 7) {
+      if (["chords", "pad"].includes(track.id) && Number.isFinite(bassCeiling) && note.pitch - bassCeiling < 7) {
         separationViolations += 1;
       }
       if (["bass", "melody", "counterpoint"].includes(track.id) && previous) {
@@ -9387,6 +9394,8 @@ function compose(config, options = {}) {
       }));
     }
   }
+  const dawRegister = applyDawRegisterPolicy(tracks, structure);
+  tracks = dawRegister.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -9486,6 +9495,7 @@ function compose(config, options = {}) {
     spectrumPlan,
     generationInterlock,
     tracks,
+    dawRegister: dawRegister.report,
     oneShotKit: publicOneShotKit(oneShotKit),
     songBlueprint,
     performanceProfile,
@@ -10640,17 +10650,21 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
   const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
+  const registerOutcome = evaluateDawRegisterQuality(candidate?.song);
+  const registerOutcomePassed = Boolean(registerOutcome.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
     && balance.aspirational
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && registerOutcomePassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
     && balance.passed
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && registerOutcomePassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10663,9 +10677,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
             ? "diversity-below-gate"
             : !sectionOutcomePassed
               ? "section-outcome-below-gate"
-              : "release-ready";
+              : !registerOutcomePassed
+                ? "register-outcome-below-gate"
+                : "release-ready";
   return {
-    version: 2,
+    version: 3,
     generation,
     passed,
     status,
@@ -10684,6 +10700,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
     sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
     sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
+    registerOutcomePassed,
+    registerOutcomeScore: finite(registerOutcome.score, 0),
+    registerRangeViolations: finite(registerOutcome.rangeViolations, 0),
+    registerSeparationViolations: finite(registerOutcome.separationViolations, 0),
+    randomOctaveLeaps: finite(registerOutcome.randomOctaveLeaps, 0),
     adaptiveTarget,
   };
 }
@@ -12293,6 +12314,7 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
+        || Number(rightOutcome.registerOutcomePassed) - Number(leftOutcome.registerOutcomePassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
@@ -12310,24 +12332,8 @@ function commitCandidate(candidates, search = {}) {
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
-  const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
-  const dawRegister = applyDawRegisterPolicy(selected.song.tracks, selected.song.structure ?? selected.song.sections ?? []);
-  selected.song.tracks = dawRegister.tracks;
-  selected.song.dawRegister = dawRegister.report;
   const registerOutcome = evaluateDawRegisterQuality(selected.song);
-  const outputOutcome = {
-    ...baseOutputOutcome,
-    version: 3,
-    registerOutcomePassed: registerOutcome.passed,
-    registerOutcomeScore: registerOutcome.score,
-    registerRangeViolations: registerOutcome.rangeViolations,
-    registerSeparationViolations: registerOutcome.separationViolations,
-    randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
-    passed: baseOutputOutcome.passed && registerOutcome.passed,
-    status: baseOutputOutcome.status === "release-ready" && !registerOutcome.passed
-      ? "register-outcome-below-gate"
-      : baseOutputOutcome.status,
-  };
+  const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
     enabled: Boolean(search.targetedRepair),
@@ -12873,6 +12879,12 @@ function runTargetedCriticRepair(candidates, {
       summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
     }
     const assessRepair = (candidateSong) => {
+      const dawRegister = applyDawRegisterPolicy(
+        candidateSong.tracks,
+        candidateSong.structure ?? candidateSong.sections ?? [],
+      );
+      candidateSong.tracks = dawRegister.tracks;
+      candidateSong.dawRegister = dawRegister.report;
       candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
       const evaluation = evaluateSongCandidate(candidateSong);
       const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
