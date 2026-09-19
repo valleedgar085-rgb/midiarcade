@@ -253,6 +253,104 @@ export function genreArrangementProfile(genre) {
   };
 }
 
+
+function blendProfileNumber(primary, secondary, amount, fallback) {
+  const left = Number.isFinite(Number(primary)) ? Number(primary) : fallback;
+  const right = Number.isFinite(Number(secondary)) ? Number(secondary) : fallback;
+  return left * (1 - amount) + right * amount;
+}
+
+function mergeWeightedProfileEntries(primaryEntries = [], secondaryEntries = [], amount = 0.5, keyForEntry = (entry) => entry?.id) {
+  const merged = new Map();
+  const append = (entries, contribution) => {
+    for (const entry of entries ?? []) {
+      const key = String(keyForEntry(entry) ?? "");
+      if (!key) continue;
+      const weighted = Number(entry?.weight ?? 1) * contribution;
+      const previous = merged.get(key);
+      if (previous) {
+        previous.weight += weighted;
+      } else {
+        merged.set(key, { ...entry, weight: weighted });
+      }
+    }
+  };
+  append(primaryEntries, 1 - amount);
+  append(secondaryEntries, amount);
+  return [...merged.values()].filter((entry) => entry.weight > 0);
+}
+
+function mergeOptionalLayers(primaryLayers = [], secondaryLayers = [], amount = 0.5) {
+  const merged = new Map();
+  const append = (layers, contribution, source) => {
+    for (const layer of layers ?? []) {
+      const key = `${layer?.trackId ?? ""}:${layer?.id ?? ""}`;
+      if (key === ":") continue;
+      const probability = clamp(Number(layer?.probability ?? 0) * contribution, 0, 1);
+      const previous = merged.get(key);
+      if (previous) {
+        previous.probability = clamp(previous.probability + probability, 0, 1);
+        previous.fusionSources = [...new Set([...(previous.fusionSources ?? []), source])];
+      } else {
+        merged.set(key, {
+          ...layer,
+          probability,
+          fusionSources: [source],
+        });
+      }
+    }
+  };
+  append(primaryLayers, 1 - amount, "primary");
+  append(secondaryLayers, amount, "secondary");
+  return [...merged.values()].filter((layer) => layer.probability > 0);
+}
+
+/**
+ * Blend the arrangement grammar as well as the core genre profile. This keeps
+ * fusion songs from inheriting only the primary genre's phrase, harmony,
+ * humanization and optional-layer rules.
+ */
+export function fusedGenreArrangementProfile(primaryGenre, secondaryGenre, blend = 0.5) {
+  const primary = genreArrangementProfile(primaryGenre);
+  const secondary = genreArrangementProfile(secondaryGenre);
+  const amount = clamp(Number.isFinite(Number(blend)) ? Number(blend) : 0.5, 0, 1);
+  if (!secondaryGenre || String(primaryGenre) === String(secondaryGenre) || amount <= 0) return primary;
+  if (amount >= 1) return secondary;
+
+  const phraseBars = [...new Set([...(primary.phraseBars ?? []), ...(secondary.phraseBars ?? [])])];
+  const rhythmTemplates = mergeWeightedProfileEntries(
+    primary.rhythmTemplates,
+    secondary.rhythmTemplates,
+    amount,
+    (entry) => entry?.id,
+  );
+  const harmonicGoals = mergeWeightedProfileEntries(
+    primary.harmonicGoals,
+    secondary.harmonicGoals,
+    amount,
+    (entry) => `${entry?.id ?? ""}:${(entry?.progression ?? []).join(",")}`,
+  );
+
+  return {
+    ...DEFAULT_PROFILE,
+    id: `fusion:${primary.id}+${secondary.id}`,
+    phraseBars: phraseBars.length ? phraseBars : DEFAULT_PROFILE.phraseBars,
+    rhythmTemplates: rhythmTemplates.length ? rhythmTemplates : DEFAULT_PROFILE.rhythmTemplates,
+    harmonicGoals: harmonicGoals.length ? harmonicGoals : DEFAULT_PROFILE.harmonicGoals,
+    optionalLayers: mergeOptionalLayers(primary.optionalLayers, secondary.optionalLayers, amount),
+    melodyMotion: {
+      stepBias: blendProfileNumber(primary.melodyMotion?.stepBias, secondary.melodyMotion?.stepBias, amount, DEFAULT_PROFILE.melodyMotion.stepBias),
+      legatoBias: blendProfileNumber(primary.melodyMotion?.legatoBias, secondary.melodyMotion?.legatoBias, amount, DEFAULT_PROFILE.melodyMotion.legatoBias),
+      staccatoBias: blendProfileNumber(primary.melodyMotion?.staccatoBias, secondary.melodyMotion?.staccatoBias, amount, DEFAULT_PROFILE.melodyMotion.staccatoBias),
+    },
+    humanization: {
+      laidBackOffsetBeats: blendProfileNumber(primary.humanization?.laidBackOffsetBeats, secondary.humanization?.laidBackOffsetBeats, amount, DEFAULT_PROFILE.humanization.laidBackOffsetBeats),
+      gridJitterAttenuation: blendProfileNumber(primary.humanization?.gridJitterAttenuation, secondary.humanization?.gridJitterAttenuation, amount, DEFAULT_PROFILE.humanization.gridJitterAttenuation),
+      velocityVarianceScale: blendProfileNumber(primary.humanization?.velocityVarianceScale, secondary.humanization?.velocityVarianceScale, amount, DEFAULT_PROFILE.humanization.velocityVarianceScale),
+    },
+  };
+}
+
 export function moodFromEnergy(energy = 0.5) {
   if (energy <= 0.42) return "calm";
   if (energy >= 0.76) return "intense";

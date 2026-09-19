@@ -25,6 +25,7 @@ import {
   mergeTrackProgramPalettes,
 } from "./core/instrument-program-policy.js";
 import {
+  fusedGenreArrangementProfile,
   genreArrangementProfile,
   legatoIntervalBias,
   layerDensityMode,
@@ -1184,7 +1185,9 @@ export function normalizeConfig(input = {}) {
     ? createFusedGenreProfile(primaryGenre, secondaryGenre, fusionBlend)
     : GENRE_PROFILES[primaryGenre];
   const professionalUpgrade = Boolean(input.professionalUpgrade);
-  const arrangementProfile = genreArrangementProfile(primaryGenre);
+  const arrangementProfile = (secondaryGenre && secondaryGenre !== primaryGenre)
+    ? fusedGenreArrangementProfile(primaryGenre, secondaryGenre, fusionBlend)
+    : genreArrangementProfile(primaryGenre);
   const key = normalizeKey(input.key ?? DEFAULT_CONFIG.key);
   const suppliedScale = input.scale ?? input.mode;
   const scaleDefault = profile.preferredScales[hashSeed(`${seed}::${genre}::scale`) % profile.preferredScales.length];
@@ -1268,6 +1271,14 @@ export function normalizeConfig(input = {}) {
     } : {}),
     tracks,
   };
+}
+
+function arrangementProfileForConfig(config = {}) {
+  const primaryGenre = String(config.genre ?? DEFAULT_CONFIG.genre);
+  const secondaryGenre = config.secondaryGenre ? String(config.secondaryGenre) : null;
+  return secondaryGenre && secondaryGenre !== primaryGenre
+    ? fusedGenreArrangementProfile(primaryGenre, secondaryGenre, config.fusionBlend)
+    : genreArrangementProfile(primaryGenre);
 }
 
 function beatsPerBar(config) {
@@ -2268,7 +2279,7 @@ const RHYTHM_IDENTITY_WORDS = {
 
 function createRhythmIdentity(config, drumGroove, rng) {
   const upgraded = Boolean(config.professionalUpgrade);
-  const arrangementProfile = upgraded ? genreArrangementProfile(config.genre) : null;
+  const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
   const rhythmTemplate = upgraded
     ? pickGenreRhythmTemplate(arrangementProfile, rng.fork("rhythm-template"), config.syncopation)
     : null;
@@ -2410,7 +2421,7 @@ function genreProgressionChoices(config, harmonicSection, familyChoices) {
   const grammar = GENRE_PROGRESSION_GRAMMARS[config.genre];
   const chordPathGrammar = CHORD_PATH_PROGRESSION_GRAMMARS[config.chordPath];
   const upgraded = Boolean(config.professionalUpgrade);
-  const arrangementProfile = upgraded ? genreArrangementProfile(config.genre) : null;
+  const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
   const grammarSection = ["chorus", "drop", "prechorus", "build"].includes(harmonicSection)
     ? "chorus"
     : ["bridge", "breakdown"].includes(harmonicSection)
@@ -4826,7 +4837,7 @@ function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCei
 }
 
 function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, rng) {
-  const arrangementProfile = genreArrangementProfile(config.genre);
+  const arrangementProfile = arrangementProfileForConfig(config);
   const layerState = config.arrangementLayers ?? { enabled: true, density: 0.5, mode: "auto" };
   if (!layerState.enabled) {
     return {
@@ -6184,7 +6195,7 @@ export function genreMicroTimingOffset({
 function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null) {
   const totalBeats = config.bars * beatsPerBar(config);
   const upgraded = Boolean(config.professionalUpgrade);
-  const arrangementProfile = upgraded ? genreArrangementProfile(config.genre) : null;
+  const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
   const humanization = arrangementProfile?.humanization ?? {};
   const felt = [];
   const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
@@ -6422,7 +6433,7 @@ function articulatePerformance(notes, id, config, rng) {
   const result = notes.map((note) => ({ ...note }));
   const melodic = ["bass", "melody", "counterpoint"].includes(id);
   const upgraded = Boolean(config.professionalUpgrade);
-  const melodyMotion = upgraded ? genreArrangementProfile(config.genre).melodyMotion ?? {} : {};
+  const melodyMotion = upgraded ? arrangementProfileForConfig(config).melodyMotion ?? {} : {};
   const stepBias = clamp(finite(melodyMotion.stepBias, 0.72), 0.05, 0.95);
   const legatoBias = clamp(finite(melodyMotion.legatoBias, 0.34), 0.05, 0.9);
   const staccatoBias = clamp(finite(melodyMotion.staccatoBias, 0.2), 0.05, 0.9);
@@ -6462,6 +6473,15 @@ function articulatePerformance(notes, id, config, rng) {
     } else if (upgraded && melodic && note.articulation === "legato" && next) {
       const overlapBudget = Math.max(0.01, next.start - note.start - 0.02);
       note.duration = round(Math.min(note.duration * 1.08, overlapBudget));
+    }
+    const wideForegroundLeap = upgraded
+      && ["melody", "counterpoint"].includes(id)
+      && next
+      && intervalToNext >= 7;
+    if (wideForegroundLeap && note.articulation !== "accent") {
+      note.velocity = clamp(note.velocity - 2, 1, 127);
+      note.duration = round(Math.max(0.06, note.duration * 0.92));
+      if (note.articulation === "legato" || note.articulation === "glide") note.articulation = "tenuto";
     }
     const breathAfter = melodic && (!next || next.start - (note.start + note.duration) >= 0.38);
     note.performanceRole = breathAfter

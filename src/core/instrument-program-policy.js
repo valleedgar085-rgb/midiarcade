@@ -38,15 +38,15 @@ export const TRACK_SOUND_ROLE_GOALS = Object.freeze({
   }),
   melody: Object.freeze({
     label: "foreground hook",
-    paletteLimit: 3,
+    paletteLimit: 4,
     fallbackLimit: 6,
-    familyOrder: Object.freeze(["voice", "air", "synth", "digital", "guitar", "reed", "string", "brass", "hybrid"]),
+    familyOrder: Object.freeze(["voice", "air", "guitar", "string", "reed", "synth", "digital", "brass", "hybrid"]),
   }),
   counterpoint: Object.freeze({
     label: "supporting answer voice",
-    paletteLimit: 3,
+    paletteLimit: 4,
     fallbackLimit: 6,
-    familyOrder: Object.freeze(["mallet", "air", "voice", "reed", "guitar", "string", "synth", "digital", "brass", "texture"]),
+    familyOrder: Object.freeze(["mallet", "air", "voice", "guitar", "string", "reed", "synth", "digital", "brass", "texture"]),
   }),
   pad: Object.freeze({
     label: "atmosphere only when it adds space",
@@ -267,12 +267,22 @@ function grooveFamilyBias(trackId, companionProgramsByTrack = {}) {
   return TRACK_SOUND_ROLE_GOALS[String(trackId)]?.familyOrder ?? [];
 }
 
+const BRIGHT_FOREGROUND_FAMILIES = new Set(["synth", "digital", "brass", "hybrid"]);
+
 function familyCollisionPenalty(trackId, candidateFamily, companionProgramsByTrack = {}) {
   if (["melody", "counterpoint", "pad", "chords"].includes(trackId)) {
     let penalty = 0;
     for (const companionId of companionTrackIds(trackId)) {
       const companionFamily = programFamilyForTrack(companionId, companionProgramsByTrack[companionId]);
       if (candidateFamily === companionFamily) penalty += companionId === "pad" ? 8 : 12;
+      if (
+        ["melody", "counterpoint"].includes(trackId)
+        && ["melody", "counterpoint"].includes(companionId)
+        && BRIGHT_FOREGROUND_FAMILIES.has(candidateFamily)
+        && BRIGHT_FOREGROUND_FAMILIES.has(companionFamily)
+      ) {
+        penalty += 6;
+      }
     }
     return penalty;
   }
@@ -327,7 +337,14 @@ export function rankAutoProgramCandidates({
 export function chooseAutoProgramRotation(options = {}) {
   const ranked = rankAutoProgramCandidates(options);
   if (!ranked.length) return Number.isFinite(Number(options.currentProgram)) ? Number(options.currentProgram) : null;
-  const topWindow = ranked.slice(0, options.explore ? 3 : 2);
+  const currentProgram = Number(options.currentProgram);
+  const alternatives = ranked.filter((program) => program !== currentProgram);
+  const rotationPool = alternatives.length ? alternatives : ranked;
+  const foreground = ["melody", "counterpoint"].includes(String(options.trackId));
+  const windowSize = foreground
+    ? (options.explore ? 4 : 3)
+    : (options.explore ? 3 : 2);
+  const topWindow = rotationPool.slice(0, windowSize);
   if (topWindow.length === 1) return topWindow[0];
   return topWindow[hashNumber(`${options.seed}:${options.trackId}:rotation`) % topWindow.length];
 }
