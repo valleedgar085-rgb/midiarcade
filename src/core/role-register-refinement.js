@@ -172,6 +172,36 @@ export function refineRoleRegisters(tracks = [], structure = []) {
     track.notes.sort((left, right) => finite(left.start) - finite(right.start) || notePitch(left) - notePitch(right));
   }
 
+  let separationCorrections = 0;
+  const bassTrack = cloned.find((track) => track.id === "bass");
+  const chordTrack = cloned.find((track) => track.id === "chords");
+  const chordWindow = roleRegisterWindow("chords");
+  if (bassTrack?.notes?.length && chordTrack?.notes?.length && chordWindow) {
+    for (const chord of chordTrack.notes) {
+      const soundingBass = bassTrack.notes.filter((bass) => (
+        finite(chord.start) < finite(bass.start) + Math.max(0.02, finite(bass.duration, 0.25))
+        && finite(bass.start) < finite(chord.start) + Math.max(0.02, finite(chord.duration, 0.25))
+      ));
+      if (!soundingBass.length) continue;
+      const bassCeiling = Math.max(...soundingBass.map(notePitch));
+      if (notePitch(chord) - bassCeiling >= 7) continue;
+      let candidate = notePitch(chord);
+      while (candidate - bassCeiling < 7) candidate += 12;
+      if (
+        candidate <= chordWindow.max
+        && candidate >= chordWindow.min
+        && !overlapsSamePitch(chordTrack.notes, chord, candidate)
+      ) {
+        chord.pitch = candidate;
+        chord.registerIntegrityRepair = "bass-chord-separation";
+        corrections += 1;
+        separationCorrections += 1;
+        correctionsByTrack.chords = (correctionsByTrack.chords ?? 0) + 1;
+      }
+    }
+    chordTrack.notes.sort((left, right) => finite(left.start) - finite(right.start) || notePitch(left) - notePitch(right));
+  }
+
   const after = analyzeRoleRegisters(cloned);
   return Object.freeze({
     tracks: cloned,
@@ -179,6 +209,7 @@ export function refineRoleRegisters(tracks = [], structure = []) {
       version: 1,
       status: after.hardViolations === 0 ? "clean" : "best-available",
       corrections,
+      separationCorrections,
       correctionsByTrack: Object.freeze({ ...correctionsByTrack }),
       before,
       after,
