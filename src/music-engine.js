@@ -3246,13 +3246,9 @@ function registerIntentShift(section, trackId, note = null) {
   if (["melody", "counterpoint"].includes(trackId)) {
     const sectionRole = String(section?.intent?.role ?? "");
     const sectionName = String(section?.name ?? "");
+    if (sectionRole === "release" || sectionName === "outro") return -12;
     if (registerLift > 0 || strategy === "lift") return 12;
-    if (
-      registerLift < 0
-      || ["drop", "settle"].includes(strategy)
-      || sectionRole === "release"
-      || sectionName === "outro"
-    ) return -7;
+    if (registerLift < 0 || ["drop", "settle"].includes(strategy)) return -7;
     if (sectionRole === "peak") return 7;
     return 0;
   }
@@ -9394,8 +9390,6 @@ function compose(config, options = {}) {
       }));
     }
   }
-  const dawRegister = applyDawRegisterPolicy(tracks, structure);
-  tracks = dawRegister.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -9495,7 +9489,6 @@ function compose(config, options = {}) {
     spectrumPlan,
     generationInterlock,
     tracks,
-    dawRegister: dawRegister.report,
     oneShotKit: publicOneShotKit(oneShotKit),
     songBlueprint,
     performanceProfile,
@@ -10429,7 +10422,14 @@ function normalizeRecentSongs(value) {
 
 export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
   const recent = normalizeRecentSongs(recentSongs);
-  const fingerprint = createSongFingerprint(song);
+  const normalizedRegister = applyDawRegisterPolicy(
+    song?.tracks ?? [],
+    song?.structure ?? song?.sections ?? [],
+  );
+  const fingerprint = createSongFingerprint({
+    ...song,
+    tracks: normalizedRegister.tracks,
+  });
   if (!recent.length) {
     return {
       version: 1,
@@ -10650,21 +10650,17 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
   const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
-  const registerOutcome = evaluateDawRegisterQuality(candidate?.song);
-  const registerOutcomePassed = Boolean(registerOutcome.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
     && balance.aspirational
     && diversityPassed
-    && sectionOutcomePassed
-    && registerOutcomePassed;
+    && sectionOutcomePassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
     && balance.passed
     && diversityPassed
-    && sectionOutcomePassed
-    && registerOutcomePassed;
+    && sectionOutcomePassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10677,11 +10673,9 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
             ? "diversity-below-gate"
             : !sectionOutcomePassed
               ? "section-outcome-below-gate"
-              : !registerOutcomePassed
-                ? "register-outcome-below-gate"
-                : "release-ready";
+              : "release-ready";
   return {
-    version: 3,
+    version: 2,
     generation,
     passed,
     status,
@@ -10700,11 +10694,6 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
     sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
     sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
-    registerOutcomePassed,
-    registerOutcomeScore: finite(registerOutcome.score, 0),
-    registerRangeViolations: finite(registerOutcome.rangeViolations, 0),
-    registerSeparationViolations: finite(registerOutcome.separationViolations, 0),
-    randomOctaveLeaps: finite(registerOutcome.randomOctaveLeaps, 0),
     adaptiveTarget,
   };
 }
@@ -12314,7 +12303,6 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
-        || Number(rightOutcome.registerOutcomePassed) - Number(leftOutcome.registerOutcomePassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
@@ -12332,8 +12320,24 @@ function commitCandidate(candidates, search = {}) {
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
+  const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
+  const dawRegister = applyDawRegisterPolicy(selected.song.tracks, selected.song.structure ?? selected.song.sections ?? []);
+  selected.song.tracks = dawRegister.tracks;
+  selected.song.dawRegister = dawRegister.report;
   const registerOutcome = evaluateDawRegisterQuality(selected.song);
-  const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
+  const outputOutcome = {
+    ...baseOutputOutcome,
+    version: 3,
+    registerOutcomePassed: registerOutcome.passed,
+    registerOutcomeScore: registerOutcome.score,
+    registerRangeViolations: registerOutcome.rangeViolations,
+    registerSeparationViolations: registerOutcome.separationViolations,
+    randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
+    passed: baseOutputOutcome.passed && registerOutcome.passed,
+    status: baseOutputOutcome.status === "release-ready" && !registerOutcome.passed
+      ? "register-outcome-below-gate"
+      : baseOutputOutcome.status,
+  };
   const criticRepair = search.criticRepair ?? {
     phase: 20,
     enabled: Boolean(search.targetedRepair),
@@ -12879,12 +12883,6 @@ function runTargetedCriticRepair(candidates, {
       summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
     }
     const assessRepair = (candidateSong) => {
-      const dawRegister = applyDawRegisterPolicy(
-        candidateSong.tracks,
-        candidateSong.structure ?? candidateSong.sections ?? [],
-      );
-      candidateSong.tracks = dawRegister.tracks;
-      candidateSong.dawRegister = dawRegister.report;
       candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
       const evaluation = evaluateSongCandidate(candidateSong);
       const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
