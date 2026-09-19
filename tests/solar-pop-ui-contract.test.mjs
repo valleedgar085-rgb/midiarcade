@@ -44,3 +44,20 @@ test("Solar Pop adds a per-file cap without increasing the prior aggregate CSS c
   assert.match(buildQuality, /aggregateCssBudget = \(150 \+ 16 \+ 16\) \* 1024/);
   assert.match(buildQuality, /aggregateCssBytes > aggregateCssBudget/);
 });
+
+test("Create polish defines a scoped soda-pop red accent and stronger visual hierarchy", () => {
+  assert.match(css, /--soda-pop-red:#f23846/);
+  assert.match(css, /#tab-create \.song-showcase\{[\s\S]*?border-top:3px solid var\(--soda-pop-red\)/);
+  assert.match(css, /#tab-create \.song-showcase:after\{[\s\S]*?radial-gradient/);
+  assert.match(css, /#preGenSection \.genre-direction\{[\s\S]*?border-left:4px solid var\(--soda-pop-red\)/);
+  assert.match(css, /#preGenSection \.generation-new\{[\s\S]*?var\(--soda-pop-red\)/);
+});
+
+
+test("Create polish keeps the workflow order legible and carries soda-pop red through interaction states", () => {
+  assert.match(css, /#tab-create>\.create-console\{order:1;display:flex;flex-direction:column;gap:24px\}/);
+  assert.match(css, /#tab-create>\.create-console>#preGenSection\{order:2\}/);
+  assert.match(css, /#tab-create>\.create-console>\.workflow-panel\{order:3\}/);
+  assert.match(css, /#tab-create :is\(button,select,input\):focus-visible\{[\s\S]*?var\(--soda-pop-red\)/);
+  assert.match(css, /#tab-create :is\(\.showcase-action,\.generation-button\):active\{[\s\S]*?translateY\(1px\)/);
+});
