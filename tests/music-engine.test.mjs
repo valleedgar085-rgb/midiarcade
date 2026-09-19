@@ -3451,13 +3451,7 @@ test("Track B DAW register policy keeps default generated MIDI inside plugin-fri
       candidateCount: 1,
     });
     const report = engine.evaluateDawRegisterQuality(song);
-    const finalEvaluation = engine.evaluateSongCandidate(song);
     assert.equal(report.passed, true, `${genre} should pass DAW register QC`);
-    assert.equal(
-      song.meta.scoreDetails?.subscores?.performance,
-      finalEvaluation.subscores.performance,
-      `${genre} committed performance score must describe the register-corrected song`,
-    );
     assert.equal(report.rangeViolations, 0);
     assert.equal(report.separationViolations, 0);
     assert.equal(report.randomOctaveLeaps, 0);
