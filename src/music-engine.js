@@ -3263,7 +3263,7 @@ function registerBoundsForNote(trackId, section, note = null, bassFloor = null) 
   const intentShift = registerIntentShift(section, trackId, note);
   const structuralLift = intentShift > 0;
   const maximum = structuralLift ? policy.peakMax : policy.max;
-  const minimum = ["chords", "pad"].includes(trackId) && Number.isFinite(bassFloor)
+  const minimum = trackId === "chords" && Number.isFinite(bassFloor)
     ? Math.min(maximum, Math.max(policy.min, Math.round(bassFloor + 7)))
     : policy.min;
   return {
@@ -3416,7 +3416,7 @@ function recenterHarmonicRegisterTrack(track, structure, bassNotes = []) {
     for (const note of group) {
       const candidates = registerOctaveCandidates(note.pitch, bounds.min, bounds.max)
         .sort((left, right) => Math.abs(left - bounds.target) - Math.abs(right - bounds.target));
-      const selected = candidates[0] ?? clamp(note.pitch, bounds.min, bounds.max);
+      const selected = candidates[0] ?? note.pitch;
       if (selected !== note.pitch) {
         const original = note.pitch;
         note.pitch = selected;
