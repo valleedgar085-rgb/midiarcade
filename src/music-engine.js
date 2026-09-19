@@ -1076,9 +1076,11 @@ function normalizeTrack(id, input = {}, profile = GENRE_PROFILES[DEFAULT_CONFIG.
   input = input && typeof input === "object" ? input : {};
   const defaults = TRACK_DEFINITIONS[id];
   const explicitlyProgrammed = Object.prototype.hasOwnProperty.call(input, "program") && input.program != null;
+  const hasOctaveExplicitFlag = Object.prototype.hasOwnProperty.call(input, "octaveExplicit");
   const explicitlyOctaved = id !== "drums"
-    && (Boolean(input.octaveExplicit)
-      || (Object.prototype.hasOwnProperty.call(input, "octave") && input.octave != null));
+    && (hasOctaveExplicitFlag
+      ? Boolean(input.octaveExplicit)
+      : Object.prototype.hasOwnProperty.call(input, "octave") && input.octave != null);
   const palette = curateTrackProgramPalette(id, profile.instrumentPrograms[id] ?? [defaults.program], {
     limit: (profile.instrumentPrograms[id] ?? []).length || 1,
   });
