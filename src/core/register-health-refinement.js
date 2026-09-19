@@ -1,8 +1,10 @@
 import { cloneValue } from "./clone-value.js";
+import { roleRegisterWindow } from "./role-register-policy.js";
 const CANDIDATE_BLOCK_SIZES = Object.freeze([2, 3, 4]);
 const SCORE_EPSILON = 1e-6;
-const MELODY_REGISTER_FLOOR = 48;
-const MELODY_REGISTER_CEILING = 84;
+const MELODY_REGISTER = roleRegisterWindow("melody");
+const MELODY_REGISTER_FLOOR = MELODY_REGISTER.min;
+const MELODY_REGISTER_CEILING = MELODY_REGISTER.max;
 
 export const MAX_REGISTER_HEALTH_CANDIDATES = CANDIDATE_BLOCK_SIZES.length;
 export const MAX_REGISTER_HEALTH_EDITS = Math.max(...CANDIDATE_BLOCK_SIZES);
