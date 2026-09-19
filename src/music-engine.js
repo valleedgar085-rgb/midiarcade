@@ -3638,6 +3638,18 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = [], option
   return { tracks: resultTracks, report };
 }
 
+function applyDawRegisterPolicyToSong(song) {
+  if (!song || !Array.isArray(song.tracks)) return song;
+  const normalized = applyDawRegisterPolicy(
+    song.tracks,
+    song.structure ?? song.sections ?? [],
+    { genre: song.genre ?? song.meta?.genre ?? "" },
+  );
+  song.tracks = normalized.tracks;
+  song.dawRegister = normalized.report;
+  return song;
+}
+
 export function evaluateDawRegisterQuality(song) {
   const tracks = song?.tracks ?? [];
   const structure = song?.structure ?? song?.sections ?? [];
@@ -12377,13 +12389,7 @@ function commitCandidate(candidates, search = {}) {
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
   const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
-  const dawRegister = applyDawRegisterPolicy(
-    selected.song.tracks,
-    selected.song.structure ?? selected.song.sections ?? [],
-    { genre: selected.song.genre ?? selected.song.meta?.genre ?? "" },
-  );
-  selected.song.tracks = dawRegister.tracks;
-  selected.song.dawRegister = dawRegister.report;
+  applyDawRegisterPolicyToSong(selected.song);
   const registerOutcome = evaluateDawRegisterQuality(selected.song);
   const outputOutcome = {
     ...baseOutputOutcome,
@@ -12947,6 +12953,7 @@ function runTargetedCriticRepair(candidates, {
       summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
     }
     const assessRepair = (candidateSong) => {
+      applyDawRegisterPolicyToSong(candidateSong);
       candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
       const evaluation = evaluateSongCandidate(candidateSong);
       const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
@@ -13092,6 +13099,7 @@ export function generateNew(input = {}) {
       revision: 0,
       compositionRoute: routeId,
     });
+    applyDawRegisterPolicyToSong(candidateSong);
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "new");
@@ -13203,6 +13211,7 @@ export function generateSimilar(current, input = {}) {
       contextTracks: targetContextTracks,
     });
 
+    applyDawRegisterPolicyToSong(candidateSong);
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "similar");
