@@ -3344,7 +3344,7 @@ function preserveStructuralRegisterContrast(notes = [], structure = [], trackId 
   return { notes, adjusted };
 }
 
-function recenterLinearRegisterTrack(track, structure) {
+function recenterLinearRegisterTrack(track, structure, { preserveTensionContrast = false } = {}) {
   const policy = DAW_REGISTER_POLICIES[track.id];
   const notes = [...(track.notes ?? [])]
     .map((note) => ({ ...note }))
@@ -3405,7 +3405,9 @@ function recenterLinearRegisterTrack(track, structure) {
     previousSectionId = section?.id ?? null;
   }
 
-  const structuralContrast = preserveStructuralRegisterContrast(notes, structure, track.id);
+  const structuralContrast = preserveTensionContrast
+    ? preserveStructuralRegisterContrast(notes, structure, track.id)
+    : { notes, adjusted: 0 };
   adjusted += structuralContrast.adjusted;
   return {
     track: { ...track, notes: structuralContrast.notes },
@@ -3573,7 +3575,7 @@ function cleanupRegisterPitchCollisions(track) {
   };
 }
 
-export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
+export function applyDawRegisterPolicy(sourceTracks = [], structure = [], options = {}) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
@@ -3583,12 +3585,15 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
   const manualTracks = [];
   let maximumLeapBefore = 0;
   let maximumLeapAfter = 0;
+  const genre = String(options?.genre ?? "");
+  const preserveTensionContrast = options?.preserveTensionContrast === true
+    || ["neoSoul", "rnbSoul", "jazz"].includes(genre);
 
   for (const id of ["bass", "melody", "counterpoint"]) {
     const source = byId.get(id);
     if (!source) continue;
     if (source.settings?.octaveExplicit) manualTracks.push(id);
-    const result = recenterLinearRegisterTrack(source, structure);
+    const result = recenterLinearRegisterTrack(source, structure, { preserveTensionContrast });
     byId.set(id, result.track);
     adjustedByTrack[id] = result.adjusted;
     maximumLeapBefore = Math.max(maximumLeapBefore, result.maximumLeapBefore ?? 0);
@@ -10475,6 +10480,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   const normalizedRegister = applyDawRegisterPolicy(
     song?.tracks ?? [],
     song?.structure ?? song?.sections ?? [],
+    { genre: song?.genre ?? song?.meta?.genre ?? "" },
   );
   const fingerprint = createSongFingerprint({
     ...song,
@@ -12371,7 +12377,11 @@ function commitCandidate(candidates, search = {}) {
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
   const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
-  const dawRegister = applyDawRegisterPolicy(selected.song.tracks, selected.song.structure ?? selected.song.sections ?? []);
+  const dawRegister = applyDawRegisterPolicy(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    { genre: selected.song.genre ?? selected.song.meta?.genre ?? "" },
+  );
   selected.song.tracks = dawRegister.tracks;
   selected.song.dawRegister = dawRegister.report;
   const registerOutcome = evaluateDawRegisterQuality(selected.song);
@@ -12448,7 +12458,11 @@ function commitCandidate(candidates, search = {}) {
       const sectionOutcome = candidate.sectionOutcome ?? evaluateSectionOutcomeQuality(song);
       const candidateBalance = evaluateCandidateBalance(evaluation);
       const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome }, song.generation);
-      const registerPreview = applyDawRegisterPolicy(song.tracks, song.structure ?? song.sections ?? []);
+      const registerPreview = applyDawRegisterPolicy(
+        song.tracks,
+        song.structure ?? song.sections ?? [],
+        { genre: song.genre ?? song.meta?.genre ?? "" },
+      );
       const registerOutcome = evaluateDawRegisterQuality({ ...song, tracks: registerPreview.tracks });
       return {
         index,
