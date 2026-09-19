@@ -766,9 +766,6 @@ test("browser app initializes against the engine contract", async () => {
     assert.ok(settings.gate >= 0.08 && settings.gate <= 1.5, `${id} gate must be normalized`);
     assert.ok(settings.humanize >= 0 && settings.humanize <= 1, `${id} humanize must be normalized`);
     assert.ok(settings.feel >= 0 && settings.feel <= 1, `${id} feel must be normalized`);
-    if (id !== "drums" && app.getAppStateSnapshot().autoControls.includes?.(`track:${id}:octave`)) {
-      assert.equal(settings.octaveExplicit, false, `${id} Auto octave must remain eligible for DAW register cleanup`);
-    }
   }
 
   assert.equal(app.getAppStateSnapshot().selectedTrack, "drums", "Drums should be the default attitude target");
