@@ -2200,7 +2200,6 @@ function applySongBlueprint(structure, blueprint) {
         energy: plan.energy,
         tension: plan.tension,
         density: plan.density,
-        registerLift: plan.registerLift,
         cadence: plan.cadence,
         motifTransform: plan.motifTransform,
         harmonicRole: plan.harmonicRole,
@@ -3676,7 +3675,7 @@ function shapeRenderedMelodicFlow(sourceTracks, structure) {
     }
     const candidates = [-24, -12, 0, 12, 24]
       .map((offset) => originalPitch + offset)
-      .filter((pitch) => pitch >= DAW_REGISTER_POLICIES.melody.min && pitch <= DAW_REGISTER_POLICIES.melody.peakMax);
+      .filter((pitch) => pitch >= 48 && pitch <= 96);
     candidates.sort((left, right) => {
       const score = (pitch) => {
         const motion = pitch - previous.pitch;
@@ -4940,7 +4939,7 @@ function generateBass(
   if (settings.density <= 0.001) return notes;
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
-  const bassOctave = settings.octave;
+  const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -5158,7 +5157,9 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
 
     const nextChord = harmonyAt(harmony, Math.min(totalBeats - 0.02, boundary + 0.01));
     if (!nextChord) continue;
-    const bassOctave = config.tracks.bass.octave;
+    const bassOctave = config.genre === "trap"
+      ? Math.max(0, config.tracks.bass.octave - 1)
+      : config.tracks.bass.octave;
     const destination = rootMidi(nextChord, bassOctave);
     const candidates = bass
       .filter((note) => note.start >= boundary - 1.0 && note.start < boundary - 0.04)
@@ -5228,23 +5229,11 @@ function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCei
     pad: 4,
   }[trackId] ?? 5;
   const pitch = baseOctave * 12 + pc;
-  if (trackId === "bass") return clamp(pitch, DAW_REGISTER_POLICIES.bass.min, DAW_REGISTER_POLICIES.bass.max);
-  if (trackId === "pad") return clamp(
-    pitch,
-    bassCeiling != null ? Math.max(DAW_REGISTER_POLICIES.pad.min, bassCeiling + 7) : DAW_REGISTER_POLICIES.pad.min,
-    DAW_REGISTER_POLICIES.pad.peakMax,
-  );
-  if (trackId === "chords") return clamp(
-    pitch,
-    bassCeiling != null ? Math.max(DAW_REGISTER_POLICIES.chords.min, bassCeiling + 7) : DAW_REGISTER_POLICIES.chords.min,
-    DAW_REGISTER_POLICIES.chords.peakMax,
-  );
-  if (trackId === "counterpoint") return clamp(
-    pitch,
-    DAW_REGISTER_POLICIES.counterpoint.min,
-    DAW_REGISTER_POLICIES.counterpoint.peakMax,
-  );
-  return clamp(pitch, DAW_REGISTER_POLICIES.melody.min, DAW_REGISTER_POLICIES.melody.peakMax);
+  if (trackId === "bass") return clamp(pitch, 34, 64);
+  if (trackId === "pad") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48, 92);
+  if (trackId === "chords") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 50, 86);
+  if (trackId === "counterpoint") return clamp(pitch, 60, 96);
+  return clamp(pitch, 62, 103);
 }
 
 function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, rng) {
@@ -7820,8 +7809,8 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
       const target = nearestPitchClass(
         note.pitch,
         targetClasses,
-        id === "bass" ? DAW_REGISTER_POLICIES.bass.min : DAW_REGISTER_POLICIES.melody.min,
-        id === "bass" ? DAW_REGISTER_POLICIES.bass.max : DAW_REGISTER_POLICIES.melody.peakMax,
+        id === "bass" ? 28 : 55,
+        id === "bass" ? 59 : 96,
       );
       if (target !== note.pitch) {
         note.pitch = target;
@@ -9351,8 +9340,7 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  const finalDawRegister = applyDawRegisterPolicy(finalGrooveAssembly.tracks, structure);
-  let tracks = finalDawRegister.tracks;
+  let tracks = finalGrooveAssembly.tracks;
   if (targetTrack === "drums" && contextTracks.bass?.length) {
     const finalDrumTrack = tracks.find((track) => track.id === "drums");
     if (finalDrumTrack) {
@@ -9457,7 +9445,6 @@ function compose(config, options = {}) {
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
     melodicDialogue: melodicDialogue.report,
-    dawRegister: finalDawRegister.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     vocalSpace: creativePolish.vocalSpace,
@@ -10633,21 +10620,17 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
   const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
-  const registerOutcome = candidate?.registerOutcome ?? evaluateDawRegisterQuality(candidate?.song);
-  const registerOutcomePassed = Boolean(registerOutcome.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
     && balance.aspirational
     && diversityPassed
-    && sectionOutcomePassed
-    && registerOutcomePassed;
+    && sectionOutcomePassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
     && balance.passed
     && diversityPassed
-    && sectionOutcomePassed
-    && registerOutcomePassed;
+    && sectionOutcomePassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10660,11 +10643,9 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
             ? "diversity-below-gate"
             : !sectionOutcomePassed
               ? "section-outcome-below-gate"
-              : !registerOutcomePassed
-                ? "register-outcome-below-gate"
-                : "release-ready";
+              : "release-ready";
   return {
-    version: 3,
+    version: 2,
     generation,
     passed,
     status,
@@ -10683,15 +10664,9 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
     sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
     sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
-    registerOutcomePassed,
-    registerOutcomeScore: finite(registerOutcome.score, 100),
-    registerRangeViolations: finite(registerOutcome.rangeViolations, 0),
-    registerSeparationViolations: finite(registerOutcome.separationViolations, 0),
-    randomOctaveLeaps: finite(registerOutcome.randomOctaveLeaps, 0),
     adaptiveTarget,
   };
 }
-
 function candidateMeetsAdaptiveTarget(candidate, generation) {
   return evaluateCandidateOutcome(candidate, generation).adaptiveTarget;
 }
@@ -10723,7 +10698,6 @@ function sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation) 
     || !outcome.qualityPassed
     || !outcome.balancePassed
     || !outcome.diversityPassed
-    || !outcome.registerOutcomePassed
   ) return null;
   const sectionOutcome = sourceCandidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(sourceCandidate?.song);
   const weakestPair = sectionOutcome.weakestPair ?? {};
@@ -12008,8 +11982,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
-  const repairedDawRegister = applyDawRegisterPolicy(repairedFinalGrooveAssembly.tracks, song.structure);
-  song.tracks = repairedDawRegister.tracks;
+  song.tracks = repairedFinalGrooveAssembly.tracks;
   if (repairStrategy?.dimension === "performance") {
     const performanceRepair = rebalanceRepairPerformance(song);
     song.tracks = performanceRepair.tracks;
@@ -12040,7 +12013,6 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   song.perceptualMix = perceptualMix.report;
   song.spectrumPlan = spectrumPlan;
   song.voiceLeading = creativePolish.voiceLeading;
-  song.dawRegister = repairedDawRegister.report;
   song.pocketCohesion = creativePolish.pocketCohesion;
   song.negativeSpace = creativePolish.negativeSpace;
   song.vocalSpace = creativePolish.vocalSpace;
@@ -12301,7 +12273,6 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
-        || Number(rightOutcome.registerOutcomePassed) - Number(leftOutcome.registerOutcomePassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
