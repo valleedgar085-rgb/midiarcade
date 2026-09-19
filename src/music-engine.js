@@ -10275,6 +10275,45 @@ export function chooseDiversityExpansionRoute(candidateRoutes = [], sourceRoute 
   ))[0] ?? routeIds[0];
 }
 
+function sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation) {
+  const outcome = evaluateCandidateOutcome(sourceCandidate, generation);
+  if (
+    outcome.sectionOutcomePassed
+    || !outcome.releasePassed
+    || !outcome.qualityPassed
+    || !outcome.balancePassed
+    || !outcome.diversityPassed
+  ) return null;
+  const sectionOutcome = sourceCandidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(sourceCandidate?.song);
+  const weakestPair = sectionOutcome.weakestPair ?? {};
+  const destinationPurpose = String(weakestPair.toPurpose ?? "");
+  const preferredRoute = ["payoff", "spotlight"].includes(destinationPurpose)
+    ? "hook-first"
+    : ["build", "develop"].includes(destinationPurpose)
+      ? "groove-first"
+      : ["contrast", "reset", "resolve"].includes(destinationPurpose)
+        ? "harmony-first"
+        : chooseDiversityExpansionRoute(
+          candidates.map((candidate) => candidate?.song?.compositionRoute?.id).filter(Boolean),
+          sourceCandidate?.song?.compositionRoute?.id ?? null,
+        );
+  return {
+    version: 3,
+    group: "section-outcome",
+    route: preferredRoute,
+    weakestDimension: "sectionContrast",
+    weakestScore: Math.max(0, 100 - Math.round(finite(sectionOutcome.score, 0))),
+    primaryGroup: "section-outcome",
+    primaryDimension: "sectionContrast",
+    diversified: preferredRoute !== sourceCandidate?.song?.compositionRoute?.id,
+    sourceCandidate: sourceCandidate.index,
+    observedAfterCandidates: candidates.length,
+    reason: "section-outcome-only-blocker",
+    sectionOutcomeScore: finite(sectionOutcome.score, 0),
+    weakestPair: clone(weakestPair),
+  };
+}
+
 function diversityOnlySearchFocus(sourceCandidate, candidates, generation) {
   const outcome = evaluateCandidateOutcome(sourceCandidate, generation);
   if (
@@ -10315,6 +10354,22 @@ function updateCandidateSearchFocus(search, candidates, generation) {
   }
   const sourceCandidate = rankCandidates(candidates)[0];
   if (!sourceCandidate) return null;
+  const sectionFocus = sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation);
+  if (sectionFocus) {
+    search.weaknessFocus = sectionFocus;
+    const history = Array.isArray(search.weaknessHistory) ? search.weaknessHistory : [];
+    const previous = history[history.length - 1];
+    if (
+      !previous
+      || previous.group !== sectionFocus.group
+      || previous.route !== sectionFocus.route
+      || previous.sourceCandidate !== sectionFocus.sourceCandidate
+      || previous.weakestPair?.fromSectionId !== sectionFocus.weakestPair?.fromSectionId
+      || previous.weakestPair?.toSectionId !== sectionFocus.weakestPair?.toSectionId
+    ) history.push(sectionFocus);
+    search.weaknessHistory = history.slice(-4);
+    return sectionFocus;
+  }
   const diversityFocus = diversityOnlySearchFocus(sourceCandidate, candidates, generation);
   if (diversityFocus) {
     search.weaknessFocus = diversityFocus;
