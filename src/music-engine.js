@@ -11662,19 +11662,19 @@ function commitCandidate(candidates, search = {}) {
     { id: "composition-routes", status: "complete", route: selected.song.compositionRoute?.id ?? "harmony-first" },
     { id: "comparative-novelty", status: "complete", compared: selected.novelty?.compared ?? 0 },
     {
-      id: "output-diversity-qc",
-      status: outputOutcome.diversityPassed ? "passed" : "best-available",
-      score: diversity.score,
-      identitySimilarity: diversity.identitySimilarity,
-      nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
-    },
-    {
       id: "balanced-candidate-search",
       status: balance.passed ? "passed" : "best-available",
       candidatesEvaluated: candidates.length,
       expandedBy: selected.song.meta.scoreDetails.candidateSearch.expandedBy,
       balanceScore: balance.balanceScore,
       creativeFloor: balance.creativeFloor,
+    },
+    {
+      id: "output-diversity-qc",
+      status: outputOutcome.diversityPassed ? "passed" : "best-available",
+      score: diversity.score,
+      identitySimilarity: diversity.identitySimilarity,
+      nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
     },
     {
       id: "targeted-critic-repair",
