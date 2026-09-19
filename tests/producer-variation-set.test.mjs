@@ -262,6 +262,24 @@ test("Elements reject piercing upper-register auditions before selection", () =>
   assert.equal(variations[0].variationSet.selectedAudition, 1);
 });
 
+test("Elements preserve accepted Shape register authority but reject a worse high outlier", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const source = sourceSong();
+  source.tracks.find((track) => track.id === "melody").notes = [
+    { pitch: 88, start: 0, duration: 0.5, velocity: 88 },
+  ];
+  const inherited = scoreSong({ id: "inherited-high", overall: 90, role: 92, releasePassed: true }, direction);
+  inherited.tracks.find((track) => track.id === "melody").notes[0].pitch = 88;
+  const worse = structuredClone(inherited);
+  worse.id = "worse-high";
+  worse.tracks.find((track) => track.id === "melody").notes[0].pitch = 96;
+
+  const inheritedAssessment = producerVariationDirectionAssessment(inherited, direction, { sourceSong: source });
+  const worseAssessment = producerVariationDirectionAssessment(worse, direction, { sourceSong: source });
+  assert.equal(inheritedAssessment.registerSafe, true);
+  assert.equal(worseAssessment.registerSafe, false);
+});
+
 test("Elements fail closed when every audition exceeds a role register ceiling", () => {
   const direction = ELEMENT_PROFILES[0];
   const high = scoreSong({ id: "all-high", overall: 99, role: 99, releasePassed: true }, direction);
