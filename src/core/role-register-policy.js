@@ -1,13 +1,22 @@
 export const ROLE_REGISTER_WINDOWS = Object.freeze({
-  bass: Object.freeze({ min: 28, max: 55 }),
-  chords: Object.freeze({ min: 40, max: 79 }),
-  melody: Object.freeze({ min: 48, max: 84 }),
-  counterpoint: Object.freeze({ min: 48, max: 84 }),
-  pad: Object.freeze({ min: 36, max: 79 }),
+  bass: Object.freeze({ min: 28, max: 55, preferredMin: 35, preferredMax: 52 }),
+  chords: Object.freeze({ min: 40, max: 79, preferredMin: 48, preferredMax: 72 }),
+  melody: Object.freeze({ min: 48, max: 84, preferredMin: 57, preferredMax: 79 }),
+  counterpoint: Object.freeze({ min: 48, max: 84, preferredMin: 55, preferredMax: 79 }),
+  pad: Object.freeze({ min: 36, max: 79, preferredMin: 43, preferredMax: 72 }),
 });
 
 export function roleRegisterWindow(trackId) {
   return ROLE_REGISTER_WINDOWS[String(trackId ?? "")] ?? null;
+}
+
+export function rolePreferredRegisterWindow(trackId) {
+  const window = roleRegisterWindow(trackId);
+  if (!window) return null;
+  return Object.freeze({
+    min: window.preferredMin ?? window.min,
+    max: window.preferredMax ?? window.max,
+  });
 }
 
 export function roleRegisterViolations(song, {

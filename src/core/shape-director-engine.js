@@ -3,6 +3,7 @@ import { createShapeIntent } from "./shape-director-policy.js";
 import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
 import { hash32 } from "./deterministic-rng.js";
 import { cloneValue } from "./clone-value.js";
+import { roleRegisterWindow } from "./role-register-policy.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -131,10 +132,13 @@ function nudgeWithinSection(note, amount, range) {
   setEventStart(note, Number(next.toFixed(5)));
 }
 
-function shiftOctave(note, direction) {
+function shiftOctave(note, direction, trackId = null) {
   const pitch = eventPitch(note);
   const shifted = pitch + Math.sign(direction) * 12;
-  if (shifted < 0 || shifted > 127) return false;
+  const window = roleRegisterWindow(trackId);
+  const minimum = window?.min ?? 0;
+  const maximum = window?.max ?? 127;
+  if (shifted < minimum || shifted > maximum) return false;
   setEventPitch(note, shifted);
   return true;
 }
@@ -180,12 +184,12 @@ function applyDirection(candidate, intent, eligible, seed) {
   } else if (direction === "harder") {
     selected.forEach((entry) => {
       raiseVelocity(entry, 10 + Math.round(strength * 18));
-      if (canChangePitch(entry, locks) && ["melody", "counterpoint"].includes(entry.trackId) && strength > 0.4) shiftOctave(entry.note, 1);
+      if (canChangePitch(entry, locks) && ["melody", "counterpoint"].includes(entry.trackId) && strength > 0.4) shiftOctave(entry.note, 1, entry.trackId);
       if (rhythmUnlocked) setEventDuration(entry.note, eventDuration(entry.note) * (0.96 - strength * 0.12));
     });
   } else if (direction === "darker" || direction === "brighter") {
     selected.forEach((entry) => {
-      if (canChangePitch(entry, locks) && entry.trackId !== "drums" && shiftOctave(entry.note, direction === "darker" ? -1 : 1)) mark(entry);
+      if (canChangePitch(entry, locks) && entry.trackId !== "drums" && shiftOctave(entry.note, direction === "darker" ? -1 : 1, entry.trackId)) mark(entry);
       if (direction === "darker") raiseVelocity(entry, -4);
       else raiseVelocity(entry, 4);
     });
@@ -203,7 +207,7 @@ function applyDirection(candidate, intent, eligible, seed) {
       const contour = index % 3 === 0 ? 12 : index % 3 === 1 ? 4 : -2;
       raiseVelocity(entry, contour);
       if (canChangePitch(entry, locks) && ["melody", "counterpoint"].includes(entry.trackId) && strength > 0.65 && index % 4 === 0) {
-        if (shiftOctave(entry.note, 1)) mark(entry);
+        if (shiftOctave(entry.note, 1, entry.trackId)) mark(entry);
       }
       if (rhythmUnlocked) setEventDuration(entry.note, Math.min(eligible.range.end - eventStart(entry.note), eventDuration(entry.note) * (1.04 + strength * 0.18)));
     });

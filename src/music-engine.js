@@ -33,6 +33,9 @@ import {
   pickGenreRhythmTemplate,
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
+import { refineTonalIntegrity } from "./core/tonal-integrity.js";
+import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { refineRoleRegisters } from "./core/role-register-refinement.js";
 
 export const PPQ = 480;
 
@@ -8948,7 +8951,22 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  let tracks = finalGrooveAssembly.tracks;
+  const tonalIntegrity = refineTonalIntegrity(
+    finalGrooveAssembly.tracks,
+    harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    structure,
+  );
+  produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
+  produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
+  produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
+  let tracks = tonalIntegrity.tracks;
   if (targetTrack === "drums" && contextTracks.bass?.length) {
     const finalDrumTrack = tracks.find((track) => track.id === "drums");
     if (finalDrumTrack) {
@@ -9071,6 +9089,7 @@ function compose(config, options = {}) {
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
+    tonalIntegrity: tonalIntegrity.report,
     spectrumPlan,
     generationInterlock,
     tracks,
@@ -9952,6 +9971,21 @@ export function createSongFingerprint(song) {
     melody: notePattern("melody"),
     counterpoint: notePattern("counterpoint"),
     orchestration,
+  };
+}
+
+function normalizedSongForIdentity(song, {
+  releaseMelodyMax = 70,
+  releaseCounterpointMax = 68,
+} = {}) {
+  const registerIntegrity = refineRoleRegisters(song?.tracks ?? [], song?.structure ?? [], {
+    releaseMelodyMax,
+    releaseCounterpointMax,
+  });
+  return {
+    ...song,
+    tracks: registerIntegrity.tracks,
+    registerIntegrity: registerIntegrity.report,
   };
 }
 
@@ -11591,7 +11625,23 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
-  song.tracks = repairedFinalGrooveAssembly.tracks;
+  const repairedTonalIntegrity = refineTonalIntegrity(
+    repairedFinalGrooveAssembly.tracks,
+    song.harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    song.structure,
+  );
+  song.tracks = repairedTonalIntegrity.tracks;
+  song.tonalIntegrity = repairedTonalIntegrity.report;
+  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
+  produced.report.metrics.strongChordFit = repairedTonalIntegrity.report.after.strongChordFit;
+  produced.report.checks.finalScaleSafety = repairedTonalIntegrity.report.after.scaleFit >= 0.999999;
   if (repairStrategy?.dimension === "performance") {
     const performanceRepair = rebalanceRepairPerformance(song);
     song.tracks = performanceRepair.tracks;
@@ -12061,6 +12111,33 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
   ];
+  const committedRegister = refineRoleRegisters(selected.song.tracks, selected.song.structure, {
+    releaseMelodyMax: 70,
+    releaseCounterpointMax: 68,
+  });
+  selected.song.tracks = committedRegister.tracks;
+  selected.song.registerIntegrity = committedRegister.report;
+  selected.song.producerPass = {
+    ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
+    repairs: {
+      ...(selected.song.producerPass?.repairs ?? {}),
+      registerCorrections: committedRegister.report.corrections,
+      registerCorrectionsByTrack: committedRegister.report.correctionsByTrack,
+      registerSeparationCorrections: committedRegister.report.separationCorrections ?? 0,
+    },
+  };
+  const committedRegisterEvaluation = evaluateSongCandidate(selected.song);
+  const committedRegisterRelease = evaluateSongReleaseGate(selected.song, committedRegisterEvaluation);
+  selected.song.meta.scoreDetails.registerIntegrity = {
+    corrections: committedRegister.report.corrections,
+    hardViolations: committedRegister.report.after.hardViolations,
+    preferredViolations: committedRegister.report.after.preferredViolations,
+    registerHealth: committedRegisterEvaluation.subscores?.registerHealth ?? null,
+    separation: committedRegisterEvaluation.subscores?.separation ?? null,
+    releasePassed: committedRegisterRelease.passed,
+    releaseFailures: clone(committedRegisterRelease.failures ?? []),
+  };
+  selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
 
@@ -12428,9 +12505,13 @@ function runTargetedCriticRepair(candidates, {
       summary.surgicalWindows.push(clone(surgicalSong.criticRepair.surgicalWindow));
     }
     const assessRepair = (candidateSong) => {
-      candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
+      const identitySong = normalizedSongForIdentity(candidateSong, {
+        releaseMelodyMax: 76,
+        releaseCounterpointMax: 74,
+      });
+      candidateSong.meta.ideaFingerprint = createSongFingerprint(identitySong);
       const evaluation = evaluateSongCandidate(candidateSong);
-      const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
+      const novelty = evaluateSongNovelty(identitySong, recentSongs, generation);
       const diversity = diversityReportFromNovelty(novelty, generation);
       const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
       candidateSong.criticRepair.weakestScoreAfter = finite(
@@ -12573,9 +12654,10 @@ export function generateNew(input = {}) {
       revision: 0,
       compositionRoute: routeId,
     });
-    candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
+    const identitySong = normalizedSongForIdentity(candidateSong);
+    candidateSong.meta.ideaFingerprint = createSongFingerprint(identitySong);
     const evaluation = evaluateSongCandidate(candidateSong);
-    const novelty = evaluateSongNovelty(candidateSong, recentSongs, "new");
+    const novelty = evaluateSongNovelty(identitySong, recentSongs, "new");
     const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
@@ -12684,9 +12766,10 @@ export function generateSimilar(current, input = {}) {
       contextTracks: targetContextTracks,
     });
 
-    candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
+    const identitySong = normalizedSongForIdentity(candidateSong);
+    candidateSong.meta.ideaFingerprint = createSongFingerprint(identitySong);
     const evaluation = evaluateSongCandidate(candidateSong);
-    const novelty = evaluateSongNovelty(candidateSong, recentSongs, "similar");
+    const novelty = evaluateSongNovelty(identitySong, recentSongs, "similar");
     const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
@@ -13106,7 +13189,7 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
       const phrasePerformance = renderPhrasePerformance(note);
-      const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
+      const pitch = canonicalMidiPitch(note.pitch);
       const velocity = clamp(Math.round(
         (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
       ), 1, 127);
