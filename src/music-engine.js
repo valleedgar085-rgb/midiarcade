@@ -35,7 +35,6 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
-import { roleRegisterWindow } from "./core/role-register-policy.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 
 export const PPQ = 480;
@@ -3277,10 +3276,9 @@ function shapeRenderedMelodicFlow(sourceTracks, structure) {
       previousSectionId = section?.id ?? null;
       continue;
     }
-    const melodyWindow = roleRegisterWindow("melody") ?? { min: 48, max: 84 };
     const candidates = [-24, -12, 0, 12, 24]
       .map((offset) => originalPitch + offset)
-      .filter((pitch) => pitch >= melodyWindow.min && pitch <= melodyWindow.max);
+      .filter((pitch) => pitch >= 48 && pitch <= 96);
     candidates.sort((left, right) => {
       const score = (pitch) => {
         const motion = pitch - previous.pitch;
@@ -4544,7 +4542,7 @@ function generateBass(
   if (settings.density <= 0.001) return notes;
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
-  const bassOctave = settings.octave;
+  const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -6624,8 +6622,7 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
         && candidate.start < note.start + note.duration
       ));
       const bassCeiling = soundingBass.length ? Math.max(...soundingBass.map((candidate) => candidate.pitch)) : null;
-      const registerCeiling = roleRegisterWindow(id)?.max ?? 127;
-      if (bassCeiling != null && note.pitch - bassCeiling < 7 && note.pitch + 12 <= registerCeiling) {
+      if (bassCeiling != null && note.pitch - bassCeiling < 7 && note.pitch <= 115) {
         note.pitch += 12;
         repairs.registerCollisionsLifted += 1;
       }
@@ -7116,8 +7113,7 @@ function runVoiceLeadingPass(sourceTracks, config) {
         ? Math.max(...soundingBass.map((note) => note.pitch))
         : null;
       const minimum = id === "pad" ? 48 : bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48;
-      const registerWindow = roleRegisterWindow(id);
-      const maximum = Math.max(minimum, registerWindow?.max ?? (id === "pad" ? 79 : 79));
+      const maximum = id === "pad" ? 108 : 103;
       const chordPitches = id === "pad"
         ? new Set(chords.filter((note) => (
           Math.abs(note.start - notes[0].start) < 0.08
@@ -7421,12 +7417,11 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
       const targetClasses = id === "bass" || plan.cadence === "resolve"
         ? [goal.rootPc]
         : goal.tones;
-      const registerWindow = roleRegisterWindow(id);
       const target = nearestPitchClass(
         note.pitch,
         targetClasses,
-        registerWindow?.min ?? (id === "bass" ? 28 : 55),
-        registerWindow?.max ?? (id === "bass" ? 55 : 84),
+        id === "bass" ? 28 : 55,
+        id === "bass" ? 59 : 96,
       );
       if (target !== note.pitch) {
         note.pitch = target;
@@ -8956,9 +8951,8 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  const registerIntegrity = refineRoleRegisters(finalGrooveAssembly.tracks, structure);
   const tonalIntegrity = refineTonalIntegrity(
-    registerIntegrity.tracks,
+    finalGrooveAssembly.tracks,
     harmony,
     {
       keyPc: config.keyPc,
@@ -8967,8 +8961,6 @@ function compose(config, options = {}) {
     },
     structure,
   );
-  produced.report.repairs.registerCorrections = registerIntegrity.report.corrections;
-  produced.report.repairs.registerCorrectionsByTrack = registerIntegrity.report.correctionsByTrack;
   produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
   produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
@@ -9097,7 +9089,6 @@ function compose(config, options = {}) {
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
-    registerIntegrity: registerIntegrity.report,
     tonalIntegrity: tonalIntegrity.report,
     spectrumPlan,
     generationInterlock,
@@ -11619,9 +11610,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
-  const repairedRegisterIntegrity = refineRoleRegisters(repairedFinalGrooveAssembly.tracks, song.structure);
   const repairedTonalIntegrity = refineTonalIntegrity(
-    repairedRegisterIntegrity.tracks,
+    repairedFinalGrooveAssembly.tracks,
     song.harmony,
     {
       keyPc: config.keyPc,
@@ -11631,10 +11621,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
   );
   song.tracks = repairedTonalIntegrity.tracks;
-  song.registerIntegrity = repairedRegisterIntegrity.report;
   song.tonalIntegrity = repairedTonalIntegrity.report;
-  produced.report.repairs.registerCorrections = repairedRegisterIntegrity.report.corrections;
-  produced.report.repairs.registerCorrectionsByTrack = repairedRegisterIntegrity.report.correctionsByTrack;
   produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
   produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
   produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
@@ -12109,6 +12096,30 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
   ];
+  const committedRegister = refineRoleRegisters(selected.song.tracks, selected.song.structure);
+  selected.song.tracks = committedRegister.tracks;
+  selected.song.registerIntegrity = committedRegister.report;
+  selected.song.producerPass = {
+    ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
+    repairs: {
+      ...(selected.song.producerPass?.repairs ?? {}),
+      registerCorrections: committedRegister.report.corrections,
+      registerCorrectionsByTrack: committedRegister.report.correctionsByTrack,
+      registerSeparationCorrections: committedRegister.report.separationCorrections ?? 0,
+    },
+  };
+  const committedRegisterEvaluation = evaluateSongCandidate(selected.song);
+  const committedRegisterRelease = evaluateSongReleaseGate(selected.song, committedRegisterEvaluation);
+  selected.song.meta.scoreDetails.registerIntegrity = {
+    corrections: committedRegister.report.corrections,
+    hardViolations: committedRegister.report.after.hardViolations,
+    preferredViolations: committedRegister.report.after.preferredViolations,
+    registerHealth: committedRegisterEvaluation.subscores?.registerHealth ?? null,
+    separation: committedRegisterEvaluation.subscores?.separation ?? null,
+    releasePassed: committedRegisterRelease.passed,
+    releaseFailures: clone(committedRegisterRelease.failures ?? []),
+  };
+  selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
 
