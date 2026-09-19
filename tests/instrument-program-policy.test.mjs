@@ -68,3 +68,29 @@ test("candidate ranking penalizes family collisions with companion lead lanes", 
   assert.equal(ranked[0], 11);
   assert.ok(companionTrackIds("counterpoint").includes("melody"));
 });
+
+
+test("melody ranking avoids stacking multiple bright foreground families when a smoother role-safe voice is available", () => {
+  const ranked = rankAutoProgramCandidates({
+    trackId: "melody",
+    currentProgram: 85,
+    genrePrograms: [80, 82, 73],
+    fallbackPrograms: [26, 40, 68],
+    companionProgramsByTrack: { counterpoint: 81, chords: 4, pad: 89 },
+    explore: false,
+    seed: "foreground-spectral-spacing",
+    getCharacter: (program) => ({ 80: "synth", 82: "digital", 73: "air", 85: "voice" }[program] ?? ""),
+  });
+  assert.equal(ranked[0], 73);
+  assert.ok(ranked.indexOf(73) < ranked.indexOf(80));
+  assert.ok(ranked.indexOf(73) < ranked.indexOf(82));
+});
+
+test("foreground palettes keep four distinct role-safe families available for deterministic song-to-song color changes", () => {
+  const melody = curateTrackProgramPalette("melody", [85, 73, 26, 40, 80, 82], { limit: 4 });
+  const counterpoint = curateTrackProgramPalette("counterpoint", [11, 73, 53, 25, 40, 80], { limit: 4 });
+  assert.equal(melody.length, 4);
+  assert.equal(counterpoint.length, 4);
+  assert.equal(new Set(melody.map((program) => programFamilyForTrack("melody", program))).size, 4);
+  assert.equal(new Set(counterpoint.map((program) => programFamilyForTrack("counterpoint", program))).size, 4);
+});
