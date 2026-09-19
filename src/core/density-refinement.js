@@ -77,16 +77,14 @@ function weakestSectionNotesPerBar(song) {
   return values.length ? Math.min(...values) : notesPerBar(song);
 }
 
-function localSectionDensity(song, startBeat) {
-  const sections = songSections(song);
-  const densities = sectionDensityMap(song);
+function localSectionDensity(sections, densities, startBeat, fallback) {
   const section = sections.find((entry) => {
     const bounds = densities.get(entry?.id);
     return bounds
       && startBeat >= bounds.startBeat - 1e-6
       && startBeat < bounds.endBeat - 1e-6;
   });
-  return section ? densities.get(section?.id)?.notesPerBar ?? notesPerBar(song) : notesPerBar(song);
+  return section ? densities.get(section?.id)?.notesPerBar ?? fallback : fallback;
 }
 
 function protectedSupportNote(note) {
@@ -102,13 +100,16 @@ function protectedSupportNote(note) {
 
 function eligibleSplitNotes(song) {
   const trackRank = new Map(SUPPORT_TRACK_PRIORITY.map((id, index) => [id, index]));
+  const sections = songSections(song);
+  const densities = sectionDensityMap(song);
+  const fallbackDensity = notesPerBar(song);
   return (song?.tracks ?? [])
     .filter((track) => trackRank.has(track?.id))
     .flatMap((track) => (track.notes ?? []).map((note, noteIndex) => ({
       trackId: track.id,
       noteIndex,
       note,
-      localDensity: localSectionDensity(song, finite(note?.start)),
+      localDensity: localSectionDensity(sections, densities, finite(note?.start), fallbackDensity),
     })))
     .filter(({ note }) => finite(note?.duration) >= 0.5 && !protectedSupportNote(note))
     .sort((left, right) => {
