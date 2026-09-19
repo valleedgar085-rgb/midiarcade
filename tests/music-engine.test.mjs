@@ -3209,3 +3209,77 @@ test("multi-seed generation produces dynamic arrangement variety without note-le
   const titles = new Set(songs.map((s) => s.title));
   assert.equal(titles.size, 5, "each random seed must produce a unique title");
 });
+
+
+test("Track B diversity QC rejects a recent exact output clone without weakening quality gates", () => {
+  const source = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-source", candidateCount: 1 });
+  const clone = structuredClone(source);
+  const report = engine.evaluateSongDiversity(clone, [source], "new");
+  assert.equal(report.passed, false);
+  assert.equal(report.reason, "too-close-to-recent-output");
+  assert.ok(report.nearCloneDimensions.includes("groove"));
+  assert.ok(report.nearCloneDimensions.includes("melody"));
+});
+
+test("Track B diversity QC remains deterministic for fresh Hip-Hop output", () => {
+  const recent = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-recent", candidateCount: 1 });
+  const candidate = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-qc-candidate", candidateCount: 1 });
+  assert.deepEqual(
+    engine.evaluateSongDiversity(candidate, [recent], "new"),
+    engine.evaluateSongDiversity(candidate, [recent], "new"),
+  );
+});
+
+
+test("Track B diversity QC blocks a complete Similar clone even when novelty target score alone would pass", () => {
+  const source = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "diversity-similar-source", candidateCount: 1 });
+  const clone = structuredClone(source);
+  clone.generation = "similar";
+  clone.settings = { ...(clone.settings ?? {}), similarity: 0.82 };
+  const novelty = engine.evaluateSongNovelty(clone, [source], "similar");
+  const diversity = engine.evaluateSongDiversity(clone, [source], "similar");
+  assert.ok(novelty.score >= 55);
+  assert.equal(diversity.passed, false);
+  assert.equal(diversity.reason, "too-close-to-recent-output");
+});
+
+
+test("Track B outcome logic keeps Producer Brain status aligned with release, quality, balance, and diversity", () => {
+  const recent = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "outcome-qc-recent", candidateCount: 1 });
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "hipHop",
+    seed: "outcome-qc-next",
+    recentSongs: [recent],
+    candidateCount: 2,
+  });
+  const details = song.meta.scoreDetails;
+  const outcome = details.outputOutcome;
+  assert.ok(outcome);
+  assert.equal(outcome.releasePassed, details.releaseGate.passed);
+  assert.equal(outcome.qualityPassed, song.meta.qualityGate.passed);
+  assert.equal(outcome.balancePassed, details.balance.passed);
+  assert.equal(outcome.diversityPassed, song.meta.diversity.passed && outcome.noveltyFloorPassed);
+  assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
+  assert.deepEqual(song.producerPass.outputOutcome, outcome);
+});
+
+test("Track B candidate diagnostics expose one coherent outcome for every auditioned candidate", () => {
+  const recent = engine.generateNew({ ...CONFIG, genre: "trap", seed: "outcome-diagnostics-recent", candidateCount: 1 });
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "outcome-diagnostics-next",
+    recentSongs: [recent],
+    candidateCount: 3,
+  });
+  const candidates = song.meta.scoreDetails.candidateScores;
+  assert.ok(candidates.length >= 3);
+  for (const candidate of candidates) {
+    assert.equal(typeof candidate.diversityPassed, "boolean");
+    assert.equal(typeof candidate.outcomePassed, "boolean");
+    assert.equal(typeof candidate.adaptiveTarget, "boolean");
+    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate/);
+    assert.ok(Array.isArray(candidate.nearCloneDimensions));
+  }
+});

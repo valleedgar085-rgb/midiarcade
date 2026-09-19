@@ -9835,6 +9835,34 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   };
 }
 
+function diversityReportFromNovelty(novelty = {}, generation = "new") {
+  const components = novelty.components ?? {};
+  const identityKeys = ["groove", "bass", "melody", "motifContour", "motifRhythm", "orchestration", "structure"];
+  const identitySimilarities = identityKeys.map((key) => finite(components[key], 0));
+  const identitySimilarity = identitySimilarities.length
+    ? identitySimilarities.reduce((sum, value) => sum + value, 0) / identitySimilarities.length
+    : 0;
+  const nearCloneDimensions = identityKeys.filter((key) => finite(components[key], 0) >= 0.9);
+  const freshEnough = generation === "similar"
+    ? finite(novelty.score, 0) >= 55 && nearCloneDimensions.length < identityKeys.length
+    : finite(novelty.score, 0) >= 65 && finite(novelty.maxSimilarity, 0) < 0.9 && nearCloneDimensions.length < 5;
+  return {
+    version: 1,
+    generation,
+    passed: !novelty.compared || freshEnough,
+    score: finite(novelty.score, 75),
+    identitySimilarity: round(identitySimilarity),
+    nearCloneDimensions,
+    reason: !novelty.compared
+      ? "no-history"
+      : freshEnough ? "distinct-enough" : "too-close-to-recent-output",
+  };
+}
+
+export function evaluateSongDiversity(song, recentSongs = [], generation = song?.generation ?? "new") {
+  return diversityReportFromNovelty(evaluateSongNovelty(song, recentSongs, generation), generation);
+}
+
 const DEFAULT_CANDIDATE_COUNT = 4;
 const MAX_CANDIDATE_COUNT = 12;
 const DEFAULT_ADAPTIVE_CANDIDATES = 3;
@@ -9969,18 +9997,54 @@ function candidateSearchPlan(input = {}) {
   };
 }
 
-function candidateMeetsAdaptiveTarget(candidate, generation) {
-  if (candidate?.repairAccepted === false) return false;
-  const balance = evaluateCandidateBalance(candidate?.evaluation);
-  const releaseReady = candidateReleaseGate(candidate).passed;
-  const noveltyReady = !candidate?.novelty?.compared
-    || finite(candidate.novelty.score, 0) >= (generation === "similar" ? 55 : 65);
-  return balance.aspirational && noveltyReady && releaseReady;
-}
-
 function candidateReleaseGate(candidate) {
   if (!candidate?.releaseGate) candidate.releaseGate = evaluateSongReleaseGate(candidate?.song, candidate?.evaluation);
   return candidate.releaseGate;
+}
+
+function evaluateCandidateOutcome(candidate, generation = candidate?.song?.generation ?? "new") {
+  const balance = evaluateCandidateBalance(candidate?.evaluation);
+  const releasePassed = Boolean(candidateReleaseGate(candidate).passed);
+  const qualityPassed = Boolean(qualityGateForEvaluation(candidate?.evaluation).passed);
+  const repairAccepted = candidate?.repairAccepted !== false;
+  const diversity = candidate?.diversity ?? diversityReportFromNovelty(candidate?.novelty, generation);
+  const noveltyFloorPassed = !candidate?.novelty?.compared
+    || finite(candidate?.novelty?.score, 0) >= (generation === "similar" ? 55 : 65);
+  const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
+  const adaptiveTarget = repairAccepted && releasePassed && balance.aspirational && diversityPassed;
+  const passed = repairAccepted && releasePassed && qualityPassed && balance.passed && diversityPassed;
+  const status = !repairAccepted
+    ? "repair-rejected"
+    : !releasePassed
+      ? "release-blocked"
+      : !qualityPassed
+        ? "quality-below-gate"
+        : !balance.passed
+          ? "balance-below-gate"
+          : !diversityPassed
+            ? "diversity-below-gate"
+            : "release-ready";
+  return {
+    version: 1,
+    generation,
+    passed,
+    status,
+    repairAccepted,
+    releasePassed,
+    qualityPassed,
+    balancePassed: Boolean(balance.passed),
+    aspirationalBalance: Boolean(balance.aspirational),
+    diversityPassed,
+    noveltyFloorPassed,
+    diversityScore: finite(diversity.score, 75),
+    diversityIdentitySimilarity: finite(diversity.identitySimilarity, 0),
+    nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
+    adaptiveTarget,
+  };
+}
+
+function candidateMeetsAdaptiveTarget(candidate, generation) {
+  return evaluateCandidateOutcome(candidate, generation).adaptiveTarget;
 }
 
 function updateCandidateSearchFocus(search, candidates, generation) {
@@ -11455,18 +11519,19 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
 
 function rankCandidates(candidates) {
   return [...candidates]
-    .filter((candidate) => candidate?.repairAccepted !== false)
-    .sort(
-    (left, right) =>
-      Number(candidateReleaseGate(right).passed) - Number(candidateReleaseGate(left).passed)
-      ||
-      Number(qualityGateForEvaluation(right.evaluation).passed) - Number(qualityGateForEvaluation(left.evaluation).passed)
-      || Number(evaluateCandidateBalance(right.evaluation).passed) - Number(evaluateCandidateBalance(left.evaluation).passed)
-      || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
-      || right.evaluation.score - left.evaluation.score
-      || (Boolean(right.repair) - Boolean(left.repair))
-      || left.index - right.index,
-  );
+    .filter((candidate) => evaluateCandidateOutcome(candidate).repairAccepted)
+    .sort((left, right) => {
+      const leftOutcome = evaluateCandidateOutcome(left);
+      const rightOutcome = evaluateCandidateOutcome(right);
+      return Number(rightOutcome.releasePassed) - Number(leftOutcome.releasePassed)
+        || Number(rightOutcome.qualityPassed) - Number(leftOutcome.qualityPassed)
+        || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
+        || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
+        || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
+        || right.evaluation.score - left.evaluation.score
+        || (Boolean(right.repair) - Boolean(left.repair))
+        || left.index - right.index;
+    });
 }
 
 function commitCandidate(candidates, search = {}) {
@@ -11476,6 +11541,8 @@ function commitCandidate(candidates, search = {}) {
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
   const releaseGate = candidateReleaseGate(selected);
   const balance = evaluateCandidateBalance(selected.evaluation);
+  const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
+  const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
     enabled: Boolean(search.targetedRepair),
@@ -11502,6 +11569,8 @@ function commitCandidate(candidates, search = {}) {
     diagnostics: selected.evaluation.diagnostics ?? {},
     releaseGate,
     novelty: selected.novelty,
+    diversity,
+    outputOutcome,
     candidatesEvaluated: candidates.length,
     selectedCandidate: selected.index,
     balance,
@@ -11528,7 +11597,9 @@ function commitCandidate(candidates, search = {}) {
     },
     candidateScores: candidates.map((candidate) => {
       const { index, evaluation, novelty, selectionScore, song } = candidate;
+      const diversity = candidate.diversity ?? diversityReportFromNovelty(novelty, song.generation);
       const candidateBalance = evaluateCandidateBalance(evaluation);
+      const outcome = evaluateCandidateOutcome(candidate, song.generation);
       return {
         index,
         score: evaluation.score,
@@ -11540,6 +11611,12 @@ function commitCandidate(candidates, search = {}) {
         maxSimilarity: novelty?.maxSimilarity ?? 0,
         immediateSimilarity: novelty?.immediateSimilarity ?? 0,
         backToBackRepeat: Boolean(novelty?.backToBackRepeat),
+        diversityPassed: outcome.diversityPassed,
+        diversityIdentitySimilarity: diversity.identitySimilarity,
+        nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
+        outcomePassed: outcome.passed,
+        outcomeStatus: outcome.status,
+        adaptiveTarget: outcome.adaptiveTarget,
         compositionRoute: song.compositionRoute?.id ?? null,
         passedPhase9: qualityGateForEvaluation(evaluation).passed,
         passedReleaseGate: candidateReleaseGate(candidate).passed,
@@ -11555,6 +11632,8 @@ function commitCandidate(candidates, search = {}) {
     }),
   };
   selected.song.meta.novelty = selected.novelty;
+  selected.song.meta.diversity = diversity;
+  selected.song.meta.outputOutcome = outputOutcome;
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   if (selected.novelty?.compared) {
     selected.song.idea?.rhythmicFeatures?.push(`Compared with ${selected.novelty.compared} recent ${selected.novelty.compared === 1 ? "idea" : "ideas"}`);
@@ -11562,8 +11641,9 @@ function commitCandidate(candidates, search = {}) {
   selected.song.meta.qualityGate = qualityGate;
   selected.song.producerPass = {
     ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
-    status: qualityGate.passed ? "passed" : "best-available",
+    status: outputOutcome.passed ? "passed" : "best-available",
     qualityGate,
+    outputOutcome,
   };
   selected.song.criticRepair = {
     ...criticRepair,
@@ -11588,6 +11668,13 @@ function commitCandidate(candidates, search = {}) {
       expandedBy: selected.song.meta.scoreDetails.candidateSearch.expandedBy,
       balanceScore: balance.balanceScore,
       creativeFloor: balance.creativeFloor,
+    },
+    {
+      id: "output-diversity-qc",
+      status: outputOutcome.diversityPassed ? "passed" : "best-available",
+      score: diversity.score,
+      identitySimilarity: diversity.identitySimilarity,
+      nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
     },
     {
       id: "targeted-critic-repair",
@@ -11971,6 +12058,7 @@ function runTargetedCriticRepair(candidates, {
       candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
       const evaluation = evaluateSongCandidate(candidateSong);
       const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
+      const diversity = diversityReportFromNovelty(novelty, generation);
       candidateSong.criticRepair.weakestScoreAfter = finite(
         evaluation.subscores?.[diagnosis.weakestDimension],
         diagnosis.weakestScore,
@@ -11994,6 +12082,7 @@ function runTargetedCriticRepair(candidates, {
         song: candidateSong,
         evaluation,
         novelty,
+        diversity,
         repairedReleaseGate,
         acceptance,
       };
@@ -12008,12 +12097,13 @@ function runTargetedCriticRepair(candidates, {
       && wholeAssessment.acceptance.accepted
       && assessment === wholeAssessment
     );
-    const { song, evaluation, novelty, repairedReleaseGate, acceptance } = assessment;
+    const { song, evaluation, novelty, diversity, repairedReleaseGate, acceptance } = assessment;
     const candidate = {
       index: candidates.length,
       song,
       evaluation,
       novelty,
+      diversity,
       repair: song.criticRepair,
       repairAccepted: acceptance.accepted,
       releaseGate: repairedReleaseGate,
