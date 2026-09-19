@@ -123,7 +123,10 @@ export function analyzeRoleRegisters(tracks = []) {
  * correct the two audible fatigue cases we care about most: sub-bass notes that
  * are unnecessarily low and foreground notes that are unnecessarily high.
  */
-export function refineRoleRegisters(tracks = [], structure = []) {
+export function refineRoleRegisters(tracks = [], structure = [], {
+  releaseMelodyMax = 76,
+  releaseCounterpointMax = 74,
+} = {}) {
   const cloned = tracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
@@ -153,7 +156,10 @@ export function refineRoleRegisters(tracks = [], structure = []) {
           || section?.id === structure?.at?.(-1)?.id
         );
       const foregroundPreferredMax = releaseSection
-        ? Math.min(preferred.max, track.id === "melody" ? 76 : 74)
+        ? Math.min(
+          preferred.max,
+          track.id === "melody" ? releaseMelodyMax : releaseCounterpointMax,
+        )
         : preferred.max;
       const tooHighForeground = ["melody", "counterpoint"].includes(track.id)
         && source > foregroundPreferredMax
