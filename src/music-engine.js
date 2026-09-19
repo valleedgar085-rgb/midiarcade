@@ -10047,6 +10047,58 @@ function candidateMeetsAdaptiveTarget(candidate, generation) {
   return evaluateCandidateOutcome(candidate, generation).adaptiveTarget;
 }
 
+export function chooseDiversityExpansionRoute(candidateRoutes = [], sourceRoute = null) {
+  const routeIds = COMPOSITION_ROUTES.map((route) => route.id);
+  const normalizedSource = validCompositionRouteId(sourceRoute);
+  const counts = new Map(routeIds.map((id) => [id, 0]));
+  for (const route of candidateRoutes) {
+    const id = validCompositionRouteId(route);
+    if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  const sourceIndex = normalizedSource ? routeIds.indexOf(normalizedSource) : -1;
+  const ordered = sourceIndex >= 0
+    ? [...routeIds.slice(sourceIndex + 1), ...routeIds.slice(0, sourceIndex)]
+    : routeIds;
+  const alternatives = ordered.filter((id) => id !== normalizedSource);
+  return alternatives.sort((left, right) => (
+    (counts.get(left) ?? 0) - (counts.get(right) ?? 0)
+    || ordered.indexOf(left) - ordered.indexOf(right)
+  ))[0] ?? routeIds[0];
+}
+
+function diversityOnlySearchFocus(sourceCandidate, candidates, generation) {
+  const outcome = evaluateCandidateOutcome(sourceCandidate, generation);
+  if (
+    outcome.diversityPassed
+    || !outcome.releasePassed
+    || !outcome.qualityPassed
+    || !outcome.balancePassed
+  ) return null;
+  const diversity = sourceCandidate?.diversity
+    ?? diversityReportFromNovelty(sourceCandidate?.novelty, generation);
+  const sourceRoute = sourceCandidate?.song?.compositionRoute?.id ?? null;
+  const route = chooseDiversityExpansionRoute(
+    candidates.map((candidate) => candidate?.song?.compositionRoute?.id).filter(Boolean),
+    sourceRoute,
+  );
+  const nearCloneDimensions = clone(diversity.nearCloneDimensions ?? []);
+  return {
+    version: 3,
+    group: "diversity",
+    route,
+    weakestDimension: nearCloneDimensions[0] ?? "identitySimilarity",
+    weakestScore: Math.max(0, 100 - Math.round(finite(diversity.score, 0))),
+    primaryGroup: "diversity",
+    primaryDimension: nearCloneDimensions[0] ?? "identitySimilarity",
+    diversified: route !== sourceRoute,
+    sourceCandidate: sourceCandidate.index,
+    observedAfterCandidates: candidates.length,
+    reason: "diversity-only-blocker",
+    diversityScore: finite(diversity.score, 0),
+    nearCloneDimensions,
+  };
+}
+
 function updateCandidateSearchFocus(search, candidates, generation) {
   if (!search?.weaknessAwareSearch || candidates.length < search.baseCandidateCount) return null;
   if (candidates.some((candidate) => candidateMeetsAdaptiveTarget(candidate, generation))) {
@@ -10054,6 +10106,20 @@ function updateCandidateSearchFocus(search, candidates, generation) {
   }
   const sourceCandidate = rankCandidates(candidates)[0];
   if (!sourceCandidate) return null;
+  const diversityFocus = diversityOnlySearchFocus(sourceCandidate, candidates, generation);
+  if (diversityFocus) {
+    search.weaknessFocus = diversityFocus;
+    const history = Array.isArray(search.weaknessHistory) ? search.weaknessHistory : [];
+    const previous = history[history.length - 1];
+    if (
+      !previous
+      || previous.group !== diversityFocus.group
+      || previous.route !== diversityFocus.route
+      || previous.sourceCandidate !== diversityFocus.sourceCandidate
+    ) history.push(diversityFocus);
+    search.weaknessHistory = history.slice(-4);
+    return diversityFocus;
+  }
   const primaryDiagnosis = diagnoseCandidateRepair(sourceCandidate.evaluation);
   if (!primaryDiagnosis) return null;
 
