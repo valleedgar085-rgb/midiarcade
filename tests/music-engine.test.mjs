@@ -3283,3 +3283,25 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
   }
 });
+
+
+test("Track B diversity-aware search deterministically chooses the least-used alternate composition route", () => {
+  assert.equal(
+    engine.chooseDiversityExpansionRoute(
+      ["groove-first", "groove-first", "hook-first"],
+      "groove-first",
+    ),
+    "harmony-first",
+  );
+  assert.equal(
+    engine.chooseDiversityExpansionRoute(
+      ["harmony-first", "groove-first", "harmony-first"],
+      "harmony-first",
+    ),
+    "hook-first",
+  );
+  assert.equal(
+    engine.chooseDiversityExpansionRoute([], "hook-first"),
+    "harmony-first",
+  );
+});
