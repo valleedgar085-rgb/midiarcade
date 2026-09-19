@@ -5225,7 +5225,7 @@ function generateLead(
     const continuityAnchorIndexes = new Set(phraseContinuityAnchorIndexes(activeMotif, {
       beatsPerBar: barBeats,
       density: settings.density,
-      intensity,
+      intensity: Math.max(finite(section.intensity, intensity), intensity),
       counterpoint,
     }));
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
