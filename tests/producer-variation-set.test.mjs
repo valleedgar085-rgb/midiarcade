@@ -236,6 +236,46 @@ test("release-failed Element auditions are ineligible and cannot beat a safe can
   assert.equal(variations[0].variationSet.selectedAudition, 1);
 });
 
+test("Elements reject piercing upper-register auditions before selection", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const high = scoreSong({ id: "piercing", overall: 99, role: 99, releasePassed: true }, direction);
+  high.tracks.find((track) => track.id === "melody").notes[0].pitch = 96;
+  const safe = scoreSong({ id: "safe-register", overall: 84, role: 86, releasePassed: true }, direction);
+  const highAssessment = producerVariationDirectionAssessment(high, direction);
+  const safeAssessment = producerVariationDirectionAssessment(safe, direction);
+
+  assert.equal(highAssessment.registerSafe, false);
+  assert.equal(highAssessment.eligible, false);
+  assert.equal(highAssessment.score, -1000);
+  assert.equal(safeAssessment.registerSafe, true);
+
+  const variations = generateProducerVariationSet(sourceSong(), { count: 1, candidatesPerVariation: 2 }, {
+    generateSimilar(_source, config) {
+      const candidateIndex = Number(String(config.seed).split(":").at(-1));
+      return structuredClone(candidateIndex === 0 ? high : safe);
+    },
+  });
+
+  assert.equal(variations.length, 1);
+  assert.equal(variations[0].id, "safe-register");
+  assert.equal(variations[0].variationSet.eligibleAuditions, 1);
+  assert.equal(variations[0].variationSet.selectedAudition, 1);
+});
+
+test("Elements fail closed when every audition exceeds a role register ceiling", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const high = scoreSong({ id: "all-high", overall: 99, role: 99, releasePassed: true }, direction);
+  high.tracks.find((track) => track.id === "counterpoint").notes = [
+    { pitch: 97, start: 0.5, duration: 0.5, velocity: 84 },
+  ];
+  const variations = generateProducerVariationSet(sourceSong(), { count: 1, candidatesPerVariation: 2 }, {
+    generateSimilar() {
+      return structuredClone(high);
+    },
+  });
+  assert.deepEqual(variations, []);
+});
+
 test("an Element with no release-safe auditions fails closed instead of returning an unsafe card", () => {
   const direction = ELEMENT_PROFILES[0];
   const failed = scoreSong({ id: "failed", overall: 100, role: 100, releasePassed: false }, direction);
