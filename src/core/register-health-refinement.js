@@ -1,6 +1,10 @@
 import { cloneValue } from "./clone-value.js";
+import { roleRegisterWindow } from "./role-register-policy.js";
 const CANDIDATE_BLOCK_SIZES = Object.freeze([2, 3, 4]);
 const SCORE_EPSILON = 1e-6;
+const MELODY_REGISTER = roleRegisterWindow("melody");
+const MELODY_REGISTER_FLOOR = MELODY_REGISTER.min;
+const MELODY_REGISTER_CEILING = MELODY_REGISTER.max;
 
 export const MAX_REGISTER_HEALTH_CANDIDATES = CANDIDATE_BLOCK_SIZES.length;
 export const MAX_REGISTER_HEALTH_EDITS = Math.max(...CANDIDATE_BLOCK_SIZES);
@@ -99,7 +103,7 @@ function shiftedScore(entries, selectedIndexes, semitones) {
     ...note,
     pitch: selectedIndexes.has(noteIndex) ? finite(note.pitch) + semitones : finite(note.pitch),
   }));
-  if (notes.some((note) => note.pitch < 0 || note.pitch > 127)) return -Infinity;
+  if (notes.some((note) => note.pitch < MELODY_REGISTER_FLOOR || note.pitch > MELODY_REGISTER_CEILING)) return -Infinity;
   return registerHealthScore(notes);
 }
 
@@ -135,7 +139,7 @@ function createCandidate(song, blockSize, candidateIndex) {
     const note = melody.notes?.[entry.noteIndex];
     if (!note) continue;
     const nextPitch = finite(note.pitch) + semitones;
-    if (nextPitch < 0 || nextPitch > 127) continue;
+    if (nextPitch < MELODY_REGISTER_FLOOR || nextPitch > MELODY_REGISTER_CEILING) continue;
     note.pitch = nextPitch;
     note.registerHealthRefinementRole = semitones > 0 ? "phrase-lift" : "phrase-drop";
     note.preserveTiming = true;

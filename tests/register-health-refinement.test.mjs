@@ -129,6 +129,19 @@ test("register candidates are deterministic, immutable, octave-only, onset-stabl
   }
 });
 
+test("register candidates never create piercing melody pitches outside the musical role window", () => {
+  const source = sourceSong();
+  track(source, "melody").notes.forEach((note, index) => {
+    note.pitch = 78 + (index % 6);
+  });
+  const candidates = createRegisterHealthCandidates(source);
+  for (const candidate of candidates) {
+    const pitches = track(candidate.song, "melody").notes.map((note) => note.pitch);
+    assert.ok(Math.max(...pitches) <= 84, "refinement must not create melody above C6");
+    assert.ok(Math.min(...pitches) >= 48, "refinement must not create melody below C3");
+  }
+});
+
 test("register pipeline commits a critic-verified phrase-register win without damaging protected melody dimensions", () => {
   const source = sourceSong();
   const before = structuredClone(source);

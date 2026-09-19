@@ -3279,6 +3279,11 @@ const workspaceController = createWorkspaceController({
   initialWorkspace: state.activeWorkspace,
   onChange(workspace) {
     resolvePendingShapeDirectorCandidate({ rerender: true });
+    if (workspace !== "arrange" && state.sectionEditorOpen) {
+      state.sectionEditorOpen = false;
+      state.editorSelection.clear();
+      renderSectionEditor();
+    }
     appStore.transaction("workspace:activate", (draft) => {
       draft.activeWorkspace = workspace;
     });
