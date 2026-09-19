@@ -3279,7 +3279,7 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
     assert.equal(typeof candidate.diversityPassed, "boolean");
     assert.equal(typeof candidate.outcomePassed, "boolean");
     assert.equal(typeof candidate.adaptiveTarget, "boolean");
-    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate/);
+    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate/);
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
   }
 });
@@ -3304,4 +3304,136 @@ test("Track B diversity-aware search deterministically chooses the least-used al
     engine.chooseDiversityExpansionRoute([], "hook-first"),
     "harmony-first",
   );
+});
+
+
+test("Track B section outcome QC rejects different-purpose sections that render as the same musical loop", () => {
+  const shifted = (offset, role = "support") => [
+    { start: offset + 0, duration: 0.5, pitch: 60, velocity: 80, producerRole: role },
+    { start: offset + 1, duration: 0.5, pitch: 64, velocity: 80, producerRole: role },
+    { start: offset + 2, duration: 0.5, pitch: 67, velocity: 80, producerRole: role },
+    { start: offset + 3, duration: 0.5, pitch: 64, velocity: 80, producerRole: role },
+  ];
+  const drumShifted = (offset) => [
+    { start: offset + 0, duration: 0.1, pitch: 36, velocity: 84, producerRole: "foundation" },
+    { start: offset + 1, duration: 0.1, pitch: 38, velocity: 84, producerRole: "foundation" },
+    { start: offset + 2, duration: 0.1, pitch: 36, velocity: 84, producerRole: "foundation" },
+    { start: offset + 3, duration: 0.1, pitch: 38, velocity: 84, producerRole: "foundation" },
+  ];
+  const song = {
+    meta: { beatsPerBar: 4 },
+    structure: [
+      { id: "verse-1", name: "verse", startBeat: 0, endBeat: 4, bars: 1 },
+      { id: "chorus-1", name: "chorus", startBeat: 4, endBeat: 8, bars: 1 },
+      { id: "bridge-1", name: "bridge", startBeat: 8, endBeat: 12, bars: 1 },
+    ],
+    songBlueprint: {
+      producerIntent: {
+        scenes: [
+          { sectionId: "verse-1", purpose: "develop", foregroundTrack: "melody" },
+          { sectionId: "chorus-1", purpose: "payoff", foregroundTrack: "melody" },
+          { sectionId: "bridge-1", purpose: "contrast", foregroundTrack: "melody" },
+        ],
+      },
+    },
+    tracks: [
+      { id: "drums", notes: [...drumShifted(0), ...drumShifted(4), ...drumShifted(8)] },
+      { id: "bass", notes: [...shifted(0), ...shifted(4), ...shifted(8)] },
+      { id: "chords", notes: [...shifted(0), ...shifted(4), ...shifted(8)] },
+      { id: "melody", notes: [...shifted(0, "foreground"), ...shifted(4, "foreground"), ...shifted(8, "foreground")] },
+      { id: "counterpoint", notes: [...shifted(0), ...shifted(4), ...shifted(8)] },
+      { id: "pad", notes: [...shifted(0), ...shifted(4), ...shifted(8)] },
+    ],
+  };
+  const report = engine.evaluateSectionOutcomeQuality(song);
+  assert.equal(report.passed, false);
+  assert.equal(report.reason, "sections-too-similar");
+  assert.equal(report.comparablePairs, 2);
+  assert.equal(report.weakestContrast, 0);
+});
+
+test("Track B section outcome QC accepts clear rendered contrast without requiring random section changes", () => {
+  const song = {
+    meta: { beatsPerBar: 4 },
+    structure: [
+      { id: "verse-1", name: "verse", startBeat: 0, endBeat: 4, bars: 1 },
+      { id: "chorus-1", name: "chorus", startBeat: 4, endBeat: 8, bars: 1 },
+      { id: "bridge-1", name: "bridge", startBeat: 8, endBeat: 12, bars: 1 },
+    ],
+    songBlueprint: {
+      producerIntent: {
+        scenes: [
+          { sectionId: "verse-1", purpose: "develop", foregroundTrack: "chords" },
+          { sectionId: "chorus-1", purpose: "payoff", foregroundTrack: "melody" },
+          { sectionId: "bridge-1", purpose: "contrast", foregroundTrack: "counterpoint" },
+        ],
+      },
+    },
+    tracks: [
+      { id: "drums", notes: [
+        { start: 0, duration: 0.1, pitch: 36, velocity: 72, producerRole: "foundation" },
+        { start: 2, duration: 0.1, pitch: 38, velocity: 74, producerRole: "foundation" },
+        { start: 4, duration: 0.1, pitch: 36, velocity: 100, producerRole: "foundation" },
+        { start: 4.5, duration: 0.1, pitch: 42, velocity: 92, producerRole: "foundation" },
+        { start: 5, duration: 0.1, pitch: 38, velocity: 102, producerRole: "foundation" },
+        { start: 5.5, duration: 0.1, pitch: 42, velocity: 90, producerRole: "foundation" },
+        { start: 6, duration: 0.1, pitch: 36, velocity: 104, producerRole: "foundation" },
+        { start: 6.5, duration: 0.1, pitch: 46, velocity: 96, producerRole: "foundation" },
+        { start: 7, duration: 0.1, pitch: 38, velocity: 104, producerRole: "foundation" },
+        { start: 8, duration: 0.1, pitch: 36, velocity: 62, producerRole: "foundation" },
+      ] },
+      { id: "bass", notes: [
+        { start: 0, duration: 1, pitch: 36, velocity: 70, producerRole: "foundation" },
+        { start: 2, duration: 1, pitch: 39, velocity: 72, producerRole: "foundation" },
+        { start: 4, duration: 0.5, pitch: 36, velocity: 96, producerRole: "foundation" },
+        { start: 5, duration: 0.5, pitch: 43, velocity: 98, producerRole: "foundation" },
+        { start: 6, duration: 0.5, pitch: 39, velocity: 98, producerRole: "foundation" },
+        { start: 7, duration: 0.5, pitch: 43, velocity: 100, producerRole: "foundation" },
+        { start: 8, duration: 2, pitch: 31, velocity: 58, producerRole: "foundation" },
+      ] },
+      { id: "chords", notes: [
+        { start: 0, duration: 2, pitch: 60, velocity: 68, producerRole: "foreground" },
+        { start: 2, duration: 2, pitch: 65, velocity: 70, producerRole: "foreground" },
+        { start: 4, duration: 1, pitch: 67, velocity: 92, producerRole: "support" },
+        { start: 6, duration: 1, pitch: 72, velocity: 94, producerRole: "support" },
+        { start: 8, duration: 4, pitch: 55, velocity: 52, producerRole: "texture" },
+      ] },
+      { id: "melody", notes: [
+        { start: 0.5, duration: 0.5, pitch: 67, velocity: 72, producerRole: "support" },
+        { start: 2.5, duration: 0.5, pitch: 69, velocity: 74, producerRole: "support" },
+        { start: 4.25, duration: 0.4, pitch: 79, velocity: 106, producerRole: "foreground" },
+        { start: 4.75, duration: 0.4, pitch: 81, velocity: 108, producerRole: "foreground" },
+        { start: 5.5, duration: 0.4, pitch: 84, velocity: 110, producerRole: "foreground" },
+        { start: 6.25, duration: 0.4, pitch: 81, velocity: 108, producerRole: "foreground" },
+        { start: 7, duration: 0.7, pitch: 79, velocity: 104, producerRole: "foreground" },
+      ] },
+      { id: "counterpoint", notes: [
+        { start: 1.5, duration: 0.5, pitch: 72, velocity: 62, producerRole: "answer" },
+        { start: 5.25, duration: 0.4, pitch: 76, velocity: 84, producerRole: "answer" },
+        { start: 8.5, duration: 1.5, pitch: 52, velocity: 66, producerRole: "foreground" },
+        { start: 10.5, duration: 1, pitch: 55, velocity: 64, producerRole: "foreground" },
+      ] },
+      { id: "pad", notes: [
+        { start: 0, duration: 4, pitch: 55, velocity: 54, producerRole: "texture" },
+        { start: 8, duration: 4, pitch: 48, velocity: 48, producerRole: "texture" },
+      ] },
+    ],
+  };
+  const report = engine.evaluateSectionOutcomeQuality(song);
+  assert.equal(report.passed, true);
+  assert.equal(report.reason, "distinct-section-jobs");
+  assert.ok(report.averageContrast >= 0.115);
+  assert.ok(report.strongPairRatio >= 0.6);
+});
+
+test("Track B production generation exposes section outcome QC inside the authoritative outcome", () => {
+  const song = engine.generateNew({ ...CONFIG, genre: "hipHop", seed: "section-outcome-production", bars: 16 });
+  const report = song.meta.sectionOutcome;
+  const outcome = song.meta.outputOutcome;
+  assert.ok(report);
+  assert.ok(outcome);
+  assert.equal(outcome.sectionOutcomePassed, report.passed);
+  assert.equal(outcome.sectionOutcomeScore, report.score);
+  assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
+  assert.ok(song.ideaEnginePhases.some((phase) => phase.id === "section-outcome-qc"));
 });

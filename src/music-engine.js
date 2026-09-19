@@ -9692,6 +9692,201 @@ export function evaluateSongCandidate(song) {
   };
 }
 
+function normalizedSectionRange(song, section) {
+  const beatsPerBar = finite(song?.meta?.beatsPerBar, 4);
+  const startBeat = finite(section?.startBeat, 0);
+  const fallbackBars = Math.max(1, finite(section?.bars, 4));
+  const endBeat = Math.max(
+    startBeat + 0.25,
+    finite(section?.endBeat, startBeat + fallbackBars * beatsPerBar),
+  );
+  return { startBeat, endBeat, beats: Math.max(0.25, endBeat - startBeat) };
+}
+
+function sectionRenderedSignature(song, section) {
+  const range = normalizedSectionRange(song, section);
+  const beatsPerBar = finite(song?.meta?.beatsPerBar, 4);
+  const scene = song?.songBlueprint?.producerIntent?.scenes?.find((entry) => entry.sectionId === section.id)
+    ?? song?.producerIntent?.scenes?.find((entry) => entry.sectionId === section.id)
+    ?? null;
+  const trackDensity = {};
+  const rhythmBins = Array.from({ length: 8 }, () => 0);
+  const pitched = [];
+  const velocities = [];
+  const foregroundCounts = new Map();
+  let totalNotes = 0;
+
+  for (const track of song?.tracks ?? []) {
+    const notes = (track?.notes ?? []).filter((note) => (
+      finite(note?.start, -1) >= range.startBeat - 1e-6
+      && finite(note?.start, -1) < range.endBeat - 1e-6
+    ));
+    trackDensity[track.id] = round(notes.length / range.beats);
+    totalNotes += notes.length;
+    for (const note of notes) {
+      const velocity = finite(note?.velocity, 80);
+      velocities.push(velocity);
+      if (track.id !== "drums" && Number.isFinite(Number(note?.pitch))) pitched.push(Number(note.pitch));
+      if (note?.producerRole === "foreground") {
+        foregroundCounts.set(track.id, (foregroundCounts.get(track.id) ?? 0) + 1);
+      }
+      const localBeat = mod(finite(note?.start, range.startBeat) - range.startBeat, beatsPerBar);
+      const bin = Math.min(7, Math.floor(localBeat / beatsPerBar * 8));
+      rhythmBins[bin] += 1;
+    }
+  }
+
+  const rhythmTotal = rhythmBins.reduce((sum, value) => sum + value, 0);
+  const rhythmProfile = rhythmBins.map((value) => round(value / Math.max(1, rhythmTotal)));
+  const actualForeground = [...foregroundCounts.entries()]
+    .sort((left, right) => right[1] - left[1] || TRACK_IDS.indexOf(left[0]) - TRACK_IDS.indexOf(right[0]))[0]?.[0]
+    ?? scene?.foregroundTrack
+    ?? null;
+  const activeTracks = Object.entries(trackDensity).filter(([, value]) => value > 0.02).map(([id]) => id);
+
+  return {
+    sectionId: section.id,
+    sectionName: section.name,
+    purpose: scene?.purpose ?? section?.intent?.role ?? "develop",
+    foregroundTrack: actualForeground,
+    totalDensity: round(totalNotes / range.beats),
+    activeTracks,
+    activeTrackCount: activeTracks.length,
+    averageVelocity: round(average(velocities, 80)),
+    pitchCenter: round(average(pitched, 60)),
+    pitchSpan: pitched.length ? Math.max(...pitched) - Math.min(...pitched) : 0,
+    trackDensity,
+    rhythmProfile,
+  };
+}
+
+function sectionPairContrast(left, right) {
+  const trackIds = TRACK_IDS;
+  const trackContrast = average(trackIds.map((id) => {
+    const a = finite(left?.trackDensity?.[id], 0);
+    const b = finite(right?.trackDensity?.[id], 0);
+    return Math.abs(a - b) / Math.max(0.2, a, b);
+  }), 0);
+  const rhythmContrast = clamp(
+    (left?.rhythmProfile ?? []).reduce((sum, value, index) => (
+      sum + Math.abs(finite(value, 0) - finite(right?.rhythmProfile?.[index], 0))
+    ), 0) / 2,
+    0,
+    1,
+  );
+  const densityContrast = Math.abs(finite(left?.totalDensity, 0) - finite(right?.totalDensity, 0))
+    / Math.max(0.5, finite(left?.totalDensity, 0), finite(right?.totalDensity, 0));
+  const velocityContrast = clamp(
+    Math.abs(finite(left?.averageVelocity, 80) - finite(right?.averageVelocity, 80)) / 22,
+    0,
+    1,
+  );
+  const registerContrast = clamp(
+    Math.abs(finite(left?.pitchCenter, 60) - finite(right?.pitchCenter, 60)) / 14,
+    0,
+    1,
+  );
+  const activeTrackContrast = clamp(
+    Math.abs(finite(left?.activeTrackCount, 0) - finite(right?.activeTrackCount, 0)) / Math.max(1, TRACK_IDS.length),
+    0,
+    1,
+  );
+  const foregroundContrast = left?.foregroundTrack && right?.foregroundTrack
+    ? Number(left.foregroundTrack !== right.foregroundTrack)
+    : 0;
+
+  return round(clamp(
+    trackContrast * 0.28
+    + rhythmContrast * 0.24
+    + densityContrast * 0.18
+    + velocityContrast * 0.1
+    + registerContrast * 0.1
+    + activeTrackContrast * 0.05
+    + foregroundContrast * 0.05,
+    0,
+    1,
+  ));
+}
+
+/**
+ * Evaluate whether different-purpose sections sound meaningfully different in
+ * the rendered arrangement. Repeated sections may preserve identity; adjacent
+ * sections with different names must demonstrate musical contrast in the
+ * actual notes rather than merely declaring different blueprint roles.
+ */
+export function evaluateSectionOutcomeQuality(song) {
+  const sections = Array.isArray(song?.structure) ? song.structure : [];
+  const signatures = sections.map((section) => sectionRenderedSignature(song, section));
+  const pairs = [];
+  for (let index = 0; index < signatures.length - 1; index += 1) {
+    const left = signatures[index];
+    const right = signatures[index + 1];
+    if (!left || !right || left.sectionName === right.sectionName) continue;
+    pairs.push({
+      fromSectionId: left.sectionId,
+      fromSectionName: left.sectionName,
+      fromPurpose: left.purpose,
+      toSectionId: right.sectionId,
+      toSectionName: right.sectionName,
+      toPurpose: right.purpose,
+      contrast: sectionPairContrast(left, right),
+      foregroundChanged: Boolean(
+        left.foregroundTrack
+        && right.foregroundTrack
+        && left.foregroundTrack !== right.foregroundTrack
+      ),
+    });
+  }
+
+  const distinctSectionNames = new Set(signatures.map((entry) => entry.sectionName).filter(Boolean));
+  if (pairs.length === 0 || distinctSectionNames.size < 2) {
+    return {
+      version: 1,
+      passed: true,
+      reason: "insufficient-comparable-sections",
+      score: 100,
+      averageContrast: 1,
+      weakestContrast: 1,
+      strongPairRatio: 1,
+      comparablePairs: pairs.length,
+      distinctSectionNames: distinctSectionNames.size,
+      weakestPair: null,
+      pairs,
+      signatures,
+    };
+  }
+
+  const contrasts = pairs.map((pair) => pair.contrast);
+  const averageContrast = average(contrasts, 0);
+  const weakestContrast = Math.min(...contrasts);
+  const strongPairRatio = pairs.filter((pair) => pair.contrast >= 0.12).length / pairs.length;
+  const weakPairs = pairs.filter((pair) => pair.contrast < 0.07);
+  const weakestPair = [...pairs].sort((left, right) => left.contrast - right.contrast)[0] ?? null;
+  const passed = averageContrast >= 0.115
+    && strongPairRatio >= 0.6
+    && weakPairs.length <= Math.max(1, Math.floor(pairs.length * 0.25));
+  const score = clamp(Math.round(
+    clamp(averageContrast / 0.22, 0, 1) * 60
+    + clamp(weakestContrast / 0.12, 0, 1) * 20
+    + strongPairRatio * 20
+  ), 0, 100);
+
+  return {
+    version: 1,
+    passed,
+    reason: passed ? "distinct-section-jobs" : "sections-too-similar",
+    score,
+    averageContrast: round(averageContrast),
+    weakestContrast: round(weakestContrast),
+    strongPairRatio: round(strongPairRatio),
+    comparablePairs: pairs.length,
+    distinctSectionNames: distinctSectionNames.size,
+    weakestPair,
+    pairs,
+    signatures,
+  };
+}
+
 function fingerprintSequenceSimilarity(left = [], right = []) {
   if (!left.length && !right.length) return 1;
   if (!left.length || !right.length) return 0;
@@ -10011,8 +10206,19 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const noveltyFloorPassed = !candidate?.novelty?.compared
     || finite(candidate?.novelty?.score, 0) >= (generation === "similar" ? 55 : 65);
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
-  const adaptiveTarget = repairAccepted && releasePassed && balance.aspirational && diversityPassed;
-  const passed = repairAccepted && releasePassed && qualityPassed && balance.passed && diversityPassed;
+  const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
+  const sectionOutcomePassed = Boolean(sectionOutcome.passed);
+  const adaptiveTarget = repairAccepted
+    && releasePassed
+    && balance.aspirational
+    && diversityPassed
+    && sectionOutcomePassed;
+  const passed = repairAccepted
+    && releasePassed
+    && qualityPassed
+    && balance.passed
+    && diversityPassed
+    && sectionOutcomePassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10023,9 +10229,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
           ? "balance-below-gate"
           : !diversityPassed
             ? "diversity-below-gate"
-            : "release-ready";
+            : !sectionOutcomePassed
+              ? "section-outcome-below-gate"
+              : "release-ready";
   return {
-    version: 1,
+    version: 2,
     generation,
     passed,
     status,
@@ -10039,6 +10247,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     diversityScore: finite(diversity.score, 75),
     diversityIdentitySimilarity: finite(diversity.identitySimilarity, 0),
     nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
+    sectionOutcomePassed,
+    sectionOutcomeScore: finite(sectionOutcome.score, 100),
+    sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
+    sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
+    sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
     adaptiveTarget,
   };
 }
@@ -10064,6 +10277,45 @@ export function chooseDiversityExpansionRoute(candidateRoutes = [], sourceRoute 
     (counts.get(left) ?? 0) - (counts.get(right) ?? 0)
     || ordered.indexOf(left) - ordered.indexOf(right)
   ))[0] ?? routeIds[0];
+}
+
+function sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation) {
+  const outcome = evaluateCandidateOutcome(sourceCandidate, generation);
+  if (
+    outcome.sectionOutcomePassed
+    || !outcome.releasePassed
+    || !outcome.qualityPassed
+    || !outcome.balancePassed
+    || !outcome.diversityPassed
+  ) return null;
+  const sectionOutcome = sourceCandidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(sourceCandidate?.song);
+  const weakestPair = sectionOutcome.weakestPair ?? {};
+  const destinationPurpose = String(weakestPair.toPurpose ?? "");
+  const preferredRoute = ["payoff", "spotlight"].includes(destinationPurpose)
+    ? "hook-first"
+    : ["build", "develop"].includes(destinationPurpose)
+      ? "groove-first"
+      : ["contrast", "reset", "resolve"].includes(destinationPurpose)
+        ? "harmony-first"
+        : chooseDiversityExpansionRoute(
+          candidates.map((candidate) => candidate?.song?.compositionRoute?.id).filter(Boolean),
+          sourceCandidate?.song?.compositionRoute?.id ?? null,
+        );
+  return {
+    version: 3,
+    group: "section-outcome",
+    route: preferredRoute,
+    weakestDimension: "sectionContrast",
+    weakestScore: Math.max(0, 100 - Math.round(finite(sectionOutcome.score, 0))),
+    primaryGroup: "section-outcome",
+    primaryDimension: "sectionContrast",
+    diversified: preferredRoute !== sourceCandidate?.song?.compositionRoute?.id,
+    sourceCandidate: sourceCandidate.index,
+    observedAfterCandidates: candidates.length,
+    reason: "section-outcome-only-blocker",
+    sectionOutcomeScore: finite(sectionOutcome.score, 0),
+    weakestPair: clone(weakestPair),
+  };
 }
 
 function diversityOnlySearchFocus(sourceCandidate, candidates, generation) {
@@ -10106,6 +10358,22 @@ function updateCandidateSearchFocus(search, candidates, generation) {
   }
   const sourceCandidate = rankCandidates(candidates)[0];
   if (!sourceCandidate) return null;
+  const sectionFocus = sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation);
+  if (sectionFocus) {
+    search.weaknessFocus = sectionFocus;
+    const history = Array.isArray(search.weaknessHistory) ? search.weaknessHistory : [];
+    const previous = history[history.length - 1];
+    if (
+      !previous
+      || previous.group !== sectionFocus.group
+      || previous.route !== sectionFocus.route
+      || previous.sourceCandidate !== sectionFocus.sourceCandidate
+      || previous.weakestPair?.fromSectionId !== sectionFocus.weakestPair?.fromSectionId
+      || previous.weakestPair?.toSectionId !== sectionFocus.weakestPair?.toSectionId
+    ) history.push(sectionFocus);
+    search.weaknessHistory = history.slice(-4);
+    return sectionFocus;
+  }
   const diversityFocus = diversityOnlySearchFocus(sourceCandidate, candidates, generation);
   if (diversityFocus) {
     search.weaknessFocus = diversityFocus;
@@ -11593,6 +11861,7 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.qualityPassed) - Number(leftOutcome.qualityPassed)
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
+        || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
@@ -11608,6 +11877,8 @@ function commitCandidate(candidates, search = {}) {
   const releaseGate = candidateReleaseGate(selected);
   const balance = evaluateCandidateBalance(selected.evaluation);
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
+  const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
+  selected.sectionOutcome = sectionOutcome;
   const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
@@ -11636,6 +11907,7 @@ function commitCandidate(candidates, search = {}) {
     releaseGate,
     novelty: selected.novelty,
     diversity,
+    sectionOutcome,
     outputOutcome,
     candidatesEvaluated: candidates.length,
     selectedCandidate: selected.index,
@@ -11664,8 +11936,9 @@ function commitCandidate(candidates, search = {}) {
     candidateScores: candidates.map((candidate) => {
       const { index, evaluation, novelty, selectionScore, song } = candidate;
       const diversity = candidate.diversity ?? diversityReportFromNovelty(novelty, song.generation);
+      const sectionOutcome = candidate.sectionOutcome ?? evaluateSectionOutcomeQuality(song);
       const candidateBalance = evaluateCandidateBalance(evaluation);
-      const outcome = evaluateCandidateOutcome(candidate, song.generation);
+      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome }, song.generation);
       return {
         index,
         score: evaluation.score,
@@ -11680,6 +11953,11 @@ function commitCandidate(candidates, search = {}) {
         diversityPassed: outcome.diversityPassed,
         diversityIdentitySimilarity: diversity.identitySimilarity,
         nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
+        sectionOutcomePassed: outcome.sectionOutcomePassed,
+        sectionOutcomeScore: outcome.sectionOutcomeScore,
+        sectionAverageContrast: outcome.sectionAverageContrast,
+        sectionWeakestContrast: outcome.sectionWeakestContrast,
+        sectionWeakestPair: clone(outcome.sectionWeakestPair),
         outcomePassed: outcome.passed,
         outcomeStatus: outcome.status,
         adaptiveTarget: outcome.adaptiveTarget,
@@ -11699,6 +11977,7 @@ function commitCandidate(candidates, search = {}) {
   };
   selected.song.meta.novelty = selected.novelty;
   selected.song.meta.diversity = diversity;
+  selected.song.meta.sectionOutcome = sectionOutcome;
   selected.song.meta.outputOutcome = outputOutcome;
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   if (selected.novelty?.compared) {
@@ -11741,6 +12020,14 @@ function commitCandidate(candidates, search = {}) {
       score: diversity.score,
       identitySimilarity: diversity.identitySimilarity,
       nearCloneDimensions: clone(diversity.nearCloneDimensions ?? []),
+    },
+    {
+      id: "section-outcome-qc",
+      status: outputOutcome.sectionOutcomePassed ? "passed" : "best-available",
+      score: sectionOutcome.score,
+      averageContrast: sectionOutcome.averageContrast,
+      weakestContrast: sectionOutcome.weakestContrast,
+      weakestPair: clone(sectionOutcome.weakestPair),
     },
     {
       id: "targeted-critic-repair",
@@ -12125,6 +12412,7 @@ function runTargetedCriticRepair(candidates, {
       const evaluation = evaluateSongCandidate(candidateSong);
       const novelty = evaluateSongNovelty(candidateSong, recentSongs, generation);
       const diversity = diversityReportFromNovelty(novelty, generation);
+      const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
       candidateSong.criticRepair.weakestScoreAfter = finite(
         evaluation.subscores?.[diagnosis.weakestDimension],
         diagnosis.weakestScore,
@@ -12149,6 +12437,7 @@ function runTargetedCriticRepair(candidates, {
         evaluation,
         novelty,
         diversity,
+        sectionOutcome,
         repairedReleaseGate,
         acceptance,
       };
@@ -12163,13 +12452,14 @@ function runTargetedCriticRepair(candidates, {
       && wholeAssessment.acceptance.accepted
       && assessment === wholeAssessment
     );
-    const { song, evaluation, novelty, diversity, repairedReleaseGate, acceptance } = assessment;
+    const { song, evaluation, novelty, diversity, sectionOutcome, repairedReleaseGate, acceptance } = assessment;
     const candidate = {
       index: candidates.length,
       song,
       evaluation,
       novelty,
       diversity,
+      sectionOutcome,
       repair: song.criticRepair,
       repairAccepted: acceptance.accepted,
       releaseGate: repairedReleaseGate,
@@ -12266,11 +12556,13 @@ export function generateNew(input = {}) {
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "new");
+    const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
       song: candidateSong,
       evaluation,
       novelty,
+      sectionOutcome,
       selectionScore: candidateSelectionScore(evaluation, novelty, "new"),
     });
   };
@@ -12375,11 +12667,13 @@ export function generateSimilar(current, input = {}) {
     candidateSong.meta.ideaFingerprint = createSongFingerprint(candidateSong);
     const evaluation = evaluateSongCandidate(candidateSong);
     const novelty = evaluateSongNovelty(candidateSong, recentSongs, "similar");
+    const sectionOutcome = evaluateSectionOutcomeQuality(candidateSong);
     candidates.push({
       index,
       song: candidateSong,
       evaluation,
       novelty,
+      sectionOutcome,
       targetTrack,
       contextTracks: targetContextTracks,
       selectionScore: candidateSelectionScore(evaluation, novelty, "similar"),
