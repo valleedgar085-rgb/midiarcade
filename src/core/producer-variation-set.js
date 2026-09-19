@@ -7,6 +7,7 @@ import {
   resolveMoodIntent,
 } from "./elemental-producer-system.js";
 import { applyElementSoundProfile } from "./elemental-sound-profile.js";
+import { roleRegisterViolations } from "./role-register-policy.js";
 
 function clamp(value, min = 0, max = 1) {
   const numeric = Number(value);
@@ -97,6 +98,8 @@ export function producerVariationDirectionAssessment(song, direction, {
   const roleScore = average((direction?.criticDimensions ?? []).map((id) => subscores?.[id]), overall);
   const balance = finite(details.balance?.balanceScore, overall);
   const releasePassed = details.releaseGate?.passed !== false;
+  const registerViolations = roleRegisterViolations(song);
+  const registerSafe = registerViolations.length === 0;
   const siblingNovelty = siblings.length
     ? evaluateSongNovelty(song, siblings, "similar")
     : null;
@@ -105,8 +108,8 @@ export function producerVariationDirectionAssessment(song, direction, {
   const score = overall * 0.42 + roleScore * 0.48 + balance * 0.1 - clonePenalty;
 
   return Object.freeze({
-    score: releasePassed ? score : -1000,
-    eligible: releasePassed,
+    score: releasePassed && registerSafe ? score : -1000,
+    eligible: releasePassed && registerSafe,
     overallScore: overall,
     roleScore,
     balanceScore: balance,
@@ -114,6 +117,8 @@ export function producerVariationDirectionAssessment(song, direction, {
     siblingClonePenalty: clonePenalty,
     comparedSiblings: siblings.length,
     criticDimensions: Object.freeze([...(direction?.criticDimensions ?? [])]),
+    registerSafe,
+    registerViolations,
   });
 }
 
