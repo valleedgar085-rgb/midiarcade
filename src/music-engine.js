@@ -9121,7 +9121,6 @@ function compose(config, options = {}) {
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
       { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
-      { phase: 77, id: "tonal-integrity-guard", status: tonalIntegrity.report.status },
     ],
     idea,
   };
