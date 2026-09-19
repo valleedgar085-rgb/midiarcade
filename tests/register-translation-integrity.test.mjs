@@ -110,6 +110,21 @@ test("role-register refinement is octave-only and moves fatigue-prone parts into
   assert.ok(result.tracks.find((track) => track.id === "melody").notes[0].pitch <= 84);
 });
 
+test("raising bass body never sacrifices the seven-semitone harmony separation contract", () => {
+  const tracks = [
+    { id: "bass", notes: [{ pitch: 34, start: 0, duration: 2, velocity: 90 }] },
+    { id: "chords", notes: [{ pitch: 48, start: 0, duration: 2, velocity: 78 }] },
+  ];
+  const result = refineRoleRegisters(tracks, [{ id: "verse-1", startBeat: 0, endBeat: 4 }]);
+  const bass = result.tracks.find((track) => track.id === "bass").notes[0];
+  const chord = result.tracks.find((track) => track.id === "chords").notes[0];
+  assert.ok(bass.pitch >= 35, "bass should move into its preferred body range");
+  assert.ok(chord.pitch - bass.pitch >= 7, "harmony must remain at least seven semitones above sounding bass");
+  assert.ok(result.report.separationCorrections >= 1);
+  assert.equal(pitchClass(bass.pitch), pitchClass(34));
+  assert.equal(pitchClass(chord.pitch), pitchClass(48));
+});
+
 test("default Trap output no longer hides the bass an extra octave below its rendered MIDI register", { timeout: 120_000 }, () => {
   const song = generateNew({
     genre: "trap",
