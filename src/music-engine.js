@@ -9767,9 +9767,13 @@ function sectionPairContrast(left, right) {
     const b = finite(right?.trackDensity?.[id], 0);
     return Math.abs(a - b) / Math.max(0.2, a, b);
   }), 0);
-  const rhythmContrast = average((left?.rhythmProfile ?? []).map((value, index) => (
-    Math.abs(finite(value, 0) - finite(right?.rhythmProfile?.[index], 0))
-  )), 0) / 2;
+  const rhythmContrast = clamp(
+    (left?.rhythmProfile ?? []).reduce((sum, value, index) => (
+      sum + Math.abs(finite(value, 0) - finite(right?.rhythmProfile?.[index], 0))
+    ), 0) / 2,
+    0,
+    1,
+  );
   const densityContrast = Math.abs(finite(left?.totalDensity, 0) - finite(right?.totalDensity, 0))
     / Math.max(0.5, finite(left?.totalDensity, 0), finite(right?.totalDensity, 0));
   const velocityContrast = clamp(
