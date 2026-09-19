@@ -3230,6 +3230,322 @@ function smoothMotifFlow(motif, role = "statement") {
   return result;
 }
 
+function registerSectionAtBeat(structure = [], beat = 0) {
+  return structure.find((section) => (
+    beat >= finite(section?.startBeat, 0) - 1e-6
+    && beat < finite(section?.endBeat, 0) - 1e-6
+  )) ?? null;
+}
+
+function registerIntentShift(section, trackId, note = null) {
+  const registerLift = Math.sign(finite(section?.intent?.registerLift, 0));
+  const strategy = String(section?.intent?.phraseRegisterStrategy ?? "preserve");
+  if (trackId === "bass") {
+    if (note?.bassRegisterRole === "upper-harmonic") return 7;
+    return 0;
+  }
+  if (["melody", "counterpoint"].includes(trackId)) {
+    if (registerLift > 0 || strategy === "lift") return 12;
+    if (registerLift < 0 || ["drop", "settle"].includes(strategy)) return -7;
+    if (section?.intent?.role === "peak") return 7;
+    return 0;
+  }
+  if (["chords", "pad"].includes(trackId)) {
+    if (registerLift > 0 || section?.intent?.role === "peak") return 4;
+    if (registerLift < 0 || ["drop", "settle"].includes(strategy)) return -4;
+  }
+  return 0;
+}
+
+function registerBoundsForNote(trackId, section, note = null, bassFloor = null) {
+  const policy = DAW_REGISTER_POLICIES[trackId];
+  if (!policy) return null;
+  const intentShift = registerIntentShift(section, trackId, note);
+  const structuralLift = intentShift > 0;
+  const maximum = structuralLift ? policy.peakMax : policy.max;
+  const minimum = ["chords", "pad"].includes(trackId) && Number.isFinite(bassFloor)
+    ? Math.min(maximum, Math.max(policy.min, Math.round(bassFloor + 7)))
+    : policy.min;
+  return {
+    ...policy,
+    min: minimum,
+    max: maximum,
+    target: clamp(policy.center + intentShift, minimum, maximum),
+    intentShift,
+  };
+}
+
+function registerOctaveCandidates(pitch, minimum, maximum) {
+  const source = Math.round(finite(pitch, 60));
+  const candidates = [];
+  for (let shift = -48; shift <= 48; shift += 12) {
+    const candidate = source + shift;
+    if (candidate >= minimum && candidate <= maximum) candidates.push(candidate);
+  }
+  return candidates;
+}
+
+function registerBassCeilingAt(bassNotes = [], start = 0, duration = 0.1) {
+  const end = start + Math.max(0.02, duration);
+  const sounding = bassNotes.filter((note) => (
+    start < finite(note?.start, 0) + Math.max(0.02, finite(note?.duration, 0.1))
+    && finite(note?.start, 0) < end
+  ));
+  return sounding.length ? Math.max(...sounding.map((note) => finite(note?.pitch, 36))) : null;
+}
+
+function recenterLinearRegisterTrack(track, structure) {
+  const policy = DAW_REGISTER_POLICIES[track.id];
+  const notes = [...(track.notes ?? [])]
+    .map((note) => ({ ...note }))
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  if (!policy || track.settings?.octaveExplicit) {
+    return { track: { ...track, notes }, adjusted: 0, maximumLeapBefore: 0, maximumLeapAfter: 0 };
+  }
+
+  let adjusted = 0;
+  let maximumLeapBefore = 0;
+  let maximumLeapAfter = 0;
+  let previous = null;
+  let previousOriginal = null;
+  let previousSectionId = null;
+
+  for (const note of notes) {
+    const section = registerSectionAtBeat(structure, note.start);
+    const bounds = registerBoundsForNote(track.id, section, note);
+    if (!bounds) continue;
+    const originalPitch = note.pitch;
+    const sameSection = Boolean(section?.id && section.id === previousSectionId);
+    const phraseConnected = previous
+      && sameSection
+      && note.start > previous.start + 1e-6
+      && note.start - (previous.start + Math.max(0.02, finite(previous.duration, 0.1))) <= 2.01;
+    if (previousOriginal && phraseConnected) {
+      maximumLeapBefore = Math.max(maximumLeapBefore, Math.abs(originalPitch - previousOriginal.pitch));
+    }
+    const candidates = registerOctaveCandidates(originalPitch, bounds.min, bounds.max);
+    if (candidates.length) {
+      candidates.sort((left, right) => {
+        const score = (pitch) => {
+          let value = Math.abs(pitch - bounds.target) + Math.abs(pitch - originalPitch) * 0.08;
+          if (phraseConnected) {
+            const leap = Math.abs(pitch - previous.pitch);
+            value += leap * 0.25;
+            value += Math.max(0, leap - policy.preferredLeap) * 5;
+            value += Math.max(0, leap - 12) * 12;
+          }
+          return value;
+        };
+        return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
+      });
+      const selected = candidates[0];
+      if (selected !== originalPitch) {
+        note.pitch = selected;
+        note.dawRegisterShift = selected - originalPitch;
+        note.dawRegisterAdjusted = true;
+        adjusted += 1;
+      }
+    }
+    if (bounds.intentShift !== 0) {
+      note.dawRegisterRole = bounds.intentShift > 0 ? "structural-lift" : "structural-settle";
+    }
+    if (previous && phraseConnected) maximumLeapAfter = Math.max(maximumLeapAfter, Math.abs(note.pitch - previous.pitch));
+    previousOriginal = { pitch: originalPitch };
+    previous = note;
+    previousSectionId = section?.id ?? null;
+  }
+
+  return {
+    track: { ...track, notes },
+    adjusted,
+    maximumLeapBefore,
+    maximumLeapAfter,
+  };
+}
+
+function recenterHarmonicRegisterTrack(track, structure, bassNotes = []) {
+  const policy = DAW_REGISTER_POLICIES[track.id];
+  const notes = [...(track.notes ?? [])]
+    .map((note) => ({ ...note }))
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  if (!policy || track.settings?.octaveExplicit) return { track: { ...track, notes }, adjusted: 0 };
+
+  const groups = new Map();
+  for (const note of notes) {
+    const key = round(note.start, 4);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(note);
+  }
+  let adjusted = 0;
+
+  for (const group of groups.values()) {
+    const start = group[0]?.start ?? 0;
+    const duration = Math.max(...group.map((note) => Math.max(0.02, finite(note.duration, 0.1))));
+    const section = registerSectionAtBeat(structure, start);
+    const bassCeiling = registerBassCeilingAt(bassNotes, start, duration);
+    const bounds = registerBoundsForNote(track.id, section, group[0], bassCeiling);
+    if (!bounds) continue;
+    const originalMean = average(group.map((note) => finite(note.pitch, bounds.target)), bounds.target);
+    const validShifts = [];
+    for (let shift = -48; shift <= 48; shift += 12) {
+      if (group.every((note) => note.pitch + shift >= bounds.min && note.pitch + shift <= bounds.max)) {
+        validShifts.push(shift);
+      }
+    }
+    let selectedShift = 0;
+    if (validShifts.length) {
+      validShifts.sort((left, right) => (
+        Math.abs(originalMean + left - bounds.target) + Math.abs(left) * 0.06
+        - (Math.abs(originalMean + right - bounds.target) + Math.abs(right) * 0.06)
+      ));
+      selectedShift = validShifts[0];
+      for (const note of group) {
+        if (selectedShift) {
+          note.pitch += selectedShift;
+          note.dawRegisterShift = selectedShift;
+          note.dawRegisterAdjusted = true;
+          adjusted += 1;
+        }
+        if (bounds.intentShift !== 0) {
+          note.dawRegisterRole = bounds.intentShift > 0 ? "structural-lift" : "structural-settle";
+        }
+      }
+      continue;
+    }
+
+    for (const note of group) {
+      const candidates = registerOctaveCandidates(note.pitch, bounds.min, bounds.max)
+        .sort((left, right) => Math.abs(left - bounds.target) - Math.abs(right - bounds.target));
+      const selected = candidates[0] ?? clamp(note.pitch, bounds.min, bounds.max);
+      if (selected !== note.pitch) {
+        const original = note.pitch;
+        note.pitch = selected;
+        note.dawRegisterShift = selected - original;
+        note.dawRegisterAdjusted = true;
+        adjusted += 1;
+      }
+      if (bounds.intentShift !== 0) {
+        note.dawRegisterRole = bounds.intentShift > 0 ? "structural-lift" : "structural-settle";
+      }
+    }
+  }
+
+  return { track: { ...track, notes }, adjusted };
+}
+
+export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const adjustedByTrack = {};
+  const manualTracks = [];
+  let maximumLeapBefore = 0;
+  let maximumLeapAfter = 0;
+
+  for (const id of ["bass", "melody", "counterpoint"]) {
+    const source = byId.get(id);
+    if (!source) continue;
+    if (source.settings?.octaveExplicit) manualTracks.push(id);
+    const result = recenterLinearRegisterTrack(source, structure);
+    byId.set(id, result.track);
+    adjustedByTrack[id] = result.adjusted;
+    maximumLeapBefore = Math.max(maximumLeapBefore, result.maximumLeapBefore ?? 0);
+    maximumLeapAfter = Math.max(maximumLeapAfter, result.maximumLeapAfter ?? 0);
+  }
+
+  const correctedBass = byId.get("bass")?.notes ?? [];
+  for (const id of ["chords", "pad"]) {
+    const source = byId.get(id);
+    if (!source) continue;
+    if (source.settings?.octaveExplicit) manualTracks.push(id);
+    const result = recenterHarmonicRegisterTrack(source, structure, correctedBass);
+    byId.set(id, result.track);
+    adjustedByTrack[id] = result.adjusted;
+  }
+
+  const resultTracks = tracks.map((track) => byId.get(track.id) ?? track);
+  const report = {
+    version: 1,
+    status: "complete",
+    adjustedNotes: Object.values(adjustedByTrack).reduce((sum, value) => sum + value, 0),
+    adjustedByTrack,
+    manualTracks: [...new Set(manualTracks)],
+    maximumLeapBefore,
+    maximumLeapAfter,
+    pitchClassesPreserved: true,
+    ranges: clone(DAW_REGISTER_POLICIES),
+  };
+  return { tracks: resultTracks, report };
+}
+
+export function evaluateDawRegisterQuality(song) {
+  const tracks = song?.tracks ?? [];
+  const structure = song?.structure ?? song?.sections ?? [];
+  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const bassNotes = byId.get("bass")?.notes ?? [];
+  let rangeViolations = 0;
+  let separationViolations = 0;
+  let randomOctaveLeaps = 0;
+  const trackReports = {};
+
+  for (const track of tracks) {
+    const policy = DAW_REGISTER_POLICIES[track.id];
+    if (!policy || track.settings?.octaveExplicit) continue;
+    let trackRangeViolations = 0;
+    const notes = [...(track.notes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    let previous = null;
+    let previousSectionId = null;
+    for (const note of notes) {
+      const section = registerSectionAtBeat(structure, note.start);
+      const bassCeiling = ["chords", "pad"].includes(track.id)
+        ? registerBassCeilingAt(bassNotes, note.start, note.duration)
+        : null;
+      const bounds = registerBoundsForNote(track.id, section, note, bassCeiling);
+      if (!bounds) continue;
+      if (note.pitch < bounds.min || note.pitch > bounds.max) {
+        rangeViolations += 1;
+        trackRangeViolations += 1;
+      }
+      if (track.id === "chords" && Number.isFinite(bassCeiling) && note.pitch - bassCeiling < 7) {
+        separationViolations += 1;
+      }
+      if (["bass", "melody", "counterpoint"].includes(track.id) && previous) {
+        const sameSection = section?.id && section.id === previousSectionId;
+        const connected = sameSection
+          && note.start > previous.start + 1e-6
+          && note.start - (previous.start + Math.max(0.02, finite(previous.duration, 0.1))) <= 2.01;
+        const intentional = Boolean(
+          note.dawRegisterRole
+          || note.bassRegisterRole === "upper-harmonic"
+          || registerIntentShift(section, track.id, note) !== 0
+        );
+        if (connected && Math.abs(note.pitch - previous.pitch) >= 12 && !intentional) randomOctaveLeaps += 1;
+      }
+      previous = note;
+      previousSectionId = section?.id ?? null;
+    }
+    trackReports[track.id] = {
+      min: notes.length ? Math.min(...notes.map((note) => note.pitch)) : null,
+      max: notes.length ? Math.max(...notes.map((note) => note.pitch)) : null,
+      rangeViolations: trackRangeViolations,
+    };
+  }
+
+  const passed = rangeViolations === 0 && separationViolations === 0 && randomOctaveLeaps === 0;
+  return {
+    version: 1,
+    passed,
+    reason: passed ? "daw-register-ready" : "register-needs-repair",
+    score: clamp(100 - rangeViolations * 12 - separationViolations * 8 - randomOctaveLeaps * 14, 0, 100),
+    rangeViolations,
+    separationViolations,
+    randomOctaveLeaps,
+    trackReports,
+  };
+}
+
 function shapeRenderedMelodicFlow(sourceTracks, structure) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
