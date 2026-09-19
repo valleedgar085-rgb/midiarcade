@@ -3260,6 +3260,7 @@ test("Track B outcome logic keeps Producer Brain status aligned with release, qu
   assert.equal(outcome.qualityPassed, song.meta.qualityGate.passed);
   assert.equal(outcome.balancePassed, details.balance.passed);
   assert.equal(outcome.diversityPassed, song.meta.diversity.passed && outcome.noveltyFloorPassed);
+  assert.equal(outcome.registerOutcomePassed, song.meta.registerOutcome.passed);
   assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
   assert.deepEqual(song.producerPass.outputOutcome, outcome);
 });
@@ -3278,8 +3279,9 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
   for (const candidate of candidates) {
     assert.equal(typeof candidate.diversityPassed, "boolean");
     assert.equal(typeof candidate.outcomePassed, "boolean");
+    assert.equal(typeof candidate.registerOutcomePassed, "boolean");
     assert.equal(typeof candidate.adaptiveTarget, "boolean");
-    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate/);
+    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate|register-outcome-below-gate/);
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
   }
 });
@@ -3436,4 +3438,146 @@ test("Track B production generation exposes section outcome QC inside the author
   assert.equal(outcome.sectionOutcomeScore, report.score);
   assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
   assert.ok(song.ideaEnginePhases.some((phase) => phase.id === "section-outcome-qc"));
+});
+
+
+test("Track B DAW register policy keeps default generated MIDI inside plugin-friendly ranges", () => {
+  for (const genre of ["trap", "hipHop", "pop", "neoSoul"]) {
+    const song = engine.generateNew({
+      ...CONFIG,
+      genre,
+      seed: `daw-register-${genre}`,
+      bars: 16,
+      candidateCount: 1,
+    });
+    const report = engine.evaluateDawRegisterQuality(song);
+    assert.equal(report.passed, true, `${genre} should pass DAW register QC`);
+    assert.equal(report.rangeViolations, 0);
+    assert.equal(report.separationViolations, 0);
+    assert.equal(report.randomOctaveLeaps, 0);
+    assert.equal(song.dawRegister?.pitchClassesPreserved, true);
+    assert.equal(song.meta.registerOutcome?.passed, true);
+
+    for (const [id, policy] of Object.entries(engine.DAW_REGISTER_POLICIES)) {
+      const track = song.tracks.find((candidate) => candidate.id === id);
+      if (!track?.notes?.length || track.settings?.octaveExplicit) continue;
+      const pitches = track.notes.map((note) => note.pitch);
+      assert.ok(Math.min(...pitches) >= policy.min, `${genre} ${id} should not fall below ${policy.min}`);
+      assert.ok(Math.max(...pitches) <= policy.peakMax, `${genre} ${id} should not exceed ${policy.peakMax}`);
+    }
+  }
+});
+
+test("Track B DAW register policy raises automatic bass out of mud and limits lead squeal", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "daw-register-trap-proof",
+    bars: 16,
+    candidateCount: 1,
+  });
+  const bass = song.tracks.find((track) => track.id === "bass").notes;
+  const melody = song.tracks.find((track) => track.id === "melody").notes;
+  const counterpoint = song.tracks.find((track) => track.id === "counterpoint").notes;
+  assert.ok(bass.length > 0);
+  assert.ok(Math.min(...bass.map((note) => note.pitch)) >= engine.DAW_REGISTER_POLICIES.bass.min);
+  assert.ok(Math.max(...bass.map((note) => note.pitch)) <= engine.DAW_REGISTER_POLICIES.bass.peakMax);
+  assert.ok(!melody.length || Math.max(...melody.map((note) => note.pitch)) <= engine.DAW_REGISTER_POLICIES.melody.peakMax);
+  assert.ok(!counterpoint.length || Math.max(...counterpoint.map((note) => note.pitch)) <= engine.DAW_REGISTER_POLICIES.counterpoint.peakMax);
+});
+
+test("Track B DAW register policy removes random octave jumps but permits structural lifts", () => {
+  const sourceTracks = [
+    {
+      id: "melody",
+      settings: { octaveExplicit: false },
+      notes: [
+        { start: 0, duration: 0.5, pitch: 60, velocity: 90 },
+        { start: 1, duration: 0.5, pitch: 84, velocity: 90 },
+        { start: 4, duration: 0.5, pitch: 84, velocity: 96 },
+      ],
+    },
+  ];
+  const structure = [
+    {
+      id: "verse-1",
+      name: "verse",
+      startBeat: 0,
+      endBeat: 4,
+      intent: { role: "statement", registerLift: 0, phraseRegisterStrategy: "preserve" },
+    },
+    {
+      id: "chorus-1",
+      name: "chorus",
+      startBeat: 4,
+      endBeat: 8,
+      intent: { role: "peak", registerLift: 1, phraseRegisterStrategy: "lift" },
+    },
+  ];
+  const result = engine.applyDawRegisterPolicy(sourceTracks, structure);
+  const notes = result.tracks[0].notes;
+  assert.ok(Math.abs(notes[1].pitch - notes[0].pitch) < 12, "same-section random octave leap should be folded");
+  assert.equal(notes[2].dawRegisterRole, "structural-lift");
+  assert.ok(notes[2].pitch >= notes[1].pitch, "planned peak section may intentionally move upward");
+  assert.equal(result.report.pitchClassesPreserved, true);
+});
+
+test("Track B manual octave controls remain authoritative over automatic DAW recentering", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    seed: "manual-register-authority",
+    genre: "hipHop",
+    candidateCount: 1,
+    tracks: {
+      bass: { octave: 1 },
+      melody: { octave: 6 },
+    },
+  });
+  const bass = song.tracks.find((track) => track.id === "bass");
+  const melody = song.tracks.find((track) => track.id === "melody");
+  assert.equal(bass.settings.octaveExplicit, true);
+  assert.equal(melody.settings.octaveExplicit, true);
+  assert.ok(song.dawRegister.manualTracks.includes("bass"));
+  assert.ok(song.dawRegister.manualTracks.includes("melody"));
+});
+
+
+test("Track B DAW register cleanup cannot create duplicate pitch/onset or same-pitch overlaps", () => {
+  const result = engine.applyDawRegisterPolicy([
+    {
+      id: "bass",
+      settings: { octaveExplicit: false },
+      notes: [
+        { start: 0, duration: 2, pitch: 36, velocity: 82 },
+        { start: 0, duration: 1, pitch: 48, velocity: 94, phraseAnchor: true },
+        { start: 1, duration: 2, pitch: 60, velocity: 88 },
+      ],
+    },
+  ], [
+    {
+      id: "verse-1",
+      name: "verse",
+      startBeat: 0,
+      endBeat: 4,
+      intent: { role: "statement", registerLift: 0, phraseRegisterStrategy: "preserve" },
+    },
+  ]);
+  const bass = result.tracks[0].notes;
+  const identities = new Set();
+  const lastByPitch = new Map();
+  for (const note of bass) {
+    const identity = `${note.pitch}:${note.start}`;
+    assert.equal(identities.has(identity), false, `duplicate pitch/onset ${identity} must be merged`);
+    identities.add(identity);
+    const previous = lastByPitch.get(note.pitch);
+    if (previous) {
+      assert.ok(
+        previous.start + previous.duration <= note.start + 1e-6,
+        `same-pitch register-fold notes must not overlap at pitch ${note.pitch}`,
+      );
+    }
+    lastByPitch.set(note.pitch, note);
+  }
+  assert.ok(result.report.mergedDuplicates >= 1);
+  assert.ok(result.report.overlapsTrimmed >= 1);
 });
