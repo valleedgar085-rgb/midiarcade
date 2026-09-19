@@ -22,9 +22,25 @@ const GENRE_WORDS = Object.freeze({
 
 const FALLBACK_LEFT = ["After", "Broken", "Chrome", "Distant", "Electric", "Golden", "Midnight", "Neon", "Open", "Quiet", "Satellite", "Velvet"];
 const FALLBACK_RIGHT = ["Gravity", "Hours", "Mirage", "Motion", "Radio", "Signal", "Skyline", "Theory", "Tide", "Weather", "Cinema", "Horizon"];
+const SINGLE_WORDS = ["Afterimage", "Backlight", "Daybreak", "Drift", "Frequency", "Halflight", "Overtone", "Static", "Undertow", "Voltage"];
+const PHRASE_OPENERS = ["After", "Beyond", "Before", "Inside", "Under"];
+const PHRASE_OBJECTS = ["Blue Light", "Last Call", "Midnight", "the Static", "the Skyline"];
+const TIME_WORDS = ["2AM", "After Hours", "Blue Hour", "Last Night", "Sunday Morning"];
+const TIME_SUFFIXES = ["Drive", "Radio", "Signal", "Story", "Weather"];
 
 function wordsForGenre(genre) {
   return GENRE_WORDS[genre] ?? [FALLBACK_LEFT, FALLBACK_RIGHT];
+}
+
+function pick(values, seed) {
+  return values[Math.abs(seed) % values.length];
+}
+
+function titleStructure(seed, identity) {
+  const bias = String(identity?.signatureBias ?? "");
+  const narrative = String(identity?.narrative ?? "");
+  const offset = bias === "hook" ? 1 : bias === "harmony" ? 2 : bias === "dialogue" ? 3 : 0;
+  return (seed + hash(narrative) + offset) % 5;
 }
 
 export function deriveSongTitle(song = {}) {
@@ -34,8 +50,20 @@ export function deriveSongTitle(song = {}) {
   const identity = dna?.identity ?? {};
   const seed = hash([dna?.familyId, dna?.id, song?.seed, genre, identity.signatureBias, identity.narrative].filter(Boolean).join("|"));
   const [leftWords, rightWords] = wordsForGenre(genre);
-  let left = leftWords[seed % leftWords.length];
-  let right = rightWords[(seed >>> 8) % rightWords.length];
-  if (left.toLowerCase() === right.toLowerCase()) right = rightWords[((seed >>> 8) + 1) % rightWords.length];
-  return `${left} ${right}`;
+  const left = pick(leftWords, seed);
+  let right = pick(rightWords, seed >>> 8);
+  if (left.toLowerCase() === right.toLowerCase()) right = pick(rightWords, (seed >>> 8) + 1);
+
+  switch (titleStructure(seed, identity)) {
+    case 0:
+      return pick(SINGLE_WORDS, seed >>> 5);
+    case 1:
+      return `${left} ${right}`;
+    case 2:
+      return `${pick(PHRASE_OPENERS, seed >>> 4)} ${pick(PHRASE_OBJECTS, seed >>> 11)}`;
+    case 3:
+      return `${pick(TIME_WORDS, seed >>> 3)} ${pick(TIME_SUFFIXES, seed >>> 13)}`;
+    default:
+      return `${left} ${pick(["Light", "Lines", "Room", "Side", "Sky"], seed >>> 15)}`;
+  }
 }
