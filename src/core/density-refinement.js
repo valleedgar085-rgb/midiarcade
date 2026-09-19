@@ -28,6 +28,67 @@ function notesPerBar(song) {
   return pitchedNoteCount(song) / songBars(song);
 }
 
+function songSections(song) {
+  const sections = Array.isArray(song?.structure) ? song.structure : song?.sections;
+  return Array.isArray(sections) ? sections : [];
+}
+
+function sectionBounds(song, section) {
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const startBeat = finite(
+    section?.startBeat,
+    finite(section?.startBar, 0) * beatsPerBar,
+  );
+  const bars = Math.max(
+    1,
+    finite(
+      section?.bars,
+      (finite(section?.endBeat, startBeat + beatsPerBar) - startBeat) / beatsPerBar,
+    ),
+  );
+  const endBeat = Math.max(
+    startBeat + 0.01,
+    finite(section?.endBeat, startBeat + bars * beatsPerBar),
+  );
+  return { startBeat, endBeat, bars };
+}
+
+function sectionDensityMap(song) {
+  const sections = songSections(song);
+  const map = new Map();
+  for (const section of sections) {
+    const bounds = sectionBounds(song, section);
+    const count = (song?.tracks ?? [])
+      .filter((track) => track?.id !== "drums")
+      .reduce((sum, track) => sum + (track?.notes ?? []).filter((note) => (
+        finite(note?.start) >= bounds.startBeat - 1e-6
+        && finite(note?.start) < bounds.endBeat - 1e-6
+      )).length, 0);
+    map.set(section?.id, {
+      ...bounds,
+      notesPerBar: count / bounds.bars,
+    });
+  }
+  return map;
+}
+
+function weakestSectionNotesPerBar(song) {
+  const values = [...sectionDensityMap(song).values()].map(({ notesPerBar: value }) => value);
+  return values.length ? Math.min(...values) : notesPerBar(song);
+}
+
+function localSectionDensity(song, startBeat) {
+  const sections = songSections(song);
+  const densities = sectionDensityMap(song);
+  const section = sections.find((entry) => {
+    const bounds = densities.get(entry?.id);
+    return bounds
+      && startBeat >= bounds.startBeat - 1e-6
+      && startBeat < bounds.endBeat - 1e-6;
+  });
+  return section ? densities.get(section?.id)?.notesPerBar ?? notesPerBar(song) : notesPerBar(song);
+}
+
 function protectedSupportNote(note) {
   return Boolean(
     note?.resolutionRole
@@ -47,9 +108,12 @@ function eligibleSplitNotes(song) {
       trackId: track.id,
       noteIndex,
       note,
+      localDensity: localSectionDensity(song, finite(note?.start)),
     })))
     .filter(({ note }) => finite(note?.duration) >= 0.5 && !protectedSupportNote(note))
     .sort((left, right) => {
+      const densityDelta = finite(left.localDensity) - finite(right.localDensity);
+      if (Math.abs(densityDelta) > 1e-9) return densityDelta;
       const durationDelta = finite(right.note.duration) - finite(left.note.duration);
       if (Math.abs(durationDelta) > 1e-9) return durationDelta;
       const trackDelta = trackRank.get(left.trackId) - trackRank.get(right.trackId);
@@ -130,8 +194,10 @@ export function createDensityRefinementCandidates(song, {
       const budgetKey = splitCount * 4 + parts;
       if (!splitCount || seenBudgets.has(budgetKey)) return null;
       seenBudgets.add(budgetKey);
+      const weakestSectionNotesPerBarBefore = weakestSectionNotesPerBar(song);
       const articulated = articulateSupport(song, splitCount, parts);
       const afterNotesPerBar = notesPerBar(articulated.song);
+      const weakestSectionNotesPerBarAfter = weakestSectionNotesPerBar(articulated.song);
       return {
         id: ["light-support", "balanced-support", "full-support"][candidateIndex],
         candidateIndex,
@@ -140,6 +206,8 @@ export function createDensityRefinementCandidates(song, {
         articulationParts: parts,
         beforeNotesPerBar: round(beforeNotesPerBar, 3),
         afterNotesPerBar: round(afterNotesPerBar, 3),
+        weakestSectionNotesPerBarBefore: round(weakestSectionNotesPerBarBefore, 3),
+        weakestSectionNotesPerBarAfter: round(weakestSectionNotesPerBarAfter, 3),
         densityTarget: round(target, 3),
         densityErrorDelta: round(
           Math.abs(afterNotesPerBar - target) - Math.abs(beforeNotesPerBar - target),
