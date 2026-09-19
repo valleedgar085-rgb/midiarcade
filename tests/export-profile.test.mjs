@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { prepareMidiExport, resolveMidiExportProfile } from "../src/core/export-profile.js";
-import { encodeMidi } from "../src/music-engine.js";
+import { DAW_REGISTER_POLICIES, encodeMidi, generateNew } from "../src/music-engine.js";
 
 const SONG = {
   meta: { totalBeats: 4 },
@@ -108,6 +108,50 @@ test("tight export quantizes a clone, removes duplicate onsets, and preserves th
   assert.equal(prepared.song.tracks.find((track) => track.id === "melody").notes[0].start, 0.25);
   assert.equal(prepared.song.tracks.find((track) => track.id === "melody").notes[0].velocity, 96);
   assert.deepEqual(source, SONG, "export preparation must never edit the working song");
+});
+
+test("performance export preserves authoritative DAW-register pitches across Trap, Hip-Hop, Pop, and Neo-Soul", () => {
+  for (const genre of ["trap", "hipHop", "pop", "neoSoul"]) {
+    const song = generateNew({
+      genre,
+      seed: `export-register-${genre}`,
+      bars: 16,
+      candidateCount: 1,
+    });
+    const prepared = prepareMidiExport(song, { timing: "performance" });
+    const payloads = midiTrackPayloads(encodeMidi(prepared.song, prepared.options)).slice(1);
+
+    assert.equal(payloads.length, prepared.song.tracks.length, `${genre} should encode every prepared track`);
+    for (const [index, track] of prepared.song.tracks.entries()) {
+      const exportedPitches = channelEvents(payloads[index])
+        .filter((event) => event.type === 0x90 && event.data[1] > 0)
+        .map((event) => event.data[0])
+        .sort((left, right) => left - right);
+      const preparedPitches = track.notes
+        .map((note) => Math.round(note.pitch))
+        .sort((left, right) => left - right);
+      assert.deepEqual(
+        exportedPitches,
+        preparedPitches,
+        `${genre} ${track.id} MIDI bytes must use the exact prepared note pitches`,
+      );
+
+      const sourceTrack = song.tracks.find((candidate) => candidate.id === track.id);
+      const sourcePitches = new Set((sourceTrack?.notes ?? []).map((note) => Math.round(note.pitch)));
+      assert.ok(
+        preparedPitches.every((pitch) => sourcePitches.has(pitch)),
+        `${genre} ${track.id} export preparation must not transpose notes`,
+      );
+
+      const policy = DAW_REGISTER_POLICIES[track.id];
+      if (policy && !track.settings?.octaveExplicit) {
+        assert.ok(
+          preparedPitches.every((pitch) => pitch >= policy.min && pitch <= policy.peakMax),
+          `${genre} ${track.id} encoded pitches must stay inside the DAW register policy`,
+        );
+      }
+    }
+  }
 });
 
 test("performance export bounds long generated notes and removes generated sustain", () => {
