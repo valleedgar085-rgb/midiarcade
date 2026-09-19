@@ -9260,7 +9260,8 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  let tracks = finalGrooveAssembly.tracks;
+  const finalDawRegister = applyDawRegisterPolicy(finalGrooveAssembly.tracks, structure);
+  let tracks = finalDawRegister.tracks;
   if (targetTrack === "drums" && contextTracks.bass?.length) {
     const finalDrumTrack = tracks.find((track) => track.id === "drums");
     if (finalDrumTrack) {
@@ -9365,6 +9366,7 @@ function compose(config, options = {}) {
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
     melodicDialogue: melodicDialogue.report,
+    dawRegister: finalDawRegister.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     vocalSpace: creativePolish.vocalSpace,
@@ -11903,7 +11905,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
-  song.tracks = repairedFinalGrooveAssembly.tracks;
+  const repairedDawRegister = applyDawRegisterPolicy(repairedFinalGrooveAssembly.tracks, song.structure);
+  song.tracks = repairedDawRegister.tracks;
   if (repairStrategy?.dimension === "performance") {
     const performanceRepair = rebalanceRepairPerformance(song);
     song.tracks = performanceRepair.tracks;
@@ -11934,6 +11937,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   song.perceptualMix = perceptualMix.report;
   song.spectrumPlan = spectrumPlan;
   song.voiceLeading = creativePolish.voiceLeading;
+  song.dawRegister = repairedDawRegister.report;
   song.pocketCohesion = creativePolish.pocketCohesion;
   song.negativeSpace = creativePolish.negativeSpace;
   song.vocalSpace = creativePolish.vocalSpace;
