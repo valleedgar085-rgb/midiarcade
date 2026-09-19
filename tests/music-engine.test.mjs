@@ -3260,6 +3260,7 @@ test("Track B outcome logic keeps Producer Brain status aligned with release, qu
   assert.equal(outcome.qualityPassed, song.meta.qualityGate.passed);
   assert.equal(outcome.balancePassed, details.balance.passed);
   assert.equal(outcome.diversityPassed, song.meta.diversity.passed && outcome.noveltyFloorPassed);
+  assert.equal(outcome.registerOutcomePassed, song.meta.registerOutcome.passed);
   assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
   assert.deepEqual(song.producerPass.outputOutcome, outcome);
 });
@@ -3278,6 +3279,7 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
   for (const candidate of candidates) {
     assert.equal(typeof candidate.diversityPassed, "boolean");
     assert.equal(typeof candidate.outcomePassed, "boolean");
+    assert.equal(typeof candidate.registerOutcomePassed, "boolean");
     assert.equal(typeof candidate.adaptiveTarget, "boolean");
     assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate|register-outcome-below-gate/);
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
