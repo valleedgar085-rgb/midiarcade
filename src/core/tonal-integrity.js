@@ -45,20 +45,28 @@ function chordPitchClasses(chord, scaleClasses) {
     .filter((pitchClass) => !scaleClasses?.size || scaleClasses.has(pitchClass)));
 }
 
-function nearestPitchForClasses(sourcePitch, classes, { maxDistance = 12 } = {}) {
+function nearestPitchForClasses(sourcePitch, classes, { maxDistance = 12, avoidCandidate = null } = {}) {
   const source = notePitch({ pitch: sourcePitch });
-  let best = source;
-  let bestDistance = Infinity;
+  const candidates = [];
   for (let delta = -maxDistance; delta <= maxDistance; delta += 1) {
     const candidate = source + delta;
     if (candidate < 0 || candidate > 127 || !classes.has(mod(candidate, 12))) continue;
-    const distance = Math.abs(delta);
-    if (distance < bestDistance || (distance === bestDistance && candidate < best)) {
-      best = candidate;
-      bestDistance = distance;
-    }
+    if (typeof avoidCandidate === "function" && avoidCandidate(candidate)) continue;
+    candidates.push({ pitch: candidate, distance: Math.abs(delta) });
   }
-  return { pitch: best, distance: bestDistance };
+  candidates.sort((left, right) => left.distance - right.distance || left.pitch - right.pitch);
+  return candidates[0] ?? { pitch: source, distance: Infinity };
+}
+
+function createsSamePitchOverlap(notes, currentNote, candidatePitch) {
+  const start = finite(currentNote?.start);
+  const end = start + Math.max(0.02, finite(currentNote?.duration, 0.25));
+  return (notes ?? []).some((other) => {
+    if (other === currentNote || notePitch(other) !== candidatePitch) return false;
+    const otherStart = finite(other?.start);
+    const otherEnd = otherStart + Math.max(0.02, finite(other?.duration, 0.25));
+    return start < otherEnd - 1e-6 && otherStart < end - 1e-6;
+  });
 }
 
 function isStrongBeat(note) {
@@ -194,7 +202,10 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
     for (const note of track.notes ?? []) {
       const originalPitch = notePitch(note);
       if (!scaleClasses.has(mod(originalPitch, 12))) {
-        const corrected = nearestPitchForClasses(originalPitch, scaleClasses, { maxDistance: 12 });
+        const corrected = nearestPitchForClasses(originalPitch, scaleClasses, {
+          maxDistance: 12,
+          avoidCandidate: (candidate) => createsSamePitchOverlap(track.notes, note, candidate),
+        });
         if (corrected.pitch !== originalPitch) {
           note.pitch = corrected.pitch;
           note.tonalIntegrityRepair = "scale-snap";
@@ -213,7 +224,10 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
       const used = sectionCorrections.get(sectionKey) ?? 0;
       if (used >= 2) continue;
 
-      const candidate = nearestPitchForClasses(notePitch(note), risk.chordClasses, { maxDistance: 2 });
+      const candidate = nearestPitchForClasses(notePitch(note), risk.chordClasses, {
+        maxDistance: 2,
+        avoidCandidate: (pitch) => createsSamePitchOverlap(track.notes, note, pitch),
+      });
       if (!Number.isFinite(candidate.distance) || candidate.distance > 2 || candidate.pitch === notePitch(note)) continue;
 
       note.pitch = candidate.pitch;
