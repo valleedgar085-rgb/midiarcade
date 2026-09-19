@@ -36,6 +36,7 @@ import {
 import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
+import { phraseContinuityAnchorIndexes } from "./core/phrase-continuity.js";
 
 export const PPQ = 480;
 
@@ -5221,17 +5222,19 @@ function generateLead(
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
     const sectionLength = section.endBeat - section.startBeat;
+    const continuityAnchorIndexes = new Set(phraseContinuityAnchorIndexes(activeMotif, {
+      beatsPerBar: barBeats,
+      density: settings.density,
+      intensity,
+      counterpoint,
+    }));
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
       const development = phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
       for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
         const event = activeMotif.events[eventIndex];
         const progress = eventIndex / Math.max(1, activeMotif.events.length - 1);
-        const phraseSkeleton = !counterpoint && (
-          eventIndex === 0
-          || eventIndex === activeMotif.events.length - 1
-          || eventIndex === Math.floor(activeMotif.events.length / 2)
-        );
+        const phraseSkeleton = !counterpoint && continuityAnchorIndexes.has(eventIndex);
         if (development?.type === "rest" && eventIndex === development.restIndex && !phraseSkeleton) continue;
         if (
           development?.type === "fragment"
