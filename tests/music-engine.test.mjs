@@ -3540,3 +3540,44 @@ test("Track B manual octave controls remain authoritative over automatic DAW rec
   assert.ok(song.dawRegister.manualTracks.includes("bass"));
   assert.ok(song.dawRegister.manualTracks.includes("melody"));
 });
+
+
+test("Track B DAW register cleanup cannot create duplicate pitch/onset or same-pitch overlaps", () => {
+  const result = engine.applyDawRegisterPolicy([
+    {
+      id: "bass",
+      settings: { octaveExplicit: false },
+      notes: [
+        { start: 0, duration: 2, pitch: 36, velocity: 82 },
+        { start: 0, duration: 1, pitch: 48, velocity: 94, phraseAnchor: true },
+        { start: 1, duration: 2, pitch: 60, velocity: 88 },
+      ],
+    },
+  ], [
+    {
+      id: "verse-1",
+      name: "verse",
+      startBeat: 0,
+      endBeat: 4,
+      intent: { role: "statement", registerLift: 0, phraseRegisterStrategy: "preserve" },
+    },
+  ]);
+  const bass = result.tracks[0].notes;
+  const identities = new Set();
+  const lastByPitch = new Map();
+  for (const note of bass) {
+    const identity = `${note.pitch}:${note.start}`;
+    assert.equal(identities.has(identity), false, `duplicate pitch/onset ${identity} must be merged`);
+    identities.add(identity);
+    const previous = lastByPitch.get(note.pitch);
+    if (previous) {
+      assert.ok(
+        previous.start + previous.duration <= note.start + 1e-6,
+        `same-pitch register-fold notes must not overlap at pitch ${note.pitch}`,
+      );
+    }
+    lastByPitch.set(note.pitch, note);
+  }
+  assert.ok(result.report.mergedDuplicates >= 1);
+  assert.ok(result.report.overlapsTrimmed >= 1);
+});
