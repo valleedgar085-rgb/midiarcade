@@ -6474,6 +6474,15 @@ function articulatePerformance(notes, id, config, rng) {
       const overlapBudget = Math.max(0.01, next.start - note.start - 0.02);
       note.duration = round(Math.min(note.duration * 1.08, overlapBudget));
     }
+    const wideForegroundLeap = upgraded
+      && ["melody", "counterpoint"].includes(id)
+      && next
+      && intervalToNext >= 7;
+    if (wideForegroundLeap && note.articulation !== "accent") {
+      note.velocity = clamp(note.velocity - 2, 1, 127);
+      note.duration = round(Math.max(0.06, note.duration * 0.92));
+      if (note.articulation === "legato" || note.articulation === "glide") note.articulation = "tenuto";
+    }
     const breathAfter = melodic && (!next || next.start - (note.start + note.duration) >= 0.38);
     note.performanceRole = breathAfter
       ? "phrase-ending"
