@@ -34,6 +34,9 @@ import {
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
 import { refineTonalIntegrity } from "./core/tonal-integrity.js";
+import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { roleRegisterWindow } from "./core/role-register-policy.js";
+import { refineRoleRegisters } from "./core/role-register-refinement.js";
 
 export const PPQ = 480;
 
@@ -3274,9 +3277,10 @@ function shapeRenderedMelodicFlow(sourceTracks, structure) {
       previousSectionId = section?.id ?? null;
       continue;
     }
+    const melodyWindow = roleRegisterWindow("melody") ?? { min: 48, max: 84 };
     const candidates = [-24, -12, 0, 12, 24]
       .map((offset) => originalPitch + offset)
-      .filter((pitch) => pitch >= 48 && pitch <= 96);
+      .filter((pitch) => pitch >= melodyWindow.min && pitch <= melodyWindow.max);
     candidates.sort((left, right) => {
       const score = (pitch) => {
         const motion = pitch - previous.pitch;
@@ -4540,7 +4544,7 @@ function generateBass(
   if (settings.density <= 0.001) return notes;
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
-  const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
+  const bassOctave = settings.octave;
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -6620,7 +6624,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
         && candidate.start < note.start + note.duration
       ));
       const bassCeiling = soundingBass.length ? Math.max(...soundingBass.map((candidate) => candidate.pitch)) : null;
-      if (bassCeiling != null && note.pitch - bassCeiling < 7 && note.pitch <= 115) {
+      const registerCeiling = roleRegisterWindow(id)?.max ?? 127;
+      if (bassCeiling != null && note.pitch - bassCeiling < 7 && note.pitch + 12 <= registerCeiling) {
         note.pitch += 12;
         repairs.registerCollisionsLifted += 1;
       }
@@ -7111,7 +7116,8 @@ function runVoiceLeadingPass(sourceTracks, config) {
         ? Math.max(...soundingBass.map((note) => note.pitch))
         : null;
       const minimum = id === "pad" ? 48 : bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48;
-      const maximum = id === "pad" ? 108 : 103;
+      const registerWindow = roleRegisterWindow(id);
+      const maximum = Math.max(minimum, registerWindow?.max ?? (id === "pad" ? 79 : 79));
       const chordPitches = id === "pad"
         ? new Set(chords.filter((note) => (
           Math.abs(note.start - notes[0].start) < 0.08
@@ -7415,11 +7421,12 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
       const targetClasses = id === "bass" || plan.cadence === "resolve"
         ? [goal.rootPc]
         : goal.tones;
+      const registerWindow = roleRegisterWindow(id);
       const target = nearestPitchClass(
         note.pitch,
         targetClasses,
-        id === "bass" ? 28 : 55,
-        id === "bass" ? 59 : 96,
+        registerWindow?.min ?? (id === "bass" ? 28 : 55),
+        registerWindow?.max ?? (id === "bass" ? 55 : 84),
       );
       if (target !== note.pitch) {
         note.pitch = target;
@@ -8949,8 +8956,9 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
+  const registerIntegrity = refineRoleRegisters(finalGrooveAssembly.tracks, structure);
   const tonalIntegrity = refineTonalIntegrity(
-    finalGrooveAssembly.tracks,
+    registerIntegrity.tracks,
     harmony,
     {
       keyPc: config.keyPc,
@@ -8959,6 +8967,8 @@ function compose(config, options = {}) {
     },
     structure,
   );
+  produced.report.repairs.registerCorrections = registerIntegrity.report.corrections;
+  produced.report.repairs.registerCorrectionsByTrack = registerIntegrity.report.correctionsByTrack;
   produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
   produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
@@ -9087,6 +9097,7 @@ function compose(config, options = {}) {
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
+    registerIntegrity: registerIntegrity.report,
     tonalIntegrity: tonalIntegrity.report,
     spectrumPlan,
     generationInterlock,
@@ -11608,8 +11619,9 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
+  const repairedRegisterIntegrity = refineRoleRegisters(repairedFinalGrooveAssembly.tracks, song.structure);
   const repairedTonalIntegrity = refineTonalIntegrity(
-    repairedFinalGrooveAssembly.tracks,
+    repairedRegisterIntegrity.tracks,
     song.harmony,
     {
       keyPc: config.keyPc,
@@ -11619,7 +11631,10 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
   );
   song.tracks = repairedTonalIntegrity.tracks;
+  song.registerIntegrity = repairedRegisterIntegrity.report;
   song.tonalIntegrity = repairedTonalIntegrity.report;
+  produced.report.repairs.registerCorrections = repairedRegisterIntegrity.report.corrections;
+  produced.report.repairs.registerCorrectionsByTrack = repairedRegisterIntegrity.report.correctionsByTrack;
   produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
   produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
   produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
@@ -13139,7 +13154,7 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
       const phrasePerformance = renderPhrasePerformance(note);
-      const pitch = clamp(Math.round(finite(note.pitch, 60)), 0, 127);
+      const pitch = canonicalMidiPitch(note.pitch);
       const velocity = clamp(Math.round(
         (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
       ), 1, 127);
