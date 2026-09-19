@@ -188,6 +188,14 @@ export const TRACK_DEFINITIONS = deepFreeze({
   },
 });
 
+export const DAW_REGISTER_POLICIES = deepFreeze({
+  bass: { min: 36, max: 60, center: 45, peakMax: 64, preferredLeap: 7 },
+  chords: { min: 48, max: 80, center: 60, peakMax: 84, preferredLeap: 5 },
+  melody: { min: 55, max: 84, center: 67, peakMax: 88, preferredLeap: 7 },
+  counterpoint: { min: 52, max: 79, center: 64, peakMax: 84, preferredLeap: 5 },
+  pad: { min: 43, max: 72, center: 55, peakMax: 76, preferredLeap: 5 },
+});
+
 /** Genre writing ranges and deterministic General MIDI sound palettes. */
 export const GENRE_PROFILES = deepFreeze({
   neoSoul: {
