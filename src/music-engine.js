@@ -33,6 +33,7 @@ import {
   pickGenreRhythmTemplate,
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
+import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 
 export const PPQ = 480;
 
@@ -8948,7 +8949,22 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  let tracks = finalGrooveAssembly.tracks;
+  const tonalIntegrity = refineTonalIntegrity(
+    finalGrooveAssembly.tracks,
+    harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    structure,
+  );
+  produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
+  produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
+  produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
+  let tracks = tonalIntegrity.tracks;
   if (targetTrack === "drums" && contextTracks.bass?.length) {
     const finalDrumTrack = tracks.find((track) => track.id === "drums");
     if (finalDrumTrack) {
@@ -9071,6 +9087,7 @@ function compose(config, options = {}) {
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
+    tonalIntegrity: tonalIntegrity.report,
     spectrumPlan,
     generationInterlock,
     tracks,
@@ -9104,6 +9121,7 @@ function compose(config, options = {}) {
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
       { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
+      { phase: 77, id: "tonal-integrity-guard", status: tonalIntegrity.report.status },
     ],
     idea,
   };
@@ -11591,7 +11609,23 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint,
   );
-  song.tracks = repairedFinalGrooveAssembly.tracks;
+  const repairedTonalIntegrity = refineTonalIntegrity(
+    repairedFinalGrooveAssembly.tracks,
+    song.harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    song.structure,
+  );
+  song.tracks = repairedTonalIntegrity.tracks;
+  song.tonalIntegrity = repairedTonalIntegrity.report;
+  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
+  produced.report.metrics.strongChordFit = repairedTonalIntegrity.report.after.strongChordFit;
+  produced.report.checks.finalScaleSafety = repairedTonalIntegrity.report.after.scaleFit >= 0.999999;
   if (repairStrategy?.dimension === "performance") {
     const performanceRepair = rebalanceRepairPerformance(song);
     song.tracks = performanceRepair.tracks;
