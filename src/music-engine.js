@@ -10542,17 +10542,21 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
   const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
+  const registerOutcome = candidate?.registerOutcome ?? evaluateDawRegisterQuality(candidate?.song);
+  const registerOutcomePassed = Boolean(registerOutcome.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
     && balance.aspirational
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && registerOutcomePassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
     && balance.passed
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && registerOutcomePassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10565,9 +10569,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
             ? "diversity-below-gate"
             : !sectionOutcomePassed
               ? "section-outcome-below-gate"
-              : "release-ready";
+              : !registerOutcomePassed
+                ? "register-outcome-below-gate"
+                : "release-ready";
   return {
-    version: 2,
+    version: 3,
     generation,
     passed,
     status,
@@ -10586,6 +10592,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
     sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
     sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
+    registerOutcomePassed,
+    registerOutcomeScore: finite(registerOutcome.score, 100),
+    registerRangeViolations: finite(registerOutcome.rangeViolations, 0),
+    registerSeparationViolations: finite(registerOutcome.separationViolations, 0),
+    randomOctaveLeaps: finite(registerOutcome.randomOctaveLeaps, 0),
     adaptiveTarget,
   };
 }
@@ -10621,6 +10632,7 @@ function sectionOutcomeOnlySearchFocus(sourceCandidate, candidates, generation) 
     || !outcome.qualityPassed
     || !outcome.balancePassed
     || !outcome.diversityPassed
+    || !outcome.registerOutcomePassed
   ) return null;
   const sectionOutcome = sourceCandidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(sourceCandidate?.song);
   const weakestPair = sectionOutcome.weakestPair ?? {};
@@ -12198,6 +12210,7 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
+        || Number(rightOutcome.registerOutcomePassed) - Number(leftOutcome.registerOutcomePassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
@@ -12215,6 +12228,8 @@ function commitCandidate(candidates, search = {}) {
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
+  const registerOutcome = selected.registerOutcome ?? evaluateDawRegisterQuality(selected.song);
+  selected.registerOutcome = registerOutcome;
   const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
   const criticRepair = search.criticRepair ?? {
     phase: 20,
@@ -12244,6 +12259,7 @@ function commitCandidate(candidates, search = {}) {
     novelty: selected.novelty,
     diversity,
     sectionOutcome,
+    registerOutcome,
     outputOutcome,
     candidatesEvaluated: candidates.length,
     selectedCandidate: selected.index,
@@ -12273,8 +12289,9 @@ function commitCandidate(candidates, search = {}) {
       const { index, evaluation, novelty, selectionScore, song } = candidate;
       const diversity = candidate.diversity ?? diversityReportFromNovelty(novelty, song.generation);
       const sectionOutcome = candidate.sectionOutcome ?? evaluateSectionOutcomeQuality(song);
+      const registerOutcome = candidate.registerOutcome ?? evaluateDawRegisterQuality(song);
       const candidateBalance = evaluateCandidateBalance(evaluation);
-      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome }, song.generation);
+      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome, registerOutcome }, song.generation);
       return {
         index,
         score: evaluation.score,
@@ -12294,6 +12311,11 @@ function commitCandidate(candidates, search = {}) {
         sectionAverageContrast: outcome.sectionAverageContrast,
         sectionWeakestContrast: outcome.sectionWeakestContrast,
         sectionWeakestPair: clone(outcome.sectionWeakestPair),
+        registerOutcomePassed: outcome.registerOutcomePassed,
+        registerOutcomeScore: outcome.registerOutcomeScore,
+        registerRangeViolations: outcome.registerRangeViolations,
+        registerSeparationViolations: outcome.registerSeparationViolations,
+        randomOctaveLeaps: outcome.randomOctaveLeaps,
         outcomePassed: outcome.passed,
         outcomeStatus: outcome.status,
         adaptiveTarget: outcome.adaptiveTarget,
@@ -12314,6 +12336,7 @@ function commitCandidate(candidates, search = {}) {
   selected.song.meta.novelty = selected.novelty;
   selected.song.meta.diversity = diversity;
   selected.song.meta.sectionOutcome = sectionOutcome;
+  selected.song.meta.registerOutcome = registerOutcome;
   selected.song.meta.outputOutcome = outputOutcome;
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   if (selected.novelty?.compared) {
@@ -12364,6 +12387,14 @@ function commitCandidate(candidates, search = {}) {
       averageContrast: sectionOutcome.averageContrast,
       weakestContrast: sectionOutcome.weakestContrast,
       weakestPair: clone(sectionOutcome.weakestPair),
+    },
+    {
+      id: "daw-register-qc",
+      status: outputOutcome.registerOutcomePassed ? "passed" : "best-available",
+      score: registerOutcome.score,
+      rangeViolations: registerOutcome.rangeViolations,
+      separationViolations: registerOutcome.separationViolations,
+      randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
     },
     {
       id: "targeted-critic-repair",
