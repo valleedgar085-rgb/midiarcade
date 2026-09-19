@@ -1076,3 +1076,12 @@ test("browser app initializes against the engine contract", async () => {
   assert.match(elementFor("#toast").textContent, /export canceled.*no file was shared/i);
   assert.doesNotMatch(elementFor("#toast").textContent, /^Exported\b/i);
 });
+
+
+test("piano-roll visual closes when leaving the Shape workspace", () => {
+  assert.match(
+    appSource,
+    /workspace !== "arrange" && state\.sectionEditorOpen[\s\S]*?state\.sectionEditorOpen = false;[\s\S]*?renderSectionEditor\(\)/,
+    "the precision editor must never stay visually open across normal workspaces",
+  );
+});
