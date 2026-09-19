@@ -3478,24 +3478,44 @@ function cleanupRegisterPitchCollisions(track) {
     mergedDuplicates += 1;
   }
 
-  const notes = [...unique.values()].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const candidates = [...unique.values()].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const notes = [];
   const lastByPitch = new Map();
+  let coalescedNearOnsets = 0;
   let overlapsTrimmed = 0;
-  for (const note of notes) {
+  for (const note of candidates) {
     const previous = lastByPitch.get(note.pitch);
-    if (previous && previous.start + previous.duration > note.start - 0.015) {
-      const repaired = Math.max(0.02, note.start - previous.start - 0.015);
-      if (repaired < previous.duration - 0.001) {
-        previous.duration = round(repaired);
-        previous.dawRegisterOverlapTrimmed = true;
-        overlapsTrimmed += 1;
+    if (previous) {
+      const onsetGap = note.start - previous.start;
+      if (onsetGap < 0.02 - 1e-6) {
+        previous.duration = Math.max(
+          finite(previous.duration, 0.1),
+          note.start + finite(note.duration, 0.1) - previous.start,
+        );
+        previous.velocity = Math.max(
+          Math.round(finite(previous.velocity, 80)),
+          Math.round(finite(note.velocity, 80)),
+        );
+        previous.dawRegisterMerged = true;
+        coalescedNearOnsets += 1;
+        continue;
+      }
+      if (previous.start + previous.duration > note.start + 1e-6) {
+        const repaired = Math.max(0.02, note.start - previous.start);
+        if (repaired < previous.duration - 0.001) {
+          previous.duration = round(repaired, 6);
+          previous.dawRegisterOverlapTrimmed = true;
+          overlapsTrimmed += 1;
+        }
       }
     }
+    notes.push(note);
     lastByPitch.set(note.pitch, note);
   }
   return {
     track: { ...track, notes },
     mergedDuplicates,
+    coalescedNearOnsets,
     overlapsTrimmed,
   };
 }
@@ -3539,7 +3559,7 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = []) {
     if (!source) continue;
     const cleaned = cleanupRegisterPitchCollisions(source);
     byId.set(id, cleaned.track);
-    mergedDuplicates += cleaned.mergedDuplicates;
+    mergedDuplicates += cleaned.mergedDuplicates + cleaned.coalescedNearOnsets;
     overlapsTrimmed += cleaned.overlapsTrimmed;
   }
 
