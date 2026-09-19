@@ -12119,7 +12119,9 @@ function commitCandidate(candidates, search = {}) {
     releasePassed: committedRegisterRelease.passed,
     releaseFailures: clone(committedRegisterRelease.failures ?? []),
   };
-  selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
+  // Keep the selected candidate fingerprint stable. Register mastering is an
+  // octave-only output correction, not a new musical identity; changing the
+  // fingerprint here would break recent-song replay detection on the next New.
   return selected.song;
 }
 
