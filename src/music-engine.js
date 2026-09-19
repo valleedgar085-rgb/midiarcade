@@ -12310,9 +12310,24 @@ function commitCandidate(candidates, search = {}) {
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
-  const registerOutcome = selected.registerOutcome ?? evaluateDawRegisterQuality(selected.song);
-  selected.registerOutcome = registerOutcome;
-  const outputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
+  const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
+  const dawRegister = applyDawRegisterPolicy(selected.song.tracks, selected.song.structure ?? selected.song.sections ?? []);
+  selected.song.tracks = dawRegister.tracks;
+  selected.song.dawRegister = dawRegister.report;
+  const registerOutcome = evaluateDawRegisterQuality(selected.song);
+  const outputOutcome = {
+    ...baseOutputOutcome,
+    version: 3,
+    registerOutcomePassed: registerOutcome.passed,
+    registerOutcomeScore: registerOutcome.score,
+    registerRangeViolations: registerOutcome.rangeViolations,
+    registerSeparationViolations: registerOutcome.separationViolations,
+    randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
+    passed: baseOutputOutcome.passed && registerOutcome.passed,
+    status: baseOutputOutcome.status === "release-ready" && !registerOutcome.passed
+      ? "register-outcome-below-gate"
+      : baseOutputOutcome.status,
+  };
   const criticRepair = search.criticRepair ?? {
     phase: 20,
     enabled: Boolean(search.targetedRepair),
@@ -12371,9 +12386,10 @@ function commitCandidate(candidates, search = {}) {
       const { index, evaluation, novelty, selectionScore, song } = candidate;
       const diversity = candidate.diversity ?? diversityReportFromNovelty(novelty, song.generation);
       const sectionOutcome = candidate.sectionOutcome ?? evaluateSectionOutcomeQuality(song);
-      const registerOutcome = candidate.registerOutcome ?? evaluateDawRegisterQuality(song);
       const candidateBalance = evaluateCandidateBalance(evaluation);
-      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome, registerOutcome }, song.generation);
+      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome }, song.generation);
+      const registerPreview = applyDawRegisterPolicy(song.tracks, song.structure ?? song.sections ?? []);
+      const registerOutcome = evaluateDawRegisterQuality({ ...song, tracks: registerPreview.tracks });
       return {
         index,
         score: evaluation.score,
@@ -12393,11 +12409,11 @@ function commitCandidate(candidates, search = {}) {
         sectionAverageContrast: outcome.sectionAverageContrast,
         sectionWeakestContrast: outcome.sectionWeakestContrast,
         sectionWeakestPair: clone(outcome.sectionWeakestPair),
-        registerOutcomePassed: outcome.registerOutcomePassed,
-        registerOutcomeScore: outcome.registerOutcomeScore,
-        registerRangeViolations: outcome.registerRangeViolations,
-        registerSeparationViolations: outcome.registerSeparationViolations,
-        randomOctaveLeaps: outcome.randomOctaveLeaps,
+        registerOutcomePassed: registerOutcome.passed,
+        registerOutcomeScore: registerOutcome.score,
+        registerRangeViolations: registerOutcome.rangeViolations,
+        registerSeparationViolations: registerOutcome.separationViolations,
+        randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
         outcomePassed: outcome.passed,
         outcomeStatus: outcome.status,
         adaptiveTarget: outcome.adaptiveTarget,
