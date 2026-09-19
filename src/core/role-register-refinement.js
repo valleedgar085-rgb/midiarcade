@@ -35,7 +35,7 @@ function intentionalRegisterLift(trackId, note, section) {
   if (!["melody", "counterpoint"].includes(String(trackId))) return false;
   return Boolean(
     finite(note?.plannedTension, 0) >= 0.76
-    || ["peak", "release"].includes(String(section?.intent?.role ?? ""))
+    || String(section?.intent?.role ?? "") === "peak"
     || finite(section?.intent?.registerLift, 0) > 0
     || note?.ensembleCadenceRole
     || note?.resolutionRole
