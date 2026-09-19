@@ -91,6 +91,7 @@ export { ELEMENT_PROFILES };
  */
 export function producerVariationDirectionAssessment(song, direction, {
   siblings = [],
+  sourceSong = null,
 } = {}) {
   const details = song?.meta?.scoreDetails ?? {};
   const subscores = details.subscores ?? details.critic?.subscores ?? {};
@@ -99,7 +100,19 @@ export function producerVariationDirectionAssessment(song, direction, {
   const balance = finite(details.balance?.balanceScore, overall);
   const releasePassed = details.releaseGate?.passed !== false;
   const registerViolations = roleRegisterViolations(song);
-  const registerSafe = registerViolations.length === 0;
+  const sourceRegisterViolations = sourceSong ? roleRegisterViolations(sourceSong) : [];
+  const sourceCeilings = new Map();
+  for (const violation of sourceRegisterViolations) {
+    if (violation.direction !== "high") continue;
+    sourceCeilings.set(violation.trackId, Math.max(sourceCeilings.get(violation.trackId) ?? -Infinity, violation.pitch));
+  }
+  const worsenedRegisterViolations = sourceSong
+    ? registerViolations.filter((violation) => (
+      violation.direction !== "high"
+      || violation.pitch > Math.max(violation.max, sourceCeilings.get(violation.trackId) ?? violation.max)
+    ))
+    : registerViolations;
+  const registerSafe = worsenedRegisterViolations.length === 0;
   const siblingNovelty = siblings.length
     ? evaluateSongNovelty(song, siblings, "similar")
     : null;
@@ -119,6 +132,7 @@ export function producerVariationDirectionAssessment(song, direction, {
     criticDimensions: Object.freeze([...(direction?.criticDimensions ?? [])]),
     registerSafe,
     registerViolations,
+    worsenedRegisterViolations,
   });
 }
 
@@ -198,7 +212,7 @@ export function generateProducerVariationSet(current, input = {}, {
         ...selected.map((song) => song?.oneShotKit?.id),
       ].filter(Boolean);
       const song = applyElementSoundProfile(generateSimilar(current, config), direction.id, intensity);
-      const assessment = producerVariationDirectionAssessment(song, direction, { siblings: selected });
+      const assessment = producerVariationDirectionAssessment(song, direction, { siblings: selected, sourceSong: current });
       auditions.push({
         song,
         assessment,
