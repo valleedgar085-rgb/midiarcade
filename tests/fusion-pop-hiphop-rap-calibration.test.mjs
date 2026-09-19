@@ -136,12 +136,11 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
 test("Pop Rap fusion performance repair preserves the section energy arc while repairing dynamics", () => {
   const config = generationConfig("pop", "fusion-quality-01:pop+rap", "rap", 0.5);
   const generated = engine.generateNew(config);
-  const before = engine.evaluateSongCandidate(generated);
   const processed = applySongOutputQualityPipeline(generated, config);
   const after = engine.evaluateSongCandidate(processed.song);
   const diagnostics = processed.fusionPerformanceDiagnostics;
 
-  assert.ok(before.subscores.performance < 84, "fixture must expose the fusion performance bottleneck");
+  assert.ok(diagnostics.beforePerformance < 84, "pipeline must expose the fusion performance bottleneck at the repair boundary");
   assert.equal(diagnostics.attempted, true);
   assert.equal(diagnostics.accepted, true);
   assert.equal(diagnostics.reason, "fusion-performance-win");
