@@ -183,11 +183,13 @@ function candidateRequestSets(song) {
   if (!opportunities.length) return [];
 
   const weakest = opportunities[0];
-  const balanced = opportunities.slice(0, 3).map((section) => ({
-    sectionId: section.id,
-    window: section.windows[0],
-    mode: "echo",
-  }));
+  const balanced = opportunities
+    .flatMap((section) => section.windows.map((window) => ({
+      sectionId: section.id,
+      window,
+      mode: "echo",
+    })))
+    .slice(0, 3);
   return [
     {
       id: "focused-echo",
