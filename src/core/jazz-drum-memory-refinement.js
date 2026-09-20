@@ -142,19 +142,25 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       if (afterDistance > beforeDistance) {
         const afterVariety = drumVarietyScore(song, targetDrums.notes);
         const afterRhythm = rhythmAuthenticityScore(song, targetDrums.notes);
-        const bestAccent = [...targetNotes]
-          .map((note) => {
-            const candidateNotes = [...targetDrums.notes, note];
+        const preservationSets = [
+          [],
+          [...targetNotes].filter((note) => [37, 38, 39, 40].includes(note.pitch)),
+          [...targetNotes].filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08),
+          [...targetNotes],
+        ];
+        const bestPreservation = preservationSets
+          .map((notes) => {
+            const candidateNotes = [...targetDrums.notes, ...notes];
             return {
-              note,
+              notes,
               distance: syncopationDistance(candidateNotes),
               variety: drumVarietyScore(song, candidateNotes),
               rhythm: rhythmAuthenticityScore(song, candidateNotes),
             };
           })
           .filter((candidate) => candidate.variety >= afterVariety && candidate.rhythm > afterRhythm)
-          .sort((left, right) => right.rhythm - left.rhythm || left.distance - right.distance)[0];
-        if (bestAccent) targetDrums.notes.push(bestAccent.note);
+          .sort((left, right) => right.rhythm - left.rhythm || right.variety - left.variety || left.distance - right.distance)[0];
+        if (bestPreservation?.notes.length) targetDrums.notes.push(...bestPreservation.notes);
       }
       targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
       return Object.freeze({
