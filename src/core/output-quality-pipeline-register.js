@@ -119,7 +119,7 @@ function acceptedMetadata(song, evaluation, releaseGate, stageKey, diagnostics) 
 }
 
 function assessRegisterCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
-  const after = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
+  const after = evaluateCandidate(candidate.song);
   const release = evaluateReleaseGate(candidate.song, after);
   const beforeRegister = finite(before?.subscores?.registerHealth);
   const afterRegister = finite(after?.subscores?.registerHealth);
@@ -863,7 +863,7 @@ function melodyContinuityCriticSong(song) {
 }
 
 function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
-  const after = evaluateCandidate(candidate.song);
+  const after = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
   const release = evaluateReleaseGate(candidate.song, after);
   const scoreDelta = finite(after?.score) - finite(before?.score);
   const floorDelta = creativeFloor(after) - beforeFloor;
