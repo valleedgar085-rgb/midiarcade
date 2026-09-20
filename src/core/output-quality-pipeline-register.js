@@ -898,7 +898,7 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
 }
 
 export function applyMelodyContinuityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
-  if (config.melodyContinuityRefinement !== true) {
+  if (config.melodyContinuityRefinement !== true || config.isFusion === true) {
     return { song, diagnostics: disabledDiagnostics(MAX_MELODY_CONTINUITY_CANDIDATES) };
   }
 
