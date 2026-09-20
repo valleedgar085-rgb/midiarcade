@@ -15,6 +15,7 @@ test("cover artwork is deterministic, safe, and can produce bounded visual varia
   assert.notEqual(original, createCoverArtworkSvg(song, { variation: 1 }));
   assert.match(original, /data-cover-finish="original"/);
   assert.match(original, /data-track-aura="v2"/);
+  assert.match(original, /#ff5369/);
   assert.match(original, /TRACK AURA/);
   assert.match(original, /BPM/);
   assert.match(createCoverArtworkSvg(song, { variation: 1 }), /data-cover-finish="matte"/);
