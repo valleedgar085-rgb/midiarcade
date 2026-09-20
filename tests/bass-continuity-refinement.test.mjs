@@ -170,10 +170,10 @@ test("bass continuity fails closed if the release gate rejects the repair", () =
   assert.equal(result.song, source);
 });
 
-test("every selectable song length produces a contiguous full arrangement with valid bass timing", () => {
+test("every selectable song length keeps the full six-track arrangement valid end to end", () => {
   for (const bars of [16, 24, 32, 48, 64]) {
     const song = generateNew({
-      seed: `length-bass-${bars}`,
+      seed: `length-ensemble-${bars}`,
       genre: "hipHop",
       bars,
       professionalUpgrade: true,
@@ -195,14 +195,19 @@ test("every selectable song length produces a contiguous full arrangement with v
       expectedStart = section.endBeat;
     }
 
-    const bass = song.tracks.find((track) => track.id === "bass");
-    assert.ok(bass?.notes?.length > 0, `${bars}-bar generation must retain a bass foundation`);
-    assert.ok(bass.notes.every((note) => (
-      Number.isFinite(note.start)
-      && Number.isFinite(note.duration)
-      && note.start >= 0
-      && note.start < song.meta.totalBeats
-      && note.duration > 0
-    )));
+    const expectedTracks = ["drums", "bass", "chords", "melody", "counterpoint", "pad"];
+    assert.deepEqual(song.tracks.map((track) => track.id).sort(), [...expectedTracks].sort());
+    for (const trackId of expectedTracks) {
+      const track = song.tracks.find((entry) => entry.id === trackId);
+      assert.ok(track?.notes?.length > 0, `${bars}-bar generation must retain ${trackId} activity`);
+      assert.ok(track.notes.every((note) => (
+        Number.isFinite(note.start)
+        && Number.isFinite(note.duration)
+        && note.start >= 0
+        && note.start < song.meta.totalBeats
+        && note.duration > 0
+        && note.start + note.duration <= song.meta.totalBeats + 1e-6
+      )), `${bars}-bar ${trackId} notes must stay inside the song timeline`);
+    }
   }
 });
