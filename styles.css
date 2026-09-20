@@ -2298,57 +2298,6 @@ input,
     linear-gradient(120deg,color-mix(in srgb,var(--mix-focus-color) 10%,transparent),transparent 36%),
     var(--bg-2);
 }
-.mix-solo-alert{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:14px;
-  margin:-4px 0 14px;
-  padding:11px 14px;
-  border:1px solid rgba(248,113,113,.42);
-  border-radius:var(--radius-sm);
-  background:rgba(248,113,113,.09);
-}
-.mix-solo-alert[hidden]{display:none}
-.mix-solo-alert span{min-width:0}
-.mix-solo-alert small{
-  display:block;
-  color:var(--red);
-  font-family:var(--font-data);
-  font-size:.62rem;
-  font-weight:800;
-  letter-spacing:.13em;
-}
-.mix-solo-alert strong{
-  display:block;
-  margin-top:2px;
-  color:var(--text);
-  font-size:.82rem;
-}
-.mix-solo-alert button{
-  flex:0 0 auto;
-  min-height:36px;
-  padding:0 12px;
-  border:1px solid rgba(248,113,113,.42);
-  border-radius:9px;
-  background:rgba(248,113,113,.12);
-  color:#fff;
-  font-size:.72rem;
-  font-weight:800;
-  letter-spacing:.05em;
-  text-transform:uppercase;
-}
-#tab-btn-mix.has-solo::after{
-  content:"SOLO";
-  margin-left:3px;
-  padding:2px 5px;
-  border-radius:999px;
-  background:rgba(248,113,113,.18);
-  color:var(--red);
-  font-size:.5rem;
-  font-weight:900;
-  letter-spacing:.08em;
-}
 .mix-focus-mark{
   display:grid;place-items:center;
   width:36px;height:36px;border-radius:50%;
@@ -2625,8 +2574,6 @@ input,
   .section-quick-actions, .section-order-actions{grid-template-columns:1fr 1fr;gap:8px}
   .section-quick-actions button, .section-order-actions button{min-height:44px;font-size:0.75rem}
   .section-edit-primary{min-height:50px;padding:12px 14px}
-  .mix-solo-alert{align-items:flex-start;flex-direction:column}
-  .mix-solo-alert button{width:100%}
   .mix-overview{
     grid-template-columns:auto minmax(0,1fr) auto;
     gap:10px;
