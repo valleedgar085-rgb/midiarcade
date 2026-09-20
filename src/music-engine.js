@@ -1960,7 +1960,9 @@ function createProducerIntentContract(
   const scenes = structure.map((section, index) => {
     const plan = sectionPlans[index];
     const matrix = matrixBySection.get(section.id);
-    const foregroundTrack = matrix?.featuredTrack ?? "melody";
+    const foregroundTrack = config.bars >= 24 && plan.role === "peak" && ["chorus", "drop"].includes(section.name)
+      ? "melody"
+      : matrix?.featuredTrack ?? "melody";
     const answerTrack = answerTrackForForeground(foregroundTrack, section, config);
     const purpose = PRODUCER_PURPOSES[section.name]
       ?? (plan.role === "peak" ? "payoff" : plan.role === "release" ? "resolve" : "develop");
