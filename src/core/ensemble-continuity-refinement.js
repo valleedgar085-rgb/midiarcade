@@ -74,6 +74,16 @@ function presenceFor(song, sectionId, trackId) {
   );
 }
 
+function minimumPresence(trackId, role) {
+  if (trackId === "counterpoint") {
+    if (role === "foreground") return 0.24;
+    if (role === "answer") return 0.28;
+    return 0.36;
+  }
+  if (trackId === "pad") return role === "foreground" ? 0.36 : 0.42;
+  return 0.46;
+}
+
 function eligibleSections(song, trackId) {
   const structure = Array.isArray(song?.structure) ? song.structure : song?.sections;
   if (!Array.isArray(structure)) return [];
@@ -88,7 +98,7 @@ function eligibleSections(song, trackId) {
       name
       && !isExcludedSectionName(name)
       && role !== "rest"
-      && presence >= 0.46
+      && presence >= minimumPresence(trackId, role)
     ));
 }
 
@@ -142,8 +152,8 @@ function targetProfile(trackId, role, beatsPerBar, baselineRate) {
   }
   if (trackId === "counterpoint") {
     return {
-      attacksPerBar: Math.max(foreground ? 0.9 : answer ? 0.45 : 0.35, Math.min(2.4, baselineRate * (foreground ? 0.58 : 0.42))),
-      maxSilenceBeats: beatsPerBar * (foreground ? 1.2 : answer ? 2 : 1.7),
+      attacksPerBar: Math.max(foreground ? 1.05 : answer ? 0.68 : 0.42, Math.min(2.4, baselineRate * (foreground ? 0.64 : answer ? 0.52 : 0.44))),
+      maxSilenceBeats: beatsPerBar * (foreground ? 1.15 : answer ? 1.55 : 1.75),
     };
   }
   return {
