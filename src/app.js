@@ -33,6 +33,12 @@ import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
+  hasAudiblePreviewEvents,
+  playbackSourceNeedsCanonicalReset,
+  playableSongNoteCount,
+  shouldRecoverSilentMixState,
+} from "./core/playback-recovery.js";
+import {
   chooseAutoProgramRotation,
   companionTrackIds,
   curateTrackProgramPalette,
@@ -3279,7 +3285,18 @@ const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
   onChange(workspace) {
+    const canonicalWorkspace = workspace !== "arrange";
+    const staleAudition = canonicalWorkspace
+      && playbackSourceNeedsCanonicalReset(player?.playbackSong, state.song);
+    const resumePosition = staleAudition ? player.currentSongTime() : null;
+    const resumePlayback = Boolean(staleAudition && player.playing);
     resolvePendingShapeDirectorCandidate({ rerender: true });
+    if (staleAudition) {
+      void player.returnToCanonicalSong({
+        positionSeconds: resumePosition,
+        resume: resumePlayback,
+      });
+    }
     if (workspace !== "arrange" && state.sectionEditorOpen) {
       state.sectionEditorOpen = false;
       state.editorSelection.clear();
@@ -4771,9 +4788,41 @@ export class PreviewPlayer {
   buildEvents() {
     const song = this.playbackSong ?? state.song;
     this.events = buildPreviewEvents(song);
+    if (shouldRecoverSilentMixState({
+      song,
+      events: this.events,
+      muted: state.muted,
+      solo: state.solo,
+    })) {
+      state.muted.clear();
+      state.solo.clear();
+      this.events = buildPreviewEvents(song);
+      renderTrackRack();
+      renderTimeline();
+      renderMixOverview();
+      scheduleSessionSave();
+      showToast("Mix had every playable track silenced. Audible playback was restored.");
+    }
     this.configureSongFx(song);
     this.playbackView = playbackViewForSong(song);
     this.lastDetailRefreshAt = -Infinity;
+  }
+
+  async returnToCanonicalSong({ positionSeconds = null, resume = null } = {}) {
+    const canonicalSong = state.song;
+    if (!playbackSourceNeedsCanonicalReset(this.playbackSong, canonicalSong)) return false;
+    const shouldResume = resume == null ? this.playing : Boolean(resume);
+    const position = Number.isFinite(Number(positionSeconds))
+      ? Number(positionSeconds)
+      : this.currentSongTime();
+    this.pause();
+    this.releasePlaybackCache();
+    this.position = clamp(position, 0, totalSeconds(canonicalSong));
+    updatePlaybackUi(this.position, totalSeconds(canonicalSong), {
+      view: playbackViewForSong(canonicalSong),
+    });
+    if (shouldResume) return this.play();
+    return true;
   }
 
   configureSongFx(song = state.song) {
@@ -4848,6 +4897,13 @@ export class PreviewPlayer {
       rampAudioParamValue(this.master.gain, 0.42, now, this.previewBudget.masterFadeSeconds);
     }
     this.buildEvents();
+    if (!hasAudiblePreviewEvents(this.events)) {
+      const hasNotes = playableSongNoteCount(song) > 0;
+      showToast(hasNotes
+        ? "The song is loaded, but the current Mix levels are silent. Raise at least one track level."
+        : "This song has no playable notes. Generate a new idea.");
+      return false;
+    }
     const duration = totalSeconds(song);
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
