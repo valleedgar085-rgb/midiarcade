@@ -230,6 +230,7 @@ export function createGenerationExecutor({
         densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
         phraseResolutionRefinement: selectedResult?.outputQualityDiagnostics?.phraseResolutionRefinement ?? null,
         registerHealthRefinement: selectedResult?.outputQualityDiagnostics?.registerHealthRefinement ?? null,
+        melodyContinuityRefinement: selectedResult?.outputQualityDiagnostics?.melodyContinuityRefinement ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;
