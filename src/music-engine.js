@@ -5273,7 +5273,8 @@ function generateLead(
   if (settings.density <= 0.001 || !validMotif(motif)) return notes;
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
-  for (const section of structure) {
+  const counterpointDialogue = counterpoint && ["hipHop", "pop", "rap", "trap"].includes(config.genre);
+  for (const [sectionIndex, section] of structure.entries()) {
     const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
@@ -5289,12 +5290,33 @@ function generateLead(
           || eventIndex === activeMotif.events.length - 1
           || eventIndex === Math.floor(activeMotif.events.length / 2)
         );
-        if (development?.type === "rest" && eventIndex === development.restIndex && !phraseSkeleton) continue;
+        // Counterpoint needs a reliable answer gesture, otherwise its lower
+        // density and groove-space filtering can erase an entire phrase. Keep
+        // the answer bounded and alternating: one anchor per phrase, with a
+        // second mid-phrase anchor in stronger sections. Explicitly sparse
+        // settings below this floor still retain their old probabilistic
+        // behavior, while density zero remains a hard off switch above.
+        const counterpointSkeleton = counterpointDialogue
+          && settings.density >= 0.22
+          && !["intro", "outro"].includes(section.name)
+          && (
+            (eventIndex === 0 && (repeat + sectionIndex) % 2 === 0)
+            || (eventIndex === Math.floor(activeMotif.events.length / 2) && (repeat + sectionIndex) % 2 === 1)
+            || (["chorus", "drop", "bridge", "solo"].includes(section.name)
+              && eventIndex === activeMotif.events.length - 1
+              && repeat % 3 === 2)
+          );
+        const legacyCounterpointAnchor = counterpoint
+          && !counterpointDialogue
+          && eventIndex === 0
+          && repeat % 2 === 0;
+        const phraseAnchor = phraseSkeleton || counterpointSkeleton || legacyCounterpointAnchor;
+        if (development?.type === "rest" && eventIndex === development.restIndex && !phraseAnchor) continue;
         if (
           development?.type === "fragment"
           && progress > 0.62
           && eventIndex !== activeMotif.events.length - 1
-          && !phraseSkeleton
+          && !phraseAnchor
         ) continue;
         let startShift = 0;
         if (development?.type === "rhythm" && progress >= 0.45 && eventIndex % 2 === 1) startShift = development.rhythmShift;
@@ -5316,10 +5338,10 @@ function generateLead(
         const tensionDensity = 0.82 + plannedTension * (counterpoint ? 0.18 : 0.3);
         const baseProbability = settings.density
           * intensity
-          * (counterpoint ? 0.86 : 1.04)
+          * (counterpointDialogue ? 0.86 : counterpoint ? 0.86 : 1.04)
           * (0.78 + plannedDensity * 0.32)
           * tensionDensity;
-        const anchor = phraseSkeleton || (counterpoint && eventIndex === 0 && repeat % 2 === 0);
+        const anchor = phraseAnchor;
         const groove = grooveInfluenceForBeat(
           grooveConductor,
           start,
@@ -5379,7 +5401,7 @@ function generateLead(
           totalBeats,
           {
             genrePhraseGrammar: activeMotif.genreGrammar ?? config.genre,
-            ...(phraseSkeleton ? { phraseAnchor: true } : {}),
+            ...(phraseAnchor ? { phraseAnchor: true } : {}),
             grooveRole: groove.role,
             plannedTension,
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
@@ -5543,6 +5565,40 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
       addNote(result, pitch, target.beat, Math.min(0.5, target.gapEnd - target.beat), Math.max(1, Math.round(source.velocity * 0.86)), totalBeats);
       used.add(target.beat);
     }
+  }
+
+  // A sparse source phrase can still leave an otherwise eligible section
+  // completely empty after collision removal. Give that section one bounded
+  // answer when a real lead gap exists; never invent an answer for a hard-off
+  // counterline because this pass is unreachable when counterNotes is empty.
+  if (!["hipHop", "pop", "rap", "trap"].includes(config.genre)) {
+    return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  }
+  for (const [sectionIndex, section] of structure.entries()) {
+    if (["intro", "outro", "breakdown"].includes(section.name)) continue;
+    if (result.some((note) => note.start >= section.startBeat && note.start < section.endBeat)) continue;
+    const available = targets
+      .filter((target) => (
+        target.sectionId === section.id
+        && !used.has(target.beat)
+        && !attackCollision(target.beat)
+        && !melodySoundsAt(target.beat)
+      ));
+    const target = chooseCounterpointGapTarget(available, {
+      genre: config.genre,
+      bars: config.bars,
+      secondaryGenre: config.secondaryGenre,
+      noteStart: section.startBeat + (section.endBeat - section.startBeat) * 0.5,
+    });
+    if (!target) continue;
+    const source = counterNotes[sectionIndex % counterNotes.length];
+    const chord = harmonyAt(harmony, target.beat);
+    const pitch = chord ? nearestChordTone(source.pitch, chord) : source.pitch;
+    addNote(result, pitch, target.beat, Math.min(0.42, target.gapEnd - target.beat), Math.max(1, Math.round(source.velocity * 0.8)), totalBeats, {
+      phraseAnchor: true,
+      counterResponseRole: "section-coverage-answer",
+    });
+    used.add(target.beat);
   }
   return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
 }
