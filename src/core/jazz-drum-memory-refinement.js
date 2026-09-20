@@ -88,6 +88,21 @@ function drumVarietyScore(song, notes) {
   return Math.round(48 + Math.max(0, Math.min(1, usefulVariation)) * 34 + (1 - adjacentCopies) * 18);
 }
 
+function rhythmAuthenticityScore(song, drumNotes) {
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
+  const bass = song?.tracks?.find((track) => track.id === "bass")?.notes ?? [];
+  const melody = song?.tracks?.find((track) => track.id === "melody")?.notes ?? [];
+  const snares = drumNotes.filter((note) => [37, 38, 39, 40].includes(note.pitch));
+  const rhythmicNotes = [...drumNotes, ...bass, ...melody];
+  const measured = rhythmicNotes.length
+    ? rhythmicNotes.filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08).length / rhythmicNotes.length
+    : 0.68;
+  const syncFit = Math.max(25, Math.min(100, Math.round(100 - Math.abs(measured - 0.68) * 135)));
+  const backbeat = Math.max(0, Math.min(1, snares.length / Math.max(1, bars * 2)));
+  return syncFit * 0.25 + backbeat * 100 * 0.15;
+}
+
 export function adjacentDrumDuplicateCount(song) {
   const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
   const signatures = Array.from({ length: bars }, (_, bar) => drumSignature(song, bar)).filter(Boolean);
@@ -126,6 +141,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       const afterDistance = syncopationDistance(targetDrums.notes);
       if (afterDistance > beforeDistance) {
         const afterVariety = drumVarietyScore(song, targetDrums.notes);
+        const afterRhythm = rhythmAuthenticityScore(song, targetDrums.notes);
         const bestAccent = [...targetNotes]
           .map((note) => {
             const candidateNotes = [...targetDrums.notes, note];
@@ -133,11 +149,12 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
               note,
               distance: syncopationDistance(candidateNotes),
               variety: drumVarietyScore(song, candidateNotes),
+              rhythm: rhythmAuthenticityScore(song, candidateNotes),
             };
           })
-          .filter((candidate) => candidate.variety >= afterVariety)
-          .sort((left, right) => left.distance - right.distance)[0];
-        if (bestAccent && bestAccent.distance < afterDistance) targetDrums.notes.push(bestAccent.note);
+          .filter((candidate) => candidate.variety >= afterVariety && candidate.rhythm > afterRhythm)
+          .sort((left, right) => right.rhythm - left.rhythm || left.distance - right.distance)[0];
+        if (bestAccent) targetDrums.notes.push(bestAccent.note);
       }
       targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
       return Object.freeze({
