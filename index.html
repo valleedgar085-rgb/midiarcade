@@ -565,7 +565,7 @@
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
                   <div class="shaper-group-heading">
-                    <span><small>1 · MUSICAL DIRECTION</small><strong>Shape the feel</strong></span>
+                    <span><small>SECTION CONTROLS</small><strong>Shape the feel</strong></span>
                     <em>Leave any choice on Auto</em>
                   </div>
                   <div class="section-macro-grid" aria-label="Section shape controls">
@@ -618,23 +618,28 @@
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
                   <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>2 · OPTIONAL PRECISION</small><strong>Open note editor</strong></span>
+                    <span><small>PRECISION EDITING</small><strong>Edit notes</strong></span>
                     <b aria-hidden="true">→</b>
                   </button>
-                  <div class="shaper-group-heading compact">
-                    <span><small>QUICK TRANSFORMS</small><strong>Change the arrangement</strong></span>
-                  </div>
-                  <div class="section-quick-actions" aria-label="Section actions">
-                    <button type="button" data-section-action="queue-jump">⚡ Queue Jump</button>
-                    <button type="button" data-section-action="simplify">Create space</button>
-                    <button type="button" data-section-action="build">Add a build</button>
-                    <button type="button" data-section-action="variations">Try variations</button>
-                    <button type="button" data-section-action="duplicate">Duplicate section</button>
-                  </div>
-                  <div class="section-order-actions" aria-label="Move selected section">
-                    <button type="button" data-section-action="earlier">← Earlier</button>
-                    <button type="button" data-section-action="later">Later →</button>
-                  </div>
+                  <details class="section-actions-menu">
+                    <summary>
+                      <span><small>SECTION ACTIONS</small><strong>More arrangement tools</strong></span>
+                      <b aria-hidden="true">•••</b>
+                    </summary>
+                    <div class="section-actions-menu-body">
+                      <div class="section-quick-actions" aria-label="Section actions">
+                        <button type="button" data-section-action="queue-jump">⚡ Queue Jump</button>
+                        <button type="button" data-section-action="simplify">Create space</button>
+                        <button type="button" data-section-action="build">Add a build</button>
+                        <button type="button" data-section-action="variations">Try variations</button>
+                        <button type="button" data-section-action="duplicate">Duplicate section</button>
+                      </div>
+                      <div class="section-order-actions" aria-label="Move selected section">
+                        <button type="button" data-section-action="earlier">← Earlier</button>
+                        <button type="button" data-section-action="later">Later →</button>
+                      </div>
+                    </div>
+                  </details>
                   <p class="section-shaper-status" id="sectionShaperStatus" role="status">Auto is following the composition engine.</p>
                 </div>
               </aside>
@@ -643,13 +648,13 @@
               <header class="editor-header">
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
-                  <p class="eyebrow">SECTION FOCUS - PIANO ROLL</p>
-                  <h3 id="sectionEditorTitle">Piano roll note &amp; velocity sequencer</h3>
+                  <p class="eyebrow">PRECISION EDITOR</p>
+                  <h3 id="sectionEditorTitle">Edit notes precisely</h3>
                   <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
                 </div>
                 <div class="editor-header-actions">
                   <button class="editor-play-button" id="editorPlayButton" type="button">Play from here</button>
-                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Close">x</button>
+                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">← Back to Shape</button>
                 </div>
               </header>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Instrument in piano roll"></div>
