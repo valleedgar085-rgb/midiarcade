@@ -155,6 +155,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     bassContinuityRefinement: typeof source.bassContinuityRefinement === "boolean"
       ? source.bassContinuityRefinement
       : freshGeneration,
+    ensembleContinuityRefinement: typeof source.ensembleContinuityRefinement === "boolean"
+      ? source.ensembleContinuityRefinement
+      : freshGeneration,
     repetitionRefinement: typeof source.repetitionRefinement === "boolean"
       ? source.repetitionRefinement
       : freshGeneration,
