@@ -5849,7 +5849,7 @@ function toggleFullscreen() {
   }
   $("#trapIntroModeControl")?.addEventListener("change", () => {
     const mode = $("#trapIntroModeControl").value;
-    showToast(`Trap intro set to ${mode === "extended" ? "extended build" : mode === "auto" ? "Auto" : "short"}. Generate to hear it.`);
+    showToast(`Trap / Hip-Hop intro set to ${mode === "extended" ? "extended build" : mode === "auto" ? "Auto" : "short"}. Generate to hear it.`);
   });
 
   $("#tempoControl").addEventListener("change", () => {

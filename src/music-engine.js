@@ -1258,9 +1258,6 @@ export function normalizeConfig(input = {}) {
     tripletAmount: unit(input.tripletAmount, profile.tripletChance),
     rollAmount: unit(input.rollAmount, profile.snareRollChance),
     registerSpread: unit(input.registerSpread, DEFAULT_CONFIG.registerSpread),
-    // Trap can opt into a two-times intro without changing any other genre's
-    // arrangement grammar. Auto uses the existing creative controls as the
-    // deterministic signal for whether a longer build has room to breathe.
     trapIntroMode: normalizeTrapIntroMode(input.trapIntroMode),
     arrangementLayers: {
       mode: layeringMode,
@@ -1420,27 +1417,24 @@ function specialFormLayout(form, bars) {
   return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
 }
 
-function shouldUseExtendedTrapIntro(config) {
-  if (config.genre !== "trap" || config.bars < 24) return false;
+function shouldUseExtendedUrbanIntro(config) {
+  if (!(config.genre === "trap" || config.genre === "hipHop") || config.bars < 24) return false;
   if (config.trapIntroMode === "extended") return true;
   if (config.trapIntroMode === "short") return false;
-  // Auto is intentionally conservative until a longer-build request is
-  // explicit. This preserves every existing Trap contract by default.
+  // Auto remains the existing short behavior until it has its own calibrated
+  // quality fixture. Explicit Extended is the safe opt-in for both genres.
   return false;
 }
 
-function extendTrapIntro(layout, sizes, config) {
-  if (!shouldUseExtendedTrapIntro(config)) return sizes;
+function extendUrbanIntro(layout, sizes, config) {
+  if (!shouldUseExtendedUrbanIntro(config)) return sizes;
   const introIndex = layout.findIndex((item) => item.name === "intro");
   if (introIndex < 0) return sizes;
   const current = sizes[introIndex];
   const target = Math.min(current * 2, config.bars - (sizes.length - 1));
   let remaining = Math.max(0, target - current);
   if (!remaining) return sizes;
-
   const result = [...sizes];
-  // Take bars from the largest body sections first. This keeps the song at
-  // the requested length and preserves every section identity and boundary.
   const donors = result
     .map((bars, index) => ({ bars, index }))
     .filter(({ index, bars }) => index !== introIndex && bars > 1)
@@ -1520,7 +1514,7 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const sizes = extendTrapIntro(layout, allocateBars(layout, bars), config);
+  const sizes = extendUrbanIntro(layout, allocateBars(layout, bars), config);
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
