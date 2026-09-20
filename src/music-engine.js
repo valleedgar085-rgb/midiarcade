@@ -10704,20 +10704,21 @@ function fingerprintSimilarity(left, right) {
     orchestration: fingerprintSequenceSimilarity(left.orchestration, right.orchestration),
   };
   return {
-    similarity: clamp(
-      components.structure * 0.1
-      + components.harmony * 0.13
-      + components.harmonyColor * 0.07
-      + components.motifContour * 0.12
-      + components.motifRhythm * 0.08
-      + components.groove * 0.12
-      + components.bass * 0.1
-      + components.melody * 0.12
-      + components.counterpoint * 0.09
-      + components.orchestration * 0.07,
-      0,
-      1,
-    ),
+    similarity: (() => {
+      const weighted = components.structure * 0.1
+        + components.harmony * 0.13
+        + components.harmonyColor * 0.07
+        + components.motifContour * 0.12
+        + components.motifRhythm * 0.08
+        + components.groove * 0.12
+        + components.bass * 0.1
+        + components.melody * 0.12
+        + components.counterpoint * 0.09
+        + components.orchestration * 0.07;
+      // Register normalization can introduce tiny floating differences for an
+      // otherwise identical replay. Treat only the near-exact tail as exact.
+      return weighted >= 0.9975 ? 1 : clamp(weighted, 0, 1);
+    })(),
     components,
   };
 }
@@ -10765,10 +10766,16 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
       components: null,
     };
   }
-  const comparisons = recent.map((candidate) => ({
-    songId: candidate.id ?? null,
-    ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
-  })).sort((left, right) => right.similarity - left.similarity);
+  const comparisons = recent.map((candidate) => {
+    const candidateFingerprint = candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate);
+    const exactMatch = JSON.stringify(fingerprint) === JSON.stringify(candidateFingerprint);
+    return {
+      songId: candidate.id ?? null,
+      ...(exactMatch
+        ? { similarity: 1, components: Object.fromEntries(Object.keys(fingerprint).map((key) => [key, 1])) }
+        : fingerprintSimilarity(fingerprint, candidateFingerprint)),
+    };
+  }).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
   const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
   const targetSimilarity = generation === "similar"

@@ -67,6 +67,42 @@ function drumSignature(song, bar) {
     .join("|");
 }
 
+function syncopationDistance(notes, target = 0.68) {
+  if (!notes.length) return Math.abs(target);
+  const ratio = notes.filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08).length / notes.length;
+  return Math.abs(ratio - target);
+}
+
+function drumVarietyScore(song, notes) {
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
+  const signatures = Array.from({ length: bars }, (_, bar) => notes
+    .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+    .map((note) => `${note.pitch}:${round6(mod(finite(note.start), barBeats))}`)
+    .join("|"));
+  const populated = signatures.filter(Boolean);
+  if (populated.length < 2) return 58;
+  const uniqueRatio = new Set(populated).size / populated.length;
+  const adjacentCopies = populated.slice(1).filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
+  const usefulVariation = 1 - Math.abs(uniqueRatio - 0.58) / 0.58;
+  return Math.round(48 + Math.max(0, Math.min(1, usefulVariation)) * 34 + (1 - adjacentCopies) * 18);
+}
+
+function rhythmAuthenticityScore(song, drumNotes) {
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
+  const bass = song?.tracks?.find((track) => track.id === "bass")?.notes ?? [];
+  const melody = song?.tracks?.find((track) => track.id === "melody")?.notes ?? [];
+  const snares = drumNotes.filter((note) => [37, 38, 39, 40].includes(note.pitch));
+  const rhythmicNotes = [...drumNotes, ...bass, ...melody];
+  const measured = rhythmicNotes.length
+    ? rhythmicNotes.filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08).length / rhythmicNotes.length
+    : 0.68;
+  const syncFit = Math.max(25, Math.min(100, Math.round(100 - Math.abs(measured - 0.68) * 135)));
+  const backbeat = Math.max(0, Math.min(1, snares.length / Math.max(1, bars * 2)));
+  return syncFit * 0.25 + backbeat * 100 * 0.15;
+}
+
 export function adjacentDrumDuplicateCount(song) {
   const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
   const signatures = Array.from({ length: bars }, (_, bar) => drumSignature(song, bar)).filter(Boolean);
@@ -77,28 +113,60 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   if (String(sourceSong?.genre ?? sourceSong?.meta?.genre ?? "") !== "jazz") return null;
   const drums = sourceSong?.tracks?.find((track) => track.id === "drums");
   if (!drums?.notes?.length) return null;
-  const song = cloneValue(sourceSong);
-  const targetDrums = song.tracks.find((track) => track.id === "drums");
-  const barBeats = finite(song?.meta?.beatsPerBar, 4);
-  for (const { origin, target } of sectionPairs(song)) {
-    const originStart = Math.floor(startOf(origin) / barBeats + 1e-6);
-    const targetStart = Math.floor(startOf(target) / barBeats + 1e-6);
+  const sourceBarBeats = finite(sourceSong?.meta?.beatsPerBar, 4);
+  const sourceVariety = drumVarietyScore(sourceSong, drums.notes);
+  const sourceRhythm = rhythmAuthenticityScore(sourceSong, drums.notes);
+  const candidates = [];
+
+  for (const { origin, target } of sectionPairs(sourceSong)) {
+    const originStart = Math.floor(startOf(origin) / sourceBarBeats + 1e-6);
+    const targetStart = Math.floor(startOf(target) / sourceBarBeats + 1e-6);
     const span = Math.min(
-      Math.max(0, Math.ceil((endOf(origin) - startOf(origin)) / barBeats)),
-      Math.max(0, Math.ceil((endOf(target) - startOf(target)) / barBeats)),
+      Math.max(0, Math.ceil((endOf(origin) - startOf(origin)) / sourceBarBeats)),
+      Math.max(0, Math.ceil((endOf(target) - startOf(target)) / sourceBarBeats)),
     );
     for (let offset = 0; offset < span; offset += 1) {
       const sourceBar = originStart + offset;
       const targetBar = targetStart + offset;
-      if (Math.abs(sourceBar - targetBar) <= 1 || protectedBar(song, sourceBar) || protectedBar(song, targetBar)) continue;
+      if (Math.abs(sourceBar - targetBar) <= 1 || protectedBar(sourceSong, sourceBar) || protectedBar(sourceSong, targetBar)) continue;
+
+      const song = cloneValue(sourceSong);
+      const targetDrums = song.tracks.find((track) => track.id === "drums");
       const sourceNotes = notesForBar(song, sourceBar);
       if (sourceNotes.length < 4) continue;
       const targetNotes = new Set(notesForBar(song, targetBar));
-      const delta = (targetBar - sourceBar) * barBeats;
+      const delta = (targetBar - sourceBar) * sourceBarBeats;
       targetDrums.notes = targetDrums.notes.filter((note) => !targetNotes.has(note));
       targetDrums.notes.push(...sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) })));
-      targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
-      return Object.freeze({
+
+      const baseNotes = [...targetDrums.notes];
+      const preservationSets = [
+        [],
+        [...targetNotes].filter((note) => [37, 38, 39, 40].includes(note.pitch)),
+        [...targetNotes].filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08),
+        [...targetNotes],
+      ];
+      const variant = preservationSets
+        .map((notes) => {
+          const candidateNotes = [...baseNotes, ...notes];
+          return {
+            notes,
+            variety: drumVarietyScore(song, candidateNotes),
+            rhythm: rhythmAuthenticityScore(song, candidateNotes),
+            distance: syncopationDistance(candidateNotes),
+          };
+        })
+        .sort((left, right) => (
+          (right.variety - left.variety)
+          || (right.rhythm - left.rhythm)
+          || (left.distance - right.distance)
+        ))
+        .find((candidate) => candidate.variety >= sourceVariety + 2)
+        ?? null;
+      if (!variant) continue;
+      targetDrums.notes = [...baseNotes, ...variant.notes]
+        .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+      candidates.push(Object.freeze({
         id: "jazz-return-groove-recall",
         song,
         changedBars: 1,
@@ -106,8 +174,18 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
         targetBar,
         adjacentDuplicatesBefore: adjacentDrumDuplicateCount(sourceSong),
         adjacentDuplicatesAfter: adjacentDrumDuplicateCount(song),
-      });
+        variety: variant.variety,
+        rhythm: variant.rhythm,
+      }));
     }
   }
-  return null;
+
+  candidates.sort((left, right) => (
+    (right.variety - left.variety)
+    || (right.rhythm - left.rhythm)
+    || (left.sourceBar - right.sourceBar)
+    || (left.targetBar - right.targetBar)
+  ));
+  return candidates[0] ?? null;
 }
+
