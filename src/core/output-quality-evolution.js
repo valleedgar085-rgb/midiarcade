@@ -149,6 +149,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     densityRefinement: typeof source.densityRefinement === "boolean"
       ? source.densityRefinement
       : freshGeneration,
+    melodyContinuityRefinement: typeof source.melodyContinuityRefinement === "boolean"
+      ? source.melodyContinuityRefinement
+      : freshGeneration,
     repetitionRefinement: typeof source.repetitionRefinement === "boolean"
       ? source.repetitionRefinement
       : freshGeneration,
