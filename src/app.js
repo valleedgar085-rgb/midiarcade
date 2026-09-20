@@ -904,6 +904,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     key: resolvedKey,
     root: resolvedKey,
     mode: resolvedMode,
+    scaleSelection: selectedMode === "auto" ? "auto" : "explicit",
     chordPath: resolvedChordPath,
     tempo: generationValue("tempoControl", 112),
     bpm: generationValue("tempoControl", 112),

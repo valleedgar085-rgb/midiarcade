@@ -36,6 +36,7 @@ import {
 import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
+import { resolveAutoScale } from "./core/scale-intent.js";
 
 export const PPQ = 480;
 
@@ -1198,19 +1199,35 @@ export function normalizeConfig(input = {}) {
     ? fusedGenreArrangementProfile(primaryGenre, secondaryGenre, fusionBlend)
     : genreArrangementProfile(primaryGenre);
   const key = normalizeKey(input.key ?? DEFAULT_CONFIG.key);
+  const chordPath = normalizeChordPath(input.chordPath, defaultChordPathForGenre(primaryGenre));
+  const energy = unit(input.energy, DEFAULT_CONFIG.energy);
+  const complexity = unit(input.complexity, DEFAULT_CONFIG.complexity);
+  const surprise = unit(input.surprise, DEFAULT_CONFIG.surprise);
+  const mood = typeof input.mood === "string" && ["calm", "neutral", "intense"].includes(input.mood)
+    ? input.mood
+    : moodFromEnergy(energy);
   const suppliedScale = input.scale ?? input.mode;
   const scaleDefault = profile.preferredScales[hashSeed(`${seed}::${genre}::scale`) % profile.preferredScales.length];
-  const scale = normalizeScale(suppliedScale ?? scaleDefault);
-  const chordPath = normalizeChordPath(input.chordPath, defaultChordPathForGenre(primaryGenre));
+  const scaleSelection = String(input.scaleSelection ?? "").trim().toLowerCase();
+  const autoScale = scaleSelection === "auto" || String(suppliedScale ?? "").trim().toLowerCase() === "auto";
+  const scale = autoScale
+    ? resolveAutoScale({
+      candidates: profile.preferredScales,
+      seed,
+      genre,
+      chordPath,
+      energy,
+      complexity,
+      surprise,
+      mood,
+    })
+    : normalizeScale(suppliedScale ?? scaleDefault);
   const timeSignature = normalizeTimeSignature(input.timeSignature ?? DEFAULT_CONFIG.timeSignature);
   const providedTracks = input.tracks ?? input.trackSettings ?? input.instruments ?? {};
   const tracks = {};
   const paletteRng = createSeededRandom(`${seed}::${genre}::palette`);
   for (const id of TRACK_IDS) tracks[id] = normalizeTrack(id, providedTracks[id], profile, paletteRng.fork(id));
   const averageTrackDensity = TRACK_IDS.reduce((sum, id) => sum + finite(tracks[id]?.density, 0.5), 0) / TRACK_IDS.length;
-  const mood = typeof input.mood === "string" && ["calm", "neutral", "intense"].includes(input.mood)
-    ? input.mood
-    : moodFromEnergy(unit(input.energy, DEFAULT_CONFIG.energy));
   const layeringMode = String(input.layeringMode ?? input.layering ?? input.arrangementLayering ?? (professionalUpgrade ? "auto" : "off"));
   const layeringDensity = layerDensityMode(layeringMode, unit(input.variation, DEFAULT_CONFIG.variation), averageTrackDensity);
   const phraseBars = professionalUpgrade
@@ -1233,6 +1250,7 @@ export function normalizeConfig(input = {}) {
     genreLabel: profile.label,
     arrangementProfileId: arrangementProfile.id,
     chordPath,
+    scaleSelection: autoScale ? "auto" : "explicit",
     key: key.name,
     keyPc: key.pc,
     scale,
@@ -1242,11 +1260,11 @@ export function normalizeConfig(input = {}) {
     phraseBars: clamp(Math.round(finite(input.phraseBars, phraseBars)), 2, 8),
     timeSignature,
     mood,
-    energy: unit(input.energy, DEFAULT_CONFIG.energy),
-    complexity: unit(input.complexity, DEFAULT_CONFIG.complexity),
+    energy,
+    complexity,
     variation: unit(input.variation, DEFAULT_CONFIG.variation),
     evolution: unit(input.evolution, DEFAULT_CONFIG.evolution),
-    surprise: unit(input.surprise, DEFAULT_CONFIG.surprise),
+    surprise,
     similarity: unit(input.similarity, DEFAULT_CONFIG.similarity),
     swing: unit(input.swing, profile.swing),
     humanize: unit(input.humanize, profile.humanize),
