@@ -188,23 +188,17 @@ function candidateRequestSets(song) {
 
   const weakest = opportunities[0];
   const balanced = [];
-  for (const section of opportunities) {
-    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
-    const window = section.windows[0];
-    if (!window) continue;
-    const slots = window.gap >= 4.5 ? 2 : 1;
-    for (let slot = 0; slot < slots && balanced.length < MAX_MELODY_CONTINUITY_LINKS; slot += 1) {
-      balanced.push({ sectionId: section.id, window, mode: "echo", slot, slots });
-    }
-  }
-  const maxWindows = Math.max(...opportunities.map((section) => section.windows.length));
-  for (let windowIndex = 1; windowIndex < maxWindows && balanced.length < MAX_MELODY_CONTINUITY_LINKS; windowIndex += 1) {
-    for (const section of opportunities) {
-      if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
-      const window = section.windows[windowIndex];
-      if (!window) continue;
-      balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
-    }
+  let balancedSong = song;
+  while (balanced.length < MAX_MELODY_CONTINUITY_LINKS) {
+    const next = melodicSections(balancedSong)
+      .map((bounds) => sectionContinuity(balancedSong, melodyTrack(balancedSong), bounds))
+      .filter(({ notes, windows, deficit }) => notes.length >= 2 && windows.length > 0 && deficit > 0.01)
+      .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index)[0];
+    const window = next?.windows?.[0];
+    if (!next || !window) break;
+    const request = { sectionId: next.id, window, mode: "echo" };
+    balanced.push(request);
+    balancedSong = addConnectors(balancedSong, [request]);
   }
   return [
     {
