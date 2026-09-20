@@ -1,7 +1,7 @@
 import { cloneValue } from "./clone-value.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
-export const MAX_MELODY_CONTINUITY_LINKS = 8;
+export const MAX_MELODY_CONTINUITY_LINKS = 16;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
@@ -188,25 +188,21 @@ function candidateRequestSets(song) {
 
   const weakest = opportunities[0];
   const balanced = [];
-  const used = new Set();
   for (const section of opportunities) {
     if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
     const window = section.windows[0];
-    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
-    used.add(window);
-  }
-  for (const section of opportunities) {
-    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
-    const window = section.windows.find((candidate) => !used.has(candidate));
     if (!window) continue;
-    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
-    used.add(window);
+    const slots = window.gap >= 4.5 ? 2 : 1;
+    for (let slot = 0; slot < slots && balanced.length < MAX_MELODY_CONTINUITY_LINKS; slot += 1) {
+      balanced.push({ sectionId: section.id, window, mode: "echo", slot, slots });
+    }
   }
   for (const section of opportunities) {
     if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
-    const window = section.windows[0];
-    if (!window || window.gap < 4) continue;
-    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 1, slots: 2 });
+    for (const window of section.windows.slice(1)) {
+      if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
+      balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
+    }
   }
   return [
     {
