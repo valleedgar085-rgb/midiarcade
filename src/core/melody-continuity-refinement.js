@@ -183,13 +183,25 @@ function candidateRequestSets(song) {
   if (!opportunities.length) return [];
 
   const weakest = opportunities[0];
-  const balanced = opportunities
-    .flatMap((section) => section.windows.map((window) => ({
-      sectionId: section.id,
-      window,
-      mode: "echo",
-    })))
-    .slice(0, 3);
+  const balanced = [];
+  const used = new Set();
+  for (const section of opportunities) {
+    if (balanced.length >= 3) break;
+    const window = section.windows[0];
+    balanced.push({ sectionId: section.id, window, mode: "echo" });
+    used.add(window);
+  }
+  if (balanced.length < 3) {
+    for (const section of opportunities) {
+      for (const window of section.windows) {
+        if (balanced.length >= 3) break;
+        if (used.has(window)) continue;
+        balanced.push({ sectionId: section.id, window, mode: "echo" });
+        used.add(window);
+      }
+      if (balanced.length >= 3) break;
+    }
+  }
   return [
     {
       id: "focused-echo",
