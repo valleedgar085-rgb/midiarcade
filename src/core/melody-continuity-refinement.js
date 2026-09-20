@@ -113,6 +113,7 @@ function sectionContinuity(song, track, bounds) {
     maxSilenceBeats,
     targetAttacksPerBar: targets.attacksPerBar,
     targetMaxSilenceBeats: targets.maxSilenceBeats,
+    silenceDeficit,
     deficit: attackDeficit + silenceDeficit,
   };
 }
