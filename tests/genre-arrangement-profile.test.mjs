@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  fusedGenreArrangementProfile,
   genreArrangementProfile,
   legatoIntervalBias,
   progressionGoalsFor,
@@ -16,6 +17,15 @@ test("genre arrangement profiles expose rhythm, phrase, harmony, and layering st
   assert.ok(Array.isArray(profile.optionalLayers) && profile.optionalLayers.length > 0);
   const goals = progressionGoalsFor(profile, "bridge", "neutral");
   assert.ok(goals.some((goal) => goal.id === "ii-V-I") || goals.some((goal) => goal.id === "modal-interchange"));
+});
+
+test("arrangement and fusion grammar resolve aliases through the shared genre contract", () => {
+  assert.deepEqual(genreArrangementProfile("R&B"), genreArrangementProfile("rnbSoul"));
+  assert.deepEqual(genreArrangementProfile("jungle"), genreArrangementProfile("drumBass"));
+  assert.equal(
+    fusedGenreArrangementProfile("R&B", "alternative rock", 0.5).id,
+    fusedGenreArrangementProfile("rnbSoul", "rock", 0.5).id,
+  );
 });
 
 test("normalizeConfig carries arrangement profile phrase and layering mode", () => {

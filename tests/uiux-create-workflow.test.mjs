@@ -126,5 +126,5 @@ test("Create-specific CSS stays outside the protected global stylesheet budget a
   assert.match(build, /createWorkflowStyles/);
   assert.match(build, /<style>\$\{creatorStyles\.code\}<\/style><style>\$\{createWorkflowStyles\.code\}<\/style>/);
   assert.match(pkg.scripts.dev, /npm run build/);
-  assert.match(pkg.scripts.dev, /--directory www/);
+  assert.match(pkg.scripts.dev, /http\.server 4173 -d www -b 0\.0\.0\.0/);
 });

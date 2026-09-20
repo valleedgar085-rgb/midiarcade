@@ -11,6 +11,7 @@ import {
   MIDI_NOTE_VELOCITY_MAX,
 } from "../src/core/note-contract.js";
 import { createQualityEvaluationContext } from "../src/core/output-quality-stage-runner.js";
+import { normalizeConfig } from "../src/music-engine.js";
 
 test("genre aliases normalize to canonical core ids without rewriting unknown ids", () => {
   assert.equal(normalizeGenreId("HIP-HOP"), "hipHop");
@@ -19,6 +20,22 @@ test("genre aliases normalize to canonical core ids without rewriting unknown id
   assert.equal(normalizeGenreId("Lo-Fi Hip-Hop"), "loFiHipHop");
   assert.equal(normalizeGenreId("Drum & Bass"), "drumBass");
   assert.equal(normalizeGenreId("customFutureGenre"), "customFutureGenre");
+});
+
+test("engine configuration uses the shared genre alias authority", () => {
+  const aliases = new Map([
+    ["R&B", "rnbSoul"],
+    ["rhythm and blues", "rnbSoul"],
+    ["chillhop", "loFiHipHop"],
+    ["jungle", "drumBass"],
+    ["UK drill", "drill"],
+    ["alternative rock", "rock"],
+  ]);
+  for (const [alias, canonical] of aliases) {
+    assert.equal(normalizeGenreId(alias), canonical);
+    assert.equal(normalizeConfig({ genre: alias }).genre, canonical);
+  }
+  assert.equal(normalizeConfig({ genre: "unknown future genre" }).genre, "pop");
 });
 
 test("canonical note contract preserves the final-master velocity ceiling", () => {

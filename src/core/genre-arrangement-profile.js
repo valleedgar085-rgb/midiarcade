@@ -1,3 +1,5 @@
+import { normalizeGenreId } from "./genre-contract.js";
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -235,7 +237,8 @@ const PROFILE_BY_GENRE = Object.freeze({
 });
 
 export function genreArrangementProfile(genre) {
-  const mapped = PROFILE_BY_GENRE[String(genre)] ?? "cinematic";
+  const canonicalGenre = normalizeGenreId(genre);
+  const mapped = PROFILE_BY_GENRE[canonicalGenre] ?? "cinematic";
   const profile = PROFILES[mapped] ?? DEFAULT_PROFILE;
   return {
     ...DEFAULT_PROFILE,
@@ -311,10 +314,12 @@ function mergeOptionalLayers(primaryLayers = [], secondaryLayers = [], amount = 
  * humanization and optional-layer rules.
  */
 export function fusedGenreArrangementProfile(primaryGenre, secondaryGenre, blend = 0.5) {
-  const primary = genreArrangementProfile(primaryGenre);
-  const secondary = genreArrangementProfile(secondaryGenre);
+  const primaryId = normalizeGenreId(primaryGenre);
+  const secondaryId = normalizeGenreId(secondaryGenre);
+  const primary = genreArrangementProfile(primaryId);
+  const secondary = genreArrangementProfile(secondaryId);
   const amount = clamp(Number.isFinite(Number(blend)) ? Number(blend) : 0.5, 0, 1);
-  if (!secondaryGenre || String(primaryGenre) === String(secondaryGenre) || amount <= 0) return primary;
+  if (!secondaryId || primaryId === secondaryId || amount <= 0) return primary;
   if (amount >= 1) return secondary;
 
   const phraseBars = [...new Set([...(primary.phraseBars ?? []), ...(secondary.phraseBars ?? [])])];

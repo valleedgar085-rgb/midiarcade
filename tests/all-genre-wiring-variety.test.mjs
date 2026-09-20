@@ -17,6 +17,7 @@ import { outputQualityDevelopment } from "../src/core/output-quality-evolution.j
 import { roleRegisterWindow } from "../src/core/role-register-policy.js";
 
 const GENRES = Object.keys(GENRE_PROFILES).sort();
+const SUPPORTED_LENGTHS = [16, 24, 32, 48, 64];
 
 function selectValues(html, id) {
   const start = html.indexOf(`id="${id}"`);
@@ -144,6 +145,52 @@ test("all genres remain release-safe while different seeds produce different ful
       songFingerprint(songs[1]),
       `${genre} must produce a different complete arrangement for a different seed and musical direction`,
     );
+  }
+});
+
+test("every genre stays complete and professional at every supported song length", { timeout: 120_000 }, () => {
+  for (const genre of GENRES) {
+    for (const bars of SUPPORTED_LENGTHS) {
+      const song = generateNew({
+        genre,
+        bars,
+        candidateCount: 1,
+        seed: `genre-length-contract-${genre}-${bars}`,
+        energy: 0.66,
+        complexity: 0.62,
+        variation: 0.74,
+        professionalUpgrade: true,
+      });
+      const label = `${genre}/${bars}`;
+      const beatsPerBar = Number(song.meta?.beatsPerBar ?? 4);
+      const totalBeats = bars * beatsPerBar;
+      const release = evaluateSongReleaseGate(song);
+
+      assert.equal(song.meta?.bars, bars, `${label} must preserve the requested length`);
+      assert.equal(release.passed, true, `${label} must pass release: ${release.failures?.join(", ") ?? "unknown"}`);
+      assert.equal(song.tonalIntegrity?.after?.scaleFit, 1, `${label} must remain scale-safe`);
+      assert.equal(song.registerIntegrity?.after?.hardViolations, 0, `${label} must have no hard register violations`);
+      assert.equal(song.structure?.[0]?.startBeat, 0, `${label} must start at beat zero`);
+      assert.equal(song.structure?.at(-1)?.endBeat, totalBeats, `${label} structure must fill the complete song`);
+
+      for (const track of song.tracks) {
+        const notes = track.notes ?? [];
+        assert.ok(notes.length > 0, `${label}/${track.id} must contain musical material`);
+        assert.ok(notes.some((note) => note.start < totalBeats / 2), `${label}/${track.id} must support the first half`);
+        assert.ok(notes.some((note) => note.start >= totalBeats / 2), `${label}/${track.id} must support the second half`);
+        assert.ok(
+          notes.every((note) => note.start >= 0 && note.start < totalBeats && note.start + note.duration <= totalBeats + 1e-6),
+          `${label}/${track.id} notes must remain inside the requested song bounds`,
+        );
+        const window = roleRegisterWindow(track.id);
+        if (window) {
+          assert.ok(
+            notes.every((note) => note.pitch >= window.min && note.pitch <= window.max),
+            `${label}/${track.id} must remain inside ${window.min}-${window.max}`,
+          );
+        }
+      }
+    }
   }
 });
 

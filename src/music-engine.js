@@ -37,6 +37,7 @@ import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
+import { normalizeGenreId } from "./core/genre-contract.js";
 
 export const PPQ = 480;
 
@@ -552,54 +553,6 @@ const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#",
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const TRACK_IDS = Object.keys(TRACK_DEFINITIONS);
 
-const GENRE_ALIASES = {
-  neosoul: "neoSoul",
-  rnb: "neoSoul",
-  rhythmandblues: "neoSoul",
-  hiphop: "hipHop",
-  rap: "rap",
-  trap: "trap",
-  house: "house",
-  techno: "techno",
-  drumbass: "drumBass",
-  drumandbass: "drumBass",
-  dnb: "drumBass",
-  jungle: "drumBass",
-  synthwave: "synthwave",
-  retrowave: "synthwave",
-  pop: "pop",
-  // v2.0 genres
-  lofi: "loFiHipHop",
-  lofihiphop: "loFiHipHop",
-  loFiHipHop: "loFiHipHop",
-  chillhop: "loFiHipHop",
-  rnbsoul: "rnbSoul",
-  soul: "rnbSoul",
-  slowjam: "rnbSoul",
-  drill: "drill",
-  ukdrill: "drill",
-  reggaeton: "reggaeton",
-  dembow: "reggaeton",
-  afrobeats: "afrobeats",
-  afropop: "afrobeats",
-  jazz: "jazz",
-  swing: "jazz",
-  ambient: "ambient",
-  chillout: "ambient",
-  downtempo: "ambient",
-  funk: "funk",
-  groove: "funk",
-  country: "country",
-  americana: "country",
-  rock: "rock",
-  altrock: "rock",
-  alternativerock: "rock",
-  popradio: "popRadio",
-  popRadio: "popRadio",
-  synthpopradio: "synthPopRadio",
-  synthPopRadio: "synthPopRadio",
-};
-
 const SCALE_ALIASES = {
   ionian: "major",
   major: "major",
@@ -1066,8 +1019,8 @@ function normalizeChordPath(value, fallback = DEFAULT_CONFIG.chordPath) {
 }
 
 function normalizeGenre(value) {
-  const token = String(value ?? DEFAULT_CONFIG.genre).replace(/[\s_&/+-]/g, "").toLowerCase();
-  return GENRE_ALIASES[token] ?? DEFAULT_CONFIG.genre;
+  const canonical = normalizeGenreId(value ?? DEFAULT_CONFIG.genre);
+  return GENRE_PROFILES[canonical] ? canonical : DEFAULT_CONFIG.genre;
 }
 
 function normalizeTrapIntroMode(value) {
@@ -10740,17 +10693,21 @@ function normalizeRecentSongs(value) {
   return result;
 }
 
-export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
-  const recent = normalizeRecentSongs(recentSongs);
+function noveltyFingerprint(song) {
   const normalizedRegister = applyDawRegisterPolicy(
     song?.tracks ?? [],
     song?.structure ?? song?.sections ?? [],
     { genre: song?.genre ?? song?.meta?.genre ?? "" },
   );
-  const fingerprint = createSongFingerprint({
+  return createSongFingerprint({
     ...song,
     tracks: normalizedRegister.tracks,
   });
+}
+
+export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
+  const recent = normalizeRecentSongs(recentSongs);
+  const fingerprint = noveltyFingerprint(song);
   if (!recent.length) {
     return {
       version: 1,
@@ -10767,7 +10724,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   }
   const comparisons = recent.map((candidate) => ({
     songId: candidate.id ?? null,
-    ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
+    ...fingerprintSimilarity(fingerprint, noveltyFingerprint(candidate)),
   })).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
   const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
