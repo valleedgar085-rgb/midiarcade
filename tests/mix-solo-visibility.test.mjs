@@ -4,7 +4,7 @@ import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
-const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const solarCss = fs.readFileSync(new URL("../src/ui/solar-pop.css", import.meta.url), "utf8");
 
 test("Mix makes persistent Solo state unmistakable and offers one-tap recovery", () => {
   assert.match(html, /id="mixSoloAlert"/);
