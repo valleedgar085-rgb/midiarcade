@@ -10627,6 +10627,166 @@ export function evaluateSectionOutcomeQuality(song) {
   };
 }
 
+/**
+ * Judge the complete arrangement as one listener-facing journey. The existing
+ * critics protect local correctness; this contract makes sure those correct
+ * parts still form a restrained opening, an earned payoff, a stable pocket,
+ * a recognizable return, and a resolving exit.
+ */
+export function evaluateSongJourneyQuality(song) {
+  const sections = Array.isArray(song?.structure) ? song.structure : [];
+  if (sections.length < 3) {
+    return {
+      version: 1,
+      passed: true,
+      reason: "short-form-exempt",
+      score: 100,
+      openingRestrained: true,
+      payoffEarned: true,
+      grooveFoundation: true,
+      motifReturn: true,
+      endingResolved: true,
+      payoffCoverage: 1,
+      foundationCoverage: 1,
+      sections: [],
+      payoffs: [],
+    };
+  }
+
+  const signatures = sections.map((section) => sectionRenderedSignature(song, section));
+  const plans = new Map((song?.songBlueprint?.sectionPlans ?? []).map((plan) => [plan.sectionId, plan]));
+  const transitions = song?.arrangementTransitions ?? song?.songBlueprint?.transitions ?? [];
+  const maxDensity = Math.max(0.5, ...signatures.map((entry) => finite(entry?.totalDensity, 0)));
+  const rows = signatures.map((signature, index) => {
+    const section = sections[index];
+    const plan = plans.get(section?.id) ?? {};
+    const plannedEnergy = clamp(finite(plan.energy, finite(section?.intensity, 0.72) / 1.18), 0, 1);
+    const renderedEnergy = clamp(
+      finite(signature?.totalDensity, 0) / maxDensity * 0.42
+      + clamp(finite(signature?.averageVelocity, 72) / 112, 0, 1) * 0.23
+      + clamp(finite(signature?.activeTrackCount, 0) / TRACK_IDS.length, 0, 1) * 0.2
+      + plannedEnergy * 0.15,
+      0,
+      1,
+    );
+    return {
+      sectionId: section?.id ?? null,
+      sectionName: section?.name ?? null,
+      purpose: signature?.purpose ?? "develop",
+      plannedEnergy: round(plannedEnergy),
+      renderedEnergy: round(renderedEnergy),
+      density: finite(signature?.totalDensity, 0),
+      activeTrackCount: finite(signature?.activeTrackCount, 0),
+      hasDrums: finite(signature?.trackDensity?.drums, 0) > 0.02,
+      hasBass: finite(signature?.trackDensity?.bass, 0) > 0.02,
+    };
+  });
+  const peakEnergy = Math.max(...rows.map((row) => row.renderedEnergy));
+  const opening = rows[0];
+  const openingRestrained = opening.purpose === "establish"
+    || opening.purpose === "reset"
+    || opening.activeTrackCount < TRACK_IDS.length
+    || opening.renderedEnergy <= peakEnergy - 0.035;
+
+  let payoffIndices = rows
+    .map((row, index) => [row, index])
+    .filter(([row]) => ["payoff", "spotlight"].includes(row.purpose))
+    .map(([, index]) => index)
+    .filter((index) => index > 0);
+  if (!payoffIndices.length) {
+    const peakIndex = rows.findIndex((row) => row.renderedEnergy === peakEnergy);
+    if (peakIndex > 0) payoffIndices = [peakIndex];
+  }
+  const sectionOutcome = evaluateSectionOutcomeQuality(song);
+  const contrastByDestination = new Map((sectionOutcome.pairs ?? []).map((pair) => [pair.toSectionId, pair.contrast]));
+  const payoffRows = payoffIndices.map((index) => {
+    const previous = rows[index - 1];
+    const payoff = rows[index];
+    const transition = transitions.find((entry) => entry.toSectionId === payoff.sectionId) ?? {};
+    const sourceSection = sections[index - 1];
+    const localizedVacuum = (song?.tracks ?? []).some((track) => (track.notes ?? []).some((note) => (
+      note.arrangementPerformanceRole === "pre-payoff-vacuum"
+      && finite(note.start, -1) >= finite(sourceSection?.endBeat, 0) - 1.01
+      && finite(note.start, -1) < finite(sourceSection?.endBeat, 0)
+    )));
+    const energyLift = round(payoff.renderedEnergy - previous.renderedEnergy);
+    const plannedLift = round(payoff.plannedEnergy - previous.plannedEnergy);
+    const contrast = finite(contrastByDestination.get(payoff.sectionId), 0);
+    const prepared = previous.purpose === "build"
+      || ["build", "launch"].includes(String(transition.type))
+      || plannedLift >= 0.035
+      || localizedVacuum;
+    const audible = energyLift >= 0.025 || contrast >= 0.07 || localizedVacuum;
+    return {
+      sectionId: payoff.sectionId,
+      previousSectionId: previous.sectionId,
+      energyLift,
+      plannedLift,
+      contrast: round(contrast),
+      transitionType: transition.type ?? null,
+      localizedVacuum,
+      prepared,
+      audible,
+      earned: prepared && audible,
+    };
+  });
+  const payoffCoverage = payoffRows.length
+    ? payoffRows.filter((row) => row.earned).length / payoffRows.length
+    : 1;
+  const payoffEarned = payoffCoverage >= 0.5;
+
+  const bodyRows = rows.filter((row) => !["establish", "reset", "resolve"].includes(row.purpose));
+  const foundationCoverage = bodyRows.length
+    ? bodyRows.filter((row) => row.hasDrums && row.hasBass).length / bodyRows.length
+    : 1;
+  const grooveBars = song?.grooveConductor?.bars ?? [];
+  const groovePlanComplete = grooveBars.length >= Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)))
+    && grooveBars.every((bar) => Array.isArray(bar?.anchors) && bar.anchors.length > 0);
+  const grooveFoundation = foundationCoverage >= 0.65 && groovePlanComplete;
+
+  const names = rows.map((row) => row.sectionName).filter(Boolean);
+  const repeatedSection = names.some((name, index) => names.indexOf(name) !== index);
+  const mappedReturn = (song?.memoryMap ?? song?.songBlueprint?.memoryMap ?? [])
+    .some((entry) => (
+      ["recall", "return"].includes(String(entry?.relationship))
+      || (
+        String(entry?.originSectionId ?? "") !== String(entry?.sectionId ?? "")
+        && finite(entry?.recallStrength, 0) >= 0.35
+      )
+    ));
+  const motifReturn = repeatedSection || mappedReturn;
+  const ending = rows.at(-1);
+  const strongestPayoff = Math.max(0, ...payoffIndices.map((index) => rows[index]?.renderedEnergy ?? 0));
+  const endingResolved = ending.purpose === "resolve"
+    || ending.sectionName === "outro"
+    || ending.renderedEnergy <= strongestPayoff - 0.025;
+
+  const checks = [openingRestrained, payoffEarned, grooveFoundation, motifReturn, endingResolved];
+  const score = Math.round(
+    Number(openingRestrained) * 15
+    + clamp(payoffCoverage, 0, 1) * 30
+    + clamp(foundationCoverage, 0, 1) * 20
+    + Number(groovePlanComplete) * 10
+    + Number(motifReturn) * 15
+    + Number(endingResolved) * 10
+  );
+  return {
+    version: 1,
+    passed: checks.every(Boolean),
+    reason: checks.every(Boolean) ? "complete-song-journey" : "incomplete-song-journey",
+    score: clamp(score, 0, 100),
+    openingRestrained,
+    payoffEarned,
+    grooveFoundation,
+    motifReturn,
+    endingResolved,
+    payoffCoverage: round(payoffCoverage),
+    foundationCoverage: round(foundationCoverage),
+    sections: rows,
+    payoffs: payoffRows,
+  };
+}
+
 function fingerprintSequenceSimilarity(left = [], right = []) {
   if (!left.length && !right.length) return 1;
   if (!left.length || !right.length) return 0;
@@ -10975,17 +11135,21 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const diversityPassed = Boolean(diversity.passed && noveltyFloorPassed);
   const sectionOutcome = candidate?.sectionOutcome ?? evaluateSectionOutcomeQuality(candidate?.song);
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
+  const songJourney = candidate?.songJourney ?? evaluateSongJourneyQuality(candidate?.song);
+  const songJourneyPassed = Boolean(songJourney.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
     && balance.aspirational
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && songJourneyPassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
     && balance.passed
     && diversityPassed
-    && sectionOutcomePassed;
+    && sectionOutcomePassed
+    && songJourneyPassed;
   const status = !repairAccepted
     ? "repair-rejected"
     : !releasePassed
@@ -10998,9 +11162,11 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
             ? "diversity-below-gate"
             : !sectionOutcomePassed
               ? "section-outcome-below-gate"
+              : !songJourneyPassed
+                ? "song-journey-below-gate"
               : "release-ready";
   return {
-    version: 2,
+    version: 3,
     generation,
     passed,
     status,
@@ -11019,6 +11185,12 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
     sectionAverageContrast: finite(sectionOutcome.averageContrast, 1),
     sectionWeakestContrast: finite(sectionOutcome.weakestContrast, 1),
     sectionWeakestPair: clone(sectionOutcome.weakestPair ?? null),
+    songJourneyPassed,
+    songJourneyScore: finite(songJourney.score, 100),
+    payoffEarned: Boolean(songJourney.payoffEarned),
+    grooveFoundation: Boolean(songJourney.grooveFoundation),
+    motifReturn: Boolean(songJourney.motifReturn),
+    endingResolved: Boolean(songJourney.endingResolved),
     adaptiveTarget,
   };
 }
@@ -12644,6 +12816,7 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
+        || Number(rightOutcome.songJourneyPassed) - Number(leftOutcome.songJourneyPassed)
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
@@ -12661,6 +12834,8 @@ function commitCandidate(candidates, search = {}) {
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
   selected.sectionOutcome = sectionOutcome;
+  const songJourney = selected.songJourney ?? evaluateSongJourneyQuality(selected.song);
+  selected.songJourney = songJourney;
   const baseOutputOutcome = evaluateCandidateOutcome(selected, selected.song.generation);
   const dawRegister = applyDawRegisterPolicy(
     selected.song.tracks,
@@ -12672,7 +12847,7 @@ function commitCandidate(candidates, search = {}) {
   const registerOutcome = evaluateDawRegisterQuality(selected.song);
   const outputOutcome = {
     ...baseOutputOutcome,
-    version: 3,
+    version: 4,
     registerOutcomePassed: registerOutcome.passed,
     registerOutcomeScore: registerOutcome.score,
     registerRangeViolations: registerOutcome.rangeViolations,
@@ -12741,8 +12916,9 @@ function commitCandidate(candidates, search = {}) {
       const { index, evaluation, novelty, selectionScore, song } = candidate;
       const diversity = candidate.diversity ?? diversityReportFromNovelty(novelty, song.generation);
       const sectionOutcome = candidate.sectionOutcome ?? evaluateSectionOutcomeQuality(song);
+      const songJourney = candidate.songJourney ?? evaluateSongJourneyQuality(song);
       const candidateBalance = evaluateCandidateBalance(evaluation);
-      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome }, song.generation);
+      const outcome = evaluateCandidateOutcome({ ...candidate, sectionOutcome, songJourney }, song.generation);
       const registerPreview = applyDawRegisterPolicy(
         song.tracks,
         song.structure ?? song.sections ?? [],
@@ -12768,6 +12944,12 @@ function commitCandidate(candidates, search = {}) {
         sectionAverageContrast: outcome.sectionAverageContrast,
         sectionWeakestContrast: outcome.sectionWeakestContrast,
         sectionWeakestPair: clone(outcome.sectionWeakestPair),
+        songJourneyPassed: outcome.songJourneyPassed,
+        songJourneyScore: outcome.songJourneyScore,
+        payoffEarned: outcome.payoffEarned,
+        grooveFoundation: outcome.grooveFoundation,
+        motifReturn: outcome.motifReturn,
+        endingResolved: outcome.endingResolved,
         registerOutcomePassed: registerOutcome.passed,
         registerOutcomeScore: registerOutcome.score,
         registerRangeViolations: registerOutcome.rangeViolations,
@@ -12793,6 +12975,7 @@ function commitCandidate(candidates, search = {}) {
   selected.song.meta.novelty = selected.novelty;
   selected.song.meta.diversity = diversity;
   selected.song.meta.sectionOutcome = sectionOutcome;
+  selected.song.meta.songJourney = songJourney;
   selected.song.meta.registerOutcome = registerOutcome;
   selected.song.meta.outputOutcome = outputOutcome;
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
@@ -12844,6 +13027,16 @@ function commitCandidate(candidates, search = {}) {
       averageContrast: sectionOutcome.averageContrast,
       weakestContrast: sectionOutcome.weakestContrast,
       weakestPair: clone(sectionOutcome.weakestPair),
+    },
+    {
+      id: "song-journey-qc",
+      status: outputOutcome.songJourneyPassed ? "passed" : "best-available",
+      score: songJourney.score,
+      openingRestrained: songJourney.openingRestrained,
+      payoffEarned: songJourney.payoffEarned,
+      grooveFoundation: songJourney.grooveFoundation,
+      motifReturn: songJourney.motifReturn,
+      endingResolved: songJourney.endingResolved,
     },
     {
       id: "daw-register-qc",
