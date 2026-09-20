@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { generateNew } from "../src/music-engine.js";
 
-const GENRES = ["trap", "hipHop", "pop", "neoSoul"];
+const GENRES = ["hipHop", "pop", "neoSoul"];
 const TRANSITIONS = new Set(["intro", "prechorus", "build", "bridge", "breakdown", "outro"]);
 
 test("Trap uses a verse-first, hook-led form", () => {
