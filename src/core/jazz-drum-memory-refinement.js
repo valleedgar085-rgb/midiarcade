@@ -67,6 +67,12 @@ function drumSignature(song, bar) {
     .join("|");
 }
 
+function syncopationDistance(notes, target = 0.68) {
+  if (!notes.length) return Math.abs(target);
+  const ratio = notes.filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08).length / notes.length;
+  return Math.abs(ratio - target);
+}
+
 export function adjacentDrumDuplicateCount(song) {
   const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
   const signatures = Array.from({ length: bars }, (_, bar) => drumSignature(song, bar)).filter(Boolean);
@@ -94,9 +100,24 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       const sourceNotes = notesForBar(song, sourceBar);
       if (sourceNotes.length < 4) continue;
       const targetNotes = new Set(notesForBar(song, targetBar));
+      const beforeDrumNotes = [...targetDrums.notes];
       const delta = (targetBar - sourceBar) * barBeats;
       targetDrums.notes = targetDrums.notes.filter((note) => !targetNotes.has(note));
-      targetDrums.notes.push(...sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) })));
+      const recalled = sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) }));
+      targetDrums.notes.push(...recalled);
+      // Keep the memory recall musical, but preserve Jazz's syncopated identity
+      // when a full-bar replacement moves the global groove away from target.
+      const beforeDistance = syncopationDistance(beforeDrumNotes);
+      const afterDistance = syncopationDistance(targetDrums.notes);
+      if (afterDistance > beforeDistance) {
+        const bestAccent = [...targetNotes]
+          .map((note) => {
+            const candidateNotes = [...targetDrums.notes, note];
+            return { note, distance: syncopationDistance(candidateNotes) };
+          })
+          .sort((left, right) => left.distance - right.distance)[0];
+        if (bestAccent && bestAccent.distance < afterDistance) targetDrums.notes.push(bestAccent.note);
+      }
       targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
       return Object.freeze({
         id: "jazz-return-groove-recall",
