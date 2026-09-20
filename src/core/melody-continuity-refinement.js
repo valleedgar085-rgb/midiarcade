@@ -197,10 +197,12 @@ function candidateRequestSets(song) {
       balanced.push({ sectionId: section.id, window, mode: "echo", slot, slots });
     }
   }
-  for (const section of opportunities) {
-    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
-    for (const window of section.windows.slice(1)) {
+  const maxWindows = Math.max(...opportunities.map((section) => section.windows.length));
+  for (let windowIndex = 1; windowIndex < maxWindows && balanced.length < MAX_MELODY_CONTINUITY_LINKS; windowIndex += 1) {
+    for (const section of opportunities) {
       if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
+      const window = section.windows[windowIndex];
+      if (!window) continue;
       balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
     }
   }
