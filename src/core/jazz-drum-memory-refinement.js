@@ -113,57 +113,60 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   if (String(sourceSong?.genre ?? sourceSong?.meta?.genre ?? "") !== "jazz") return null;
   const drums = sourceSong?.tracks?.find((track) => track.id === "drums");
   if (!drums?.notes?.length) return null;
-  const song = cloneValue(sourceSong);
-  const targetDrums = song.tracks.find((track) => track.id === "drums");
-  const barBeats = finite(song?.meta?.beatsPerBar, 4);
-  for (const { origin, target } of sectionPairs(song)) {
-    const originStart = Math.floor(startOf(origin) / barBeats + 1e-6);
-    const targetStart = Math.floor(startOf(target) / barBeats + 1e-6);
+  const sourceBarBeats = finite(sourceSong?.meta?.beatsPerBar, 4);
+  const sourceVariety = drumVarietyScore(sourceSong, drums.notes);
+  const sourceRhythm = rhythmAuthenticityScore(sourceSong, drums.notes);
+  const candidates = [];
+
+  for (const { origin, target } of sectionPairs(sourceSong)) {
+    const originStart = Math.floor(startOf(origin) / sourceBarBeats + 1e-6);
+    const targetStart = Math.floor(startOf(target) / sourceBarBeats + 1e-6);
     const span = Math.min(
-      Math.max(0, Math.ceil((endOf(origin) - startOf(origin)) / barBeats)),
-      Math.max(0, Math.ceil((endOf(target) - startOf(target)) / barBeats)),
+      Math.max(0, Math.ceil((endOf(origin) - startOf(origin)) / sourceBarBeats)),
+      Math.max(0, Math.ceil((endOf(target) - startOf(target)) / sourceBarBeats)),
     );
     for (let offset = 0; offset < span; offset += 1) {
       const sourceBar = originStart + offset;
       const targetBar = targetStart + offset;
-      if (Math.abs(sourceBar - targetBar) <= 1 || protectedBar(song, sourceBar) || protectedBar(song, targetBar)) continue;
+      if (Math.abs(sourceBar - targetBar) <= 1 || protectedBar(sourceSong, sourceBar) || protectedBar(sourceSong, targetBar)) continue;
+
+      const song = cloneValue(sourceSong);
+      const targetDrums = song.tracks.find((track) => track.id === "drums");
       const sourceNotes = notesForBar(song, sourceBar);
       if (sourceNotes.length < 4) continue;
       const targetNotes = new Set(notesForBar(song, targetBar));
-      const beforeDrumNotes = [...targetDrums.notes];
-      const delta = (targetBar - sourceBar) * barBeats;
+      const delta = (targetBar - sourceBar) * sourceBarBeats;
       targetDrums.notes = targetDrums.notes.filter((note) => !targetNotes.has(note));
-      const recalled = sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) }));
-      targetDrums.notes.push(...recalled);
-      // Keep the memory recall musical, but preserve Jazz's syncopated identity
-      // when a full-bar replacement moves the global groove away from target.
-      const beforeDistance = syncopationDistance(beforeDrumNotes);
-      const afterDistance = syncopationDistance(targetDrums.notes);
-      if (afterDistance > beforeDistance) {
-        const afterVariety = drumVarietyScore(song, targetDrums.notes);
-        const afterRhythm = rhythmAuthenticityScore(song, targetDrums.notes);
-        const preservationSets = [
-          [],
-          [...targetNotes].filter((note) => [37, 38, 39, 40].includes(note.pitch)),
-          [...targetNotes].filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08),
-          [...targetNotes],
-        ];
-        const bestPreservation = preservationSets
-          .map((notes) => {
-            const candidateNotes = [...targetDrums.notes, ...notes];
-            return {
-              notes,
-              distance: syncopationDistance(candidateNotes),
-              variety: drumVarietyScore(song, candidateNotes),
-              rhythm: rhythmAuthenticityScore(song, candidateNotes),
-            };
-          })
-          .filter((candidate) => candidate.variety >= afterVariety && candidate.rhythm > afterRhythm)
-          .sort((left, right) => right.rhythm - left.rhythm || right.variety - left.variety || left.distance - right.distance)[0];
-        if (bestPreservation?.notes.length) targetDrums.notes.push(...bestPreservation.notes);
-      }
-      targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
-      return Object.freeze({
+      targetDrums.notes.push(...sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) })));
+
+      const baseNotes = [...targetDrums.notes];
+      const preservationSets = [
+        [],
+        [...targetNotes].filter((note) => [37, 38, 39, 40].includes(note.pitch)),
+        [...targetNotes].filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08),
+        [...targetNotes],
+      ];
+      const variant = preservationSets
+        .map((notes) => {
+          const candidateNotes = [...baseNotes, ...notes];
+          return {
+            notes,
+            variety: drumVarietyScore(song, candidateNotes),
+            rhythm: rhythmAuthenticityScore(song, candidateNotes),
+            distance: syncopationDistance(candidateNotes),
+          };
+        })
+        .sort((left, right) => (
+          (right.variety - left.variety)
+          || (right.rhythm - left.rhythm)
+          || (left.distance - right.distance)
+        ))
+        .find((candidate) => candidate.variety >= sourceVariety + 2 && candidate.rhythm >= sourceRhythm)
+        ?? null;
+      if (!variant) continue;
+      targetDrums.notes = [...baseNotes, ...variant.notes]
+        .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+      candidates.push(Object.freeze({
         id: "jazz-return-groove-recall",
         song,
         changedBars: 1,
@@ -171,8 +174,18 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
         targetBar,
         adjacentDuplicatesBefore: adjacentDrumDuplicateCount(sourceSong),
         adjacentDuplicatesAfter: adjacentDrumDuplicateCount(song),
-      });
+        variety: variant.variety,
+        rhythm: variant.rhythm,
+      }));
     }
   }
-  return null;
+
+  candidates.sort((left, right) => (
+    (right.variety - left.variety)
+    || (right.rhythm - left.rhythm)
+    || (left.sourceBar - right.sourceBar)
+    || (left.targetBar - right.targetBar)
+  ));
+  return candidates[0] ?? null;
 }
+
