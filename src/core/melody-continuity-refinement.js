@@ -2,7 +2,11 @@ import { cloneValue } from "./clone-value.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
 
-const EXCLUDED_SECTION_NAMES = new Set(["intro", "outro", "breakdown", "break", "interlude"]);
+const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
+
+function isExcludedSectionName(name) {
+  return EXCLUDED_SECTION_NAMES.some((excluded) => name === excluded || name.startsWith(excluded));
+}
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -60,7 +64,7 @@ function melodicSections(song) {
       name,
       ...sectionBounds(song, section),
     };
-  }).filter(({ name }) => name && !EXCLUDED_SECTION_NAMES.has(name));
+  }).filter(({ name }) => name && !isExcludedSectionName(name));
 }
 
 function melodyTrack(song) {
@@ -149,11 +153,12 @@ function connectorNote(window, sectionId, mode, ordinal) {
   const duration = round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
   return {
-    ...source,
     id: `${String(source?.id ?? "melody-link")}:continuity-${sectionId}-${ordinal}`,
+    pitch: finite(source?.pitch, 60),
     start,
     duration,
     velocity,
+    sectionId,
     continuityRole: "phrase-link",
   };
 }
