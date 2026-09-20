@@ -845,6 +845,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const selectedMode = $("#modeControl").value;
   const selectedBars = $("#barsControl").value;
   const selectedChordPath = $("#chordPathControl")?.value || "auto";
+  const trapIntroMode = $("#trapIntroModeControl")?.value || "short";
   const creativeRange = normalizeCreativeRange($("#creativeRangeControl")?.value);
   const resolvedKey = selectedKey === "auto"
     ? NOTE_NAMES[hashNumber(`${seed}:auto:key`) % NOTE_NAMES.length]
@@ -920,6 +921,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     rollAmount: clamp(generationValue("rollControl", rhythm.roll) / 100, 0, 1),
     variation: generationValue("variationControl", 42) / 100,
     evolution: generationValue("evolutionControl", 58) / 100,
+    trapIntroMode,
     surprise: generationValue("surpriseControl", 28) / 100,
     similarity: clamp(1 - generationValue("variationControl", 42) / 165, 0.58, 0.92),
     trackControls,
@@ -934,7 +936,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
 const GENERATION_SETTING_IDS = [
   "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "creativeRangeControl", "chordPathControl",
   "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl",
-  "variationControl", "evolutionControl", "surpriseControl",
+  "variationControl", "evolutionControl", "trapIntroModeControl", "surpriseControl",
 ];
 let appliedGenerationSettings = null;
 
@@ -1794,6 +1796,7 @@ function syncControlsFromSong() {
     swing: "swingControl",
     humanize: "humanizeControl",
     variation: "variationControl",
+    trapIntroMode: "trapIntroModeControl",
   };
   for (const [setting, controlId] of Object.entries(generationControlMap)) {
     const control = $(`#${controlId}`);
@@ -5844,6 +5847,10 @@ function toggleFullscreen() {
       showToast(`${label} set to ${$(`#${id}`).value}%. Tap New song idea to generate with this direction.`);
     });
   }
+  $("#trapIntroModeControl")?.addEventListener("change", () => {
+    const mode = $("#trapIntroModeControl").value;
+    showToast(`Trap intro set to ${mode === "extended" ? "extended build" : mode === "auto" ? "Auto" : "short"}. Generate to hear it.`);
+  });
 
   $("#tempoControl").addEventListener("change", () => {
     if (state.song && selectedGenreId() === songGenreId()) {
@@ -6103,6 +6110,7 @@ function toggleFullscreen() {
     $("#complexityControl").value = 54;
     $("#variationControl").value = 42;
     $("#evolutionControl").value = 58;
+    $("#trapIntroModeControl").value = "short";
     $("#surpriseControl").value = 28;
     updateRangeDisplays();
     decorateAutoRangeControls();

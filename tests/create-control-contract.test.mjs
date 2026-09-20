@@ -45,6 +45,7 @@ const EXPECTED_CREATE_IDS = [
   "rollControl",
   "variationControl",
   "evolutionControl",
+  "trapIntroModeControl",
   "surpriseControl",
   "generateNew",
   "generateSimilar",
@@ -102,6 +103,7 @@ const CHANGE_IDS = [
   "keyControl",
   "modeControl",
   "chordPathControl",
+  "trapIntroModeControl",
 ];
 
 function makeControl(id = "", dataset = {}) {

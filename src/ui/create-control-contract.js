@@ -29,6 +29,7 @@ export const CREATE_CONTROL_CONTRACT = Object.freeze({
   rollControl: entry("Transition rolls", "Controls drum-roll activity near real phrase and section boundaries.", "advanced", "input"),
   variationControl: entry("Variation", "Controls how much internal phrase and pattern variety Producer Brain may introduce.", "advanced", "input"),
   evolutionControl: entry("Phrase evolution", "Controls how strongly motifs, dynamics and patterns develop over the course of the song.", "advanced", "input"),
+  trapIntroModeControl: entry("Trap intro build", "Trap only: keep the immediate intro or give the drums a deterministic double-length build. Other genres ignore this choice.", "advanced"),
   surpriseControl: entry("Surprise", "Allows less-common but genre-compatible musical decisions without abandoning the selected direction.", "advanced", "input"),
   generateNew: entry("Generate new song", "Composes a completely new arrangement from the staged Create settings while leaving those settings selected.", "generate", "click"),
   generateSimilar: entry("Create Fire / Electric / Drip", "Creates three related songs from one DNA: Fire for impact, Electric for motion and Drip for space.", "generate", "click"),

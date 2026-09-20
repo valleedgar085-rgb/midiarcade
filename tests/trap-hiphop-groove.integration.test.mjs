@@ -123,3 +123,58 @@ test("Trap and Hip-Hop groove contracts stay deterministic and section-aware", (
 
   assert.ok([...summary.values()].some((entry) => entry.evolutionHits > 0), "section-aware groove evolution never engaged");
 });
+
+test("Trap can deterministically double its intro without changing song length or Hip-Hop", () => {
+  const base = {
+    seed: "trap-intro-build",
+    bars: 32,
+    energy: 0.68,
+    complexity: 0.62,
+    variation: 0.5,
+    evolution: 0.62,
+  };
+  const shortTrap = runGenerationRequest("new", {
+    config: { ...base, genre: "trap", trapIntroMode: "short" },
+  }).song;
+  const extendedTrap = runGenerationRequest("new", {
+    config: { ...base, genre: "trap", trapIntroMode: "extended" },
+  }).song;
+  const repeatedExtendedTrap = runGenerationRequest("new", {
+    config: { ...base, genre: "trap", trapIntroMode: "extended" },
+  }).song;
+  const shortHipHop = runGenerationRequest("new", {
+    config: { ...base, genre: "hipHop", trapIntroMode: "short" },
+  }).song;
+  const extendedHipHop = runGenerationRequest("new", {
+    config: { ...base, genre: "hipHop", trapIntroMode: "extended" },
+  }).song;
+
+  const introBars = (song) => song.structure.find((section) => section.name === "intro")?.bars ?? 0;
+  const timelineBars = (song) => song.structure.reduce((sum, section) => sum + section.bars, 0);
+  const sectionFingerprint = (song) => JSON.stringify(song.structure.map(({ name, bars, startBar }) => ({ name, bars, startBar })));
+
+  assert.equal(introBars(extendedTrap), introBars(shortTrap) * 2, "extended Trap intro should be exactly twice the short intro");
+  assert.equal(timelineBars(extendedTrap), base.bars, "extended Trap intro must fit inside the requested song length");
+  assert.equal(sectionFingerprint(extendedTrap), sectionFingerprint(repeatedExtendedTrap), "extended Trap planning must remain deterministic");
+  assert.equal(sectionFingerprint(shortHipHop), sectionFingerprint(extendedHipHop), "Trap intro mode must not alter Hip-Hop structure");
+  assert.equal(introBars(extendedHipHop), introBars(shortHipHop), "Hip-Hop intro length must remain unchanged");
+});
+
+test("Trap auto intro preserves the current default while Extended stays explicit", () => {
+  const input = {
+    seed: "trap-intro-auto",
+    genre: "trap",
+    bars: 32,
+    energy: 0.68,
+    complexity: 0.62,
+    variation: 0.5,
+  };
+  const auto = runGenerationRequest("new", {
+    config: { ...input, trapIntroMode: "auto" },
+  }).song;
+  const extended = runGenerationRequest("new", {
+    config: { ...input, trapIntroMode: "extended" },
+  }).song;
+  assert.equal(auto.structure.find((section) => section.name === "intro")?.bars, 2);
+  assert.equal(extended.structure.find((section) => section.name === "intro")?.bars, (auto.structure.find((section) => section.name === "intro")?.bars ?? 0) * 2);
+});

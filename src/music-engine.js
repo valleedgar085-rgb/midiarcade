@@ -510,6 +510,7 @@ export const DEFAULT_CONFIG = deepFreeze({
   tripletAmount: 0.13,
   rollAmount: 0.16,
   registerSpread: 0.34,
+  trapIntroMode: "short",
   tracks: Object.fromEntries(
     Object.entries(TRACK_DEFINITIONS).map(([id, track]) => [id, { ...track }]),
   ),
@@ -1060,6 +1061,11 @@ function normalizeGenre(value) {
   return GENRE_ALIASES[token] ?? DEFAULT_CONFIG.genre;
 }
 
+function normalizeTrapIntroMode(value) {
+  const mode = String(value ?? DEFAULT_CONFIG.trapIntroMode).trim().toLowerCase();
+  return ["auto", "short", "extended"].includes(mode) ? mode : DEFAULT_CONFIG.trapIntroMode;
+}
+
 function normalizeTimeSignature(value) {
   let numerator = 4;
   let denominator = 4;
@@ -1252,6 +1258,10 @@ export function normalizeConfig(input = {}) {
     tripletAmount: unit(input.tripletAmount, profile.tripletChance),
     rollAmount: unit(input.rollAmount, profile.snareRollChance),
     registerSpread: unit(input.registerSpread, DEFAULT_CONFIG.registerSpread),
+    // Trap can opt into a two-times intro without changing any other genre's
+    // arrangement grammar. Auto uses the existing creative controls as the
+    // deterministic signal for whether a longer build has room to breathe.
+    trapIntroMode: normalizeTrapIntroMode(input.trapIntroMode),
     arrangementLayers: {
       mode: layeringMode,
       density: round(layeringDensity),
@@ -1410,6 +1420,41 @@ function specialFormLayout(form, bars) {
   return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
 }
 
+function shouldUseExtendedTrapIntro(config) {
+  if (config.genre !== "trap" || config.bars < 24) return false;
+  if (config.trapIntroMode === "extended") return true;
+  if (config.trapIntroMode === "short") return false;
+  // Auto is intentionally conservative until a longer-build request is
+  // explicit. This preserves every existing Trap contract by default.
+  return false;
+}
+
+function extendTrapIntro(layout, sizes, config) {
+  if (!shouldUseExtendedTrapIntro(config)) return sizes;
+  const introIndex = layout.findIndex((item) => item.name === "intro");
+  if (introIndex < 0) return sizes;
+  const current = sizes[introIndex];
+  const target = Math.min(current * 2, config.bars - (sizes.length - 1));
+  let remaining = Math.max(0, target - current);
+  if (!remaining) return sizes;
+
+  const result = [...sizes];
+  // Take bars from the largest body sections first. This keeps the song at
+  // the requested length and preserves every section identity and boundary.
+  const donors = result
+    .map((bars, index) => ({ bars, index }))
+    .filter(({ index, bars }) => index !== introIndex && bars > 1)
+    .sort((left, right) => right.bars - left.bars || left.index - right.index);
+  for (const donor of donors) {
+    if (!remaining) break;
+    const take = Math.min(remaining, donor.bars - 1);
+    result[donor.index] -= take;
+    result[introIndex] += take;
+    remaining -= take;
+  }
+  return result;
+}
+
 function createStructure(config, rng) {
   const bars = config.bars;
   const form = GENRE_PROFILES[config.genre].arrangement.form;
@@ -1475,7 +1520,7 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const sizes = allocateBars(layout, bars);
+  const sizes = extendTrapIntro(layout, allocateBars(layout, bars), config);
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
