@@ -80,9 +80,12 @@ fs.writeFileSync(
 );
 
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
+const compactIndexSource = indexSource
+  .replace(/<!--[^]*?-->/g, '')
+  .replace(/^[\\t ]+/gm, '');
 fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
-  indexSource.replace(
+  compactIndexSource.replace(
     '</head>',
     `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"></head>`,
   ),

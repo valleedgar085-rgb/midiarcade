@@ -33,6 +33,12 @@ import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
+  hasAudiblePreviewEvents,
+  playbackSourceNeedsCanonicalReset,
+  playableSongNoteCount,
+  shouldRecoverSilentMixState,
+} from "./core/playback-recovery.js";
+import {
   chooseAutoProgramRotation,
   companionTrackIds,
   curateTrackProgramPalette,
@@ -2822,14 +2828,32 @@ function renderMixOverview() {
   const id = TRACK_ORDER.includes(state.selectedTrack) ? state.selectedTrack : "drums";
   const meta = TRACK_META[id];
   const settings = state.trackSettings[id];
-  const audible = state.solo.size
-    ? state.solo.size
+  const soloIds = [...state.solo].filter((trackId) => TRACK_ORDER.includes(trackId));
+  const audible = soloIds.length
+    ? soloIds.length
     : Math.max(0, TRACK_ORDER.length - state.muted.size);
   $("#mixOverview").style.setProperty("--mix-focus-color", meta.color);
   $("#mixFocusName").textContent = meta.name;
   $("#mixFocusSound").textContent = `${programName(id, settings.program)} · ${ATTITUDE_LABELS[settings.attitude] || "Neutral"}`;
   $("#mixAudibleCount").textContent = `${audible} / ${TRACK_ORDER.length}`;
   $("#mixLockedCount").textContent = String(state.locked.size);
+
+  const soloAlert = $("#mixSoloAlert");
+  const soloText = $("#mixSoloAlertText");
+  const mixTab = $("#tab-btn-mix");
+  const mobileMix = $("#mobileMix");
+  const soloNames = soloIds.map((trackId) => TRACK_META[trackId]?.name ?? trackId);
+  if (soloAlert) soloAlert.hidden = soloIds.length === 0;
+  if (soloText && soloIds.length) {
+    soloText.textContent = soloIds.length === 1
+      ? `${soloNames[0]} is soloed. The other five instruments are still in the song but muted by Solo.`
+      : `${soloNames.join(", ")} are soloed. Only those instruments are audible.`;
+  }
+  mixTab?.classList.toggle("has-solo", soloIds.length > 0);
+  mobileMix?.classList.toggle("has-solo", soloIds.length > 0);
+  mixTab?.setAttribute("aria-label", soloIds.length
+    ? `Mix — Solo active on ${soloNames.join(", ")}`
+    : "Mix");
   renderSmartMixConsole();
 }
 
@@ -3279,7 +3303,18 @@ const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
   onChange(workspace) {
+    const canonicalWorkspace = workspace !== "arrange";
+    const staleAudition = canonicalWorkspace
+      && playbackSourceNeedsCanonicalReset(player?.playbackSong, state.song);
+    const resumePosition = staleAudition ? player.currentSongTime() : null;
+    const resumePlayback = Boolean(staleAudition && player.playing);
     resolvePendingShapeDirectorCandidate({ rerender: true });
+    if (staleAudition) {
+      void player.returnToCanonicalSong({
+        positionSeconds: resumePosition,
+        resume: resumePlayback,
+      });
+    }
     if (workspace !== "arrange" && state.sectionEditorOpen) {
       state.sectionEditorOpen = false;
       state.editorSelection.clear();
@@ -3714,6 +3749,7 @@ function handleTrackAction(id, action) {
     state.muted.has(id) ? state.muted.delete(id) : state.muted.add(id);
     renderTrackRack();
     renderTimeline();
+    renderMixOverview();
     if (player.playing) player.restart();
     scheduleSessionSave();
     return;
@@ -3721,8 +3757,14 @@ function handleTrackAction(id, action) {
   if (action === "solo") {
     state.solo.has(id) ? state.solo.delete(id) : state.solo.add(id);
     renderTrackRack();
+    renderTimeline();
+    renderMixOverview();
     if (player.playing) player.restart();
     scheduleSessionSave();
+    const soloNames = [...state.solo].map((trackId) => TRACK_META[trackId]?.name ?? trackId);
+    showToast(soloNames.length
+      ? `Solo active: ${soloNames.join(", ")}. Use Hear full band in Mix to clear it.`
+      : "Solo cleared. Full-band playback is restored.");
     return;
   }
   if (action === "lock") {
@@ -4771,9 +4813,41 @@ export class PreviewPlayer {
   buildEvents() {
     const song = this.playbackSong ?? state.song;
     this.events = buildPreviewEvents(song);
+    if (shouldRecoverSilentMixState({
+      song,
+      events: this.events,
+      muted: state.muted,
+      solo: state.solo,
+    })) {
+      state.muted.clear();
+      state.solo.clear();
+      this.events = buildPreviewEvents(song);
+      renderTrackRack();
+      renderTimeline();
+      renderMixOverview();
+      scheduleSessionSave();
+      showToast("Mix had every playable track silenced. Audible playback was restored.");
+    }
     this.configureSongFx(song);
     this.playbackView = playbackViewForSong(song);
     this.lastDetailRefreshAt = -Infinity;
+  }
+
+  async returnToCanonicalSong({ positionSeconds = null, resume = null } = {}) {
+    const canonicalSong = state.song;
+    if (!playbackSourceNeedsCanonicalReset(this.playbackSong, canonicalSong)) return false;
+    const shouldResume = resume == null ? this.playing : Boolean(resume);
+    const position = Number.isFinite(Number(positionSeconds))
+      ? Number(positionSeconds)
+      : this.currentSongTime();
+    this.pause();
+    this.releasePlaybackCache();
+    this.position = clamp(position, 0, totalSeconds(canonicalSong));
+    updatePlaybackUi(this.position, totalSeconds(canonicalSong), {
+      view: playbackViewForSong(canonicalSong),
+    });
+    if (shouldResume) return this.play();
+    return true;
   }
 
   configureSongFx(song = state.song) {
@@ -4848,6 +4922,13 @@ export class PreviewPlayer {
       rampAudioParamValue(this.master.gain, 0.42, now, this.previewBudget.masterFadeSeconds);
     }
     this.buildEvents();
+    if (!hasAudiblePreviewEvents(this.events)) {
+      const hasNotes = playableSongNoteCount(song) > 0;
+      showToast(hasNotes
+        ? "The song is loaded, but the current Mix levels are silent. Raise at least one track level."
+        : "This song has no playable notes. Generate a new idea.");
+      return false;
+    }
     const duration = totalSeconds(song);
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
@@ -5866,6 +5947,16 @@ function toggleFullscreen() {
   $("#redoButton").addEventListener("click", redoHistory);
   $("#renameButton").addEventListener("click", renameSong);
   $("#randomizeMixButton").addEventListener("click", randomizeTrackControls);
+  $("#clearSoloButton")?.addEventListener("click", () => {
+    if (!state.solo.size) return;
+    state.solo.clear();
+    renderTrackRack();
+    renderTimeline();
+    renderMixOverview();
+    if (player.playing) player.restart();
+    scheduleSessionSave();
+    showToast("Solo cleared. Full-band playback is restored.");
+  });
   $("#mixEnhanceToggle")?.addEventListener("click", () => {
     state.mixAssistant.enabled = !state.mixAssistant.enabled;
     renderSmartMixConsole();
@@ -6281,7 +6372,10 @@ async function init() {
       recovered = true;
     }
     if (recovered) showToast("A damaged saved session was replaced with a fresh idea.");
-    else if (restored) showToast("Your last song and live take were restored.");
+    else if (restored && state.solo.size) {
+      const soloNames = [...state.solo].map((trackId) => TRACK_META[trackId]?.name ?? trackId);
+      showToast(`Your last song was restored. Solo is still active on ${soloNames.join(", ")}.`);
+    } else if (restored) showToast("Your last song and live take were restored.");
     discoverMidiDevices({ requestAccess: false });
     // Prune old MIDI exports at startup (fire-and-forget).
     pruneMidiExportsCache().catch(() => {});
