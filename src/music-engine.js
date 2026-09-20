@@ -1585,7 +1585,10 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const allocatedSizes = bars >= 16 && !electronic && phraseGridGenre\n    ? allocatePhraseGridBars(layout, bars)\n    : allocateBars(layout, bars);\n  const sizes = extendUrbanIntro(layout, allocatedSizes, config);
+  const allocatedSizes = bars >= 16 && !electronic && phraseGridGenre
+    ? allocatePhraseGridBars(layout, bars)
+    : allocateBars(layout, bars);
+  const sizes = extendUrbanIntro(layout, allocatedSizes, config);
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
