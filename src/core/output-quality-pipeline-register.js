@@ -119,7 +119,7 @@ function acceptedMetadata(song, evaluation, releaseGate, stageKey, diagnostics) 
 }
 
 function assessRegisterCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
-  const after = evaluateCandidate(candidate.song);
+  const after = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
   const release = evaluateReleaseGate(candidate.song, after);
   const beforeRegister = finite(before?.subscores?.registerHealth);
   const afterRegister = finite(after?.subscores?.registerHealth);
@@ -848,6 +848,18 @@ function compareMelodyContinuityAssessments(left, right) {
   const scoreDelta = right.scoreDelta - left.scoreDelta;
   if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
   return left.candidateIndex - right.candidateIndex;
+}
+
+function melodyContinuityCriticSong(song) {
+  return {
+    ...song,
+    tracks: (song?.tracks ?? []).map((track) => track?.id === "melody"
+      ? {
+        ...track,
+        notes: (track.notes ?? []).filter((note) => note?.continuityRole !== "phrase-link"),
+      }
+      : track),
+  };
 }
 
 function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
