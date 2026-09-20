@@ -46,7 +46,7 @@ test("Android release configuration targets the current Play baseline without br
   assert.match(variables, /minSdkVersion\s*=\s*24/);
   assert.match(variables, /compileSdkVersion\s*=\s*36/);
   assert.match(variables, /targetSdkVersion\s*=\s*36/);
-  assert.match(appGradle, /versionCode\s+3/);
+  assert.match(appGradle, /versionCode\\s+4/);
   assert.match(appGradle, /versionName\s+"1\.2\.0"/);
   assert.match(appGradle, /debug\s*\{[\s\S]*?applicationIdSuffix\s+"\.preview"/, "Preview APK must install beside differently signed production builds");
   assert.match(appGradle, /versionNameSuffix\s+"-preview"/);
@@ -90,7 +90,7 @@ test("PWA and Play artwork is versioned, present, and wired into the studio prod
   const pkg = JSON.parse(packageJson);
   const manifest = JSON.parse(webManifest);
 
-  assert.equal(pkg.version, "1.2.0");
+  assert.equal(pkg.version, "1.2.1");
   assert.equal(pkg.engines.node, ">=22.0.0");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(manifest.icons.map((icon) => icon.sizes), ["192x192", "512x512"]);
