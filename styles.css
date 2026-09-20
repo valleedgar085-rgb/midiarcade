@@ -767,10 +767,6 @@ input[type=range].is-auto{
 .mini-range{display:flex;flex-direction:column;gap:4px}
 .mini-range>span{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--text-2)}
 .mini-range output{font-family:var(--mono);font-size:11px;color:var(--accent)}
-.mini-select{display:flex;flex-direction:column;gap:4px}
-.mini-select>span{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--text-2)}
-.mini-select>span small{font-size:9px;letter-spacing:.08em;color:var(--text-3)}
-.mini-select select{width:100%;min-height:30px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--text);font:600 11px var(--mono)}
 
 /* GENERATION BUTTONS */
 .generation-actions-bar{display:grid;grid-template-columns:1fr 1fr;gap:12px}
