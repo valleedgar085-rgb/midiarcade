@@ -10765,10 +10765,16 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
       components: null,
     };
   }
-  const comparisons = recent.map((candidate) => ({
-    songId: candidate.id ?? null,
-    ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
-  })).sort((left, right) => right.similarity - left.similarity);
+  const comparisons = recent.map((candidate) => {
+    const candidateFingerprint = candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate);
+    const exactMatch = JSON.stringify(fingerprint) === JSON.stringify(candidateFingerprint);
+    return {
+      songId: candidate.id ?? null,
+      ...(exactMatch
+        ? { similarity: 1, components: Object.fromEntries(Object.keys(fingerprint).map((key) => [key, 1])) }
+        : fingerprintSimilarity(fingerprint, candidateFingerprint)),
+    };
+  }).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
   const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
   const targetSimilarity = generation === "similar"
