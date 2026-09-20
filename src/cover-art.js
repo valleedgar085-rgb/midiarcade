@@ -44,6 +44,7 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
   const hue = (seed + genreSeed) % 360;
   const hue2 = (hue + 48 + ((seed >>> 8) % 88)) % 360;
   const hue3 = (hue2 + 72) % 360;
+  const sodaPopRed = "#ff5369";
   const centerX = 600 + ((seed % 101) - 50);
   const centerY = 510 + (((seed >>> 7) % 81) - 40);
   const energyArc = Array.isArray(dna?.arrangement?.energyArc) ? dna.arrangement.energyArc : [];
@@ -91,7 +92,7 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
     const local = hash(`${seed}:ribbon:${index}`);
     const y = 255 + index * 125 + (local % 45);
     const bend = 70 + ((local >>> 8) % 140);
-    return `<path d="M-80 ${y} C240 ${y - bend}, 410 ${y + bend}, 650 ${y} S1030 ${y - bend}, 1280 ${y + 18}" fill="none" stroke="hsl(${(hue + index * 38) % 360} 100% 72%)" stroke-opacity=".16" stroke-width="${10 + index * 5}" filter="url(#ribbonBlur)"/>`;
+    return `<path d="M-80 ${y} C240 ${y - bend}, 410 ${y + bend}, 650 ${y} S1030 ${y - bend}, 1280 ${y + 18}" fill="none" stroke="${index === 0 ? sodaPopRed : `hsl(${(hue + index * 38) % 360} 100% 72%)`}" stroke-opacity=".16" stroke-width="${10 + index * 5}" filter="url(#ribbonBlur)"/>`;
   }).join("");
   const sectionSource = song?.structure ?? song?.songBlueprint?.structure ?? dna?.sections ?? [];
   const sectionCount = Math.max(4, Math.min(12, Array.isArray(sectionSource) ? sectionSource.length : 6));
@@ -100,7 +101,7 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
     const start = (index / sectionCount) * 360 + 3;
     const span = (360 / sectionCount) - 7;
     const radius = pulseRadius + 66 + (local % 18);
-    return `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="none" stroke="hsl(${(hue2 + index * 17) % 360} 100% 78%)" stroke-opacity=".34" stroke-width="${3 + (local % 5)}" stroke-dasharray="${Math.max(18, Math.round((2 * Math.PI * radius) * span / 360))} 9999" transform="rotate(${start} ${centerX} ${centerY})"/>`;
+    return `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="none" stroke="${index === 0 ? sodaPopRed : `hsl(${(hue2 + index * 17) % 360} 100% 78%)`}" stroke-opacity=".34" stroke-width="${3 + (local % 5)}" stroke-dasharray="${Math.max(18, Math.round((2 * Math.PI * radius) * span / 360))} 9999" transform="rotate(${start} ${centerX} ${centerY})"/>`;
   }).join("");
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1200 1200" role="img" aria-label="${escapeXml(title)} cover artwork" data-cover-finish="${finish.id}" data-track-aura="v2">
