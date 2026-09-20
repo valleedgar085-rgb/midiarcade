@@ -11,8 +11,8 @@ test("Mix makes persistent Solo state unmistakable and offers one-tap recovery",
   assert.match(html, /id="mixSoloAlertText"/);
   assert.match(html, /id="clearSoloButton"/);
   assert.match(html, />Hear full band</);
-  assert.match(css, /\.mix-solo-alert/);
-  assert.match(css, /#tab-btn-mix\.has-solo::after/);
+  assert.match(solarCss, /\.mix-solo-alert/);
+  assert.match(solarCss, /#tab-btn-mix\.has-solo::after/);
 });
 
 test("mute and solo changes immediately refresh Mix status instead of hiding state", () => {
