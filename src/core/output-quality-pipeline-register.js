@@ -6,6 +6,10 @@ import {
 } from "../music-engine.js";
 import { normalizeGenreId } from "./genre-contract.js";
 import { createFusionPerformanceRebalanceCandidate } from "./fusion-performance-refinement.js";
+import {
+  createBassContinuityCandidates,
+  MAX_BASS_CONTINUITY_CANDIDATES,
+} from "./bass-continuity-refinement.js";
 import { createJazzDrumMemoryCandidate } from "./jazz-drum-memory-refinement.js";
 import {
   createMelodyContinuityCandidates,
@@ -599,6 +603,123 @@ export function applyFusionPerformanceRefinement(song, config, evaluateCandidate
   return { song: candidate.song, diagnostics };
 }
 
+function compareBassContinuityAssessments(left, right) {
+  const continuityDelta = left.continuityErrorDelta - right.continuityErrorDelta;
+  if (Math.abs(continuityDelta) > 1e-9) return continuityDelta;
+  const scoreDelta = right.scoreDelta - left.scoreDelta;
+  if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+  return left.candidateIndex - right.candidateIndex;
+}
+
+function assessBassContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const scoreDelta = finite(after?.score) - finite(before?.score);
+  const floorDelta = creativeFloor(after) - beforeFloor;
+  const dimensions = Object.keys(before?.subscores ?? {});
+  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const accepted = Boolean(
+    release?.passed
+    && scaleSafe
+    && candidate.continuityErrorDelta < -1e-6
+    && scoreDelta >= -1e-9
+    && floorDelta >= -1e-9
+    && protectedSafe
+  );
+  return {
+    ...candidate,
+    after,
+    release,
+    scoreDelta,
+    floorDelta,
+    protectedDeltas: dimensionDeltas,
+    protectedSafe,
+    accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : candidate.continuityErrorDelta >= -1e-6 ? "continuity-direction"
+          : !protectedSafe ? "protected-dimension-regression"
+            : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "critic-regression"
+              : accepted ? "continuity-win" : "critic-regression",
+  };
+}
+
+export function applyBassContinuityRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  if (config.bassContinuityRefinement !== true) {
+    return { song, diagnostics: disabledDiagnostics(MAX_BASS_CONTINUITY_CANDIDATES) };
+  }
+
+  const candidates = createBassContinuityCandidates(song);
+  if (!candidates.length) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: true,
+        accepted: false,
+        changed: false,
+        reason: "no-bass-foundation-dropout",
+        candidatesEvaluated: 0,
+        candidateLimit: MAX_BASS_CONTINUITY_CANDIDATES,
+        candidateIds: [],
+      }),
+    };
+  }
+
+  const before = evaluateCandidate(song);
+  const beforeFloor = creativeFloor(before);
+  const assessments = candidates.map((candidate) => assessBassContinuityCandidate(
+    candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate,
+  ));
+  const candidateIds = assessments.map(({ id }) => id);
+  const accepted = assessments.filter(({ accepted: isAccepted }) => isAccepted)
+    .sort(compareBassContinuityAssessments);
+  const selected = accepted[0] ?? [...assessments].sort(compareBassContinuityAssessments)[0];
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted: Boolean(selected?.accepted),
+    changed: Boolean(selected?.accepted && selected?.changedNotes),
+    reason: selected?.reason ?? "critic-regression",
+    id: selected?.id ?? null,
+    changedNotes: finite(selected?.changedNotes),
+    weakestSectionId: selected?.weakestSectionId ?? null,
+    candidatesEvaluated: assessments.length,
+    candidateLimit: MAX_BASS_CONTINUITY_CANDIDATES,
+    candidateIds,
+    beforeScore: round(before?.score),
+    afterScore: round(selected?.after?.score),
+    scoreDelta: round(selected?.scoreDelta),
+    beforeContinuityDeficit: round(selected?.beforeContinuityDeficit, 4),
+    afterContinuityDeficit: round(selected?.afterContinuityDeficit, 4),
+    continuityErrorDelta: round(selected?.continuityErrorDelta, 4),
+    floorDelta: round(selected?.floorDelta),
+    protectedDeltas: Object.fromEntries(
+      Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
+    ),
+  });
+  if (!accepted.length) return { song, diagnostics };
+
+  selected.song.outputQualityEvolution = {
+    ...(selected.song.outputQualityEvolution ?? {}),
+    bassContinuityRefinement: {
+      accepted: true,
+      changedNotes: diagnostics.changedNotes,
+      continuityErrorDelta: diagnostics.continuityErrorDelta,
+      scoreDelta: diagnostics.scoreDelta,
+      candidatesEvaluated: diagnostics.candidatesEvaluated,
+    },
+  };
+  selected.song.meta = acceptedMetadata(
+    selected.song,
+    selected.after,
+    selected.release,
+    "bassContinuityRefinement",
+    diagnostics,
+  );
+  return { song: selected.song, diagnostics };
+}
+
 function compareMelodyContinuityAssessments(left, right) {
   const continuityDelta = left.continuityErrorDelta - right.continuityErrorDelta;
   if (Math.abs(continuityDelta) > 1e-9) return continuityDelta;
@@ -734,6 +855,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
+    { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
   ]);
   const diagnostics = sequence.diagnostics;
   return {
@@ -748,6 +870,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
+    bassContinuityDiagnostics: diagnostics.bassContinuityRefinement,
   };
 }
 
@@ -771,6 +894,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
+    ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
   ];
   for (const [key, diagnostics] of acceptedStages) {
     if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
