@@ -10675,6 +10675,18 @@ export function createSongFingerprint(song) {
   };
 }
 
+function noveltyFingerprintForSong(song) {
+  const normalizedRegister = applyDawRegisterPolicy(
+    song?.tracks ?? [],
+    song?.structure ?? song?.sections ?? [],
+    { genre: song?.genre ?? song?.meta?.genre ?? "" },
+  );
+  return createSongFingerprint({
+    ...song,
+    tracks: normalizedRegister.tracks,
+  });
+}
+
 function normalizedSongForIdentity(song, {
   releaseMelodyMax = 70,
   releaseCounterpointMax = 68,
@@ -10742,15 +10754,7 @@ function normalizeRecentSongs(value) {
 
 export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
   const recent = normalizeRecentSongs(recentSongs);
-  const normalizedRegister = applyDawRegisterPolicy(
-    song?.tracks ?? [],
-    song?.structure ?? song?.sections ?? [],
-    { genre: song?.genre ?? song?.meta?.genre ?? "" },
-  );
-  const fingerprint = createSongFingerprint({
-    ...song,
-    tracks: normalizedRegister.tracks,
-  });
+  const fingerprint = noveltyFingerprintForSong(song);
   if (!recent.length) {
     return {
       version: 1,
@@ -10767,7 +10771,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   }
   const comparisons = recent.map((candidate) => ({
     songId: candidate.id ?? null,
-    ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
+    ...fingerprintSimilarity(fingerprint, noveltyFingerprintForSong(candidate)),
   })).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
   const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
