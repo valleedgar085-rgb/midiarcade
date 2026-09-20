@@ -161,7 +161,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
           || (right.rhythm - left.rhythm)
           || (left.distance - right.distance)
         ))
-        .find((candidate) => candidate.variety >= sourceVariety + 2 && candidate.rhythm >= sourceRhythm)
+        .find((candidate) => candidate.variety >= sourceVariety + 2)
         ?? null;
       if (!variant) continue;
       targetDrums.notes = [...baseNotes, ...variant.notes]
