@@ -571,37 +571,3 @@
   #preGenSection .song-variation-options button {flex-basis:154px;min-height:72px}
   #preGenSection .song-variation-options button b {font-size:.9rem}
 }
-
-/* UIUX CLEANUP PHASE 1 — CREATE hierarchy */
-#tab-create>.create-console{max-width:1180px;width:100%;margin:0 auto;gap:18px}
-#tab-create .song-showcase{grid-template-columns:140px minmax(0,1fr);gap:20px;padding:20px;border-top:2px solid var(--soda-pop-red);box-shadow:0 8px 24px rgba(26,26,46,.06)}
-#tab-create .showcase-art{width:140px!important;height:140px!important;min-height:140px}
-#tab-create .song-showcase:after{display:none}
-#tab-create .song-showcase .title-row h1{font-size:clamp(1.85rem,3vw,3rem)}
-#tab-create .song-facts{margin-top:9px}
-#tab-create .showcase-actions{margin-top:12px}
-#tab-create .taste-actions{margin-top:8px;opacity:.58}
-#tab-create .showcase-arc-wrap{margin-top:10px}
-#tab-create .dna-integrated-card{margin-top:8px;background:#fff;border-color:var(--solar-line)}
-#tab-create>.create-console>#preGenSection{border-top:3px solid var(--soda-pop-red);box-shadow:0 12px 32px rgba(26,26,46,.075)}
-#preGenSection .creator-heading{padding-bottom:14px;border-bottom:1px solid var(--solar-line)}
-#preGenSection .direction-essentials-heading{margin:14px 0 7px}
-#preGenSection .generation-intent{margin-top:12px;padding:10px 12px}
-#preGenSection .generation-actions-bar{grid-template-columns:minmax(0,1.55fr) minmax(0,.75fr)}
-#preGenSection .generation-new{min-height:96px;background:linear-gradient(135deg,var(--soda-pop-red),var(--soda-pop-deep));border-color:var(--soda-pop-red);color:#fff;box-shadow:0 12px 26px rgba(242,56,70,.22)}
-#preGenSection .generation-new :is(strong,small,em,kbd){color:#fff}
-#preGenSection .generation-new .action-icon{background:rgba(255,255,255,.16)}
-#preGenSection .generation-similar{min-height:96px;background:#fff;border-color:var(--solar-line)}
-#preGenSection .phase1-advanced-direction{background:#fff;border-color:var(--solar-line)}
-#tab-create>.create-console>.workflow-panel{margin-top:-4px;box-shadow:none;border-style:dashed;background:rgba(255,255,255,.62)}
-#tab-create>.create-console>.workflow-panel:not([open]){opacity:.68}
-#tab-create .create-shape-handoff{margin-top:0;border:0;border-top:1px solid var(--solar-line);border-radius:0;background:transparent;box-shadow:none;padding:16px 2px 2px}
-#tab-create .create-shape-handoff button{background:var(--solar-ink);color:#fff;box-shadow:none;border-radius:10px}
-@media(max-width:680px){
-#tab-create>.create-console{gap:10px}#tab-create .song-showcase{padding:12px}
-#tab-create .showcase-art{width:min(128px,42vw)!important;height:min(128px,42vw)!important}
-#tab-create>.create-console>.workflow-panel{display:none}
-#preGenSection .generation-actions-bar{grid-template-columns:1fr}
-#preGenSection .generation-new,#preGenSection .generation-similar{min-height:72px}
-#tab-create .create-shape-handoff{grid-template-columns:1fr;padding-top:12px}
-#tab-create .create-shape-handoff button{width:100%}}
