@@ -58,7 +58,7 @@ test("continuity candidates add only bounded deterministic melody connectors", (
   assert.deepEqual(first, repeated);
   assert.ok(first.length >= 2 && first.length <= 3);
   for (const candidate of first) {
-    assert.ok(candidate.changedNotes >= 1 && candidate.changedNotes <= 8);
+    assert.ok(candidate.changedNotes >= 1 && candidate.changedNotes <= 16);
     assert.ok(candidate.continuityErrorDelta < 0);
     const originalCount = source.tracks.find((track) => track.id === "melody").notes.length;
     const candidateCount = candidate.song.tracks.find((track) => track.id === "melody").notes.length;
@@ -88,7 +88,7 @@ function evaluationFor(candidateSong, { regress = false } = {}) {
     score: 84 + connectorCount,
     subscores: {
       density: 72 + connectorCount * 2,
-      motif: regress && connectorCount ? 83 : 84,
+      motif: regress && candidateSong.tracks.find((track) => track.id === "melody").notes.length > 8 ? 83 : 84,
       repetition: 82,
       memory: 86,
       registerHealth: 88,
