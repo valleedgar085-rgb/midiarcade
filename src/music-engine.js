@@ -1619,7 +1619,7 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const allocatedSizes = bars >= 16 && !electronic && phraseGridGenre
+  const allocatedSizes = bars === 32 && !electronic && phraseGridGenre
     ? allocatePhraseGridBars(layout, bars, config.genre)
     : allocateBars(layout, bars);
   const sizes = extendUrbanIntro(layout, allocatedSizes, config);
