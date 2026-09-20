@@ -52,3 +52,19 @@ test("phrase-grid arrangement remains deterministic", () => {
   assert.deepEqual(first.structure, second.structure);
   assert.deepEqual(first.tracks, second.tracks);
 });
+
+test("the final peak hook keeps the melody foreground while preserving feature rotation", () => {
+  for (const genre of ["trap", "hipHop", "pop", "neoSoul"]) {
+    const song = generateNew({
+      genre,
+      seed: `arrangement-peak-hook-${genre}`,
+      bars: 32,
+      professionalUpgrade: true,
+      candidateCount: 1,
+    });
+    const peak = song.songBlueprint.sectionPlans.find((plan) => plan.role === "peak");
+    const scene = song.songBlueprint.producerIntent.scenes.find((entry) => entry.sectionId === peak?.sectionId);
+    assert.ok(peak && ["chorus", "drop"].includes(peak.sectionName));
+    assert.equal(scene?.foregroundTrack, "melody", `${genre} final payoff must return the hook`);
+  }
+});
