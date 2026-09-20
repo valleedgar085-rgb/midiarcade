@@ -1,6 +1,7 @@
 import { cloneValue } from "./clone-value.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
+export const MAX_MELODY_CONTINUITY_LINKS = 8;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
@@ -140,15 +141,16 @@ export function analyzeMelodyContinuity(song) {
   });
 }
 
-function chooseInsertionBeat(window) {
-  const midpoint = (window.start + window.end) / 2;
+function chooseInsertionBeat(window, slot = 0, slots = 1) {
+  const ratio = slots > 1 ? (slot + 1) / (slots + 1) : 0.5;
+  const midpoint = window.start + (window.end - window.start) * ratio;
   const quantized = Math.round(midpoint * 4) / 4;
   return round(clamp(quantized, window.start, window.end - 0.12), 4);
 }
 
-function connectorNote(window, sectionId, mode, ordinal) {
+function connectorNote(window, sectionId, mode, ordinal, slot = 0, slots = 1) {
   const source = mode === "anticipation" ? window.next : window.previous;
-  const start = chooseInsertionBeat(window);
+  const start = chooseInsertionBeat(window, slot, slots);
   const available = Math.max(0.12, window.end - start);
   const duration = round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
@@ -167,7 +169,7 @@ function addConnectors(song, requests) {
   const candidate = cloneValue(song);
   const track = melodyTrack(candidate);
   if (!track) return candidate;
-  const additions = requests.map(({ window, sectionId, mode }, index) => connectorNote(window, sectionId, mode, index));
+  const additions = requests.map(({ window, sectionId, mode, slot = 0, slots = 1 }, index) => (\n    connectorNote(window, sectionId, mode, index, slot, slots)\n  ));
   track.notes = [...(track.notes ?? []), ...additions]
     .sort((left, right) => finite(left?.start) - finite(right?.start) || finite(left?.pitch) - finite(right?.pitch));
   return candidate;
@@ -186,21 +188,23 @@ function candidateRequestSets(song) {
   const balanced = [];
   const used = new Set();
   for (const section of opportunities) {
-    if (balanced.length >= 3) break;
+    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
     const window = section.windows[0];
-    balanced.push({ sectionId: section.id, window, mode: "echo" });
+    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
     used.add(window);
   }
-  if (balanced.length < 3) {
-    for (const section of opportunities) {
-      for (const window of section.windows) {
-        if (balanced.length >= 3) break;
-        if (used.has(window)) continue;
-        balanced.push({ sectionId: section.id, window, mode: "echo" });
-        used.add(window);
-      }
-      if (balanced.length >= 3) break;
-    }
+  for (const section of opportunities) {
+    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
+    const window = section.windows.find((candidate) => !used.has(candidate));
+    if (!window) continue;
+    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 0, slots: 1 });
+    used.add(window);
+  }
+  for (const section of opportunities) {
+    if (balanced.length >= MAX_MELODY_CONTINUITY_LINKS) break;
+    const window = section.windows[0];
+    if (!window || window.gap < 4) continue;
+    balanced.push({ sectionId: section.id, window, mode: "echo", slot: 1, slots: 2 });
   }
   return [
     {
