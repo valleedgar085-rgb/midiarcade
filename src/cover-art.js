@@ -44,6 +44,7 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
   const hue = (seed + genreSeed) % 360;
   const hue2 = (hue + 48 + ((seed >>> 8) % 88)) % 360;
   const hue3 = (hue2 + 72) % 360;
+  const sodaPopRed = "#ff5369";
   const centerX = 600 + ((seed % 101) - 50);
   const centerY = 510 + (((seed >>> 7) % 81) - 40);
   const energyArc = Array.isArray(dna?.arrangement?.energyArc) ? dna.arrangement.energyArc : [];
@@ -70,25 +71,57 @@ export function createCoverArtworkSvg(song, { variation = 0, size = 1200 } = {})
   const prismBottom = 790 + Math.round(energy * 20);
   const prismLeft = 330 - (seed % 46);
   const prismRight = 875 + ((seed >>> 5) % 46);
+  const stars = Array.from({ length: 72 }, (_, index) => {
+    const local = hash(`${seed}:star:${index}`);
+    const x = 35 + (local % 1130);
+    const y = 110 + ((local >>> 10) % 720);
+    const radius = 0.7 + ((local >>> 20) % 24) / 10;
+    const opacity = 0.16 + ((local >>> 24) % 55) / 100;
+    return `<circle cx="${x}" cy="${y}" r="${radius.toFixed(1)}" fill="white" opacity="${opacity.toFixed(2)}"/>`;
+  }).join("");
+  const shards = Array.from({ length: 9 }, (_, index) => {
+    const local = hash(`${seed}:shard:${index}`);
+    const x = 90 + (local % 1010);
+    const y = 160 + ((local >>> 9) % 570);
+    const width = 24 + ((local >>> 17) % 86);
+    const height = 70 + ((local >>> 23) % 150);
+    const rotation = -42 + (local % 84);
+    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="url(#glassShard)" opacity=".14" transform="rotate(${rotation} ${x + width / 2} ${y + height / 2})"/>`;
+  }).join("");
+  const ribbons = Array.from({ length: 4 }, (_, index) => {
+    const local = hash(`${seed}:ribbon:${index}`);
+    const y = 255 + index * 125 + (local % 45);
+    const bend = 70 + ((local >>> 8) % 140);
+    return `<path d="M-80 ${y} C240 ${y - bend}, 410 ${y + bend}, 650 ${y} S1030 ${y - bend}, 1280 ${y + 18}" fill="none" stroke="${index === 0 ? sodaPopRed : `hsl(${(hue + index * 38) % 360} 100% 72%)`}" stroke-opacity=".16" stroke-width="${10 + index * 5}" filter="url(#ribbonBlur)"/>`;
+  }).join("");
+  const sectionSource = song?.structure ?? song?.songBlueprint?.structure ?? dna?.sections ?? [];
+  const sectionCount = Math.max(4, Math.min(12, Array.isArray(sectionSource) ? sectionSource.length : 6));
+  const sectionRing = Array.from({ length: sectionCount }, (_, index) => {
+    const local = hash(`${seed}:section:${index}`);
+    const start = (index / sectionCount) * 360 + 3;
+    const span = (360 / sectionCount) - 7;
+    const radius = pulseRadius + 66 + (local % 18);
+    return `<circle cx="${centerX}" cy="${centerY}" r="${radius}" fill="none" stroke="${index === 0 ? sodaPopRed : `hsl(${(hue2 + index * 17) % 360} 100% 78%)`}" stroke-opacity=".34" stroke-width="${3 + (local % 5)}" stroke-dasharray="${Math.max(18, Math.round((2 * Math.PI * radius) * span / 360))} 9999" transform="rotate(${start} ${centerX} ${centerY})"/>`;
+  }).join("");
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1200 1200" role="img" aria-label="${escapeXml(title)} cover artwork" data-cover-finish="${finish.id}" data-track-aura="v1">
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1200 1200" role="img" aria-label="${escapeXml(title)} cover artwork" data-cover-finish="${finish.id}" data-track-aura="v2">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue} 72% 8%)"/><stop offset=".48" stop-color="hsl(${hue2} 72% 14%)"/><stop offset="1" stop-color="#03040b"/></linearGradient>
       <radialGradient id="aura"><stop stop-color="hsl(${hue3} 100% 72%)" stop-opacity=".68"/><stop offset=".48" stop-color="hsl(${hue2} 96% 58%)" stop-opacity=".25"/><stop offset="1" stop-color="hsl(${hue} 96% 48%)" stop-opacity="0"/></radialGradient>
-      <linearGradient id="prism" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue3} 100% 88%)"/><stop offset=".35" stop-color="hsl(${hue2} 96% 64%)"/><stop offset=".7" stop-color="hsl(${hue} 96% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 25) % 360} 100% 70%)"/></linearGradient>
+      <linearGradient id="glassShard" x1="0" y1="0" x2="1" y2="1"><stop stop-color="white" stop-opacity=".9"/><stop offset=".45" stop-color="hsl(${hue3} 100% 72%)" stop-opacity=".42"/><stop offset="1" stop-color="hsl(${hue} 100% 54%)" stop-opacity=".08"/></linearGradient>\n      <linearGradient id="prism" x1="0" y1="0" x2="1" y2="1"><stop stop-color="hsl(${hue3} 100% 88%)"/><stop offset=".35" stop-color="hsl(${hue2} 96% 64%)"/><stop offset=".7" stop-color="hsl(${hue} 96% 58%)"/><stop offset="1" stop-color="hsl(${(hue + 25) % 360} 100% 70%)"/></linearGradient>
       <linearGradient id="finishSheen" x1="0" y1="0" x2="1" y2="1" gradientTransform="rotate(${foilAngle} .5 .5)"><stop stop-color="white" stop-opacity="0"/><stop offset=".48" stop-color="white" stop-opacity="${finish.gloss}"/><stop offset=".58" stop-color="hsl(${hue3} 100% 82%)" stop-opacity="${finish.id === "foil" ? 0.2 : finish.gloss * 0.35}"/><stop offset="1" stop-color="white" stop-opacity="0"/></linearGradient>
-      <filter id="blur"><feGaussianBlur stdDeviation="48"/></filter>
+      <filter id="blur"><feGaussianBlur stdDeviation="48"/></filter>\n      <filter id="ribbonBlur"><feGaussianBlur stdDeviation="16"/></filter>\n      <filter id="prismDepth"><feDropShadow dx="0" dy="22" stdDeviation="28" flood-color="black" flood-opacity=".52"/><feDropShadow dx="0" dy="0" stdDeviation="18" flood-color="hsl(${hue3} 100% 68%)" flood-opacity=".42"/></filter>
       <filter id="glow"><feGaussianBlur stdDeviation="12" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
       <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="${finishSeed % 97}"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 ${finish.grain} 0"/></filter>
       <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse"><path d="M48 0H0V48" fill="none" stroke="white" stroke-opacity="${finish.grid * 0.55}"/></pattern>
     </defs>
     <rect width="1200" height="1200" rx="48" fill="url(#bg)"/>
-    <rect width="1200" height="1200" rx="48" fill="url(#grid)"/>
+    <rect width="1200" height="1200" rx="48" fill="url(#grid)"/>\n    <g>${stars}</g>\n    <g>${ribbons}</g>\n    <g>${shards}</g>
     <circle cx="${centerX}" cy="${centerY}" r="${pulseRadius + 120}" fill="url(#aura)" filter="url(#blur)"/>
     <g fill="none" stroke="white" stroke-opacity=".42" stroke-linecap="round" filter="url(#glow)">${spikes}</g>
-    <circle cx="${centerX}" cy="${centerY}" r="${pulseRadius}" fill="none" stroke="hsl(${hue3} 100% 76%)" stroke-opacity=".62" stroke-width="3"/>
-    <g filter="url(#glow)">
-      <path d="M${centerX} ${prismTop} L${prismRight} ${prismBottom} L${centerX} ${prismBottom - 105} L${prismLeft} ${prismBottom} Z" fill="url(#prism)" fill-opacity=".22" stroke="url(#prism)" stroke-width="10"/>
+    <g>${sectionRing}</g>\n    <circle cx="${centerX}" cy="${centerY}" r="${pulseRadius}" fill="none" stroke="hsl(${hue3} 100% 76%)" stroke-opacity=".62" stroke-width="3"/>
+    <g filter="url(#prismDepth)">
+      <path d="M${centerX} ${prismTop} L${prismRight} ${prismBottom} L${centerX} ${prismBottom - 105} L${prismLeft} ${prismBottom} Z" fill="url(#prism)" fill-opacity=".28" stroke="url(#prism)" stroke-width="10"/>\n      <path d="M${centerX} ${prismTop + 18} L${prismRight - 24} ${prismBottom - 12}" fill="none" stroke="white" stroke-opacity=".72" stroke-width="3"/>\n      <path d="M${centerX} ${prismTop + 18} L${prismLeft + 24} ${prismBottom - 12}" fill="none" stroke="white" stroke-opacity=".38" stroke-width="2"/>
       <path d="M${centerX} ${prismTop} L${centerX} ${prismBottom - 105} L${prismLeft} ${prismBottom} Z" fill="hsl(${hue} 88% 34%)" fill-opacity=".45" stroke="white" stroke-opacity=".22"/>
       <path d="M${centerX} ${prismTop} L${prismRight} ${prismBottom} L${centerX} ${prismBottom - 105} Z" fill="hsl(${hue3} 96% 66%)" fill-opacity=".34" stroke="white" stroke-opacity=".3"/>
     </g>
