@@ -3915,6 +3915,8 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
   const maximumRolls = Math.max(1, Math.floor(Math.max(1, structure.length - 1) / 3));
   let rollFigures = 0;
   let tripletFigures = 0;
+  let preDropPunctuationFigures = 0;
+  const maximumPreDropPunctuation = Math.max(1, Math.floor(config.bars / 16));
   let lastFillId = null;
 
   const hit = (pitch, start, velocity, duration = 0.08, metadata = null) => {
@@ -4217,6 +4219,30 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
 
     const boundary = sectionEnd && bar !== config.bars - 1;
     const importantBoundary = section.name === "build" || nextSection?.name === "drop" || nextSection?.name === "chorus";
+    const preDropRng = transitionRng.fork("pre-drop-punctuation");
+    const preDropProbability = clamp(
+      config.drumFills
+        * settings.variation
+        * (0.22 + config.energy * 0.28 + config.complexity * 0.18)
+        * (importantBoundary ? 1.35 : 0.7),
+      0,
+      0.72,
+    );
+    const forcePreDropPunctuation = boundary
+      && section.name !== "intro"
+      && ["chorus", "drop"].includes(nextSection?.name)
+      && config.energy >= 0.72
+      && config.complexity >= 0.58
+      && config.drumFills >= 0.35
+      && preDropPunctuationFigures === 0;
+    const usePreDropPunctuation = boundary
+      && ["chorus", "drop"].includes(nextSection?.name)
+      && ["trap", "hipHop", "rap"].includes(config.genre)
+      && config.drumFills > 0.001
+      && config.evolution > 0.001
+      && settings.variation > 0.2
+      && preDropPunctuationFigures < maximumPreDropPunctuation
+      && (forcePreDropPunctuation || preDropRng.bool(preDropProbability));
     const forceRoll = config.rollAmount >= 0.5 && featuredGenre && config.energy >= 0.8 && config.complexity >= 0.7 && rollFigures === 0 && boundary;
     const forceTransitionRoll = boundary
       && ["launch", "build"].includes(transition?.type)
@@ -4226,7 +4252,28 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       && rollFigures < maximumRolls;
     const rollProbability = config.rollAmount * config.drumFills * (0.3 + config.energy * 0.38 + config.complexity * 0.38) * (importantBoundary ? 1.35 : 0.72);
     const useRoll = boundary && rollFigures < maximumRolls && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
-    if (useRoll) {
+    if (usePreDropPunctuation) {
+      const burstStart = Math.max(0, barBeats - 1);
+      const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
+      const burstNotes = config.genre === "trap" ? [42, 42, 46] : [42, 46, 42];
+      burstNotes.forEach((pitch, index) => {
+        hit(
+          pitch,
+          start + burstStart + index * burstStep,
+          eventVelocity(config, settings, intensity, preDropRng.fork(`hat-burst-${index}`), 0.52 + index * 0.11),
+          0.055,
+          { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+        );
+      });
+      hit(
+        38,
+        start + Math.min(barBeats - 0.125, burstStart + burstStep * 3),
+        eventVelocity(config, settings, intensity, preDropRng.fork("snare-pickup"), 0.92),
+        0.08,
+        { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+      );
+      preDropPunctuationFigures += 1;
+    } else if (useRoll) {
       const steps = config.genre === "trap" ? [1 / 6, 1 / 8, 1 / 8, 1 / 4]
         : config.genre === "drumBass" ? [1 / 4, 1 / 6, 1 / 8]
           : [1 / 4, 1 / 6];
@@ -4277,6 +4324,56 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         transitionFeature: incomingTransition?.type ?? "section-hit",
       });
     }
+  }
+
+  // Look ahead from the completed structure as a final deterministic safety
+  // net. Some earlier drum branches may already spend the boundary's fill
+  // budget, so this pass only writes into a clean final bar and never stacks
+  // on an existing transition fill or roll.
+  for (const [sectionIndex, section] of structure.entries()) {
+    const nextSection = structure[sectionIndex + 1];
+    if (
+      section.name === "intro"
+      || !["chorus", "drop"].includes(nextSection?.name)
+      || !["trap", "hipHop", "rap"].includes(config.genre)
+      || config.drumFills <= 0.001
+      || config.evolution <= 0.001
+      || settings.variation <= 0.2
+      || preDropPunctuationFigures >= maximumPreDropPunctuation
+    ) continue;
+    const barStart = Math.max(0, section.endBeat - barBeats);
+    const tailStart = barStart + Math.max(0, barBeats - 1);
+    const cleanTail = !notes.some((note) => (
+      note.start >= tailStart - 1e-6
+      && note.start < section.endBeat - 1e-6
+      && (note.transitionFeature || note.rhythmicFeature === "snare-roll")
+    ));
+    if (!cleanTail || notes.some((note) => note.preDropPunctuation && note.start >= barStart && note.start < section.endBeat)) continue;
+    const lookaheadRng = rng.fork(`pre-drop-lookahead-${section.id}`);
+    const important = config.energy >= 0.72 && config.complexity >= 0.58 && config.drumFills >= 0.35;
+    const force = important && preDropPunctuationFigures === 0;
+    const probability = clamp(settings.variation * (0.22 + config.energy * 0.28 + config.complexity * 0.18), 0, 0.68);
+    if (!force && !lookaheadRng.bool(probability)) continue;
+    const intensity = clamp(section.intensity * (0.58 + config.energy * 0.6), 0.35, 1.25);
+    const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
+    const burstNotes = config.genre === "trap" ? [42, 42, 46] : [42, 46, 42];
+    burstNotes.forEach((pitch, index) => {
+      hit(
+        pitch,
+        tailStart + index * burstStep,
+        eventVelocity(config, settings, intensity, lookaheadRng.fork(`hat-${index}`), 0.52 + index * 0.11),
+        0.055,
+        { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+      );
+    });
+    hit(
+      38,
+      Math.min(section.endBeat - 0.125, tailStart + burstStep * 3),
+      eventVelocity(config, settings, intensity, lookaheadRng.fork("snare"), 0.92),
+      0.08,
+      { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+    );
+    preDropPunctuationFigures += 1;
   }
   return developDuplicateDrumBars(notes, config, structure, settings, rng.fork("drum-development"), grooveConductor);
 }
@@ -4383,6 +4480,7 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
       || note.transitionFeature
       || note.transitionHandoffRole
       || note.transitionHandoffId
+      || note.preDropPunctuation
       || note.rhythmicFeature === "phrase-boundary-roll"
       || note.rhythmicFeature === "transition-fill"
     ));
