@@ -1,7 +1,7 @@
 import { cloneValue } from "./clone-value.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
-export const MAX_MELODY_CONTINUITY_LINKS = 16;
+export const MAX_MELODY_CONTINUITY_LINKS = 24;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
