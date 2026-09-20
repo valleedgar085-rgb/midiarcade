@@ -124,7 +124,7 @@ export function analyzeMelodyContinuity(song) {
   const sections = melodicSections(song)
     .map((bounds) => sectionContinuity(song, track, bounds));
   const actionable = sections
-    .filter(({ notes, windows, silenceDeficit }) => notes.length >= 2 && windows.length > 0 && silenceDeficit > 0.01)
+    .filter(({ notes, windows, silenceDeficit }) => notes.length >= 2 && windows.length > 0 && silenceDeficit > 0.05)
     .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index);
   return Object.freeze({
     deficit: round(actionable.reduce((sum, section) => sum + section.deficit, 0), 4),
@@ -137,7 +137,7 @@ export function analyzeMelodyContinuity(song) {
       targetAttacksPerBar: section.targetAttacksPerBar,
       targetMaxSilenceBeats: section.targetMaxSilenceBeats,
       deficit: round(section.deficit, 4),
-      actionable: section.notes.length >= 2 && section.windows.length > 0 && section.silenceDeficit > 0.01,
+      actionable: section.notes.length >= 2 && section.windows.length > 0 && section.silenceDeficit > 0.05,
     })),
   });
 }
@@ -183,7 +183,7 @@ function candidateRequestSets(song) {
   if (!track) return [];
   const opportunities = melodicSections(song)
     .map((bounds) => sectionContinuity(song, track, bounds))
-    .filter(({ notes, windows, silenceDeficit }) => notes.length >= 2 && windows.length > 0 && silenceDeficit > 0.01)
+    .filter(({ notes, windows, silenceDeficit }) => notes.length >= 2 && windows.length > 0 && silenceDeficit > 0.05)
     .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index);
   if (!opportunities.length) return [];
 
