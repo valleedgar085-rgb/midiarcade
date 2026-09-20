@@ -5,6 +5,7 @@ import {
   analyzeMelodyContinuity,
   createMelodyContinuityCandidates,
 } from "../src/core/melody-continuity-refinement.js";
+import { applyMelodyContinuityRefinement } from "../src/core/output-quality-pipeline-register.js";
 
 function song() {
   return {
@@ -76,4 +77,72 @@ test("continuity does not invent melody activity for intentionally silent sectio
     candidate.song.tracks.find((track) => track.id === "melody").notes
       .filter((note) => note.start >= 8 && note.start < 16).length === 0
   )));
+});
+
+
+function evaluationFor(candidateSong, { regress = false } = {}) {
+  const connectorCount = candidateSong.tracks
+    .find((track) => track.id === "melody").notes
+    .filter((note) => note.continuityRole === "phrase-link").length;
+  return {
+    score: 84 + connectorCount,
+    subscores: {
+      density: 72 + connectorCount * 2,
+      motif: regress && connectorCount ? 83 : 84,
+      repetition: 82,
+      memory: 86,
+      registerHealth: 88,
+      groove: 87,
+      performance: 85,
+      separation: 89,
+      phraseResolution: 84,
+      genreAuthenticity: 86,
+    },
+    diagnostics: { scaleFit: 1 },
+  };
+}
+
+test("final continuity stage accepts only a release-safe no-regression connector", () => {
+  const source = song();
+  const result = applyMelodyContinuityRefinement(
+    source,
+    { melodyContinuityRefinement: true },
+    (candidateSong) => evaluationFor(candidateSong),
+    () => ({ passed: true, totalScore: 90 }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.accepted, true);
+  assert.ok(result.diagnostics.changedNotes >= 1);
+  assert.ok(result.diagnostics.continuityErrorDelta < 0);
+  assert.ok(result.song !== source);
+});
+
+test("final continuity stage fails closed when any existing critic regresses", () => {
+  const source = song();
+  const result = applyMelodyContinuityRefinement(
+    source,
+    { melodyContinuityRefinement: true },
+    (candidateSong) => evaluationFor(candidateSong, { regress: true }),
+    () => ({ passed: true, totalScore: 90 }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.accepted, false);
+  assert.equal(result.diagnostics.reason, "protected-dimension-regression");
+  assert.equal(result.song, source);
+});
+
+test("final continuity stage fails closed when the release gate rejects the connector", () => {
+  const source = song();
+  const result = applyMelodyContinuityRefinement(
+    source,
+    { melodyContinuityRefinement: true },
+    (candidateSong) => evaluationFor(candidateSong),
+    () => ({ passed: false, totalScore: 70 }),
+  );
+
+  assert.equal(result.diagnostics.accepted, false);
+  assert.equal(result.diagnostics.reason, "release-gate");
+  assert.equal(result.song, source);
 });
