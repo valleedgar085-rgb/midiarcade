@@ -45,19 +45,5 @@ export function applyGenerationTheme(root, song) {
   const theme = generationTheme(song);
   root.dataset.generationTheme = theme.id;
   root.dataset.generationPattern = theme.pattern;
-  const properties = {
-    "--accent": theme.accent,
-    "--accent-2": theme.accent2,
-    "--accent-3": theme.accent3,
-    "--bg": theme.bg,
-    "--bg-1": theme.bg1,
-    "--bg-2": theme.bg2,
-    "--bg-3": theme.bg3,
-    "--generation-hue": theme.hue,
-    "--generation-hue-2": theme.secondaryHue,
-    "--generation-glow-x": `${theme.glowX}%`,
-    "--generation-glow-y": `${theme.glowY}%`,
-  };
-  for (const [name, value] of Object.entries(properties)) root.style.setProperty(name, value);
   return theme;
 }

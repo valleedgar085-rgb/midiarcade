@@ -238,7 +238,7 @@ test("generation executor recovers worker-declared errors without double-settlin
   assert.equal(executor.activeRequests, 0);
 });
 
-test("generation themes are deterministic, varied, and apply readable design tokens", () => {
+test("generation themes remain deterministic without recoloring the fixed studio UI", () => {
   const first = generationTheme({ id: "one", seed: "alpha", genre: "rock", key: "E" });
   const repeated = generationTheme({ id: "one", seed: "alpha", genre: "rock", key: "E" });
   const alternatives = Array.from({ length: 12 }, (_, index) => (
@@ -254,8 +254,7 @@ test("generation themes are deterministic, varied, and apply readable design tok
     style: { setProperty(name, value) { properties.set(name, value); } },
   };
   assert.equal(applyGenerationTheme(root, { id: "one", seed: "alpha" }).id, root.dataset.generationTheme);
-  assert.match(properties.get("--accent"), /^#[0-9a-f]{6}$/i);
-  assert.match(properties.get("--bg"), /^#[0-9a-f]{6}$/i);
+  assert.equal(properties.size, 0);
   assert.ok(root.dataset.generationPattern);
 });
 
