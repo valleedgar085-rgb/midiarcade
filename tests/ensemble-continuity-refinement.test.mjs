@@ -54,7 +54,7 @@ function ensembleDropoutSong() {
         lanes: {
           drums: { presence: 0.9 },
           chords: { presence: 0.8 },
-          counterpoint: { presence: 0.62 },
+          counterpoint: { presence: 0.32 },
           pad: { presence: 0.7 },
         },
       },
@@ -63,7 +63,7 @@ function ensembleDropoutSong() {
         lanes: {
           drums: { presence: 1 },
           chords: { presence: 0.9 },
-          counterpoint: { presence: 0.68 },
+          counterpoint: { presence: 0.34 },
           pad: { presence: 0.82 },
         },
       },
