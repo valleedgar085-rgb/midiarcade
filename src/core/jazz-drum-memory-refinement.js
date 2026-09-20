@@ -93,10 +93,20 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       if (Math.abs(sourceBar - targetBar) <= 1 || protectedBar(song, sourceBar) || protectedBar(song, targetBar)) continue;
       const sourceNotes = notesForBar(song, sourceBar);
       if (sourceNotes.length < 4) continue;
-      const targetNotes = new Set(notesForBar(song, targetBar));
+      const targetNotes = notesForBar(song, targetBar);
+      const targetIdentity = new Set(targetNotes.map((note) => (
+        `${finite(note.pitch)}:${round6(mod(finite(note.start), barBeats))}`
+      )));
       const delta = (targetBar - sourceBar) * barBeats;
-      targetDrums.notes = targetDrums.notes.filter((note) => !targetNotes.has(note));
-      targetDrums.notes.push(...sourceNotes.map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) })));
+      // Recall the Jazz groove as an additive memory layer. Keeping the target
+      // bar's existing accents preserves its local syncopation and authenticity
+      // while still adding the remembered return identity.
+      const recalled = sourceNotes
+        .map((note) => ({ ...cloneValue(note), start: round6(finite(note.start) + delta) }))
+        .filter((note) => !targetIdentity.has(
+          `${finite(note.pitch)}:${round6(mod(finite(note.start), barBeats))}`,
+        ));
+      targetDrums.notes.push(...recalled);
       targetDrums.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
       return Object.freeze({
         id: "jazz-return-groove-recall",
