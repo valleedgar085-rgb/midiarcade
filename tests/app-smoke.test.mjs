@@ -319,6 +319,11 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /for \(const \[index, point\] of expressionCurve\.slice\(1\)\.entries\(\)\)/, "preview gain must schedule every interior expression point");
   assert.match(appSource, /createConvolver/, "preview audio must include a real ambience bus");
   assert.match(appSource, /createWaveShaper/, "full preview audio must retain the saturation stage");
+  assert.match(
+    appSource,
+    /octaveExplicit:\s*!state\.autoControls\.has\(\`track:\$\{id\}:octave\`\)/,
+    "generation must tell the engine whether octave is Auto or manually owned",
+  );
   assert.match(appSource, /previewGraphBudget/, "preview audio must resolve a runtime DSP budget");
   assert.match(appSource, /this\.previewBudget\.saturation/, "constrained playback must be able to bypass saturation");
   assert.match(appSource, /saturation\.oversample = this\.previewBudget\.oversample/, "oversampling must follow the runtime graph budget");

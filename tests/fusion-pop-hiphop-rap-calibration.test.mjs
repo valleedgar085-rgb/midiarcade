@@ -132,6 +132,25 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
   console.log("POP_HIPHOP_RAP_FUSION_CALIBRATION", JSON.stringify(rows));
 });
 
+
+test("Pop Rap fusion performance repair preserves the section energy arc while repairing dynamics", () => {
+  const config = generationConfig("pop", "fusion-quality-01:pop+rap", "rap", 0.5);
+  const generated = engine.generateNew(config);
+  const processed = applySongOutputQualityPipeline(generated, config);
+  const after = engine.evaluateSongCandidate(processed.song);
+  const diagnostics = processed.fusionPerformanceDiagnostics;
+
+  assert.ok(diagnostics.beforePerformance < 84, "pipeline must expose the fusion performance bottleneck at the repair boundary");
+  assert.equal(diagnostics.attempted, true);
+  assert.equal(diagnostics.accepted, true);
+  assert.equal(diagnostics.reason, "fusion-performance-win");
+  assert.ok(after.subscores.performance >= 84);
+  assert.ok(diagnostics.performanceDelta >= 0.75);
+  assert.ok(diagnostics.protectedDeltas.storyArc >= -1);
+  assert.ok(Object.values(diagnostics.protectedDeltas).every((delta) => delta >= -1));
+  assert.equal(diagnostics.topologySafe, true);
+});
+
 test("fusion profile midpoint keeps both parent identities represented", () => {
   for (const [primary, secondary] of PAIRS) {
     const fused = engine.createFusedGenreProfile(primary, secondary, 0.5);
