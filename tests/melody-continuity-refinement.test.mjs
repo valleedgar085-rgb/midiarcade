@@ -80,7 +80,7 @@ test("continuity does not invent melody activity for intentionally silent sectio
 });
 
 
-function evaluationFor(candidateSong, { regress = false } = {}) {
+function evaluationFor(candidateSong, { regress = false, source = null } = {}) {
   const connectorCount = candidateSong.tracks
     .find((track) => track.id === "melody").notes
     .filter((note) => note.continuityRole === "phrase-link").length;
@@ -88,7 +88,7 @@ function evaluationFor(candidateSong, { regress = false } = {}) {
     score: 84 + connectorCount,
     subscores: {
       density: 72 + connectorCount * 2,
-      motif: regress && candidateSong.tracks.find((track) => track.id === "melody").notes.length > 8 ? 83 : 84,
+      motif: regress && source && candidateSong !== source ? 83 : 84,
       repetition: 82,
       memory: 86,
       registerHealth: 88,
@@ -123,7 +123,7 @@ test("final continuity stage fails closed when any existing critic regresses", (
   const result = applyMelodyContinuityRefinement(
     source,
     { melodyContinuityRefinement: true },
-    (candidateSong) => evaluationFor(candidateSong, { regress: true }),
+    (candidateSong) => evaluationFor(candidateSong, { regress: true, source }),
     () => ({ passed: true, totalScore: 90 }),
   );
 
