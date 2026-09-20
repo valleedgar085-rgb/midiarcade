@@ -64,3 +64,32 @@
 #tab-arrange .shape-director-directions{grid-template-columns:1fr 1fr}
 #tab-arrange .section-quick-actions{display:grid;grid-template-columns:1fr 1fr}
 #tab-arrange .section-editor{position:fixed;inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 0;z-index:140;overflow:auto;border-radius:0}}
+
+/* UIUX CLEANUP PHASE 2 — progressive disclosure and precision workspace */
+#tab-arrange .shape-dna-chips{display:none}
+#tab-arrange .shape-focus-bar .thread-join{opacity:.38}
+#tab-arrange .section-actions-menu{margin-top:10px;border:1px solid var(--solar-line);border-radius:12px;background:#fff;overflow:hidden}
+#tab-arrange .section-actions-menu>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;padding:9px 11px;cursor:pointer;list-style:none;color:var(--solar-ink)}
+#tab-arrange .section-actions-menu>summary::-webkit-details-marker{display:none}
+#tab-arrange .section-actions-menu>summary span{display:grid;gap:2px}
+#tab-arrange .section-actions-menu>summary small{font:800 8px/1 var(--font-mono);letter-spacing:.13em;color:var(--text-3)}
+#tab-arrange .section-actions-menu>summary strong{font:750 12px/1.15 var(--font-body)}
+#tab-arrange .section-actions-menu>summary>b{font-size:17px;letter-spacing:2px;color:var(--text-3)}
+#tab-arrange .section-actions-menu[open]>summary{border-bottom:1px solid var(--solar-line);background:var(--solar-cream)}
+#tab-arrange .section-actions-menu-body{display:grid;gap:8px;padding:10px}
+#tab-arrange .section-actions-menu .section-quick-actions{opacity:1}
+#tab-arrange .section-actions-menu :is(.section-quick-actions,.section-order-actions){gap:7px}
+#tab-arrange .section-actions-menu button{min-height:40px}
+#tab-arrange .section-editor.is-open{position:fixed;inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 var(--transport-h);z-index:135;margin:0;padding:18px 22px 24px;overflow:auto;border:0;border-radius:0;background:var(--solar-cream);box-shadow:0 0 0 1px var(--solar-line),0 16px 48px rgba(26,26,46,.16)}
+#tab-arrange .section-editor.is-open .editor-header{position:sticky;top:-18px;z-index:5;margin:-18px -22px 0;padding:14px 22px;background:rgba(255,248,240,.96);border-bottom:1px solid var(--solar-line);backdrop-filter:blur(12px)}
+#tab-arrange .section-editor.is-open .editor-focus-orbit{display:none}
+#tab-arrange .section-editor.is-open .editor-close-button{min-height:42px;padding:0 14px;border-radius:10px;background:var(--solar-ink);color:#fff;border-color:var(--solar-ink);font-weight:800}
+#tab-arrange .section-editor.is-open .piano-roll-shell{min-height:360px}
+@media(max-width:680px){
+#tab-arrange .section-actions-menu button{min-height:44px}
+#tab-arrange .section-editor.is-open{inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 var(--transport-h);padding:12px 10px 18px}
+#tab-arrange .section-editor.is-open .editor-header{top:-12px;margin:-12px -10px 0;padding:10px}
+#tab-arrange .section-editor.is-open .editor-header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+#tab-arrange .section-editor.is-open .editor-close-button{width:100%}
+#tab-arrange .section-editor.is-open .piano-roll-shell{min-height:300px}
+}
