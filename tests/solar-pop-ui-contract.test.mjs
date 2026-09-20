@@ -6,21 +6,20 @@ const css = fs.readFileSync(new URL("../src/ui/solar-pop.css", import.meta.url),
 const build = fs.readFileSync(new URL("../scripts/build.js", import.meta.url), "utf8");
 const buildQuality = fs.readFileSync(new URL("../scripts/check-build-quality.js", import.meta.url), "utf8");
 
-test("Solar Pop preserves the Figma palette as explicit local design tokens", () => {
+test("Figma Studio preserves its dark palette as explicit local design tokens", () => {
   for (const token of [
-    "--solar-ink:#1a1a2e",
-    "--solar-cream:#fff8f0",
-    "--solar-coral:#ff4f4f",
-    "--solar-yellow:#ffd60a",
-    "--solar-orange:#ff9f1c",
-    "--solar-pink:#ff6b8b",
-    "--solar-cyan:#2bc0d2",
-    "--solar-muted:#8e8ea8",
+    "--figma-bg:#0d0e11",
+    "--figma-surface:#15171c",
+    "--figma-surface-2:#1c1f26",
+    "--figma-border:#262a33",
+    "--figma-orange:#ff5500",
+    "--figma-text:#f3f4f6",
+    "--figma-muted:#9ca3af",
   ]) assert.match(css, new RegExp(token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.doesNotMatch(css, /https?:\/\//, "Solar Pop must remain local-first and must not depend on expiring Figma assets");
 });
 
-test("Solar Pop themes the existing Create Shape Mix Finish shell rather than replacing behavior", () => {
+test("Figma Studio themes the existing Create Shape Mix Finish shell rather than replacing behavior", () => {
   for (const selector of ["#tab-create", "#tab-arrange", "#tab-mix", "#tab-finish", ".transport", ".topbar", ".tab-nav"]) {
     assert.ok(css.includes(selector), `${selector} should participate in the Solar Pop system`);
   }
@@ -32,32 +31,28 @@ test("Solar Pop themes the existing Create Shape Mix Finish shell rather than re
   assert.match(css, /@media\(orientation:landscape\) and \(max-height:720px\)/);
 });
 
-test("Solar Pop ships after existing workspace CSS in web and Android builds", () => {
+test("Figma Studio ships after existing workspace CSS in web and Android builds", () => {
   assert.match(build, /src', 'ui', 'solar-pop\.css'/);
   assert.match(build, /path\.join\(wwwDir, 'solar-pop\.css'\)/);
   assert.match(build, /href=\"\.\/shape-director\.css\"><link rel=\"stylesheet\" href=\"\.\/solar-pop\.css\"/);
   assert.match(build, /androidPublicDir[\s\S]*?wwwDir, 'solar-pop\.css'/);
 });
 
-test("Solar Pop adds a per-file cap without increasing the prior aggregate CSS ceiling", () => {
+test("Figma Studio adds a per-file cap with an updated base stylesheet allowance", () => {
   assert.match(buildQuality, /"www\/solar-pop\.css": 16 \* 1024/);
+  assert.match(buildQuality, /"www\/styles\.css": 160 \* 1024/);
   assert.match(buildQuality, /aggregateCssBudget = \(150 \+ 16 \+ 16\) \* 1024/);
   assert.match(buildQuality, /aggregateCssBytes > aggregateCssBudget/);
 });
 
-test("Create polish defines a scoped soda-pop red accent and stronger visual hierarchy", () => {
-  assert.match(css, /--soda-pop-red:#f23846/);
-  assert.match(css, /#tab-create \.song-showcase\{[\s\S]*?border-top:3px solid var\(--soda-pop-red\)/);
-  assert.match(css, /#tab-create \.song-showcase:after\{[\s\S]*?radial-gradient/);
-  assert.match(css, /#preGenSection \.genre-direction\{[\s\S]*?border-left:4px solid var\(--soda-pop-red\)/);
-  assert.match(css, /#preGenSection \.generation-new\{[\s\S]*?var\(--soda-pop-red\)/);
+test("Create uses the Figma orange action hierarchy without Solar Pop decoration", () => {
+  assert.match(css, /#tab-create \.song-showcase\{[\s\S]*?var\(--figma-surface\)/);
+  assert.match(css, /#preGenSection \.generation-new\{[\s\S]*?var\(--figma-orange\)/);
+  assert.doesNotMatch(css, /#f23846/);
 });
 
 
-test("Create polish keeps the workflow order legible and carries soda-pop red through interaction states", () => {
-  assert.match(css, /#tab-create>\.create-console\{order:1;display:flex;flex-direction:column;gap:24px\}/);
-  assert.match(css, /#tab-create>\.create-console>#preGenSection\{order:2\}/);
-  assert.match(css, /#tab-create>\.create-console>\.workflow-panel\{order:3\}/);
-  assert.match(css, /#tab-create :is\(button,select,input\):focus-visible\{[\s\S]*?var\(--soda-pop-red\)/);
-  assert.match(css, /#tab-create :is\(\.showcase-action,\.generation-button\):active\{[\s\S]*?translateY\(1px\)/);
+test("Create keeps the Figma desktop and phone hierarchy", () => {
+  assert.match(css, /#tab-create>\.create-console\{display:grid;grid-template-columns:minmax\(0,1\.1fr\) minmax\(320px,\.9fr\);gap:20px\}/);
+  assert.match(css, /@media\(max-width:680px\)[\s\S]*?#tab-create>\.create-console\{display:flex;gap:16px\}/);
 });

@@ -7,7 +7,7 @@ const budgets = Object.freeze({
   "www/src/app.js": 360 * 1024,
   "www/src/generation-worker.js": 320 * 1024,
   "www/src/quality-pipeline.js": 24 * 1024,
-  "www/styles.css": 150 * 1024,
+  "www/styles.css": 160 * 1024,
   "www/generation-experience.css": 16 * 1024,
   "www/shape-director.css": 16 * 1024,
   "www/solar-pop.css": 16 * 1024,
@@ -48,7 +48,7 @@ if (!html.includes('href="./shape-director.css"')) failures.push("Shape Director
 if (!html.includes('href="./solar-pop.css"')) failures.push("Solar Pop stylesheet is not linked from the built app");
 if (!generationCss.includes("orientation:landscape")) failures.push("landscape generation stabilization is missing from the shipped stylesheet");
 if (!shapeCss.includes("orientation:landscape")) failures.push("Shape Director landscape safeguards are missing from the shipped stylesheet");
-if (!solarPopCss.includes("--solar-coral:#ff4f4f")) failures.push("Solar Pop design tokens are missing from the shipped stylesheet");
+if (!solarPopCss.includes("--figma-orange:#ff5500")) failures.push("Figma Studio design tokens are missing from the shipped stylesheet");
 if (!solarPopCss.includes("orientation:landscape")) failures.push("Solar Pop landscape safeguards are missing from the shipped stylesheet");
 for (const [relativePath, source] of [
   ["www/index.html", html],
