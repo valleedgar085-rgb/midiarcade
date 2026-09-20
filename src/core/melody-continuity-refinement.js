@@ -169,7 +169,9 @@ function addConnectors(song, requests) {
   const candidate = cloneValue(song);
   const track = melodyTrack(candidate);
   if (!track) return candidate;
-  const additions = requests.map(({ window, sectionId, mode, slot = 0, slots = 1 }, index) => (\n    connectorNote(window, sectionId, mode, index, slot, slots)\n  ));
+  const additions = requests.map(({ window, sectionId, mode, slot = 0, slots = 1 }, index) => (
+    connectorNote(window, sectionId, mode, index, slot, slots)
+  ));
   track.notes = [...(track.notes ?? []), ...additions]
     .sort((left, right) => finite(left?.start) - finite(right?.start) || finite(left?.pitch) - finite(right?.pitch));
   return candidate;
