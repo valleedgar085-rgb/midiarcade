@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 146609)
-Total output lines: 13402
-
 /**
  * MIDI Arcade music engine.
  *
@@ -4347,7 +4344,4165 @@ function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveC
     const from = structure.find((section) => section.id === transition.fromSectionId);
     const to = structure.find((section) => section.id === transition.toSectionId);
     if (from) transitionBars.add(from.startBar + from.bars - 1);
-    if (to…46609 tokens truncated…ow of repairTargets) {
+    if (to) transitionBars.add(to.startBar);
+  }
+
+  const notesByBar = Array.from({ length: config.bars }, () => []);
+  const outsideNotes = [];
+  for (const sourceNote of source) {
+    const note = { ...sourceNote };
+    const bar = Math.floor(note.start / barBeats);
+    if (bar >= 0 && bar < config.bars) notesByBar[bar].push(note);
+    else outsideNotes.push(note);
+  }
+  const notesForBar = (bar) => notesByBar[bar] ?? [];
+  const signatureForBar = (bar) => notesForBar(bar)
+    .map((note) => note.pitch + ":" + round(mod(note.start, barBeats), 4))
+    .sort()
+    .join("|");
+  const isProtectedBar = (bar) => {
+    const section = sectionForBar(bar);
+    const barNotes = notesForBar(bar);
+    if (!section || bar <= 0 || bar >= config.bars - 1) return true;
+    if (bar === section.startBar || transitionBars.has(bar)) return true;
+    if (mod(bar - section.startBar, phraseBars) === 0) return true;
+    return barNotes.some((note) => (
+      note.drumFillId
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.transitionHandoffId
+      || note.rhythmicFeature === "phrase-boundary-roll"
+      || note.rhythmicFeature === "transition-fill"
+    ));
+  };
+  const averageVelocity = (notes) => notes.length
+    ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
+    : 80;
+
+  let recalls = 0;
+  for (let bar = 2; bar < config.bars - 1; bar += 1) {
+    if (isProtectedBar(bar)) continue;
+    const targetSection = sectionForBar(bar);
+    if (!targetSection) continue;
+    const targetRole = mod(bar - targetSection.startBar, phraseBars);
+    const previousSignature = signatureForBar(bar - 1);
+    const candidates = [];
+    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
+    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
+    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
+      if (isProtectedBar(referenceBar)) continue;
+      const referenceSection = sectionForBar(referenceBar);
+      if (!referenceSection) continue;
+      const sameSection = referenceSection.name === targetSection.name;
+      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
+      if (!sameSection && referenceFamily !== targetFamily) continue;
+      const referenceRole = mod(referenceBar - referenceSection.startBar, phraseBars);
+      if (referenceRole !== targetRole) continue;
+      const referenceNotes = notesForBar(referenceBar);
+      if (!referenceNotes.length) continue;
+      const referenceSignature = signatureForBar(referenceBar);
+      if (!referenceSignature || referenceSignature === previousSignature) continue;
+      candidates.push({ referenceBar, sameSection });
+    }
+    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
+    const referenceBar = candidates[0]?.referenceBar;
+    if (!Number.isInteger(referenceBar)) continue;
+
+    const referenceNotes = notesForBar(referenceBar);
+    const targetNotes = notesForBar(bar);
+    if (!referenceNotes.length || !targetNotes.length) continue;
+    const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
+    const targetStart = bar * barBeats;
+    const velocityRatio = clamp(
+      averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
+      0.86,
+      1.16,
+    );
+    const replacement = referenceNotes.map((note) => {
+      const {
+        connectionId: _connectionId,
+        connectionRole: _connectionRole,
+        sectionPatternId: _sectionPatternId,
+        phraseRole: _phraseRole,
+        transitionFeature: _transitionFeature,
+        transitionHandoffRole: _transitionHandoffRole,
+        transitionHandoffId: _transitionHandoffId,
+        ensembleCadenceRole: _ensembleCadenceRole,
+        sectionId: _sectionId,
+        ...rhythmicNote
+      } = note;
+      return {
+        ...rhythmicNote,
+        start: round(targetStart + round(mod(note.start, barBeats))),
+        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 120),
+        sectionId: targetSection.id,
+        connectionId: targetConnectionNote?.connectionId ?? `interlock:${targetSection.id}`,
+        ...(targetConnectionNote?.connectionRole ? { connectionRole: targetConnectionNote.connectionRole } : {}),
+        ...(targetConnectionNote?.sectionPatternId ? { sectionPatternId: targetConnectionNote.sectionPatternId } : {}),
+        ...(targetConnectionNote?.phraseRole ? { phraseRole: targetConnectionNote.phraseRole } : {}),
+        grooveMemoryRecall: true,
+        grooveMemorySourceBar: referenceBar,
+        grooveMemorySectionRole: targetRole,
+      };
+    });
+    notesByBar[bar] = replacement;
+    recalls += 1;
+  }
+
+  if (!recalls) return source;
+  return [...outsideNotes, ...notesByBar.flat()]
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+}
+function applyFinalGrooveMemory(tracks, config, structure, songBlueprint, grooveConductor) {
+  return tracks.map((track) => track.id === "drums"
+    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint, grooveConductor) }
+    : track);
+}
+
+function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {
+  if (!bassNotes?.length || settings.density <= 0.001) return drumNotes;
+  const result = drumNotes.map((note) => ({ ...note }));
+  const barBeats = beatsPerBar(config);
+  const totalBeats = config.bars * barBeats;
+  const desiredForBass = (note) => {
+    if (["house", "neoSoul"].includes(config.genre)) return note.start - 0.5;
+    if (config.genre === "techno" && Math.abs(mod(note.start, 1) - 0.5) < 0.16) return note.start - 0.5;
+    return note.start;
+  };
+  for (let bar = 0; bar < config.bars; bar += 1) {
+    const barStart = bar * barBeats;
+    const barEnd = barStart + barBeats;
+    const candidates = bassNotes
+      .map((note) => ({ note, desired: desiredForBass(note) }))
+      .filter(({ desired }) => desired >= barStart - 1e-6 && desired < barEnd - 0.04)
+      .sort((a, b) => b.note.velocity - a.note.velocity || a.desired - b.desired);
+    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
+    const maximumAdditions = config.genre === "trap"
+      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))
+      : baseMaximumAdditions;
+    let additions = 0;
+    for (const { note, desired } of candidates) {
+      if (additions >= maximumAdditions) break;
+      if (result.some((drum) => drum.pitch === 36 && Math.abs(drum.start - desired) < 0.1)) continue;
+      const section = sectionForBar(structure, bar);
+      const local = rng.fork(`retained-bass-kick-${bar}-${round(desired, 4)}`);
+      const intensity = clamp(section.intensity * (0.58 + config.energy * 0.6), 0.35, 1.25);
+      const bassAccent = clamp(note.velocity / 100, 0.68, 1.08);
+      addNote(result, 36, desired, 0.08, eventVelocity(config, settings, intensity, local, 0.92 * bassAccent), totalBeats);
+      additions += 1;
+    }
+  }
+  return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+}
+
+function rootMidi(chord, octave) {
+  return (octave + 1) * 12 + chord.rootPc;
+}
+
+function groovePulsesForWindow(conductor, lane, start, duration, barBeats) {
+  const end = start + duration - 0.05;
+  const firstBar = Math.max(0, Math.floor(start / barBeats));
+  const lastBar = Math.max(firstBar, Math.floor(Math.max(start, end - 0.001) / barBeats));
+  const pulses = [];
+  for (let bar = firstBar; bar <= lastBar; bar += 1) {
+    const plan = grooveBar(conductor, bar);
+    for (const offset of plan?.[lane] ?? []) {
+      const absolute = bar * barBeats + offset;
+      if (absolute >= start - 0.001 && absolute < end) pulses.push(round(absolute - start));
+    }
+  }
+  return uniqueGrooveOffsets(pulses, duration);
+}
+
+function bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor = null) {
+  const kickOnsets = Array.isArray(drumContext?.kickOnsets) ? drumContext.kickOnsets : [];
+  // A completely drumless arrangement still needs an independent bass line.
+  // Once real kicks exist, however, empty harmony windows become intentional
+  // low-end space rather than an excuse to fall back to an imaginary pattern.
+  if (!kickOnsets.length) return null;
+  const eventStart = chord.start;
+  const eventEnd = chord.start + chord.duration - 0.05;
+  const conducted = groovePulsesForWindow(
+    grooveConductor,
+    "bassPulses",
+    chord.start,
+    chord.duration,
+    beatsPerBar(config),
+  ).filter((offset) => {
+    const absolute = chord.start + offset;
+    if (config.genre === "house") return kickOnsets.some((kick) => Math.abs(kick + 0.5 - absolute) < 0.01);
+    if (config.genre === "neoSoul") return kickOnsets.some((kick) => [0.25, 0.5, 0.75].some((delay) => Math.abs(kick + delay - absolute) < 0.01));
+    return kickOnsets.some((kick) => Math.abs(kick - absolute) < 0.01 || Math.abs(kick + 0.5 - absolute) < 0.01);
+  });
+  if (conducted.length) return conducted;
+  const lookBehind = config.genre === "neoSoul" ? 0.76 : 0.01;
+  const relevant = kickOnsets.filter((start) => start >= eventStart - lookBehind && start < eventEnd);
+  const current = relevant.filter((start) => start >= eventStart - 0.001);
+  if (!relevant.length) return [];
+  const absolute = [];
+  const add = (start) => {
+    if (start < eventStart - 0.001 || start >= eventEnd) return;
+    if (config.genre === "house" && kickOnsets.some((kick) => Math.abs(kick - start) < 1e-6)) return;
+    if (!absolute.some((existing) => Math.abs(existing - start) < 1e-6)) absolute.push(start);
+  };
+
+  if (config.genre === "house") {
+    for (const kick of relevant) add(kick + 0.5);
+  } else if (config.genre === "techno") {
+    const locked = chord.bar % 2 === 0;
+    for (const kick of current) add(kick + (locked ? 0 : 0.5));
+  } else if (["trap", "hipHop", "rap"].includes(config.genre)) {
+    const lockChance = config.genre === "trap" ? 0.64 : 0.52;
+    current.forEach((kick, index) => {
+      if (index === 0 || rng.bool(lockChance + settings.density * 0.18)) add(kick);
+    });
+    if (config.syncopation > 0.62 && current.length && rng.bool(settings.variation * 0.42)) add(current[current.length - 1] + 0.25);
+  } else if (config.genre === "drumBass") {
+    current.forEach((kick, index) => {
+      if (index === 0 || rng.bool(0.58 + settings.density * 0.25)) add(kick);
+    });
+    if (chord.bar % 2 === 1 && current.length) add(current[0] + 0.5);
+  } else if (config.genre === "neoSoul") {
+    const delays = [0.5, 0.75, 0.25];
+    relevant.forEach((kick, index) => add(kick + delays[(chord.bar + index) % delays.length]));
+  }
+
+  if (!absolute.length && current.length && config.genre !== "house") add(current[0]);
+  if (!absolute.length) return [];
+  return absolute.sort((a, b) => a - b).map((start) => round(Math.max(0, start - eventStart)));
+}
+
+function generateBass(
+  config,
+  structure,
+  harmony,
+  style,
+  settings,
+  rng,
+  drumContext = null,
+  grooveConductor = null,
+  songBlueprint = null,
+) {
+  const notes = [];
+  if (settings.density <= 0.001) return notes;
+  const totalBeats = config.bars * beatsPerBar(config);
+  const barBeats = beatsPerBar(config);
+  const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
+  let harmonicLifts = 0;
+  for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
+    const chord = harmony[eventIndex];
+    const section = sectionForBar(structure, chord.bar);
+    const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+    const barPlan = grooveBar(grooveConductor, chord.bar);
+    const plannedTension = plannedTensionAtBeat(songBlueprint, section, chord.start, barBeats);
+    const intensity = clamp(
+      section.intensity * (0.65 + config.energy * 0.5) * (0.91 + plannedTension * 0.16),
+      0.35,
+      1.25,
+    );
+    let offsets = bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor);
+    if (Array.isArray(offsets)) {
+      // An empty contextual result is deliberate space; non-empty offsets came
+      // from kicks that actually survived drum generation.
+      if (!offsets.length) continue;
+    } else if (["house", "techno"].includes(config.genre)) {
+      const barStart = chord.bar * barBeats;
+      offsets = [0.5, 1.5, 2.5, 3.5]
+        .map((offset) => barStart + offset - chord.start)
+        .filter((offset) => offset >= -0.001 && offset < chord.duration - 0.05);
+      if (!offsets.length) offsets = [0];
+    } else if (["neoSoul", "hipHop", "rap", "trap", "drumBass"].includes(config.genre)) {
+      const barStart = chord.bar * barBeats;
+      offsets = genreKickOffsets(config, style, barBeats, chord.bar)
+        .map((offset) => barStart + offset - chord.start)
+        .filter((offset) => offset >= -0.001 && offset < chord.duration - 0.05);
+      if (!offsets.length) offsets = [0];
+    } else if (style.bassGroove === "pulse") {
+      const step = config.energy > 0.68 && settings.density > 0.55 ? 0.5 : 1;
+      offsets = [];
+      for (let offset = 0; offset < chord.duration - 0.05; offset += step) offsets.push(offset);
+    } else if (style.bassGroove === "syncopated") {
+      offsets = [0, 0.75, 1.5, 2.5, 3.25].filter((offset) => offset < chord.duration - 0.05);
+    } else if (style.bassGroove === "walking") {
+      offsets = [];
+      for (let offset = 0; offset < chord.duration - 0.05; offset += 1) offsets.push(offset);
+    } else {
+      offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
+    }
+
+    const nextChord = harmony[(eventIndex + 1) % harmony.length];
+    for (let index = 0; index < offsets.length; index += 1) {
+      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      const absoluteStart = chord.start + offsets[index];
+      const barOffset = round(mod(absoluteStart, barBeats), 4);
+      const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
+      const bassGrooveRole = index === 0 || Math.abs(barOffset) < 0.011
+        ? "anchor"
+        : matchesPulse("answers")
+          ? (barPlan?.role === "development" ? "ghost-response" : "response")
+          : index === offsets.length - 1 && ["answer", "turnaround"].includes(barPlan?.role)
+            ? "pickup"
+            : "movement";
+      let pitch = rootMidi(chord, bassOctave);
+      if (style.bassGroove === "rootFifth" && index % 2 === 1) pitch += 7;
+      if (style.bassGroove === "walking") {
+        const choices = [0, 2, 4, 5];
+        pitch = midiForDegree(config, chord.degree + choices[index % choices.length], bassOctave);
+      } else if (index > 0 && rng.bool(settings.variation * 0.45)) {
+        const movement = bassGrooveRole === "pickup"
+          ? rng.pick([-1, 1, 2])
+          : bassGrooveRole.includes("response")
+            ? rng.pick([2, 4, 5])
+            : rng.pick([4, 5, 7]);
+        pitch = midiForDegree(config, chord.degree + movement, bassOctave);
+      }
+      const last = index === offsets.length - 1;
+      if (last && nextChord && rng.bool(settings.variation * config.complexity * 0.5)) {
+        const target = rootMidi(nextChord, bassOctave);
+        const approach = rng.pick([-2, -1, 1, 2]);
+        pitch = nearestScalePitch(target + approach, config, Math.sign(approach));
+      }
+      const harmonicLiftEligible = (
+        sectionPlan?.role === "peak"
+        && index === offsets.length - 1
+        && pitch <= 52
+      );
+      const harmonicLift = harmonicLiftEligible && (
+        harmonicLifts === 0
+        || (
+          ["development", "turnaround"].includes(barPlan?.role)
+          && rng.bool(0.28 + settings.variation * 0.42)
+        )
+      );
+      if (harmonicLift) {
+        pitch += 12;
+        harmonicLifts += 1;
+      }
+      const nextOffset = offsets[index + 1] ?? chord.duration;
+      const durationFactor = ["house", "techno"].includes(config.genre)
+        ? 0.58
+        : ["trap", "hipHop", "rap", "drumBass"].includes(config.genre)
+          ? 0.92
+          : 0.84;
+      const roleGate = bassGrooveRole === "ghost-response" ? 0.48
+        : bassGrooveRole === "pickup" ? 0.62
+          : bassGrooveRole === "response" ? 0.78 : 1;
+      const duration = Math.max(0.1, (nextOffset - offsets[index]) * durationFactor * roleGate);
+      const roleAccent = bassGrooveRole === "anchor" ? 1
+        : bassGrooveRole === "response" ? 0.88
+          : bassGrooveRole === "pickup" ? 0.78
+            : bassGrooveRole === "ghost-response" ? 0.68 : 0.82;
+      addNote(
+        notes,
+        pitch,
+        absoluteStart,
+        duration,
+        eventVelocity(config, settings, intensity, rng, harmonicLift ? 0.9 : roleAccent),
+        totalBeats,
+        {
+          bassRegisterRole: harmonicLift ? "upper-harmonic" : index === 0 ? "sub-anchor" : "movement",
+          plannedTension,
+          phraseRole: barPlan?.role ?? "statement",
+          genrePhrase: barPlan?.genrePhrase ?? null,
+          bassGrooveRole,
+        },
+      );
+    }
+  }
+  return notes;
+}
+
+const CHARACTERISTIC_VOICE_BY_GENRE = deepFreeze({
+  ambient: "pad",
+  jazz: "chords",
+  neoSoul: "chords",
+  rnbSoul: "chords",
+  loFiHipHop: "chords",
+  house: "bass",
+  techno: "bass",
+  drumBass: "bass",
+  trap: "bass",
+  hipHop: "bass",
+  rap: "bass",
+  drill: "bass",
+  reggaeton: "bass",
+  afrobeats: "bass",
+  funk: "bass",
+  rock: "melody",
+  country: "melody",
+});
+
+function applyCharacteristicVoice(sourceTracks, structure, config) {
+  const preferred = CHARACTERISTIC_VOICE_BY_GENRE[config.genre] ?? "melody";
+  const candidates = [preferred, "melody", "bass", "chords", "counterpoint", "pad"];
+  const trackId = candidates.find((id) => sourceTracks.find((track) => track.id === id)?.notes?.length) ?? "melody";
+  const sectionsCovered = new Set();
+  const tracks = sourceTracks.map((track) => {
+    if (track.id !== trackId) return track;
+    return {
+      ...track,
+      characteristicVoice: true,
+      notes: track.notes.map((note) => {
+        const section = structure.find((candidate) => (
+          note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+        ));
+        if (section) sectionsCovered.add(section.id);
+        const role = note.bassGrooveRole === "anchor" || ["statement", "peak"].includes(note.phraseRole)
+          ? "signature-accent"
+          : note.bassGrooveRole?.includes("response") || note.phraseRole === "answer"
+            ? "signature-answer"
+            : "signature-support";
+        return {
+          ...note,
+          characteristicVoiceRole: role,
+        };
+      }),
+    };
+  });
+  return {
+    tracks,
+    report: {
+      version: 1,
+      status: "complete",
+      trackId,
+      sectionCoverage: round(sectionsCovered.size / Math.max(1, structure.length)),
+      mixLift: 1.08,
+      character: trackId === "bass" ? "groove-anchor" : trackId === "chords" ? "harmonic-color" : trackId === "pad" ? "atmospheric-glow" : "lead-signature",
+    },
+  };
+}
+
+/**
+ * Turn drum fills into ensemble events. The drum phrase remains the call while
+ * bass approaches the next harmony inside the same final beat, so section
+ * boundaries feel composed instead of assembled from independent lanes.
+ */
+function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config) {
+  const tracks = Object.fromEntries(
+    Object.entries(sourceTracks).map(([id, notes]) => [id, notes.map((note) => ({ ...note }))]),
+  );
+  const drums = tracks.drums ?? [];
+  const bass = tracks.bass ?? [];
+  const barBeats = beatsPerBar(config);
+  const totalBeats = config.bars * barBeats;
+  const fills = new Map();
+  for (const note of drums) {
+    if (!note.drumFillId) continue;
+    const bar = Math.floor(note.start / barBeats);
+    const id = `turnaround:${bar}:${note.drumFillId}`;
+    if (!fills.has(id)) fills.set(id, { id, bar, patternId: note.drumFillId, notes: [] });
+    fills.get(id).notes.push(note);
+  }
+
+  let bassAnswers = 0;
+  for (const fill of fills.values()) {
+    const boundary = Math.min(totalBeats, (fill.bar + 1) * barBeats);
+    const fillStart = Math.min(...fill.notes.map((note) => note.start));
+    for (const note of fill.notes) {
+      note.rhythmTurnaroundId = fill.id;
+      note.rhythmTurnaroundRole = "drum-call";
+    }
+
+    const nextChord = harmonyAt(harmony, Math.min(totalBeats - 0.02, boundary + 0.01));
+    if (!nextChord) continue;
+    const bassOctave = config.genre === "trap"
+      ? Math.max(0, config.tracks.bass.octave - 1)
+      : config.tracks.bass.octave;
+    const destination = rootMidi(nextChord, bassOctave);
+    const candidates = bass
+      .filter((note) => note.start >= boundary - 1.0 && note.start < boundary - 0.04)
+      .sort((left, right) => right.start - left.start);
+    let answer = candidates[0];
+    if (!answer) {
+      const pickupStart = round(Math.max(fillStart, boundary - 0.75), 2);
+      answer = {
+        pitch: destination,
+        start: pickupStart,
+        duration: round(boundary - pickupStart - 0.06, 2),
+        velocity: 80,
+        orchestrationRole: "bass",
+      };
+      bass.push(answer);
+    }
+    const pitchClassDistance = mod(destination - answer.pitch, 12);
+    const direction = pitchClassDistance === 0
+      ? (hashSeed(`${config.seed}|${fill.id}|bass-answer`) % 2 ? 1 : -1)
+      : pitchClassDistance <= 6 ? 1 : -1;
+    answer.pitch = nearestScalePitch(answer.pitch + direction * 2, config, direction);
+    answer.duration = Math.min(answer.duration, Math.max(0.12, boundary - answer.start - 0.06));
+    answer.rhythmicFeature = answer.rhythmicFeature ?? "bass-fill-answer";
+    answer.rhythmTurnaroundId = fill.id;
+    answer.rhythmTurnaroundRole = "bass-answer";
+    answer.transitionFeature = fill.notes[0].transitionFeature ?? "turnaround";
+    bassAnswers += 1;
+  }
+  bass.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return {
+    tracks,
+    report: {
+      phase: 72,
+      version: 1,
+      status: "complete",
+      drumCalls: fills.size,
+      bassAnswers,
+    },
+  };
+}
+
+function harmonyAtBeat(harmony = [], beat = 0) {
+  return harmony.find((event) => (
+    beat >= event.start - 1e-6 && beat < event.start + event.duration - 1e-6
+  )) ?? harmony[harmony.length - 1] ?? null;
+}
+
+function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCeiling = null) {
+  if (trackId === "drums") {
+    const drumPitches = Array.isArray(layer.drumPitches) && layer.drumPitches.length
+      ? layer.drumPitches
+      : [51, 54, 56, 70, 75];
+    return rng.pick(drumPitches);
+  }
+  const scaleLength = config.scaleIntervals.length;
+  const harmonyDegree = Math.round(finite(harmonyEvent?.degree, 0));
+  const degreeOffsets = Array.isArray(layer.degreeOffsets) && layer.degreeOffsets.length
+    ? layer.degreeOffsets
+    : [0, 2, 4];
+  const degree = harmonyDegree + rng.pick(degreeOffsets);
+  const pc = mod(config.keyPc + config.scaleIntervals[mod(degree, scaleLength)], 12);
+  const baseOctave = {
+    bass: 2,
+    chords: 4,
+    melody: 6,
+    counterpoint: 5,
+    pad: 4,
+  }[trackId] ?? 5;
+  const pitch = baseOctave * 12 + pc;
+  if (trackId === "bass") return clamp(pitch, 34, 64);
+  if (trackId === "pad") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48, 92);
+  if (trackId === "chords") return clamp(pitch, bassCeiling != null ? Math.max(48, bassCeiling + 7) : 50, 86);
+  if (trackId === "counterpoint") return clamp(pitch, 60, 96);
+  return clamp(pitch, 62, 103);
+}
+
+function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, rng) {
+  const arrangementProfile = arrangementProfileForConfig(config);
+  const layerState = config.arrangementLayers ?? { enabled: true, density: 0.5, mode: "auto" };
+  if (!layerState.enabled) {
+    return {
+      tracks: rawTracks,
+      report: { enabled: false, density: round(layerState.density ?? 0), mode: layerState.mode ?? "off", triggers: 0, layers: {} },
+    };
+  }
+  const barBeats = beatsPerBar(config);
+  const density = clamp(finite(layerState.density, 0.5), 0, 1);
+  const result = Object.fromEntries(Object.entries(rawTracks).map(([id, notes]) => [id, [...notes]]));
+  const layerCounts = {};
+  let triggers = 0;
+  for (const layer of arrangementProfile.optionalLayers ?? []) {
+    if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
+    for (const section of structure) {
+      if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
+      for (let localBar = 0; localBar < section.bars; localBar += 1) {
+        const sectionIntensity = clamp(finite(section.intensity, section.energy ?? config.energy), 0, 1);
+        const probability = clamp(
+          finite(layer.probability, 0.12)
+          * (0.35 + density * 1.15)
+          * (0.85 + config.variation * 0.4)
+          * (0.75 + sectionIntensity * 0.35),
+          0,
+          0.95,
+        );
+        const triggerRng = rng.fork(`${layer.id}:${section.id}:${localBar}`);
+        if (!triggerRng.bool(probability)) continue;
+        const offsets = Array.isArray(layer.startOffsets) && layer.startOffsets.length ? layer.startOffsets : [0];
+        const offset = triggerRng.pick(offsets);
+        const start = round(section.startBeat + localBar * barBeats + clamp(finite(offset, 0), 0, Math.max(0, barBeats - 0.05)));
+        if (start >= section.endBeat - 0.02) continue;
+        const velocityRange = Array.isArray(layer.velocityRange) ? layer.velocityRange : [52, 86];
+        const velocity = clamp(
+          Math.round(
+            finite(velocityRange[0], 52)
+            + (finite(velocityRange[1], 86) - finite(velocityRange[0], 52)) * triggerRng.float(),
+          ),
+          1,
+          127,
+        );
+        const maxDuration = Math.max(0.06, section.endBeat - start);
+        const duration = clamp(finite(layer.durationBeats, 0.5), 0.06, maxDuration);
+        const bassCeiling = (rawTracks.bass ?? []).reduce((highest, note) => (
+          start < note.start + note.duration && note.start < start + duration
+            ? Math.max(highest, note.pitch)
+            : highest
+        ), -Infinity);
+        const chord = harmonyAtBeat(harmony, start);
+        const pitch = layeredPitchForTrack(
+          layer.trackId,
+          layer,
+          chord,
+          config,
+          triggerRng.fork("pitch"),
+          Number.isFinite(bassCeiling) ? bassCeiling : null,
+        );
+        result[layer.trackId].push({
+          pitch,
+          start,
+          duration: round(duration),
+          velocity,
+          arrangementLayer: layer.id,
+          arrangementInstrument: layer.instrument ?? layer.id,
+          ...(layer.trackId === "drums" ? { rhythmicFeature: `${layer.id}-accent` } : {}),
+        });
+        layerCounts[layer.id] = (layerCounts[layer.id] ?? 0) + 1;
+        triggers += 1;
+      }
+    }
+  }
+  for (const id of Object.keys(result)) {
+    result[id].sort((a, b) => a.start - b.start || a.pitch - b.pitch || a.duration - b.duration);
+  }
+  return {
+    tracks: result,
+    report: {
+      enabled: true,
+      density: round(density),
+      mode: layerState.mode ?? "auto",
+      triggers,
+      layers: layerCounts,
+    },
+  };
+}
+
+function createSpectrumPlan(config, structure, songBlueprint) {
+  return {
+    version: 1,
+    bands: {
+      sub: [24, 43],
+      lowMid: [44, 59],
+      body: [60, 76],
+      presence: [77, 95],
+      air: [96, 120],
+    },
+    sections: structure.map((section) => {
+      const plan = blueprintPlanForSection(songBlueprint, section);
+      return {
+        sectionId: section.id,
+        role: plan?.role ?? "development",
+        lowEndWeight: round(clamp(0.58 + finite(plan?.energy, 0.5) * 0.36, 0.55, 0.94)),
+        highLift: round(clamp(
+          (plan?.role === "peak" ? 0.82 : 0.28) + finite(plan?.tension, 0.5) * 0.18,
+          0.24,
+          1,
+        )),
+      };
+    }),
+  };
+}
+
+function applySpectrumPlan(sourceTracks, structure, spectrumPlan, config) {
+  const sectionPlans = new Map(spectrumPlan.sections.map((plan) => [plan.sectionId, plan]));
+  const trackById = new Map(sourceTracks.map((track) => [track.id, track]));
+  const liftSectionPlan = [...spectrumPlan.sections]
+    .sort((a, b) => b.highLift - a.highLift)[0];
+  const liftSection = structure.find((section) => section.id === liftSectionPlan?.sectionId);
+  const featuredBassNote = (trackById.get("bass")?.notes ?? [])
+    .filter((note) => (
+      liftSection
+      && note.start >= liftSection.startBeat - 1e-6
+      && note.start < liftSection.endBeat - 1e-6
+      && note.pitch <= 52
+      && note.bassRegisterRole !== "sub-anchor"
+    ))
+    .at(-1) ?? null;
+  const topAtOnset = new Map();
+  for (const id of ["chords", "pad"]) {
+    for (const note of trackById.get(id)?.notes ?? []) {
+      const key = `${id}:${round(note.start, 4)}`;
+      topAtOnset.set(key, Math.max(topAtOnset.get(key) ?? 0, note.pitch));
+    }
+  }
+
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => {
+      if (track.id === "drums") return { ...note, spectrumRole: note.pitch === 36 ? "sub-transient" : note.pitch >= 42 ? "high-percussion" : "drum-body" };
+      const section = structure.find((candidate) => (
+        note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+      )) ?? structure.at(-1);
+      const plan = sectionPlans.get(section?.id);
+      let pitch = note.pitch;
+      let spectrumRole = track.id;
+      if (track.id === "bass") {
+        if (note === featuredBassNote) {
+          pitch += 12;
+          spectrumRole = "upper-harmonic";
+        } else {
+          if (note.bassRegisterRole === "sub-anchor" && pitch > 47 && pitch - 12 >= 24) pitch -= 12;
+          spectrumRole = note.bassRegisterRole ?? (pitch <= 43 ? "sub-anchor" : "bass-movement");
+        }
+      } else if (
+        track.id === "melody"
+        && plan?.role === "peak"
+        && ["development", "turnaround"].includes(note.phraseRole)
+        && pitch <= 96
+      ) {
+        pitch += 12;
+        spectrumRole = "featured-air";
+      } else if (
+        track.id === "counterpoint"
+        && plan?.role === "peak"
+        && note.phraseRole === "answer"
+        && pitch <= 96
+      ) {
+        pitch += 12;
+        spectrumRole = "answer-presence";
+      } else if (["chords", "pad"].includes(track.id)) {
+        const top = topAtOnset.get(`${track.id}:${round(note.start, 4)}`);
+        if (plan?.highLift >= 0.72 && note.pitch === top && pitch <= 96) {
+          pitch += 12;
+          spectrumRole = track.id === "pad" ? "air-bed" : "harmonic-presence";
+        } else {
+          spectrumRole = track.id === "pad" ? "spectral-bed" : "harmonic-body";
+        }
+      }
+      return {
+        ...note,
+        pitch: clamp(pitch, 0, 127),
+        ...(note === featuredBassNote ? { bassRegisterRole: "upper-harmonic" } : {}),
+        spectrumRole,
+      };
+    }),
+  }));
+  const pitched = tracks.filter((track) => track.id !== "drums").flatMap((track) => track.notes);
+  return {
+    tracks,
+    metrics: {
+      lowestPitch: pitched.length ? Math.min(...pitched.map((note) => note.pitch)) : null,
+      highestPitch: pitched.length ? Math.max(...pitched.map((note) => note.pitch)) : null,
+      span: pitched.length ? Math.max(...pitched.map((note) => note.pitch)) - Math.min(...pitched.map((note) => note.pitch)) : 0,
+    },
+  };
+}
+
+function chordVoicing(chord, octave, previous, spread, rng, config = null) {
+  const root = rootMidi(chord, octave);
+  const intervals = chord.tones.map((tone) => mod(tone - chord.rootPc, 12));
+  const candidates = [];
+  for (let inversion = 0; inversion < Math.min(intervals.length, 4); inversion += 1) {
+    let pitches = intervals.map((interval, index) => root + interval + (index < inversion ? 12 : 0)).sort((a, b) => a - b);
+    for (const shift of [-12, 0, 12]) {
+      const shifted = pitches.map((pitch) => pitch + shift);
+      if (shifted.every((pitch) => pitch >= 24 && pitch <= 108)) candidates.push(shifted);
+    }
+  }
+  const center = root + 5;
+  const score = (pitches) => {
+    const register = Math.abs(pitches.reduce((sum, pitch) => sum + pitch, 0) / pitches.length - center);
+    if (!previous?.length) return register;
+    const topVoiceLeap = Math.abs((pitches[pitches.length - 1] ?? 0) - (previous[previous.length - 1] ?? 0));
+    const voiceMotion = pitches.reduce((sum, pitch, index) => sum + Math.abs(pitch - previous[Math.min(index, previous.length - 1)]), 0);
+    const leapPenalty = topVoiceLeap > 4 ? topVoiceLeap * 1.5 : 0;
+    return voiceMotion + leapPenalty + register * 0.35;
+  };
+  candidates.sort((a, b) => score(a) - score(b));
+  const shortlist = candidates.slice(0, Math.min(3, candidates.length));
+  const chosen = [...(rng.pick(shortlist) ?? [root, root + 4, root + 7])];
+  if (config?.genre === "neoSoul" && chosen.length >= 4 && mod(chosen[0], 12) === chord.rootPc) chosen.shift();
+  if (["house", "techno"].includes(config?.genre) && chosen.length > 3) chosen.splice(1, chosen.length - 3);
+  if (spread > 0.55 && chosen.length >= 3) chosen[chosen.length - 1] = clamp(chosen[chosen.length - 1] + 12, 0, 127);
+  if (config?.genre === "synthwave" && chosen.length >= 3) chosen[0] = clamp(chosen[0] - 12, 0, 127);
+  chosen.sort((a, b) => a - b);
+  return chosen;
+}
+
+function generateChords(config, structure, harmony, style, settings, rng, grooveConductor = null, songBlueprint = null) {
+  const notes = [];
+  if (settings.density <= 0.001) return notes;
+  const totalBeats = config.bars * beatsPerBar(config);
+  let previous = null;
+  for (const chord of harmony) {
+    const section = sectionForBar(structure, chord.bar);
+    const tension = plannedTensionAtBeat(songBlueprint, section, chord.start, beatsPerBar(config));
+    const intensity = clamp(section.intensity * (0.66 + config.energy * 0.5) * (0.9 + tension * 0.18), 0.35, 1.25);
+    const voicing = chordVoicing(chord, settings.octave, previous, config.registerSpread, rng, config);
+    previous = voicing;
+    let offsets;
+    if (style.chordMotion === "pulse") {
+      offsets = [];
+      const step = settings.density > 0.62 ? 0.5 : 1;
+      for (let offset = 0; offset < chord.duration - 0.05; offset += step) offsets.push(offset);
+    } else if (style.chordMotion === "offbeat") {
+      offsets = [0.5, 1.5, 2.5, 3.5].filter((offset) => offset < chord.duration - 0.05);
+      if (!offsets.length) offsets = [0];
+    } else if (style.chordMotion === "arpeggio") {
+      const step = config.complexity > 0.58 ? 0.25 : 0.5;
+      for (let offset = 0, index = 0; offset < chord.duration - 0.05; offset += step, index += 1) {
+        if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.12, 0.98))) continue;
+        const pitch = voicing[index % voicing.length] + (index >= voicing.length && rng.bool(0.35) ? 12 : 0);
+        addNote(notes, pitch, chord.start + offset, Math.min(step * 0.9, chord.duration - offset), eventVelocity(config, settings, intensity, rng, index % voicing.length === 0 ? 0.9 : 0.72), totalBeats);
+      }
+      continue;
+    } else {
+      offsets = [0];
+      if (settings.density > 0.75 && chord.duration >= 2 && rng.bool(settings.variation * 0.35)) offsets.push(chord.duration / 2);
+    }
+    const conductedOffsets = groovePulsesForWindow(
+      grooveConductor,
+      "chordPulses",
+      chord.start,
+      chord.duration,
+      beatsPerBar(config),
+    );
+    if (conductedOffsets.length && style.chordMotion !== "sustained") offsets = conductedOffsets;
+
+    for (let index = 0; index < offsets.length; index += 1) {
+      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
+      const nextOffset = offsets[index + 1] ?? chord.duration;
+      const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
+      for (const pitch of voicing) {
+        addNote(notes, pitch, chord.start + offsets[index], duration, eventVelocity(config, settings, intensity, rng, 0.74), totalBeats);
+      }
+    }
+  }
+  return notes;
+}
+
+function sectionDegreeShift(section) {
+  if (section.name === "chorus") return 2;
+  if (section.name === "drop") return 2;
+  if (section.name === "build" || section.name === "prechorus") return 1;
+  if (section.name === "bridge") return -1;
+  if (section.name === "outro") return -2;
+  return 0;
+}
+
+function phraseDevelopment(config, section, repeat, repeatStart, motif, counterpoint, rng, songBlueprint = null) {
+  const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+  if (repeat === 0 && (!sectionPlan || sectionPlan.motifTransform === "statement")) return null;
+  const repeatEnd = Math.min(repeatStart + motif.lengthBeats, section.endBeat);
+  const sectionEnding = repeatEnd >= section.endBeat - 0.01;
+  const phraseEnding = sectionEnding || repeat % 2 === 1;
+  const local = rng.fork(`development-${counterpoint ? "counter" : "lead"}-${section.id}-${repeat}`);
+  const intensity = clamp(section.intensity * (0.52 + config.energy * 0.5), 0.3, 1.25);
+  let plannedType = null;
+  if (sectionPlan) {
+    plannedType = repeat === 0
+      ? sectionPlan.motifTransform
+      : sectionPlan.developmentPath[(repeat - 1) % sectionPlan.developmentPath.length];
+    if (counterpoint && ["climax", "octaveLift"].includes(plannedType)) plannedType = "answer";
+  }
+  if (!plannedType && !phraseEnding) return null;
+  if (!plannedType && !sectionEnding && !local.bool(clamp(0.22 + config.variation * 0.3 + config.evolution * 0.2 + config.surprise * 0.12 + intensity * 0.14, 0, 0.92))) return null;
+  const liftSection = ["prechorus", "chorus", "build", "drop"].includes(section.name);
+  const type = plannedType ?? local.weighted([
+    ["answer", 2.4],
+    ["contour", 1.1 + config.complexity * 1.25],
+    ["rhythm", 0.9 + config.syncopation * 1.2],
+    ["rest", 0.65 + (1 - clamp(intensity, 0, 1)) * 1.25],
+    ["octaveLift", counterpoint ? 0.12 : 0.35 + intensity * 0.75 + (liftSection ? 0.8 : 0)],
+  ]);
+  return {
+    type,
+    direction: sectionPlan?.direction ?? (local.bool(0.56) ? 1 : -1),
+    restIndex: motif.events.length > 2 ? local.int(1, motif.events.length - 2) : -1,
+    rhythmShift: local.pick([-0.25, 0.25]),
+    intensity,
+    repeatEnd,
+    sectionEnding,
+  };
+}
+
+function motifForSection(motifProgram, section, counterpoint, fallback) {
+  const assignment = motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+  const familyMember = motifProgram?.family?.[assignment?.motifId ?? "A"];
+  const selected = counterpoint ? familyMember?.counterpoint : familyMember?.melody;
+  return validMotif(selected) ? selected : fallback;
+}
+
+function grooveInfluenceForBeat(conductor, beat, lane, barBeats) {
+  const bar = Math.max(0, Math.floor(beat / barBeats));
+  const offset = round(mod(beat, barBeats));
+  const plan = grooveBar(conductor, bar);
+  if (!plan) return { pulse: false, space: false, role: null };
+  return {
+    pulse: (plan[lane] ?? []).some((value) => Math.abs(value - offset) <= 0.13),
+    space: (plan.spaces ?? []).some((value) => Math.abs(value - offset) <= 0.13),
+    role: plan.role,
+  };
+}
+
+function magnetizeBeatToGroove(conductor, beat, lane, barBeats, maximumDistance) {
+  const bar = Math.max(0, Math.floor(beat / barBeats));
+  const plan = grooveBar(conductor, bar);
+  const candidates = plan?.[lane] ?? [];
+  if (!candidates.length) return { beat, snapped: false };
+  const barStart = bar * barBeats;
+  const closest = candidates
+    .map((offset) => barStart + offset)
+    .sort((left, right) => Math.abs(left - beat) - Math.abs(right - beat))[0];
+  return Math.abs(closest - beat) <= maximumDistance
+    ? { beat: round(closest), snapped: Math.abs(closest - beat) > 0.001 }
+    : { beat, snapped: false };
+}
+
+function generateLead(
+  config,
+  structure,
+  harmony,
+  motif,
+  settings,
+  rng,
+  counterpoint = false,
+  songBlueprint = null,
+  motifProgram = null,
+  grooveConductor = null,
+) {
+  const notes = [];
+  if (settings.density <= 0.001 || !validMotif(motif)) return notes;
+  const totalBeats = config.bars * beatsPerBar(config);
+  const barBeats = beatsPerBar(config);
+  for (const section of structure) {
+    const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
+    const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+    const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
+    const sectionLength = section.endBeat - section.startBeat;
+    for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
+      const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
+      const development = phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
+      for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
+        const event = activeMotif.events[eventIndex];
+        const progress = eventIndex / Math.max(1, activeMotif.events.length - 1);
+        const phraseSkeleton = !counterpoint && (
+          eventIndex === 0
+          || eventIndex === activeMotif.events.length - 1
+          || eventIndex === Math.floor(activeMotif.events.length / 2)
+        );
+        if (development?.type === "rest" && eventIndex === development.restIndex && !phraseSkeleton) continue;
+        if (
+          development?.type === "fragment"
+          && progress > 0.62
+          && eventIndex !== activeMotif.events.length - 1
+          && !phraseSkeleton
+        ) continue;
+        let startShift = 0;
+        if (development?.type === "rhythm" && progress >= 0.45 && eventIndex % 2 === 1) startShift = development.rhythmShift;
+        const proposedStart = repeatStart + finite(event.offset, 0) + startShift;
+        if (proposedStart >= section.endBeat - 0.04 || proposedStart >= totalBeats) continue;
+        const timingMagnet = counterpoint
+          ? 0.18 + config.syncopation * 0.08
+          : 0.26 + config.syncopation * 0.12;
+        const synchronized = magnetizeBeatToGroove(
+          grooveConductor,
+          proposedStart,
+          counterpoint ? "counterPulses" : "leadPulses",
+          barBeats,
+          timingMagnet,
+        );
+        const start = Math.max(repeatStart, synchronized.beat);
+        const plannedDensity = sectionPlan?.density ?? 0.7;
+        const plannedTension = plannedTensionAtBeat(songBlueprint, section, proposedStart, barBeats);
+        const tensionDensity = 0.82 + plannedTension * (counterpoint ? 0.18 : 0.3);
+        const baseProbability = settings.density
+          * intensity
+          * (counterpoint ? 0.86 : 1.04)
+          * (0.78 + plannedDensity * 0.32)
+          * tensionDensity;
+        const anchor = phraseSkeleton || (counterpoint && eventIndex === 0 && repeat % 2 === 0);
+        const groove = grooveInfluenceForBeat(
+          grooveConductor,
+          start,
+          counterpoint ? "counterPulses" : "leadPulses",
+          barBeats,
+        );
+        if (groove.space && !anchor) continue;
+        const grooveProbability = baseProbability * (groove.pulse ? 1.18 : groove.space ? 0.45 : 0.9);
+        if (!anchor && !rng.bool(clamp(grooveProbability, 0.04, 0.98))) continue;
+        const motifDegree = Math.round(finite(event.degree, 0));
+        let degree = motifDegree + sectionDegreeShift(section);
+        if (section.name === "bridge" && !counterpoint) degree = -degree + 3;
+        if (repeat > 0 && rng.bool(settings.variation * (0.1 + config.variation * 0.18))) degree += rng.pick([-2, -1, 1, 2]);
+        if (development?.type === "answer" && progress >= 0.45) degree += development.direction * (eventIndex % 2 === 0 ? 2 : 1);
+        if (development?.type === "contour") degree += development.direction * Math.round(progress * (1 + config.complexity * 2));
+        if (development?.type === "inversion") degree = -motifDegree + sectionDegreeShift(section) + development.direction;
+        if (development?.type === "sequence") degree += development.direction * (1 + Math.round(progress * 2));
+        if (development?.type === "climax") degree += 2 + Math.round(progress * 2);
+        if (development?.type === "resolution" && progress >= 0.55) degree = progress > 0.82 ? 0 : Math.round(degree * (1 - progress));
+        let pitch = midiForDegree(config, degree, settings.octave);
+        if ((development?.type === "octaveLift" || development?.type === "climax") && progress >= 0.42) pitch += counterpoint ? -12 : 12;
+        if (
+          sectionPlan?.registerLift
+          && plannedTension >= (sectionPlan.registerLift > 0 ? 0.66 : 0.42)
+          && !["climax", "octaveLift"].includes(development?.type)
+          && progress >= 0.36
+        ) {
+          pitch += sectionPlan.registerLift * 12;
+        }
+        const chord = harmonyAt(harmony, start);
+        const position = mod(start, beatsPerBar(config));
+        const strong = Math.abs(position - Math.round(position)) < 0.04;
+        if (strong && chord) pitch = nearestChordTone(pitch, chord, degree === 0 ? 0 : Math.sign(degree));
+        if (counterpoint && chord && chord.tones.includes(mod(pitch, 12))) {
+          const escape = rng.bool(0.5) ? 2 : -2;
+          pitch = nearestScalePitch(pitch + escape, config, Math.sign(escape));
+        }
+        const maxDuration = section.endBeat - start;
+        const rhythmFactor = development?.type === "rhythm" && progress >= 0.45
+          ? (eventIndex % 2 ? 0.62 : 1.2)
+          : development?.type === "fragment"
+            ? 0.78
+            : development?.type === "resolution"
+              ? 1.18
+              : 1;
+        const duration = Math.min(clamp(finite(event.duration, 0.5) * rhythmFactor, 0.1, 4), maxDuration);
+        const developmentAccent = development
+          ? 0.9 + development.intensity * 0.08 + progress * 0.06 + plannedTension * 0.1
+          : 0.94 + plannedTension * 0.1;
+        const accent = clamp(finite(event.accent, 0.75) * developmentAccent, 0.4, 1.25);
+        addNote(
+          notes,
+          pitch,
+          start,
+          duration,
+          eventVelocity(config, settings, intensity, rng, accent),
+          totalBeats,
+          {
+            genrePhraseGrammar: activeMotif.genreGrammar ?? config.genre,
+            ...(phraseSkeleton ? { phraseAnchor: true } : {}),
+            grooveRole: groove.role,
+            plannedTension,
+            ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
+          },
+        );
+      }
+      if (!counterpoint && ["answer", "resolution", "climax"].includes(development?.type) && development.sectionEnding) {
+        const start = Math.max(repeatStart, development.repeatEnd - 0.375);
+        const chord = harmonyAt(harmony, start);
+        let pitch = midiForDegree(config, (chord?.degree ?? 0) + sectionDegreeShift(section), settings.octave);
+        if (chord) pitch = nearestChordTone(pitch, chord);
+        if (!notes.some((note) => note.pitch === pitch && Math.abs(note.start - start) < 1e-6)) {
+          addNote(notes, pitch, start, Math.min(0.32, section.endBeat - start), eventVelocity(config, settings, intensity, rng, 0.96 + development.intensity * 0.06), totalBeats);
+        }
+      }
+    }
+  }
+  if (!counterpoint && config.tripletAmount > 0) {
+    const maxFigures = Math.max(1, Math.floor(structure.length / 3));
+    let figures = 0;
+    for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
+      const section = structure[sectionIndex];
+      const closingMotif = motifForSection(motifProgram, section, false, motif);
+      if (section.endBeat - section.startBeat < 1) continue;
+      const force = config.tripletAmount >= 0.5 && config.genre === "trap" && config.energy >= 0.82 && config.complexity >= 0.72 && figures === 0 && sectionIndex === 0;
+      if (!force && !rng.bool(config.tripletAmount * (0.16 + config.complexity * 0.3))) continue;
+      const step = config.genre === "trap" && config.complexity > 0.72 ? 1 / 6 : 1 / 3;
+      const count = step === 1 / 6 ? 6 : 3;
+      const phraseStart = section.endBeat - 1;
+      const chord = harmonyAt(harmony, phraseStart);
+      const baseDegree = Math.round(finite(closingMotif.events[closingMotif.events.length - 1]?.degree, 0)) + sectionDegreeShift(section);
+      const motion = [0, 1, 2, 1, 0, -1];
+      for (let index = 0; index < count; index += 1) {
+        const start = phraseStart + index * step;
+        let pitch = midiForDegree(config, baseDegree + motion[index], settings.octave);
+        if (index === 0 && chord) pitch = nearestChordTone(pitch, chord);
+        if (notes.some((note) => note.pitch === pitch && Math.abs(note.start - start) < 1e-6)) continue;
+        addNote(notes, pitch, start, Math.min(step * 0.7, 0.22), eventVelocity(config, settings, section.intensity, rng, index === count - 1 ? 0.9 : 0.68), totalBeats, { rhythmicFeature: step === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth" });
+      }
+      figures += 1;
+    }
+  }
+  return notes;
+}
+
+const FORWARD_COUNTER_ANSWER_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
+
+export function chooseCounterpointGapTarget(targets = [], {
+  genre,
+  bars,
+  secondaryGenre = null,
+  noteStart = 0,
+  maxDistance = 2.5,
+} = {}) {
+  const start = finite(noteStart, 0);
+  const available = [...targets]
+    .filter((target) => Number.isFinite(Number(target?.beat)))
+    .sort((left, right) => Math.abs(left.beat - start) - Math.abs(right.beat - start) || left.beat - right.beat);
+  if (!available.length) return null;
+  const nearest = available.find((target) => Math.abs(target.beat - start) <= maxDistance) ?? available[0];
+  if (
+    secondaryGenre
+    || finite(bars, 0) < 12
+    || !FORWARD_COUNTER_ANSWER_GENRES.has(String(genre ?? ""))
+  ) return nearest;
+
+  const forward = available
+    .filter((target) => target.beat >= start + 0.1)
+    .sort((left, right) => Math.abs(left.beat - start) - Math.abs(right.beat - start) || left.beat - right.beat);
+  return forward.find((target) => Math.abs(target.beat - start) <= maxDistance) ?? nearest;
+}
+
+function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, harmony) {
+  if (!counterNotes.length || !melodyNotes.length) return counterNotes;
+  const totalBeats = config.bars * beatsPerBar(config);
+  const melody = [...melodyNotes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  const targets = [];
+  const minimumGap = 0.32;
+  const addGapTargets = (start, end, section) => {
+    if (end - start < minimumGap) return;
+    let target = Math.ceil((start + 0.015) * 4) / 4;
+    if (target < start + 0.04) target += 0.25;
+    let index = 0;
+    while (target < end - 0.1 && index < 4) {
+      targets.push({ beat: round(target), sectionId: section.id, gapEnd: end });
+      target += config.complexity > 0.72 ? 0.5 : 0.75;
+      index += 1;
+    }
+  };
+
+  for (const section of structure) {
+    const sectionMelody = melody.filter((note) => note.start < section.endBeat - 0.01 && note.start + note.duration > section.startBeat + 0.01);
+    let cursor = section.startBeat;
+    for (const note of sectionMelody) {
+      addGapTargets(cursor, Math.min(section.endBeat, note.start - 0.06), section);
+      cursor = Math.max(cursor, note.start + note.duration + 0.1);
+    }
+    addGapTargets(cursor, section.endBeat, section);
+  }
+
+  const attackCollision = (beat) => melody.some((note) => Math.abs(note.start - beat) < 0.16);
+  const melodySoundsAt = (beat) => melody.some((note) => beat > note.start - 0.04 && beat < note.start + note.duration + 0.08);
+  const used = new Set();
+  const result = [];
+  const ordered = [...counterNotes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  for (let index = 0; index < ordered.length; index += 1) {
+    const note = ordered[index];
+    const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6)
+      ?? structure[structure.length - 1];
+    const originalStart = note.start;
+    let start = note.start;
+    let gapEnd = section.endBeat;
+    if (attackCollision(start) || melodySoundsAt(start)) {
+      const available = targets
+        .filter((target) => target.sectionId === section.id && !used.has(target.beat) && !attackCollision(target.beat) && !melodySoundsAt(target.beat));
+      const chosen = chooseCounterpointGapTarget(available, {
+        genre: config.genre,
+        bars: config.bars,
+        secondaryGenre: config.secondaryGenre,
+        noteStart: note.start,
+      });
+      if (!chosen) continue;
+      start = chosen.beat;
+      gapEnd = chosen.gapEnd;
+    } else {
+      const containingGap = targets.find((target) => target.sectionId === section.id && Math.abs(target.beat - start) < 0.38);
+      if (containingGap) gapEnd = containingGap.gapEnd;
+    }
+    start = round(clamp(start, section.startBeat, Math.min(section.endBeat - 0.05, totalBeats - 0.02)));
+    if (used.has(start)) continue;
+    used.add(start);
+    const nextMelody = melody.find((candidate) => candidate.start > start + 0.05);
+    const availableDuration = Math.min(
+      gapEnd - start - 0.05,
+      nextMelody ? nextMelody.start - start - 0.06 : Number.POSITIVE_INFINITY,
+      section.endBeat - start,
+    );
+    const duration = clamp(Math.min(note.duration, availableDuration), 0.1, Math.max(0.1, section.endBeat - start));
+    let pitch = note.pitch;
+    const chord = harmonyAt(harmony, start);
+    const position = mod(start, beatsPerBar(config));
+    if (chord && Math.abs(position - Math.round(position)) < 0.04) pitch = nearestChordTone(pitch, chord);
+    addNote(result, pitch, start, duration, note.velocity, totalBeats, {
+      ...(note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : {}),
+      ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
+      ...(note.plannedTension == null ? {} : { plannedTension: note.plannedTension }),
+      ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
+      ...(start >= originalStart + 0.1 ? { counterResponseRole: "forward-gap-answer" } : {}),
+    });
+  }
+
+  // Very dense lead phrases can consume every candidate from the original
+  // counterline. Keep one restrained answer when a real gap still exists.
+  if (result.length < Math.min(2, counterNotes.length) && targets.length) {
+    for (const target of targets) {
+      if (result.length >= Math.min(2, counterNotes.length) || used.has(target.beat) || melodySoundsAt(target.beat)) continue;
+      const source = counterNotes[result.length % counterNotes.length];
+      const chord = harmonyAt(harmony, target.beat);
+      let pitch = source.pitch;
+      if (chord) pitch = nearestChordTone(pitch, chord);
+      addNote(result, pitch, target.beat, Math.min(0.5, target.gapEnd - target.beat), Math.max(1, Math.round(source.velocity * 0.86)), totalBeats);
+      used.add(target.beat);
+    }
+  }
+  return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+}
+
+function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, structure) {
+  const melody = [...(melodyNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const counterpoint = [...(counterNotes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  if (!melody.length || !counterpoint.length) {
+    return { melody, counterpoint, report: { version: 1, answers: 0, contrary: 0, oblique: 0, forwardAnswers: 0 } };
+  }
+  let previousCounter = null;
+  let contrary = 0;
+  let oblique = 0;
+  const shapedCounterpoint = counterpoint.map((note) => {
+    const priorIndex = melody.findLastIndex((lead) => lead.start <= note.start + 0.001);
+    const lead = melody[Math.max(0, priorIndex)];
+    const earlierLead = melody[Math.max(0, priorIndex - 1)];
+    const leadDirection = lead && earlierLead ? Math.sign(lead.pitch - earlierLead.pitch) : 0;
+    const desiredDirection = leadDirection === 0 ? 0 : -leadDirection;
+    const chord = harmonyAt(harmony, note.start);
+    const candidates = [
+      note.pitch,
+      nearestScalePitch(note.pitch + desiredDirection * 2, config, desiredDirection),
+      nearestScalePitch(note.pitch + desiredDirection * 4, config, desiredDirection),
+      nearestScalePitch(note.pitch - (desiredDirection || 1) * 2, config, -(desiredDirection || 1)),
+    ].filter((pitch, index, values) => pitch >= 36 && pitch <= 108 && values.indexOf(pitch) === index);
+    const score = (pitch) => {
+      const motion = previousCounter ? pitch - previousCounter.pitch : 0;
+      const directionPenalty = desiredDirection && Math.sign(motion) !== desiredDirection ? 5 : 0;
+      const leapPenalty = Math.max(0, Math.abs(motion) - 4) * 3;
+      const chordPenalty = chord?.tones?.includes(mod(pitch, 12)) ? 0 : 1.5;
+      const registerPenalty = Math.abs(pitch - note.pitch) * 0.3;
+      return directionPenalty + leapPenalty + chordPenalty + registerPenalty;
+    };
+    candidates.sort((left, right) => score(left) - score(right) || Math.abs(left - note.pitch) - Math.abs(right - note.pitch));
+    const pitch = candidates[0] ?? note.pitch;
+    const counterDirection = previousCounter ? Math.sign(pitch - previousCounter.pitch) : 0;
+    const relationship = leadDirection && counterDirection === -leadDirection ? "contrary" : "oblique";
+    if (relationship === "contrary") contrary += 1;
+    else oblique += 1;
+    const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6);
+    const shaped = {
+      ...note,
+      pitch,
+      counterMelodyRole: "answer",
+      melodicRelationship: relationship,
+      answerToBeat: round(lead?.start ?? note.start),
+      dialogueSectionId: section?.id ?? null,
+    };
+    previousCounter = shaped;
+    return shaped;
+  });
+  const shapedMelody = melody.map((note, index) => ({
+    ...note,
+    melodyRole: index % 2 === 0 ? "call" : "development",
+  }));
+  return {
+    melody: shapedMelody,
+    counterpoint: shapedCounterpoint,
+    report: {
+      version: 1,
+      answers: shapedCounterpoint.length,
+      contrary,
+      oblique,
+      forwardAnswers: shapedCounterpoint.filter((note) => note.counterResponseRole === "forward-gap-answer").length,
+    },
+  };
+}
+
+function generatePad(
+  config,
+  structure,
+  harmony,
+  style,
+  settings,
+  rng,
+  songBlueprint = null,
+  grooveConductor = null,
+) {
+  const notes = [];
+  if (settings.density <= 0.001) return notes;
+  const totalBeats = config.bars * beatsPerBar(config);
+  let previous = null;
+  for (let index = 0; index < harmony.length; index += 1) {
+    const chord = harmony[index];
+    const section = sectionForBar(structure, chord.bar);
+    const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+    const barPlan = grooveBar(grooveConductor, chord.bar);
+    const plannedTension = plannedTensionAtBeat(songBlueprint, section, chord.start, beatsPerBar(config));
+    const phrasePresence = {
+      statement: 1,
+      answer: 0.84,
+      development: 1.04,
+      turnaround: 0.92,
+    }[barPlan?.role] ?? 1;
+    const intensity = clamp(
+      section.intensity
+        * (0.5 + config.energy * 0.35)
+        * (0.9 + plannedTension * 0.16),
+      0.25,
+      1.08,
+    );
+    const anchor = chord.bar === section.startBar;
+    const presence = clamp(
+      settings.density
+        * (0.72 + finite(sectionPlan?.density, 0.6) * 0.34)
+        * phrasePresence,
+      0.05,
+      0.99,
+    );
+    if (!anchor && !rng.bool(presence)) continue;
+    const voicing = chordVoicing(chord, settings.octave, previous, Math.max(0.5, config.registerSpread), rng, config);
+    previous = voicing;
+    const delay = style.padMotion === "bloom" && chord.start > 0 ? Math.min(0.12, chord.duration * 0.05) : 0;
+    for (const pitch of voicing) {
+      addNote(
+        notes,
+        pitch,
+        chord.start + delay,
+        Math.max(0.1, chord.duration - delay),
+        eventVelocity(config, settings, intensity, rng, 0.56),
+        totalBeats,
+        {
+          sectionPatternId: barPlan?.sectionFamilyId ?? `${section.name}:pad`,
+          phraseRole: barPlan?.role ?? "statement",
+          plannedTension,
+        },
+      );
+    }
+  }
+  return notes;
+}
+
+const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
+
+export function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
+  if (!STAGGERED_ENTRY_GENRES.has(config.genre)) return null;
+  if (!section || !scene || ["foreground", "foundation", "rest"].includes(producerRole)) return null;
+  const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
+  if (span < 1.5) return null;
+  const barBeats = Math.max(1, beatsPerBar(config));
+  const totalArrangementBeats = Math.max(
+    0,
+    ...structure.map((candidate) => finite(candidate?.endBeat, 0)),
+  ) - Math.min(
+    ...structure.map((candidate) => finite(candidate?.startBeat, 0)),
+  );
+  if (totalArrangementBeats < barBeats * 12 - 1e-6) return null;
+  let entryBeat = null;
+  let exitBeat = null;
+
+  if (section.id === structure[0]?.id && scene.purpose === "establish") {
+    const delayFraction = {
+      answer: 0.24,
+      support: 0.14,
+      texture: 0.34,
+    }[producerRole] ?? 0;
+    const maxBars = {
+      answer: 1,
+      support: 0.5,
+      texture: 1.5,
+    }[producerRole] ?? 0;
+    if (delayFraction > 0 && maxBars > 0) {
+      const delay = Math.min(span * delayFraction, barBeats * maxBars);
+      entryBeat = round(section.startBeat + Math.max(0.5, delay));
+    }
+  }
+
+  if (
+    section.id === structure.at(-1)?.id
+    && scene.purpose === "resolve"
+    && !["chords"].includes(trackId)
+  ) {
+    const tailFraction = {
+      answer: 0.18,
+      support: 0.12,
+      texture: 0.24,
+    }[producerRole] ?? 0;
+    const maxTail = {
+      answer: 1.5,
+      support: 1,
+      texture: 2,
+    }[producerRole] ?? 0;
+    if (tailFraction > 0 && maxTail > 0) {
+      const tail = Math.min(span * tailFraction, maxTail);
+      exitBeat = round(section.endBeat - Math.max(0.5, tail));
+    }
+  }
+
+  return entryBeat != null || exitBeat != null ? { entryBeat, exitBeat } : null;
+}
+
+function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
+  const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
+  const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
+  return Object.fromEntries(Object.entries(rawTracks).map(([id, sourceNotes]) => {
+    const result = [];
+    for (const section of structure) {
+      const notes = sourceNotes.filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
+      const lane = matrix.get(section.id)?.lanes?.[id];
+      const scene = scenes.get(section.id);
+      const producerRole = scene?.roles?.[id] ?? lane?.role ?? "support";
+      const roleGate = producerRoleGateWindow(section, structure, scene, id, producerRole, config);
+      if (!lane || !notes.length) {
+        result.push(...notes.map((note) => ({
+          ...note,
+          producerRole,
+          producerScenePurpose: scene?.purpose ?? "develop",
+        })));
+        continue;
+      }
+      const kept = [];
+      const foregroundAttacks = scene?.foregroundTrack && scene.foregroundTrack !== id
+        ? (rawTracks[scene.foregroundTrack] ?? []).filter((note) => (
+          note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+        ))
+        : [];
+      const rolePresence = {
+        foreground: 1,
+        foundation: 0.98,
+        answer: 0.8,
+        support: 0.88,
+        texture: 0.72,
+        rest: 0.12,
+      }[producerRole] ?? 0.88;
+      const developmentPresence = scene?.developmentAxis === "density" && ["support", "texture"].includes(producerRole)
+        ? 0.72
+        : scene?.developmentAxis === "dialogue" && producerRole === "answer"
+          ? 1.08
+          : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
+            ? 0.68
+            : 1;
+      const roleVelocity = {
+        foreground: 1.05,
+        foundation: 0.98,
+        answer: 0.94,
+        support: 0.9,
+        texture: 0.84,
+        rest: 0.76,
+      }[producerRole] ?? 0.9;
+      for (let index = 0; index < notes.length; index += 1) {
+        const note = notes[index];
+        if (id === "drums" && producerRole !== "rest") {
+          kept.push({
+            ...note,
+            velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+            orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
+          });
+          continue;
+        }
+        const barPosition = mod(note.start, beatsPerBar(config));
+        const protectedAnchor = note.phraseAnchor
+          || note.resolutionRole
+          || note.transitionRole
+          || note.transitionFeature
+          || note.transitionHandoffRole
+          || note.memoryRole
+          || note.motifHandoffRole
+          || note.ensembleAccent
+          || note.finalAssemblyRole;
+        const outsideRoleGate = !protectedAnchor && Boolean(
+          (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
+          || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
+        );
+        const structuralAnchor = (producerRole !== "rest" && index === 0)
+          || protectedAnchor
+          || (id === "drums" && ([36, 38, 39].includes(note.pitch) || Math.abs(barPosition) < 0.04))
+          || (id === "bass" && Math.abs(note.start - Math.round(note.start)) < 0.04)
+          || (["chords", "pad"].includes(id) && note.start <= section.startBeat + 0.04);
+        const local = rng.fork(`phase7-${section.id}-${id}-${round(note.start, 4)}-${note.pitch}-${index}`);
+        const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
+          Math.abs(foreground.start - note.start) < 0.105
+        ));
+        if (outsideRoleGate) continue;
+        if (!protectedAnchor && answerCollision) continue;
+        if (producerRole === "rest" && !protectedAnchor) continue;
+        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
+        kept.push({
+          ...note,
+          velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+          orchestrationRole: lane.role,
+          producerRole,
+          producerScenePurpose: scene?.purpose ?? "develop",
+        });
+      }
+      if (!kept.length && notes.length && producerRole !== "rest") {
+        const fallbackNotes = notes.filter((note) => {
+          const protectedAnchor = note.phraseAnchor
+            || note.resolutionRole
+            || note.transitionRole
+            || note.transitionFeature
+            || note.transitionHandoffRole
+            || note.memoryRole
+            || note.motifHandoffRole
+            || note.ensembleAccent
+            || note.finalAssemblyRole;
+          if (protectedAnchor) return true;
+          if (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6) return false;
+          if (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6) return false;
+          return true;
+        });
+        const anchor = [...fallbackNotes].sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
+        if (anchor) {
+          kept.push({
+            ...anchor,
+            orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
+          });
+        }
+      }
+      result.push(...kept);
+    }
+    return [id, result.sort((left, right) => left.start - right.start || left.pitch - right.pitch)];
+  }));
+}
+
+function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
+  const sectionForNote = (note) => structure.find((section) => (
+    note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+  ));
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => {
+      const section = sectionForNote(note);
+      const scene = scenes.get(section?.id);
+      return {
+        ...note,
+        producerRole: scene?.roles?.[track.id] ?? note.producerRole ?? "support",
+        producerScenePurpose: scene?.purpose ?? note.producerScenePurpose ?? "develop",
+      };
+    }),
+  }));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  for (const scene of producerIntent?.scenes ?? []) {
+    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
+    const answerTrack = trackById.get(scene.answerTrack);
+    if (!section || !answerTrack || !foreground.length) continue;
+    answerTrack.notes = answerTrack.notes.filter((note) => {
+      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
+      const protectedAnchor = note.phraseAnchor
+        || note.resolutionRole
+        || note.transitionRole
+        || note.transitionFeature
+        || note.transitionHandoffRole
+        || note.memoryRole
+        || note.motifHandoffRole
+        || note.ensembleAccent
+        || note.finalAssemblyRole;
+      if (protectedAnchor) return true;
+      return !foreground.some((lead) => (
+        lead.start >= section.startBeat - 1e-6
+        && lead.start < section.endBeat - 1e-6
+        && Math.abs(lead.start - note.start) < 0.105
+      ));
+    });
+  }
+  const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
+      section && note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+    ));
+    const foreground = notesFor(scene.foregroundTrack);
+    const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
+    const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
+    const protectedSharedAnchors = collidingAnswers.filter((note) => (
+      note.phraseAnchor
+      || note.resolutionRole
+      || note.transitionRole
+      || note.transitionFeature
+      || note.transitionHandoffRole
+      || note.memoryRole
+      || note.motifHandoffRole
+      || note.ensembleAccent
+      || note.finalAssemblyRole
+    )).length;
+    const collisions = collidingAnswers.length - protectedSharedAnchors;
+    const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
+    const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
+    return {
+      sectionId: scene.sectionId,
+      purpose: scene.purpose,
+      returnIndex: scene.returnIndex,
+      developmentAxis: scene.developmentAxis,
+      foregroundTrack: scene.foregroundTrack,
+      foregroundNotes: foreground.length,
+      answerTrack: scene.answerTrack,
+      answerCollisionRate: round(collisions / Math.max(1, answers.length)),
+      protectedSharedAnchors,
+      restTracks: restTrackIds.length,
+      restNotes,
+    };
+  });
+  const allNotes = tracks.flatMap((track) => track.notes);
+  const foregroundCoverage = sceneReports.filter((scene) => scene.foregroundNotes > 0).length
+    / Math.max(1, sceneReports.length);
+  const answerCollisionRate = average(sceneReports.map((scene) => scene.answerCollisionRate), 0);
+  const singleForeground = (producerIntent?.scenes ?? []).every((scene) => (
+    Object.values(scene.roles ?? {}).filter((role) => role === "foreground").length === 1
+  ));
+  const completeRoles = (producerIntent?.scenes ?? []).every((scene) => (
+    TRACK_IDS.every((id) => typeof scene.roles?.[id] === "string")
+  ));
+  const developedReturns = (producerIntent?.scenes ?? [])
+    .filter((scene) => finite(scene.returnIndex, 0) > 0)
+    .every((scene) => ["rhythm", "density", "register", "dialogue"].includes(scene.developmentAxis));
+  return {
+    tracks,
+    report: {
+      phase: 76,
+      version: 1,
+      status: "complete",
+      signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
+      metrics: {
+        sceneCount: sceneReports.length,
+        taggedNotes: allNotes.filter((note) => note.producerRole).length,
+        foregroundCoverage: round(foregroundCoverage),
+        answerCollisionRate: round(answerCollisionRate),
+        restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+      },
+      checks: {
+        completeRoles,
+        singleForeground,
+        developedReturns,
+        foregroundAudible: foregroundCoverage >= 0.9,
+        answersSeparated: answerCollisionRate <= 0.28,
+        allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
+      },
+      scenes: sceneReports,
+    },
+  };
+}
+
+function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifLength, totalBeats) {
+  const melody = (rawTracks.melody ?? []).map((note) => ({ ...note }));
+  for (const memory of songBlueprint?.memoryMap ?? []) {
+    const target = structure.find((section) => section.id === memory.sectionId);
+    const origin = structure.find((section) => section.id === memory.originSectionId);
+    if (!target || !origin || target.id === origin.id) continue;
+    const window = Math.min(
+      Math.max(1, finite(motifLength, beatsPerBar({ timeSignature: [4, 4] }))),
+      origin.endBeat - origin.startBeat,
+      target.endBeat - target.startBeat,
+    );
+    const source = melody
+      .filter((note) => note.start >= origin.startBeat - 1e-6 && note.start < origin.startBeat + window - 1e-6)
+      .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    if (!source.length) continue;
+
+    if (memory.relationship === "contrast") {
+      for (const note of melody.filter((candidate) => (
+        candidate.start >= target.startBeat - 1e-6 && candidate.start < target.startBeat + window - 1e-6
+      ))) {
+        note.memoryRole = "contrast";
+        note.memoryOriginSectionId = origin.id;
+      }
+      continue;
+    }
+
+    const desired = Math.max(2, Math.round(source.length * clamp(memory.recallStrength, 0.35, 1)));
+    const recalled = source.slice(0, desired).map((note, index) => {
+      const relativeStart = note.start - origin.startBeat;
+      const start = clamp(target.startBeat + relativeStart, target.startBeat, Math.min(target.endBeat - 0.02, totalBeats - 0.02));
+      let pitch = note.pitch;
+      if (memory.contrastAxis === "register" && memory.relationship === "return") pitch += pitch <= 103 ? 12 : -12;
+      const chord = harmonyAt(harmony, start);
+      if (chord && Math.abs(start - Math.round(start)) < 0.05) pitch = nearestChordTone(pitch, chord);
+      const rhythmFactor = memory.contrastAxis === "rhythm" && index % 2 ? 0.76 : 1;
+      return {
+        ...note,
+        pitch: clamp(Math.round(pitch), 0, 127),
+        start: round(start),
+        duration: round(clamp(note.duration * rhythmFactor, 0.08, Math.max(0.08, target.endBeat - start))),
+        velocity: clamp(Math.round(note.velocity * (memory.relationship === "return" ? 1.06 : 0.98)), 1, 127),
+        memoryRole: memory.relationship,
+        memoryOriginSectionId: origin.id,
+      };
+    });
+    const targetWindowEnd = target.startBeat + window;
+    const retained = melody.filter((note) => note.start < target.startBeat - 1e-6 || note.start >= targetWindowEnd - 1e-6);
+    melody.length = 0;
+    melody.push(...retained, ...recalled);
+    melody.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  const result = { ...rawTracks, melody };
+  // A return should be remembered by the rhythm section and answering voice,
+  // not only by the lead. Reuse the origin's onset sentence while retaining
+  // the target section's harmony, register, articulation, and orchestration.
+  for (const trackId of ["bass", "counterpoint"]) {
+    const notes = (rawTracks[trackId] ?? []).map((note) => ({ ...note }));
+    for (const memory of songBlueprint?.memoryMap ?? []) {
+      if (!["recall", "return"].includes(memory.relationship)) continue;
+      const target = structure.find((section) => section.id === memory.sectionId);
+      const origin = structure.find((section) => section.id === memory.originSectionId);
+      if (!target || !origin || target.id === origin.id) continue;
+      const window = Math.min(
+        Math.max(1, finite(motifLength, 4)),
+        origin.endBeat - origin.startBeat,
+        target.endBeat - target.startBeat,
+      );
+      const source = notes
+        .filter((note) => note.start >= origin.startBeat - 1e-6 && note.start < origin.startBeat + window - 1e-6)
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const targetNotes = notes
+        .filter((note) => note.start >= target.startBeat - 1e-6 && note.start < target.startBeat + window - 1e-6)
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const recalledCount = Math.min(
+        targetNotes.length,
+        source.length,
+        trackId === "bass" ? 5 : 3,
+      );
+      for (let index = 0; index < recalledCount; index += 1) {
+        const note = targetNotes[index];
+        const sourceNote = source[index];
+        note.start = round(clamp(
+          target.startBeat + sourceNote.start - origin.startBeat,
+          target.startBeat,
+          Math.min(target.endBeat - 0.02, totalBeats - 0.02),
+        ));
+        note.duration = round(clamp(
+          average([note.duration, sourceNote.duration], note.duration),
+          0.06,
+          Math.max(0.06, target.endBeat - note.start),
+        ));
+        note.memoryRole = memory.relationship;
+        note.memoryOriginSectionId = origin.id;
+        note.memoryTransform = trackId === "bass" ? "rhythmic-callback" : "answer-callback";
+      }
+    }
+    notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    result[trackId] = notes;
+  }
+  return result;
+}
+
+function applyFeaturedMotifHandoffs(rawTracks, structure, songBlueprint, motifLength, totalBeats, config) {
+  const tracks = Object.fromEntries(Object.entries(rawTracks).map(([id, notes]) => [
+    id,
+    notes.map((note) => ({ ...note })),
+  ]));
+  const firstEntryByName = new Map();
+  let handoffs = 0;
+  let notesAdapted = 0;
+  for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
+    const originEntry = firstEntryByName.get(entry.sectionName);
+    if (!originEntry) {
+      firstEntryByName.set(entry.sectionName, entry);
+      continue;
+    }
+    if (!entry.featuredTrack || entry.featuredTrack === originEntry.featuredTrack || entry.featuredTrack === "pad") continue;
+    const origin = structure.find((section) => section.id === originEntry.sectionId);
+    const target = structure.find((section) => section.id === entry.sectionId);
+    if (!origin || !target) continue;
+    const window = Math.min(
+      Math.max(1, finite(motifLength, 4)),
+      origin.endBeat - origin.startBeat,
+      target.endBeat - target.startBeat,
+    );
+    const sourceNotes = (tracks[originEntry.featuredTrack] ?? [])
+      .filter((note) => note.start >= origin.startBeat - 1e-6 && note.start < origin.startBeat + window - 1e-6)
+      .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    const sourceOffsets = [...new Set(sourceNotes.map((note) => round(note.start - origin.startBeat, 3)))]
+      .slice(0, 4);
+    if (sourceOffsets.length < 2) continue;
+    const targetNotes = (tracks[entry.featuredTrack] ?? [])
+      .filter((note) => (
+        note.start >= target.startBeat - 1e-6
+        && note.start < target.startBeat + window - 1e-6
+        && (
+          entry.featuredTrack !== "drums"
+          || ![36, 38, 39].includes(note.pitch)
+        )
+      ))
+      .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    const count = Math.min(sourceOffsets.length, targetNotes.length, entry.featuredTrack === "drums" ? 3 : 4);
+    if (count < 2) continue;
+    for (let index = 0; index < count; index += 1) {
+      const note = targetNotes[index];
+      let adaptedStart = clamp(
+        target.startBeat + sourceOffsets[index],
+        target.startBeat + 0.02,
+        Math.min(target.endBeat - 0.25, totalBeats - 0.25),
+      );
+      if (entry.featuredTrack === "bass") {
+        const responseDeltas = {
+          house: [0.5],
+          techno: [0, 0.5],
+          trap: [0, 0.25],
+          hipHop: [0, 0.25],
+          drumBass: [0, 0.5],
+          neoSoul: [0, 0.25, 0.5, 0.75],
+        }[config.genre];
+        const kickResponses = (tracks.drums ?? [])
+          .filter((drum) => (
+            drum.pitch === 36
+            && drum.start >= target.startBeat - 1e-6
+            && drum.start < target.endBeat - 1e-6
+          ))
+          .flatMap((drum) => (responseDeltas ?? [0]).map((delta) => drum.start + delta))
+          .filter((start) => start >= target.startBeat && start < target.endBeat - 0.02)
+          .sort((left, right) => Math.abs(left - adaptedStart) - Math.abs(right - adaptedStart));
+        if (kickResponses[0] != null) adaptedStart = kickResponses[0];
+        else adaptedStart = note.start;
+      }
+      note.start = round(adaptedStart);
+      note.motifHandoffRole = `${originEntry.featuredTrack}-to-${entry.featuredTrack}`;
+      note.motifHandoffOriginSectionId = origin.id;
+      notesAdapted += 1;
+    }
+    tracks[entry.featuredTrack].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    handoffs += 1;
+  }
+  return {
+    tracks,
+    report: {
+      phase: 69,
+      version: 1,
+      status: "complete",
+      handoffs,
+      notesAdapted,
+    },
+  };
+}
+
+function applyCoordinatedTransitions(rawTracks, structure, songBlueprint) {
+  const result = Object.fromEntries(Object.entries(rawTracks).map(([id, notes]) => [
+    id,
+    notes.map((note) => ({ ...note })),
+  ]));
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    if (!from) continue;
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    const lastSection = structure[structure.length - 1];
+    if (to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
+    const boundary = from.endBeat;
+    const pickupStart = Math.max(from.startBeat, boundary - finite(transition.pickupBeats, 0.5));
+
+    if (transition.type === "drop-out") {
+      for (const id of Object.keys(result)) {
+        result[id] = result[id]
+          .filter((note) => note.start < pickupStart - 1e-6 || note.start >= boundary - 1e-6)
+          .map((note) => note.start < pickupStart && note.start + note.duration > pickupStart
+            ? { ...note, duration: Math.max(0.02, pickupStart - note.start), transitionFeature: "drop-out" }
+            : note);
+      }
+      continue;
+    }
+
+    for (const id of ["drums", "bass", "chords", "melody", "counterpoint"]) {
+      const candidates = (result[id] ?? [])
+        .filter((note) => note.start >= pickupStart - 1e-6 && note.start < boundary - 1e-6)
+        .sort((left, right) => right.start - left.start || right.velocity - left.velocity);
+      if (candidates[0]) candidates[0].transitionFeature = transition.type;
+    }
+
+    if (["launch", "resolve"].includes(transition.type)) {
+      for (const id of ["chords", "pad"]) {
+        result[id] = (result[id] ?? []).map((note) => (
+          note.start < boundary && note.start + note.duration > boundary
+            ? { ...note, duration: Math.max(0.02, boundary - note.start), transitionFeature: transition.type }
+            : note
+        ));
+      }
+    }
+  }
+  return result;
+}
+
+export function genreMicroTimingOffset({
+  genre,
+  trackId,
+  pitch = null,
+  start = 0,
+  exactSubdivision = false,
+} = {}) {
+  if (exactSubdivision) return 0;
+  const beat = finite(start, 0);
+  const lane = String(trackId ?? "");
+  const id = String(genre ?? "");
+  if (id === "hipHop") {
+    if (lane === "drums") {
+      if ([38, 39].includes(Math.round(finite(pitch, -1)))) return 0.012;
+      if ([42, 44, 46].includes(Math.round(finite(pitch, -1)))) {
+        return Math.floor(beat * 4 + 1e-6) % 2 === 0 ? -0.005 : 0.005;
+      }
+      return 0;
+    }
+    if (lane === "melody") return 0.008 + (Math.floor(beat / 2) % 2 === 0 ? -0.002 : 0.002);
+    if (lane === "counterpoint") return -0.006;
+    if (lane === "chords") return 0.004;
+    if (lane === "pad") return 0.003;
+    return 0;
+  }
+  if (id === "pop") {
+    if (lane === "drums" && [38, 39].includes(Math.round(finite(pitch, -1)))) return 0.006;
+    if (lane === "melody") return -0.006;
+    if (lane === "counterpoint") return 0.006;
+    if (lane === "chords") return 0.002;
+    if (lane === "pad") return 0.004;
+  }
+  return 0;
+}
+
+function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null) {
+  const totalBeats = config.bars * beatsPerBar(config);
+  const upgraded = Boolean(config.professionalUpgrade);
+  const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
+  const humanization = arrangementProfile?.humanization ?? {};
+  const felt = [];
+  const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
+  for (const note of rawNotes) {
+    const exactSubdivision = typeof note.rhythmicFeature === "string" || note.preserveTiming === true;
+    const eighthPosition = mod(note.start, 1);
+    const isOffEighth = Math.abs(eighthPosition - 0.5) < 0.035;
+    const swingDelay = !exactSubdivision && isOffEighth ? config.swing * settings.feel * (1 / 6) : 0;
+    const jitterRange = finite(performanceProfile?.timingJitter, 0.035 * config.humanize);
+    const genre = config?.genre;
+    const isLaidbackGenre = upgraded
+      ? finite(humanization.laidBackOffsetBeats, 0) > 0
+      : ["neoSoul", "loFiHipHop", "rnbSoul"].includes(genre);
+    const isGridGenre = upgraded
+      ? ["house", "techno", "synthwave", "trap", "drill", "drumBass"].includes(genre)
+      : ["house", "techno", "synthwave", "trap"].includes(genre);
+    const isLaidbackNote = isLaidbackGenre && (
+      (trackId === "drums" && [37, 38, 39].includes(note.pitch)) || trackId === "bass"
+    );
+    const laidbackOffset = !exactSubdivision && isLaidbackNote
+      ? (upgraded ? finite(humanization.laidBackOffsetBeats, 0.016) : 0.016) * config.humanize
+      : 0;
+    const effectiveJitterRange = isGridGenre && trackId !== "drums"
+      ? jitterRange * (upgraded ? clamp(finite(humanization.gridJitterAttenuation, 0.5), 0.25, 1) : 0.5)
+      : jitterRange;
+    const jitter = exactSubdivision ? 0 : (rng.float() * 2 - 1) * effectiveJitterRange * settings.humanize;
+    const pocketOffset = exactSubdivision ? 0 : finite(performanceProfile?.trackOffsets?.[trackId], 0) * settings.feel;
+    const protectedLanding = Boolean(note.resolutionRole || note.ensembleCadenceRole || note.transitionHandoffRole);
+    const microOffset = config.secondaryGenre || protectedLanding
+      ? 0
+      : genreMicroTimingOffset({
+        genre,
+        trackId,
+        pitch: note.pitch,
+        start: note.start,
+        exactSubdivision,
+      }) * settings.feel * (0.6 + clamp(config.humanize, 0, 1) * 0.4);
+    const start = clamp(note.start + swingDelay + pocketOffset + laidbackOffset + microOffset + jitter, 0, Math.max(0, totalBeats - 0.02));
+    const durationJitter = exactSubdivision ? 1 : 1 + (rng.float() * 2 - 1) * jitterRange * settings.humanize;
+    const duration = clamp(note.duration * settings.gate * durationJitter, 0.02, Math.max(0.02, totalBeats - start));
+    const velocityRange = finite(
+      performanceProfile?.velocityVariance,
+      7 * config.humanize * (upgraded ? clamp(finite(humanization.velocityVarianceScale, 1), 0.7, 1.4) : 1),
+    );
+    const velocity = clamp(Math.round(note.velocity + (rng.float() * 2 - 1) * velocityRange * settings.humanize), 1, 127);
+    felt.push({
+      pitch: trackId === "drums" ? note.pitch : nearestScalePitch(note.pitch, config, 0, allowedScale),
+      start: round(start),
+      duration: round(duration),
+      velocity,
+      ...(note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : {}),
+      ...(Number.isFinite(note.subdivision) ? { subdivision: note.subdivision } : {}),
+      ...(note.transitionFeature ? { transitionFeature: note.transitionFeature } : {}),
+      ...(note.drumFillId ? { drumFillId: note.drumFillId } : {}),
+      ...(note.drumFillFamily ? { drumFillFamily: note.drumFillFamily } : {}),
+      ...(note.rhythmTurnaroundId ? { rhythmTurnaroundId: note.rhythmTurnaroundId } : {}),
+      ...(note.rhythmTurnaroundRole ? { rhythmTurnaroundRole: note.rhythmTurnaroundRole } : {}),
+      ...(note.orchestrationRole ? { orchestrationRole: note.orchestrationRole } : {}),
+      ...(note.memoryRole ? { memoryRole: note.memoryRole } : {}),
+      ...(note.memoryOriginSectionId ? { memoryOriginSectionId: note.memoryOriginSectionId } : {}),
+      ...(note.memoryTransform ? { memoryTransform: note.memoryTransform } : {}),
+      ...(Number.isFinite(note.plannedTension) ? { plannedTension: round(note.plannedTension) } : {}),
+      ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
+      ...(Number.isFinite(note.phraseBoundary) ? { phraseBoundary: round(note.phraseBoundary) } : {}),
+      ...(note.articulationIntent ? { articulationIntent: note.articulationIntent } : {}),
+      ...(note.connectionId ? { connectionId: note.connectionId } : {}),
+      ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
+      ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
+      ...(note.phraseRole ? { phraseRole: note.phraseRole } : {}),
+      ...(note.phraseCadenceRole ? { phraseCadenceRole: note.phraseCadenceRole } : {}),
+      ...(note.phraseMemoryRole ? { phraseMemoryRole: note.phraseMemoryRole } : {}),
+      ...(note.phraseMemoryTransform ? { phraseMemoryTransform: note.phraseMemoryTransform } : {}),
+      ...(note.phraseMemoryLandingRole ? { phraseMemoryLandingRole: note.phraseMemoryLandingRole } : {}),
+      ...(note.phraseMemorySourceSectionId ? { phraseMemorySourceSectionId: note.phraseMemorySourceSectionId } : {}),
+      ...(note.phraseRegisterStrategy ? { phraseRegisterStrategy: note.phraseRegisterStrategy } : {}),
+      ...(Number.isFinite(note.phraseRecallStrength) ? { phraseRecallStrength: round(note.phraseRecallStrength) } : {}),
+      ...(Number.isFinite(note.phrasePerformanceDelta) ? { phrasePerformanceDelta: note.phrasePerformanceDelta } : {}),
+      ...(Number.isFinite(note.phrasePerformanceDurationScale) ? {
+        phrasePerformanceDurationScale: round(note.phrasePerformanceDurationScale),
+      } : {}),
+      ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
+      ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
+      ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
+      ...(note.melodyRole ? { melodyRole: note.melodyRole } : {}),
+      ...(note.counterMelodyRole ? { counterMelodyRole: note.counterMelodyRole } : {}),
+      ...(note.melodicRelationship ? { melodicRelationship: note.melodicRelationship } : {}),
+      ...(Number.isFinite(note.answerToBeat) ? { answerToBeat: round(note.answerToBeat) } : {}),
+      ...(note.dialogueSectionId ? { dialogueSectionId: note.dialogueSectionId } : {}),
+      ...(note.bassGrooveRole ? { bassGrooveRole: note.bassGrooveRole } : {}),
+      ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
+      ...(note.motifHandoffRole ? { motifHandoffRole: note.motifHandoffRole } : {}),
+      ...(note.motifHandoffOriginSectionId ? { motifHandoffOriginSectionId: note.motifHandoffOriginSectionId } : {}),
+      ...(note.arrangementLayer ? { arrangementLayer: note.arrangementLayer } : {}),
+      ...(note.arrangementInstrument ? { arrangementInstrument: note.arrangementInstrument } : {}),
+    });
+  }
+
+  felt.sort((a, b) => a.start - b.start || a.pitch - b.pitch || a.duration - b.duration);
+  const deduped = [];
+  for (const note of felt) {
+    const previous = deduped[deduped.length - 1];
+    if (previous && previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 0.0005) {
+      previous.duration = Math.max(previous.duration, note.duration);
+      previous.velocity = Math.max(previous.velocity, note.velocity);
+    } else {
+      deduped.push(note);
+    }
+  }
+  return deduped;
+}
+
+function enforceScaleSafety(sourceTracks, config) {
+  let corrections = 0;
+  const correctionsByTrack = {};
+  const allowedScale = scalePitchClasses(config);
+  const tracks = sourceTracks.map((track) => {
+    if (track.id === "drums") return track;
+    let trackCorrections = 0;
+    const notes = (track.notes ?? []).map((note) => {
+      const pitch = nearestScalePitch(note.pitch, config, 0, allowedScale);
+      if (pitch !== note.pitch) {
+        corrections += 1;
+        trackCorrections += 1;
+      }
+      return pitch === note.pitch ? note : { ...note, pitch };
+    });
+    correctionsByTrack[track.id] = trackCorrections;
+    return { ...track, notes };
+  });
+  const pitchedNotes = tracks
+    .filter((track) => track.id !== "drums")
+    .flatMap((track) => track.notes ?? []);
+  const scaleFit = pitchedNotes.length
+    ? pitchedNotes.filter((note) => pitchFitsScale(note.pitch, config, allowedScale)).length / pitchedNotes.length
+    : 1;
+  return {
+    tracks,
+    corrections,
+    correctionsByTrack,
+    scaleFit: round(scaleFit),
+    passed: scaleFit >= 1 - 1e-9,
+  };
+}
+
+function appendExpressionRamp(events, startBeat, endBeat, startValue, endValue, barBeats) {
+  if (endBeat <= startBeat + 0.01) return;
+  const steps = clamp(Math.ceil((endBeat - startBeat) / Math.max(0.5, barBeats / 2)), 2, 8);
+  for (let index = 0; index <= steps; index += 1) {
+    const progress = index / steps;
+    events.push({
+      type: "cc",
+      controller: 11,
+      beat: round(startBeat + (endBeat - startBeat) * progress),
+      value: clamp(Math.round(startValue + (endValue - startValue) * progress), 0, 127),
+    });
+  }
+}
+
+function createExpressionAutomation(id, config, structure, settings, rng, songBlueprint = null) {
+  const barBeats = beatsPerBar(config);
+  const totalBeats = config.bars * barBeats;
+  const base = clamp(Math.round(108 + settings.volume * 18), 96, 126);
+  const events = [{ type: "cc", controller: 11, beat: 0, value: base }];
+  const expressive = ["chords", "melody", "counterpoint", "pad"].includes(id);
+  if (!expressive || totalBeats < barBeats * 2) return events;
+
+  const emotional = structure.filter((section) => ["bridge", "breakdown"].includes(section.name) && section.endBeat < totalBeats - 0.01);
+  const dipSection = emotional.find((section) => (
+    id === "pad"
+    || rng.fork(`dip-${section.id}`).bool(0.42 + settings.reverb * 0.34)
+  ));
+  if (dipSection) {
+    const length = dipSection.endBeat - dipSection.startBeat;
+    const low = clamp(Math.round(base * (id === "pad" ? 0.58 : 0.68)), 46, base - 12);
+    const lowBeat = Math.min(dipSection.endBeat - barBeats * 0.45, dipSection.startBeat + Math.max(barBeats, length * 0.42));
+    const restoreBeat = Math.min(dipSection.endBeat, Math.max(lowBeat + barBeats, dipSection.endBeat - 0.05));
+    appendExpressionRamp(events, dipSection.startBeat, lowBeat, base, low, barBeats);
+    appendExpressionRamp(events, lowBeat, restoreBeat, low, base, barBeats);
+  }
+
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    if (!from) continue;
+    const boundary = from.endBeat;
+    const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, barBeats);
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    const lastSection = structure[structure.length - 1];
+    if (["bridge", "breakdown"].includes(to?.name)) continue;
+    if (to?.id === lastSection?.id && to?.name === "outro") continue;
+    if (["launch", "build"].includes(transition.type)) {
+      const low = clamp(Math.round(base - 10 - transition.strength * 12), 58, base - 6);
+      appendExpressionRamp(events, Math.max(from.startBeat, boundary - pickup), boundary, low, base, barBeats);
+    } else if (transition.type === "drop-out") {
+      const low = clamp(Math.round(base * (0.5 + (1 - transition.strength) * 0.16)), 42, base - 18);
+      appendExpressionRamp(events, Math.max(from.startBeat, boundary - pickup), Math.max(from.startBeat, boundary - 0.03), base, low, barBeats);
+      appendExpressionRamp(events, boundary, Math.min(totalBeats, boundary + Math.min(barBeats / 2, pickup)), low, base, barBeats);
+    }
+  }
+
+  const finalSection = structure[structure.length - 1];
+  const finalFadeRng = rng.fork(`final-${finalSection?.id ?? "song"}`);
+  const finalEmotional = finalSection && ["outro", "breakdown"].includes(finalSection.name);
+  const fadeChance = id === "pad" ? 1 : id === "counterpoint" ? 0.78 : id === "melody" ? 0.7 : 0.56;
+  if (finalEmotional && finalFadeRng.bool(fadeChance)) {
+    const sectionLength = finalSection.endBeat - finalSection.startBeat;
+    const fadeLength = Math.min(sectionLength, barBeats * (id === "pad" ? 2.5 : 1.75));
+    const fadeStart = Math.max(finalSection.startBeat, finalSection.endBeat - fadeLength);
+    const floor = clamp(Math.round(base * (id === "pad" ? 0.42 : 0.52)), 42, 76);
+    appendExpressionRamp(events, fadeStart, Math.min(totalBeats, finalSection.endBeat), base, floor, barBeats);
+  }
+
+  const byBeat = new Map();
+  for (const event of events) byBeat.set(`${event.controller}:${round(event.beat)}`, event);
+  return [...byBeat.values()].sort((a, b) => a.beat - b.beat || a.controller - b.controller);
+}
+
+function articulatePerformance(notes, id, config, rng) {
+  if (id === "drums") {
+    return notes.map((note) => ({
+      ...note,
+      velocity: note.rhythmicFeature?.includes("ghost")
+        ? clamp(Math.round(note.velocity * 0.82), 1, 127)
+        : note.phraseRole === "turnaround"
+          ? clamp(note.velocity + 3, 1, 127)
+          : note.velocity,
+      articulation: note.rhythmicFeature === "snare-roll"
+        ? "roll"
+        : note.velocity >= 108
+          ? "accent"
+          : "tight",
+      performanceRole: note.rhythmicFeature?.includes("ghost") ? "ghost" : note.phraseRole ?? "pulse",
+    }));
+  }
+
+  const result = notes.map((note) => ({ ...note }));
+  const melodic = ["bass", "melody", "counterpoint"].includes(id);
+  const upgraded = Boolean(config.professionalUpgrade);
+  const melodyMotion = upgraded ? arrangementProfileForConfig(config).melodyMotion ?? {} : {};
+  const stepBias = clamp(finite(melodyMotion.stepBias, 0.72), 0.05, 0.95);
+  const legatoBias = clamp(finite(melodyMotion.legatoBias, 0.34), 0.05, 0.9);
+  const staccatoBias = clamp(finite(melodyMotion.staccatoBias, 0.2), 0.05, 0.9);
+  for (let index = 0; index < result.length; index += 1) {
+    const note = result[index];
+    const next = result[index + 1];
+    const tension = clamp(finite(note.plannedTension, 0.5), 0, 1);
+    const phraseFactor = note.phraseRole === "answer" ? 0.96
+      : note.phraseRole === "development" ? 1.015
+        : note.phraseRole === "turnaround" ? 1.035 : 1;
+    note.velocity = clamp(Math.round(note.velocity * phraseFactor), 1, 127);
+    const intervalToNext = next ? Math.abs(next.pitch - note.pitch) : Infinity;
+    const connected = next
+      && next.start - (note.start + note.duration) < 0.16
+      && intervalToNext <= 5;
+    const legatoChoice = upgraded
+      ? melodic && connected
+        && rng.fork(`${id}-legato-${index}`).bool(clamp(legatoBias + legatoIntervalBias(stepBias, intervalToNext) + tension * 0.18, 0.08, 0.96))
+      : melodic && connected;
+    const staccatoChoice = upgraded
+      ? melodic
+        && note.duration <= 0.36
+        && rng.fork(`${id}-staccato-${index}`).bool(clamp(staccatoBias + (1 - tension) * 0.12, 0.08, 0.94))
+      : false;
+    note.articulation = note.articulationIntent
+      ?? (note.velocity >= 110
+      ? "accent"
+      : legatoChoice
+        ? "legato"
+        : staccatoChoice || note.duration <= 0.22
+          ? "staccato"
+          : ["chords", "pad"].includes(id)
+            ? "sustain"
+            : "tenuto");
+    if (upgraded && melodic && note.articulation === "staccato") {
+      note.duration = round(Math.max(0.06, note.duration * 0.82));
+    } else if (upgraded && melodic && note.articulation === "legato" && next) {
+      const overlapBudget = Math.max(0.01, next.start - note.start - 0.02);
+      note.duration = round(Math.min(note.duration * 1.08, overlapBudget));
+    }
+    const wideForegroundLeap = upgraded
+      && ["melody", "counterpoint"].includes(id)
+      && next
+      && intervalToNext >= 7;
+    if (wideForegroundLeap && note.articulation !== "accent") {
+      note.velocity = clamp(note.velocity - 2, 1, 127);
+      note.duration = round(Math.max(0.06, note.duration * 0.92));
+      if (note.articulation === "legato" || note.articulation === "glide") note.articulation = "tenuto";
+    }
+    const breathAfter = melodic && (!next || next.start - (note.start + note.duration) >= 0.38);
+    note.performanceRole = breathAfter
+      ? "phrase-ending"
+      : note.phraseRole === "answer" ? "response"
+        : note.phraseRole === "turnaround" ? "lift"
+          : "continuation";
+    if (breathAfter) {
+      note.duration = round(Math.max(0.06, Math.min(note.duration, (next?.start ?? note.start + note.duration + 0.18) - note.start - 0.12)));
+      if (note.articulation !== "accent") note.articulation = "tenuto";
+    }
+    if (
+      melodic
+      && index > 0
+      && Math.abs(note.pitch - result[index - 1].pitch) <= 2
+      && note.start - (result[index - 1].start + result[index - 1].duration) < 0.12
+      && rng.fork(`${id}-glide-${index}`).bool(0.08 + tension * 0.2)
+    ) {
+      note.articulation = "glide";
+      note.glideFromSemitones = result[index - 1].pitch - note.pitch;
+      note.glideBeats = round(clamp(note.duration * 0.22, 0.06, 0.2));
+    }
+  }
+  return result;
+}
+
+function createPerformanceAutomation(id, notes, config, structure, settings, rng, songBlueprint = null) {
+  const events = createExpressionAutomation(id, config, structure, settings, rng.fork("expression"), songBlueprint);
+  if (id === "drums") return events;
+
+  if (["melody", "counterpoint", "pad"].includes(id)) {
+    events.push({ type: "cc", controller: 1, beat: 0, value: id === "pad" ? 18 : 4 });
+    for (const section of structure) {
+      const tension = clamp(finite(section.plannedTension ?? section.tension, 0.5), 0, 1);
+      events.push({
+        type: "cc",
+        controller: 1,
+        beat: round(section.startBeat),
+        value: clamp(Math.round((id === "pad" ? 14 : 2) + tension * (id === "pad" ? 42 : 28)), 0, 127),
+      });
+    }
+  }
+
+  if (["chords", "pad"].includes(id)) {
+    events.push({ type: "cc", controller: 64, beat: 0, value: 0 });
+    for (const section of structure) {
+      events.push({ type: "cc", controller: 64, beat: round(section.startBeat), value: 96 });
+      events.push({ type: "cc", controller: 64, beat: round(Math.max(section.startBeat, section.endBeat - 0.08)), value: 0 });
+    }
+  }
+
+  for (const note of notes) {
+    if (note.articulation !== "glide" || !Number.isFinite(note.glideFromSemitones)) continue;
+    const bend = clamp(Math.round(8192 + note.glideFromSemitones / 2 * 8192), 0, 16383);
+    events.push({ type: "pitchBend", beat: note.start, value: bend });
+    events.push({ type: "pitchBend", beat: round(note.start + finite(note.glideBeats, 0.12)), value: 8192 });
+  }
+
+  const byIdentity = new Map();
+  for (const event of events) {
+    const key = event.type === "cc"
+      ? `cc:${event.controller}:${round(event.beat)}`
+      : `${event.type}:${round(event.beat)}`;
+    byIdentity.set(key, event);
+  }
+  return [...byIdentity.values()].sort((left, right) => (
+    left.beat - right.beat || String(left.type).localeCompare(String(right.type))
+  ));
+}
+
+function makeTrack(id, settings, notes, automation = []) {
+  return {
+    id,
+    name: settings.name,
+    role: TRACK_DEFINITIONS[id].type,
+    type: TRACK_DEFINITIONS[id].type,
+    channel: TRACK_DEFINITIONS[id].channel,
+    program: settings.program,
+    settings: {
+      density: settings.density,
+      variation: settings.variation,
+      octave: settings.octave,
+      volume: settings.volume,
+      velocity: settings.velocity,
+      pan: settings.pan,
+      reverb: settings.reverb,
+      cutoff: settings.cutoff,
+      resonance: settings.resonance,
+      gate: settings.gate,
+      humanize: settings.humanize,
+      feel: settings.feel,
+      mute: settings.mute,
+      solo: settings.solo,
+    },
+    notes,
+    automation,
+  };
+}
+
+function runProducerPass(sourceTracks, structure, songBlueprint) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+    automation: (track.automation ?? []).map((event) => ({ ...event })),
+  }));
+  const repairs = {
+    overlapsTrimmed: 0,
+    registerCollisionsLifted: 0,
+    velocitiesScaled: 0,
+  };
+
+  for (const track of tracks) {
+    if (track.id === "drums") continue;
+    const lastByPitch = new Map();
+    for (const note of track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch)) {
+      const previous = lastByPitch.get(note.pitch);
+      if (previous && previous.start + previous.duration > note.start - 0.015) {
+        const repaired = Math.max(0.02, note.start - previous.start - 0.015);
+        if (repaired < previous.duration - 0.001) {
+          previous.duration = round(repaired);
+          repairs.overlapsTrimmed += 1;
+        }
+      }
+      lastByPitch.set(note.pitch, note);
+    }
+  }
+
+  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
+  for (const id of ["chords", "pad"]) {
+    const track = tracks.find((candidate) => candidate.id === id);
+    if (!track) continue;
+    for (const note of track.notes) {
+      const soundingBass = bass.filter((candidate) => (
+        note.start < candidate.start + candidate.duration
+        && candidate.start < note.start + note.duration
+      ));
+      const bassCeiling = soundingBass.length ? Math.max(...soundingBass.map((candidate) => candidate.pitch)) : null;
+      if (bassCeiling != null && note.pitch - bassCeiling < 7 && note.pitch <= 115) {
+        note.pitch += 12;
+        repairs.registerCollisionsLifted += 1;
+      }
+    }
+  }
+
+  const allNotes = tracks.flatMap((track) => track.notes);
+  const originalPeak = allNotes.length ? Math.max(...allNotes.map((note) => note.velocity)) : 0;
+  if (originalPeak > 120) {
+    const scale = 120 / originalPeak;
+    for (const note of allNotes) note.velocity = clamp(Math.round(note.velocity * scale), 1, 120);
+    repairs.velocitiesScaled = allNotes.length;
+  }
+
+  const finalPeak = allNotes.length ? Math.max(...allNotes.map((note) => note.velocity)) : 0;
+  const featuredCoverage = (songBlueprint?.orchestrationMatrix ?? []).map((entry) => {
+    const section = structure.find((candidate) => candidate.id === entry.sectionId);
+    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    if (!section || !track || track.settings?.density <= 0.001) return true;
+    return track.notes.some((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
+  });
+  const report = {
+    phase: 9,
+    version: 1,
+    status: "awaiting-critic",
+    repairs,
+    metrics: {
+      peakVelocity: finalPeak,
+      headroom: Math.max(0, 127 - finalPeak),
+      featuredSectionCoverage: round(average(featuredCoverage.map((covered) => covered ? 1 : 0), 1)),
+    },
+    checks: {
+      noteBounds: allNotes.every((note) => note.pitch >= 0 && note.pitch <= 127 && note.velocity >= 1 && note.velocity <= 127),
+      headroom: finalPeak <= 120,
+      featuredSections: featuredCoverage.every(Boolean),
+    },
+  };
+  return { tracks, report };
+}
+
+function runPerceptualMixPass(sourceTracks, structure) {
+  const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => ({ ...note })),
+  }));
+  const priority = { melody: 5, bass: 5, drums: 5, counterpoint: 3, chords: 2, pad: 1 };
+  const pitched = tracks.filter((track) => track.id !== "drums");
+  let maskingPairs = 0;
+  let attenuatedNotes = 0;
+  for (let leftIndex = 0; leftIndex < pitched.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < pitched.length; rightIndex += 1) {
+      const left = pitched[leftIndex];
+      const right = pitched[rightIndex];
+      const rightNotes = [...right.notes].sort((a, b) => a.start - b.start);
+      let rightCursor = 0;
+      for (const leftNote of [...left.notes].sort((a, b) => a.start - b.start)) {
+        while (
+          rightCursor < rightNotes.length
+          && rightNotes[rightCursor].start + rightNotes[rightCursor].duration <= leftNote.start
+        ) rightCursor += 1;
+        for (let index = rightCursor; index < rightNotes.length; index += 1) {
+          const rightNote = rightNotes[index];
+          if (rightNote.start >= leftNote.start + leftNote.duration) break;
+          const overlap = leftNote.start < rightNote.start + rightNote.duration
+            && rightNote.start < leftNote.start + leftNote.duration;
+          if (!overlap) continue;
+          const pitchDiff = Math.abs(leftNote.pitch - rightNote.pitch);
+          const isMidRangeOvercrowding = (left.id === "melody" && ["chords", "counterpoint"].includes(right.id))
+            || (right.id === "melody" && ["chords", "counterpoint"].includes(left.id));
+          const maxDiff = isMidRangeOvercrowding ? 7 : 4;
+          if (pitchDiff > maxDiff) continue;
+          maskingPairs += 1;
+          const support = priority[left.id] <= priority[right.id] ? leftNote : rightNote;
+          if (support.perceptualRepair) continue;
+          support.velocity = clamp(support.velocity - (isMidRangeOvercrowding ? 8 : 5), 1, 127);
+          support.duration = round(Math.max(0.04, support.duration * (isMidRangeOvercrowding ? 0.88 : 0.94)));
+          support.perceptualRepair = "masking-space";
+          attenuatedNotes += 1;
+        }
+      }
+    }
+  }
+  const notes = tracks.flatMap((track) => track.notes);
+  for (const note of notes) {
+    note.duration = round(clamp(note.duration, 0.02, Math.max(0.02, totalBeats - note.start)));
+  }
+  const velocities = notes.map((note) => note.velocity).sort((a, b) => a - b);
+  const low = velocities[Math.floor(velocities.length * 0.1)] ?? 0;
+  const high = velocities[Math.floor(velocities.length * 0.9)] ?? 0;
+  const spectralBands = {
+    sub: notes.filter((note) => note.pitch <= 43).length,
+    body: notes.filter((note) => note.pitch > 43 && note.pitch <= 76).length,
+    presence: notes.filter((note) => note.pitch > 76).length,
+  };
+  return {
+    tracks,
+    report: {
+      phase: 42,
+      version: 1,
+      status: "complete",
+      maskingPairs,
+      attenuatedNotes,
+      dynamicRange: high - low,
+      spectralBands,
+      sectionCount: structure.length,
+    },
+  };
+}
+
+/**
+ * Last-mile musical mastering shared by preview and MIDI export. Scale repair
+ * can collapse neighboring pitches onto one note, so this pass rechecks
+ * overlaps, clears lead/counterpoint unisons, and preserves section dynamics
+ * while keeping deterministic headroom.
+ */
+function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
+  const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+    automation: (track.automation ?? []).map((event) => ({ ...event })),
+  }));
+  const repairs = {
+    postScaleOverlaps: 0,
+    duplicateNotesMerged: 0,
+    leadUnisonsCleared: 0,
+    leadDissonancesCleared: 0,
+    headroomAdjustments: 0,
+  };
+  const sectionPlans = new Map(
+    (songBlueprint?.sectionPlans ?? []).map((plan) => [plan.sectionId, plan]),
+  );
+
+  for (const track of tracks) {
+    const ordered = track.notes
+      .map((note) => {
+        const section = structure.find((candidate) => (
+          note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+        ));
+        const plannedEnergy = clamp(finite(
+          sectionPlans.get(section?.id)?.energy,
+          section?.energy ?? 0.58,
+        ), 0, 1);
+        const dynamicFactor = 0.94 + plannedEnergy * 0.1;
+        const velocity = clamp(Math.round(note.velocity * dynamicFactor), 1, 120);
+        if (velocity !== note.velocity) repairs.headroomAdjustments += 1;
+        const start = round(clamp(note.start, 0, Math.max(0, totalBeats - 0.02)));
+        return {
+          ...note,
+          start,
+          duration: round(clamp(note.duration, 0.02, Math.max(0.02, totalBeats - start))),
+          velocity,
+          finalMasterRole: plannedEnergy >= 0.72 ? "section-peak"
+            : plannedEnergy <= 0.38 ? "section-breath" : "section-body",
+        };
+      })
+      .sort((left, right) => left.start - right.start || left.pitch - right.pitch || left.duration - right.duration);
+    const deduped = [];
+    for (const note of ordered) {
+      const retriggerFloor = track.id === "drums" ? 0.0005 : 0.02;
+      const duplicate = deduped.findLast((candidate) => (
+        candidate.pitch === note.pitch && Math.abs(candidate.start - note.start) < retriggerFloor
+      ));
+      if (duplicate) {
+        const duplicateEnd = Math.max(
+          duplicate.start + duplicate.duration,
+          note.start + note.duration,
+        );
+        duplicate.duration = round(duplicateEnd - duplicate.start);
+        duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
+        repairs.duplicateNotesMerged += 1;
+        continue;
+      }
+      deduped.push(note);
+    }
+    if (track.id !== "drums") {
+      const lastByPitch = new Map();
+      for (const note of deduped) {
+        const previous = lastByPitch.get(note.pitch);
+        if (previous && previous.start + previous.duration > note.start - 0.012) {
+          previous.duration = round(Math.max(0.02, note.start - previous.start - 0.012));
+          repairs.postScaleOverlaps += 1;
+        }
+        lastByPitch.set(note.pitch, note);
+      }
+    }
+    track.notes = deduped;
+  }
+
+  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = tracks.find((track) => track.id === "counterpoint")?.notes ?? [];
+  const allowedScale = scalePitchClasses(config);
+  for (const counterNote of counterpoint) {
+    const overlappingLeads = melody.filter((leadNote) => (
+      counterNote.start < leadNote.start + leadNote.duration
+      && leadNote.start < counterNote.start + counterNote.duration
+    ));
+    const dissonantLeads = overlappingLeads.filter((leadNote) => (
+      [0, 1, 6, 11].includes(mod(Math.abs(counterNote.pitch - leadNote.pitch), 12))
+    ));
+    if (dissonantLeads.length) {
+      const firstConflict = dissonantLeads
+        .slice()
+        .sort((left, right) => left.start - right.start)[0];
+      const availableDuration = firstConflict.start - counterNote.start - 0.06;
+      if (availableDuration >= 0.08) {
+        counterNote.duration = round(Math.min(counterNote.duration, availableDuration));
+      } else {
+        const candidates = [];
+        for (let shift = -7; shift <= 7; shift += 1) {
+          const pitch = counterNote.pitch + shift;
+          if (pitch < 36 || pitch > 116 || !allowedScale.has(mod(pitch, 12))) continue;
+          if (overlappingLeads.some((lead) => [0, 1, 6, 11].includes(mod(Math.abs(pitch - lead.pitch), 12)))) continue;
+          candidates.push(pitch);
+        }
+        const pitch = candidates.sort((left, right) => (
+          Math.abs(left - counterNote.pitch) - Math.abs(right - counterNote.pitch)
+          || left - right
+        ))[0];
+        if (Number.isFinite(pitch)) counterNote.pitch = pitch;
+        else {
+          counterNote.velocity = clamp(counterNote.velocity - 10, 1, 120);
+          counterNote.duration = round(Math.max(0.04, counterNote.duration * 0.58));
+        }
+      }
+      counterNote.finalMasterRepair = "lead-dissonance-space";
+      repairs.leadDissonancesCleared += 1;
+    }
+    const unison = melody.find((leadNote) => (
+      leadNote.pitch === counterNote.pitch
+      && Math.abs(leadNote.start - counterNote.start) <= 0.035
+      && leadNote.start < counterNote.start + counterNote.duration
+      && counterNote.start < leadNote.start + leadNote.duration
+    ));
+    if (!unison) continue;
+    const shifted = counterNote.pitch + (counterNote.pitch <= 103 ? 12 : -12);
+    const shiftIsClear = shifted >= 0 && shifted <= 127 && !counterpoint.some((candidate) => (
+      candidate !== counterNote
+      && candidate.pitch === shifted
+      && candidate.start < counterNote.start + counterNote.duration
+      && counterNote.start < candidate.start + candidate.duration
+    ));
+    if (shiftIsClear) counterNote.pitch = shifted;
+    else {
+      counterNote.velocity = clamp(counterNote.velocity - 8, 1, 120);
+      counterNote.duration = round(Math.max(0.02, counterNote.duration * 0.82));
+    }
+    counterNote.finalMasterRepair = "lead-unison-space";
+    repairs.leadUnisonsCleared += 1;
+  }
+
+  const notes = tracks.flatMap((track) => track.notes ?? []);
+  const velocities = notes.map((note) => note.velocity).sort((left, right) => left - right);
+  const percentile = (amount) => velocities[Math.min(
+    Math.max(0, velocities.length - 1),
+    Math.floor(velocities.length * amount),
+  )] ?? 0;
+  return {
+    tracks,
+    report: {
+      phase: 52,
+      version: 1,
+      status: "complete",
+      repairs,
+      metrics: {
+        noteCount: notes.length,
+        peakVelocity: velocities.at(-1) ?? 0,
+        dynamicRange: percentile(0.9) - percentile(0.1),
+        sectionCount: structure.length,
+      },
+      checks: {
+        headroom: notes.every((note) => note.velocity <= 120),
+        noteBounds: notes.every((note) => (
+          note.start >= 0 && note.duration >= 0.02 && note.start + note.duration <= totalBeats + 1e-6
+        )),
+        sorted: tracks.every((track) => track.notes.every((note, index, list) => (
+          index === 0 || list[index - 1].start <= note.start
+        ))),
+      },
+    },
+  };
+}
+
+/**
+ * Reconcile the rendered arrangement with its blueprint after all destructive
+ * space-making passes. A removed feature is restored from the already
+ * scale-checked pre-polish performance, never synthesized from an arbitrary
+ * pitch. Transition repairs only annotate an existing boundary event.
+ */
+function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+    automation: (track.automation ?? []).map((event) => ({ ...event })),
+  }));
+  const fallbackById = new Map(
+    fallbackTracks.map((track) => [track.id, track.notes ?? []]),
+  );
+  let featuredAnchorsRestored = 0;
+  let transitionEventsTagged = 0;
+
+  for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
+    const section = structure.find((candidate) => candidate.id === entry.sectionId);
+    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
+    const hasFeature = track.notes.some((note) => (
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
+    ));
+    if (hasFeature) continue;
+    let anchor = (fallbackById.get(entry.featuredTrack) ?? [])
+      .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
+      .sort((left, right) => (
+        Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor))
+        || right.velocity - left.velocity
+        || left.start - right.start
+      ))[0];
+    if (!anchor && entry.featuredTrack === "counterpoint") {
+      const melodyAnchor = (fallbackById.get("melody") ?? [])
+        .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
+        .sort((left, right) => Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor)) || left.start - right.start)[0];
+      if (melodyAnchor) {
+        anchor = {
+          ...melodyAnchor,
+          pitch: melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12,
+          velocity: clamp(Math.round(melodyAnchor.velocity * 0.78), 1, 120),
+          duration: round(Math.min(melodyAnchor.duration, 0.75)),
+          counterMelodyRole: "answer",
+          melodicRelationship: "oblique",
+          answerToBeat: round(melodyAnchor.start),
+          dialogueSectionId: section.id,
+        };
+      }
+    }
+    if (!anchor) continue;
+    const restoredStart = round(clamp(anchor.start, section.startBeat, section.endBeat - 0.02));
+    track.notes.push({
+      ...anchor,
+      start: restoredStart,
+      duration: round(Math.min(anchor.duration, section.endBeat - restoredStart)),
+      orchestrationRole: "feature",
+      finalAssemblyRole: "restored-feature-anchor",
+    });
+    track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+    featuredAnchorsRestored += 1;
+  }
+
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    if (!from || !to) continue;
+    const lastSection = structure[structure.length - 1];
+    if (to.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
+    const handoffId = `${from.id}->${to.id}`;
+    const alreadyTagged = tracks.some((track) => track.notes.some((note) => (
+      note.transitionHandoffId === handoffId
+    )));
+    if (alreadyTagged || transition.type === "drop-out") continue;
+    const pickupStart = Math.max(
+      from.startBeat,
+      from.endBeat - clamp(finite(transition.pickupBeats, 0.5), 0.25, 2),
+    );
+    const candidates = tracks
+      .filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id))
+      .flatMap((track) => track.notes.map((note) => ({ note, trackId: track.id })))
+      .filter(({ note }) => note.start >= pickupStart - 1e-6 && note.start <= from.endBeat + 0.12)
+      .sort((left, right) => (
+        Math.abs(left.note.start - from.endBeat) - Math.abs(right.note.start - from.endBeat)
+        || Number(right.trackId === "drums") - Number(left.trackId === "drums")
+        || right.note.velocity - left.note.velocity
+      ));
+    if (!candidates[0]) continue;
+    candidates[0].note.transitionHandoffId = handoffId;
+    candidates[0].note.transitionHandoffRole = `${transition.type}-final-boundary`;
+    candidates[0].note.transitionFeature ??= transition.type;
+    candidates[0].note.finalAssemblyRole = "verified-transition-event";
+    transitionEventsTagged += 1;
+  }
+
+  return {
+    tracks,
+    repairs: {
+      featuredAnchorsRestored,
+      transitionEventsTagged,
+    },
+  };
+}
+
+function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
+  const missingFeaturedSections = [];
+  for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
+    const section = structure.find((candidate) => candidate.id === entry.sectionId);
+    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
+    if (!track.notes.some((note) => (
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
+    ))) {
+      missingFeaturedSections.push(entry.sectionId);
+    }
+  }
+  const silentSections = structure
+    .filter((section) => !tracks.some((track) => track.notes.some((note) => (
+      note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
+    ))))
+    .map((section) => section.id);
+  const transitionContracts = (songBlueprint?.transitions ?? []).filter((transition) => {
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    const lastSection = structure[structure.length - 1];
+    return !(to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name));
+  });
+  const coordinatedTransitions = transitionContracts.filter((transition) => {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    if (!from) return false;
+    const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
+    if (transition.type !== "drop-out") {
+      return tracks.some((track) => track.notes.some((note) => note.transitionHandoffId === handoffId));
+    }
+    const silenceStart = Math.max(
+      from.startBeat,
+      from.endBeat - clamp(finite(transition.pickupBeats, 0.5), 0.25, 2),
+    );
+    return tracks.every((track) => !track.notes.some((note) => (
+      note.start >= silenceStart - 1e-6 && note.start < from.endBeat - 1e-6
+    )));
+  }).length;
+  return {
+    phase: 75,
+    version: 1,
+    status: missingFeaturedSections.length || silentSections.length
+      || coordinatedTransitions !== transitionContracts.length
+      ? "best-available"
+      : "complete",
+    repairs,
+    checks: {
+      sectionCoverage: silentSections.length === 0,
+      featuredLaneCoverage: missingFeaturedSections.length === 0,
+      transitionCoverage: coordinatedTransitions === transitionContracts.length,
+    },
+    metrics: {
+      sectionCount: structure.length,
+      silentSections,
+      missingFeaturedSections,
+      transitionCount: transitionContracts.length,
+      coordinatedTransitions,
+    },
+  };
+}
+
+function runVoiceLeadingPass(sourceTracks, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  let voicesMoved = 0;
+  let totalMotion = 0;
+  let comparedVoices = 0;
+  let commonTonesHeld = 0;
+  let bassCollisionsCleared = 0;
+  let padDoublingsAvoided = 0;
+  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
+  const chords = tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const candidatesForPitchClass = (pitch, minimum, maximum) => {
+    const pitchClass = mod(pitch, 12);
+    const candidates = [];
+    for (let candidate = pitchClass; candidate <= 127; candidate += 12) {
+      if (candidate >= minimum && candidate <= maximum) candidates.push(candidate);
+    }
+    return candidates;
+  };
+
+  for (const id of ["chords", "pad"]) {
+    const track = tracks.find((candidate) => candidate.id === id);
+    if (!track) continue;
+    const groups = new Map();
+    for (const note of track.notes) {
+      const key = round(note.start);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(note);
+    }
+    let previous = null;
+    for (const notes of [...groups.values()].sort((left, right) => left[0].start - right[0].start)) {
+      notes.sort((left, right) => left.pitch - right.pitch);
+      const soundingBass = bass.filter((note) => (
+        notes[0].start < note.start + note.duration
+        && note.start < notes[0].start + notes[0].duration
+      ));
+      const bassCeiling = soundingBass.length
+        ? Math.max(...soundingBass.map((note) => note.pitch))
+        : null;
+      const minimum = id === "pad" ? 48 : bassCeiling != null ? Math.max(48, bassCeiling + 7) : 48;
+      const maximum = id === "pad" ? 108 : 103;
+      const chordPitches = id === "pad"
+        ? new Set(chords.filter((note) => (
+          Math.abs(note.start - notes[0].start) < 0.08
+          || (
+            notes[0].start < note.start + note.duration
+            && note.start < notes[0].start + notes[0].duration
+          )
+        )).map((note) => note.pitch))
+        : new Set();
+      const choices = notes.map((note) => candidatesForPitchClass(note.pitch, minimum, maximum));
+      let best = null;
+      const visit = (index, voicing) => {
+        if (index === choices.length) {
+          let score = 0;
+          for (let voice = 0; voice < voicing.length; voice += 1) {
+            const pitch = voicing[voice];
+            if (previous?.length) {
+              const distance = Math.min(...previous.map((note) => Math.abs(note.pitch - pitch)));
+              score += distance;
+              if (previous.some((note) => note.pitch === pitch)) score -= 7;
+            } else {
+              score += Math.abs(pitch - (id === "pad" ? 72 : 64)) * 0.18;
+            }
+            if (voice > 0) {
+              const spacing = pitch - voicing[voice - 1];
+              if (spacing < 3) score += 30;
+              if (spacing > 16) score += (spacing - 16) * 0.8;
+            }
+            if (id === "pad" && chordPitches.has(pitch)) score += 6;
+          }
+          if (bassCeiling != null && voicing[0] - bassCeiling < 7) {
+            score += 80 + (7 - (voicing[0] - bassCeiling)) * 8;
+          }
+          if (!best || score < best.score) best = { score, voicing: [...voicing] };
+          return;
+        }
+        for (const pitch of choices[index]) {
+          if (voicing.length && pitch <= voicing[voicing.length - 1]) continue;
+          visit(index + 1, [...voicing, pitch]);
+        }
+      };
+      visit(0, []);
+      const voicing = best?.voicing ?? notes.map((note) => note.pitch);
+      const originalBassCollision = bassCeiling != null && notes[0].pitch - bassCeiling < 7;
+      const originalPadDoublings = id === "pad"
+        ? notes.filter((note) => chordPitches.has(note.pitch)).length
+        : 0;
+      notes.forEach((note, index) => {
+        const chosen = voicing[index] ?? note.pitch;
+        if (previous?.length) {
+          totalMotion += Math.min(...previous.map((prior) => Math.abs(prior.pitch - chosen)));
+          comparedVoices += 1;
+          if (previous.some((prior) => prior.pitch === chosen)) commonTonesHeld += 1;
+        }
+        if (chosen !== note.pitch) {
+          note.pitch = chosen;
+          note.voiceLeadingRepair = "whole-voicing-optimizer";
+          voicesMoved += 1;
+        }
+      });
+      if (originalBassCollision && (bassCeiling == null || notes[0].pitch - bassCeiling >= 7)) {
+        bassCollisionsCleared += 1;
+      }
+      if (id === "pad") {
+        const remaining = notes.filter((note) => chordPitches.has(note.pitch)).length;
+        padDoublingsAvoided += Math.max(0, originalPadDoublings - remaining);
+      }
+      notes.sort((left, right) => left.pitch - right.pitch);
+      previous = notes;
+    }
+    track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  return {
+    tracks,
+    report: {
+      phase: 46,
+      version: 1,
+      status: "complete",
+      voicesMoved,
+      commonTonesHeld,
+      bassCollisionsCleared,
+      padDoublingsAvoided,
+      averageVoiceMotion: round(comparedVoices ? totalMotion / comparedVoices : 0),
+      scalePreserved: tracks
+        .filter((track) => track.id !== "drums")
+        .flatMap((track) => track.notes)
+        .every((note) => pitchFitsScale(note.pitch, config)),
+    },
+  };
+}
+
+function runPocketCohesionPass(sourceTracks, structure) {
+  const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const drums = tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const anchors = drums
+    .filter((note) => [36, 38, 39].includes(note.pitch))
+    .map((note) => note.start)
+    .sort((left, right) => left - right);
+  let alignedNotes = 0;
+  let totalCorrection = 0;
+  for (const track of tracks) {
+    // Lead and counterpoint already follow their genre phrase grids. Tighten
+    // only the rhythm section here so expressive melodic placement survives.
+    if (!["bass", "chords"].includes(track.id)) continue;
+    for (const note of track.notes) {
+      if (note.rhythmicFeature || note.transitionFeature) continue;
+      const anchor = anchors.find((beat) => Math.abs(beat - note.start) <= 0.065);
+      if (!Number.isFinite(anchor)) continue;
+      const correction = clamp((anchor - note.start) * 0.45, -0.028, 0.028);
+      if (Math.abs(correction) < 0.002) continue;
+      note.start = round(clamp(note.start + correction, 0, Math.max(0, totalBeats - 0.02)));
+      note.pocketCohesion = "shared-transient";
+      alignedNotes += 1;
+      totalCorrection += Math.abs(correction);
+    }
+    track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  return {
+    tracks,
+    report: {
+      phase: 47,
+      version: 1,
+      status: "complete",
+      alignedNotes,
+      averageCorrection: round(alignedNotes ? totalCorrection / alignedNotes : 0),
+      anchorCount: anchors.length,
+    },
+  };
+}
+
+function runNegativeSpacePass(sourceTracks, structure, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const eligible = structure
+    .filter((section) => !["intro", "outro"].includes(section.name))
+    .sort((left, right) => finite(left.energy, 0.5) - finite(right.energy, 0.5));
+  const breathSection = eligible[0] ?? structure[Math.floor(structure.length / 2)];
+  const phraseBars = Math.max(2, GENRE_PROFILES[config.genre]?.arrangement?.phraseBars ?? 4);
+  const barBeats = beatsPerBar(config);
+  let notesRemoved = 0;
+  const windows = [];
+  if (breathSection) {
+    for (
+      let boundary = breathSection.startBeat + phraseBars * barBeats;
+      boundary < breathSection.endBeat + 0.01;
+      boundary += phraseBars * barBeats
+    ) {
+      windows.push({
+        start: round(Math.max(breathSection.startBeat, boundary - Math.min(0.5, barBeats / 4))),
+        end: round(Math.min(breathSection.endBeat, boundary)),
+      });
+    }
+    for (const id of ["counterpoint", "pad"]) {
+      const track = tracks.find((candidate) => candidate.id === id);
+      if (!track) continue;
+      track.notes = track.notes.filter((note) => {
+        const inBreath = windows.some((window) => note.start >= window.start && note.start < window.end);
+        if (inBreath) notesRemoved += 1;
+        return !inBreath;
+      });
+    }
+  }
+  return {
+    tracks,
+    report: {
+      phase: 48,
+      version: 1,
+      status: "complete",
+      sectionId: breathSection?.id ?? null,
+      windows,
+      notesRemoved,
+    },
+  };
+}
+
+const VOCAL_LED_GENRES = new Set(["rap", "hipHop", "trap", "drill", "rnbSoul", "neoSoul", "pop", "reggaeton", "afrobeats"]);
+
+function runVocalSpacePass(sourceTracks, structure, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const enabled = VOCAL_LED_GENRES.has(config.genre);
+  const barBeats = beatsPerBar(config);
+  const verseSections = enabled
+    ? structure.filter((section) => !["intro", "chorus", "drop", "outro"].includes(section.name))
+    : [];
+  const windows = verseSections.flatMap((section) => Array.from({ length: section.bars }, (_, localBar) => {
+    const start = section.startBeat + localBar * barBeats;
+    return [
+      { start: round(start + barBeats * 0.125), end: round(start + barBeats * 0.375) },
+      { start: round(start + barBeats * 0.5625), end: round(start + barBeats * 0.8125) },
+    ];
+  })).flat();
+  let freedNotes = 0;
+  let softenedNotes = 0;
+  const inVocalWindow = (note) => windows.some((window) => (
+    note.start >= window.start && note.start < window.end
+  ));
+  if (windows.length) {
+    for (const id of ["melody", "counterpoint"]) {
+      const track = tracks.find((candidate) => candidate.id === id);
+      if (!track) continue;
+      track.notes = track.notes.filter((note) => {
+        if (!inVocalWindow(note)) return true;
+        const bar = Math.floor(note.start / barBeats);
+        const keepFill = bar % 4 === 3 && ["lift", "phrase-ending"].includes(note.performanceRole);
+        if (keepFill && id === "melody") {
+          note.velocity = clamp(note.velocity - 7, 1, 120);
+          note.duration = round(Math.max(0.04, note.duration * 0.72));
+          note.vocalSpaceRole = "answer-fill";
+          softenedNotes += 1;
+          return true;
+        }
+        freedNotes += 1;
+        return false;
+      });
+    }
+    for (const id of ["chords", "pad"]) {
+      const track = tracks.find((candidate) => candidate.id === id);
+      if (!track) continue;
+      for (const note of track.notes) {
+        if (!inVocalWindow(note)) continue;
+        note.velocity = clamp(note.velocity - 4, 1, 120);
+        note.vocalSpaceRole = "vocal-bed";
+        softenedNotes += 1;
+      }
+    }
+  }
+  const melodicNotes = tracks
+    .filter((track) => ["melody", "counterpoint"].includes(track.id))
+    .flatMap((track) => track.notes);
+  const occupiedWindows = windows.filter((window) => melodicNotes.some((note) => (
+    note.start >= window.start && note.start < window.end
+  ))).length;
+  return {
+    tracks,
+    report: {
+      phase: 51,
+      version: 1,
+      status: "complete",
+      enabled,
+      windowCount: windows.length,
+      freedNotes,
+      softenedNotes,
+      openWindowRatio: round(windows.length ? 1 - occupiedWindows / windows.length : 0),
+    },
+  };
+}
+
+function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  let sectionsCoordinated = 0;
+  let notesRetuned = 0;
+  let releasesShaped = 0;
+  const nearestPitchClass = (pitch, pitchClasses, minimum, maximum) => {
+    let best = pitch;
+    let distance = Infinity;
+    for (const pitchClass of pitchClasses) {
+      for (let candidate = pitchClass; candidate <= 127; candidate += 12) {
+        if (candidate < minimum || candidate > maximum) continue;
+        const candidateDistance = Math.abs(candidate - pitch);
+        if (candidateDistance < distance) {
+          best = candidate;
+          distance = candidateDistance;
+        }
+      }
+    }
+    return best;
+  };
+
+  for (const section of structure) {
+    const plan = blueprintPlanForSection(songBlueprint, section);
+    if (!plan || !["resolve", "lift", "suspend"].includes(plan.cadence)) continue;
+    const sectionHarmony = harmony.filter((event) => (
+      event.start < section.endBeat - 1e-6
+      && event.start + event.duration > section.startBeat + 1e-6
+    ));
+    const goal = sectionHarmony.at(-1);
+    if (!goal) continue;
+    let coordinated = false;
+    for (const id of ["bass", "melody"]) {
+      const track = trackById.get(id);
+      const candidates = track?.notes.filter((note) => (
+        note.start >= Math.max(section.startBeat, goal.start) - 1e-6
+        && note.start < section.endBeat - 1e-6
+        && (!note.connectionId || note.connectionId === `interlock:${section.id}`)
+      )) ?? [];
+      const note = candidates.at(-1);
+      if (!note) continue;
+      const targetClasses = id === "bass" || plan.cadence === "resolve"
+        ? [goal.rootPc]
+        : goal.tones;
+      const target = nearestPitchClass(
+        note.pitch,
+        targetClasses,
+        id === "bass" ? 28 : 55,
+        id === "bass" ? 59 : 96,
+      );
+      if (target !== note.pitch) {
+        note.pitch = target;
+        notesRetuned += 1;
+      }
+      note.ensembleCadenceRole = `${plan.cadence}-${id}-landing`;
+      if (plan.cadence === "resolve") {
+        const heldDuration = Math.min(
+          id === "bass" ? 1.25 : 1,
+          Math.max(note.duration, section.endBeat - note.start - 0.04),
+        );
+        if (heldDuration > note.duration + 1e-6) {
+          note.duration = round(heldDuration);
+          releasesShaped += 1;
+        }
+      }
+      coordinated = true;
+    }
+    for (const id of ["chords", "pad"]) {
+      const notes = trackById.get(id)?.notes.filter((note) => (
+        note.start >= goal.start - 1e-6 && note.start < section.endBeat - 1e-6
+      )) ?? [];
+      for (const note of notes) {
+        const maximum = Math.max(0.08, section.endBeat - note.start - 0.025);
+        const shaped = plan.cadence === "lift"
+          ? Math.min(note.duration, 0.72)
+          : plan.cadence === "resolve"
+            ? Math.min(maximum, Math.max(note.duration, 0.9))
+            : Math.min(note.duration, 0.86);
+        if (Math.abs(shaped - note.duration) > 1e-6) {
+          note.duration = round(shaped);
+          releasesShaped += 1;
+        }
+        note.ensembleCadenceRole = `${plan.cadence}-harmony-release`;
+        coordinated = true;
+      }
+    }
+    if (coordinated) sectionsCoordinated += 1;
+  }
+  return {
+    tracks,
+    report: {
+      phase: 66,
+      version: 1,
+      status: "complete",
+      sectionsCoordinated,
+      notesRetuned,
+      releasesShaped,
+      scalePreserved: tracks
+        .filter((track) => track.id !== "drums")
+        .flatMap((track) => track.notes)
+        .every((note) => pitchFitsScale(note.pitch, config)),
+    },
+  };
+}
+
+function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  let transitionsCoordinated = 0;
+  let arrivalsAligned = 0;
+  let crossingsCleared = 0;
+  let dropoutNotesRemoved = 0;
+  for (const transition of songBlueprint?.transitions ?? []) {
+    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const to = structure.find((section) => section.id === transition.toSectionId);
+    if (!from || !to) continue;
+    const lastSection = structure[structure.length - 1];
+    if (to.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
+    const boundary = from.endBeat;
+    const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, 2);
+    const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
+    let coordinated = false;
+
+    if (transition.type === "drop-out") {
+      const silenceStart = Math.max(from.startBeat, boundary - pickup);
+      for (const track of tracks) {
+        const kept = [];
+        for (const note of track.notes) {
+          if (note.start >= silenceStart - 1e-6 && note.start < boundary - 1e-6) {
+            const belongsToIncomingSection = note.connectionId === `interlock:${to.id}`;
+            const essentialArrival = (
+              track.id === "drums" && note.pitch === 36
+              || track.id === "bass" && note.bassRegisterRole === "upper-harmonic"
+            );
+            if ((belongsToIncomingSection || essentialArrival) && !note.ensembleCadenceRole) {
+              note.start = round(boundary);
+              note.transitionHandoffRole = "drop-out-arrival";
+              note.transitionHandoffId = handoffId;
+              arrivalsAligned += 1;
+              coordinated = true;
+              kept.push(note);
+              continue;
+            }
+            dropoutNotesRemoved += 1;
+            coordinated = true;
+            continue;
+          }
+          if (note.start < silenceStart && note.start + note.duration > silenceStart) {
+            note.duration = round(Math.max(0.02, silenceStart - note.start));
+            note.transitionHandoffRole = "dropout-breath";
+            note.transitionHandoffId = handoffId;
+            crossingsCleared += 1;
+            coordinated = true;
+          }
+          kept.push(note);
+        }
+        track.notes = kept;
+      }
+    } else {
+      for (const track of tracks) {
+        const incoming = track.notes
+          .filter((note) => note.start >= boundary - 0.09 && note.start <= boundary + 0.12)
+          .sort((left, right) => (
+            Number(right.connectionId === `interlock:${to.id}`)
+            - Number(left.connectionId === `interlock:${to.id}`)
+            || Number(Boolean(left.ensembleCadenceRole)) - Number(Boolean(right.ensembleCadenceRole))
+            || Math.abs(left.start - boundary) - Math.abs(right.start - boundary)
+          ));
+        const arrivalCandidates = incoming.filter((note) => (
+          note.connectionId === `interlock:${to.id}` || !note.ensembleCadenceRole
+        ));
+        const arrival = arrivalCandidates.find((note) => note.transitionFeature === transition.type)
+          ?? (["drums", "bass", "chords", "pad"].includes(track.id) ? arrivalCandidates[0] : null);
+        if (arrival && Math.abs(arrival.start - boundary) > 1e-6) {
+          arrival.start = round(boundary);
+          arrival.transitionHandoffRole = `${transition.type}-arrival`;
+          arrival.transitionHandoffId = handoffId;
+          arrivalsAligned += 1;
+          coordinated = true;
+        } else if (arrival) {
+          arrival.transitionHandoffRole = `${transition.type}-arrival`;
+          arrival.transitionHandoffId = handoffId;
+          coordinated = true;
+        }
+        if (transition.strength >= 0.72 && ["melody", "counterpoint", "chords", "pad"].includes(track.id)) {
+          for (const note of track.notes) {
+            if (note.start < boundary - 0.035 && note.start + note.duration > boundary - 0.035) {
+              if (boundary - 0.035 - note.start < 0.02) note.start = round(boundary - 0.055);
+              note.duration = round(Math.max(0.02, boundary - 0.035 - note.start));
+              note.transitionHandoffRole = `${transition.type}-clear-seam`;
+              note.transitionHandoffId = handoffId;
+              crossingsCleared += 1;
+              coordinated = true;
+            }
+          }
+        }
+      }
+    }
+    if (coordinated) transitionsCoordinated += 1;
+  }
+  for (const track of tracks) {
+    track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  return {
+    tracks,
+    report: {
+      phase: 67,
+      version: 1,
+      status: "complete",
+      transitionsCoordinated,
+      arrivalsAligned,
+      crossingsCleared,
+      dropoutNotesRemoved,
+    },
+  };
+}
+
+function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint, config) {
+  const voiceLeading = runVoiceLeadingPass(sourceTracks, config);
+  const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure);
+  const negativeSpace = runNegativeSpacePass(pocketCohesion.tracks, structure, config);
+  const vocalSpace = runVocalSpacePass(negativeSpace.tracks, structure, config);
+  const ensembleCadence = runEnsembleCadencePass(
+    vocalSpace.tracks,
+    structure,
+    harmony,
+    songBlueprint,
+    config,
+  );
+  const transitionHandoff = runTransitionHandoffPass(
+    ensembleCadence.tracks,
+    structure,
+    songBlueprint,
+  );
+  return {
+    tracks: transitionHandoff.tracks,
+    voiceLeading: voiceLeading.report,
+    pocketCohesion: pocketCohesion.report,
+    negativeSpace: negativeSpace.report,
+    vocalSpace: vocalSpace.report,
+    ensembleCadence: ensembleCadence.report,
+    transitionHandoff: transitionHandoff.report,
+  };
+}
+
+function createSectionContrastReport(tracks, structure, orchestrationMatrix) {
+  const firstFeatureByName = new Map();
+  let repeatedSections = 0;
+  let rotatedReturns = 0;
+  const densities = structure.map((section) => {
+    const entry = orchestrationMatrix.find((candidate) => candidate.sectionId === section.id);
+    const previousFeature = firstFeatureByName.get(section.name);
+    if (previousFeature) {
+      repeatedSections += 1;
+      if (entry?.featuredTrack && entry.featuredTrack !== previousFeature) rotatedReturns += 1;
+    } else if (entry?.featuredTrack) {
+      firstFeatureByName.set(section.name, entry.featuredTrack);
+    }
+    const noteCount = tracks.reduce((sum, track) => sum + track.notes.filter((note) => (
+      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+    )).length, 0);
+    return noteCount / Math.max(1, section.endBeat - section.startBeat);
+  });
+  return {
+    phase: 68,
+    version: 1,
+    status: "complete",
+    repeatedSections,
+    rotatedReturns,
+    densityRange: round(Math.max(...densities, 0) - Math.min(...densities, 0)),
+    featuredTracks: [...new Set(orchestrationMatrix.map((entry) => entry.featuredTrack).filter(Boolean))],
+  };
+}
+
+function createDrumFillVocabularyReport(tracks, genre) {
+  const fillNotes = tracks.find((track) => track.id === "drums")?.notes
+    .filter((note) => note.drumFillId) ?? [];
+  const patternsUsed = [...new Set(fillNotes.map((note) => note.drumFillId))];
+  const vocabulary = drumFillVocabularyForGenre(genre);
+  return {
+    phase: 71,
+    version: 1,
+    status: "complete",
+    family: vocabulary[0].id.split("-")[0],
+    fillEvents: fillNotes.length,
+    patternCount: patternsUsed.length,
+    patternsUsed,
+  };
+}
+
+function createRhythmTurnaroundReport(tracks) {
+  const calls = new Set();
+  const answers = new Set();
+  for (const track of tracks) {
+    for (const note of track.notes) {
+      if (!note.rhythmTurnaroundId) continue;
+      if (note.rhythmTurnaroundRole === "drum-call") calls.add(note.rhythmTurnaroundId);
+      if (note.rhythmTurnaroundRole === "bass-answer") answers.add(note.rhythmTurnaroundId);
+    }
+  }
+  const paired = [...calls].filter((id) => answers.has(id));
+  return {
+    phase: 72,
+    version: 1,
+    status: "complete",
+    drumCalls: calls.size,
+    bassAnswers: answers.size,
+    pairedTurnarounds: paired.length,
+    pairRate: round(paired.length / Math.max(1, calls.size)),
+  };
+}
+
+// ─── Song identity and title language ───────────────────────────────────────
+// Titles combine style, tonal color, and energy without altering composition.
+const TITLE_ADJECTIVES = [
+  "Velvet", "Neon", "Golden", "Midnight", "Crystal", "Lucid", "Solar", "Secret", "Endless", "Prismatic",
+  "Obsidian", "Astral", "Luminous", "Radiant", "Vivid", "Ethereal", "Cyber", "Silken", "Twilight", "Spectral",
+  "Weightless", "Electric", "Chrome", "Fever", "Quiet", "Wild", "Blue", "Slow", "Satellite", "Hollow",
+];
+const TITLE_NOUNS = [
+  "Orbit", "Bloom", "Signal", "Skyline", "Echo", "Mirage", "Horizon", "Eclipse", "Cascade", "Passage",
+  "Avenue", "Prism", "Polaroid", "Afterglow", "Daybreak", "Switchback", "Static", "Moonlight", "Undertow",
+  "Overdrive", "Silhouette", "Fire Escape", "Night Bus", "Glasshouse", "Crossfade", "Half-Light",
+];
+const TITLE_GENRE_WORDS = {
+  neoSoul: { adjectives: ["Velvet", "Silken", "Honeyed", "Late-Night"], nouns: ["Slow Dance", "Side Street", "Blue Hour", "Afterglow"] },
+  hipHop: { adjectives: ["Dusty", "Concrete", "Low-Slung", "Backseat"], nouns: ["Cipher", "Corner Store", "Night Bus", "Rooftop"] },
+  rap: { adjectives: ["Untold", "Streetlit", "Raw", "After-Dark"], nouns: ["Sixteen Bars", "Open Mic", "Wordplay", "City Pages"] },
+  trap: { adjectives: ["Chrome", "Hollow", "Midnight", "Black-Ice"], nouns: ["Pressure", "Starlight", "Fast Lane", "No Signal"] },
+  house: { adjectives: ["Mirrorball", "Electric", "Golden", "Afterhours"], nouns: ["Warehouse", "Heartbeat", "Open Door", "Last Call"] },
+  techno: { adjectives: ["Obsidian", "Machine", "Steel", "Infrared"], nouns: ["Tunnel", "Voltage", "Night Shift", "Sublevel"] },
+  drumBass: { adjectives: ["Weightless", "Rapid", "Airborne", "Fractured"], nouns: ["Break Line", "Rush Hour", "Slipstream", "Blue Static"] },
+  synthwave: { adjectives: ["Neon", "Satellite", "Chrome", "Violet"], nouns: ["Night Drive", "Arcade", "Sunset Grid", "Video Sky"] },
+  pop: { adjectives: ["Golden", "Wild", "Bright", "Electric"], nouns: ["Daydream", "Polaroid", "Fire Escape", "Summer Signal"] },
+  country: { adjectives: ["Open-Road", "Dusty", "Golden", "Blue-Sky"], nouns: ["County Line", "Front Porch", "Long Way Home", "Radio Moon"] },
+  rock: { adjectives: ["Electric", "Ragged", "Crimson", "Loud"], nouns: ["Overdrive", "Backstage", "Broken Amp", "Last Encore"] },
+};
+const TITLE_ACTIONS = ["Chase", "Hold", "Follow", "Find", "Leave", "Ride", "Cross", "Wake"];
+const TITLE_PLACES = ["Daybreak", "Midnight", "the Skyline", "the Afterglow", "Blue Hour", "Last Light"];
+
+function titleFor(config, rng) {
+  const genreWords = TITLE_GENRE_WORDS[config.genre] ?? TITLE_GENRE_WORDS.pop;
+  const modeWords = ["minor", "phrygian", "harmonicMinor"].includes(config.scale)
+    ? ["Hollow", "Midnight", "Obsidian", "Blue"]
+    : ["major", "lydian"].includes(config.scale)
+      ? ["Golden", "Luminous", "Solar", "Weightless"]
+      : ["Lucid", "Velvet", "Electric", "Twilight"];
+  const energyWords = config.energy >= 0.75
+    ? ["Fever", "Electric", "Wild", "Rapid"]
+    : config.energy <= 0.38
+      ? ["Quiet", "Slow", "Silken", "Weightless"]
+      : [];
+  const adjectives = [...new Set([...genreWords.adjectives, ...modeWords, ...energyWords, ...TITLE_ADJECTIVES])];
+  const nouns = [...new Set([...genreWords.nouns, ...TITLE_NOUNS])];
+  const adjective = rng.pick(adjectives);
+  const noun = rng.pick(nouns);
+  const template = rng.int(0, 3);
+  if (template === 1) return `${noun} at ${rng.pick(TITLE_PLACES)}`;
+  if (template === 2) return `${rng.pick(TITLE_ACTIONS)} the ${noun}`;
+  if (template === 3) {
+    const second = rng.pick(nouns.filter((word) => word !== noun));
+    return `${noun} / ${second}`;
+  }
+  return `${adjective} ${noun}`;
+}
+
+// Keep engine-only configuration details out of the exported song contract.
+function publicSettings(config) {
+  const {
+    seed: _seed,
+    keyPc: _keyPc,
+    scaleIntervals: _scaleIntervals,
+    title: _title,
+    key: _key,
+    scale: _scale,
+    tempo: _tempo,
+    bars: _bars,
+    timeSignature: _timeSignature,
+    excludeOneShotKitIds: _excludeOneShotKitIds,
+    tasteProfile: _tasteProfile,
+    ...settings
+  } = config;
+  return clone(settings);
+}
+
+const GM_PROGRAM_NAMES = {
+  0: "Acoustic Grand Piano",
+  4: "Electric Piano 1",
+  5: "Electric Piano 2",
+  16: "Drawbar Organ",
+  17: "Percussive Organ",
+  25: "Steel-String Guitar",
+  26: "Jazz Electric Guitar",
+  33: "Fingered Electric Bass",
+  34: "Picked Electric Bass",
+  35: "Fretless Bass",
+  36: "Slap Bass",
+  38: "Synth Bass 1",
+  39: "Synth Bass 2",
+  48: "String Ensemble",
+  53: "Voice Oohs",
+  54: "Synth Voice",
+  73: "Flute",
+  80: "Square Lead",
+  81: "Saw Lead",
+  82: "Calliope Lead",
+  84: "Charang Lead",
+  85: "Voice Lead",
+  86: "Fifths Lead",
+  87: "Bass + Lead",
+  88: "New Age Pad",
+  89: "Warm Pad",
+  90: "Polysynth Pad",
+  91: "Choir Pad",
+  92: "Bowed Pad",
+  95: "Sweep Pad",
+  99: "Atmosphere FX",
+};
+
+const GM2_DRUM_KIT_NAMES = {
+  0: "Standard Kit",
+  8: "Room Kit",
+  16: "Power Kit",
+  24: "Electronic Kit",
+  25: "TR-808 Kit",
+};
+
+/**
+ * Browser-preview one-shot palettes. These are compact procedural samples:
+ * each kit has its own deterministic noise grain, tuning, envelopes, and
+ * transient color while retaining the General MIDI drum-note map for export.
+ */
+export const ONE_SHOT_KITS = deepFreeze([
+  {
+    id: "velvet-room",
+    name: "Velvet Room One-Shots",
+    oneShots: { kick: "Velvet 22", snare: "Room Snap", clap: "Soft Stack", hat: "Silk Hat", openHat: "Silk Open", cymbal: "Warm Crash", tom: "Maple Tom" },
+    preview: { kickStart: 118, kickEnd: 45, kickDecay: 0.24, kickWave: "sine", clickPitch: 2350, clickLevel: 0.032, snareFilter: 1450, snareTone: 178, snareDecay: 0.19, hatFilter: 5900, hatDecay: 0.052, openHatDecay: 0.28, cymbalFilter: 4200, cymbalDecay: 0.68, tomTune: 0.92, noiseColor: 0.72 },
+  },
+  {
+    id: "neon-808",
+    name: "Neon 808 One-Shots",
+    oneShots: { kick: "Neon Sub", snare: "Laser Snare", clap: "Digital Stack", hat: "Pixel Hat", openHat: "Neon Open", cymbal: "Glass Crash", tom: "808 Tom" },
+    preview: { kickStart: 176, kickEnd: 34, kickDecay: 0.34, kickWave: "sine", clickPitch: 4100, clickLevel: 0.052, snareFilter: 2250, snareTone: 232, snareDecay: 0.13, hatFilter: 8200, hatDecay: 0.036, openHatDecay: 0.19, cymbalFilter: 6100, cymbalDecay: 0.48, tomTune: 1.08, noiseColor: 1.34 },
+  },
+  {
+    id: "dusty-tape",
+    name: "Dusty Tape One-Shots",
+    oneShots: { kick: "Tape Knock", snare: "Dust Snare", clap: "Cassette Clap", hat: "Vinyl Hat", openHat: "Loose Open", cymbal: "Muted Crash", tom: "Cardboard Tom" },
+    preview: { kickStart: 104, kickEnd: 49, kickDecay: 0.18, kickWave: "triangle", clickPitch: 1650, clickLevel: 0.022, snareFilter: 1180, snareTone: 154, snareDecay: 0.15, hatFilter: 4700, hatDecay: 0.061, openHatDecay: 0.24, cymbalFilter: 3600, cymbalDecay: 0.39, tomTune: 0.84, noiseColor: 0.48 },
+  },
+  {
+    id: "chrome-club",
+    name: "Chrome Club One-Shots",
+    oneShots: { kick: "Club Hammer", snare: "Chrome Snare", clap: "Arena Clap", hat: "Chrome Hat", openHat: "Club Open", cymbal: "White Crash", tom: "Festival Tom" },
+    preview: { kickStart: 154, kickEnd: 42, kickDecay: 0.21, kickWave: "sine", clickPitch: 5200, clickLevel: 0.061, snareFilter: 2700, snareTone: 218, snareDecay: 0.17, hatFilter: 9200, hatDecay: 0.032, openHatDecay: 0.25, cymbalFilter: 7200, cymbalDecay: 0.72, tomTune: 1.14, noiseColor: 1.58 },
+  },
+  {
+    id: "basement-knock",
+    name: "Basement Knock One-Shots",
+    oneShots: { kick: "Concrete Kick", snare: "Basement Crack", clap: "Wall Clap", hat: "Rust Hat", openHat: "Rust Open", cymbal: "Dark Crash", tom: "Floor Tom" },
+    preview: { kickStart: 132, kickEnd: 38, kickDecay: 0.29, kickWave: "sine", clickPitch: 2050, clickLevel: 0.044, snareFilter: 1720, snareTone: 132, snareDecay: 0.22, hatFilter: 5400, hatDecay: 0.043, openHatDecay: 0.31, cymbalFilter: 3900, cymbalDecay: 0.82, tomTune: 0.76, noiseColor: 0.63 },
+  },
+  {
+    id: "circuit-pop",
+    name: "Circuit Pop One-Shots",
+    oneShots: { kick: "Circuit Kick", snare: "Pop Snare", clap: "Candy Clap", hat: "Tick Hat", openHat: "Fizz Open", cymbal: "Spark Crash", tom: "Arcade Tom" },
+    preview: { kickStart: 146, kickEnd: 52, kickDecay: 0.16, kickWave: "triangle", clickPitch: 6200, clickLevel: 0.047, snareFilter: 3150, snareTone: 264, snareDecay: 0.11, hatFilter: 10400, hatDecay: 0.026, openHatDecay: 0.15, cymbalFilter: 7900, cymbalDecay: 0.36, tomTune: 1.28, noiseColor: 1.82 },
+  },
+  {
+    id: "airbreak",
+    name: "Airbreak One-Shots",
+    oneShots: { kick: "Break Kick", snare: "Air Snare", clap: "Wide Clap", hat: "Rush Hat", openHat: "Rush Open", cymbal: "Break Crash", tom: "Jungle Tom" },
+    preview: { kickStart: 128, kickEnd: 47, kickDecay: 0.17, kickWave: "sine", clickPitch: 3400, clickLevel: 0.038, snareFilter: 2380, snareTone: 196, snareDecay: 0.14, hatFilter: 7600, hatDecay: 0.029, openHatDecay: 0.18, cymbalFilter: 5700, cymbalDecay: 0.44, tomTune: 1.2, noiseColor: 1.18 },
+  },
+  {
+    id: "solar-percussion",
+    name: "Solar Percussion One-Shots",
+    oneShots: { kick: "Sun Kick", snare: "Palm Snare", clap: "Hand Stack", hat: "Seed Hat", openHat: "Shaker Open", cymbal: "Bronze Crash", tom: "Skin Tom" },
+    preview: { kickStart: 112, kickEnd: 55, kickDecay: 0.2, kickWave: "triangle", clickPitch: 2850, clickLevel: 0.029, snareFilter: 1920, snareTone: 246, snareDecay: 0.16, hatFilter: 6800, hatDecay: 0.047, openHatDecay: 0.21, cymbalFilter: 5000, cymbalDecay: 0.57, tomTune: 1.36, noiseColor: 0.96 },
+  },
+]);
+
+function chooseOneShotKit(config, preferred = null) {
+  const preferredId = typeof preferred === "string" ? preferred : preferred?.id;
+  const requestedId = preferredId || config.oneShotKitId;
+  const requested = ONE_SHOT_KITS.find((kit) => kit.id === requestedId);
+  if (requested) return requested;
+  const excluded = new Set(config.excludeOneShotKitIds ?? []);
+  const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
+  const palette = choices.length ? choices : ONE_SHOT_KITS;
+  return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
+}
+
+function publicOneShotKit(kit) {
+  return {
+    id: kit.id,
+    name: kit.name,
+    oneShots: clone(kit.oneShots),
+  };
+}
+
+function programName(program) {
+  return GM_PROGRAM_NAMES[program] ?? `GM Program ${Number(program) + 1}`;
+}
+
+function createIdeaAnalysis(config, structure, harmony, style, tracks, oneShotKit, songBlueprint = null, performanceProfile = null) {
+  const profile = GENRE_PROFILES[config.genre];
+  const notes = tracks.flatMap((track) => track.notes ?? []);
+  const tripletEvents = notes.filter((note) => String(note.rhythmicFeature ?? "").startsWith("triplet-")).length;
+  const snareRollEvents = notes.filter((note) => note.rhythmicFeature === "snare-roll").length;
+  const ghostNoteEvents = notes.filter((note) => note.rhythmicFeature === "ghost-note").length;
+  const auxiliaryRhythmEvents = notes.filter((note) => /-(accent)$/.test(String(note.rhythmicFeature ?? ""))).length;
+  const grooveNames = {
+    backbeat: "Pocket backbeat",
+    fourFloor: "Four-on-the-floor drive",
+    breakbeat: "Syncopated breakbeat",
+    halfTime: "Half-time pocket",
+    electro: "Electro syncopation",
+  };
+  const rhythmIdentity = style.rhythmIdentity && typeof style.rhythmIdentity === "object"
+    ? clone(style.rhythmIdentity)
+    : null;
+  const rhythmicFeatures = [
+    rhythmIdentity?.label ?? grooveNames[style.drumGroove] ?? "Genre pocket",
+    grooveNames[style.drumGroove] ?? "Genre pocket",
+  ];
+  if (profile.halfTime || style.drumGroove === "halfTime") rhythmicFeatures.push("Half-time backbeat");
+  if (tripletEvents) {
+    if (notes.some((note) => note.rhythmicFeature === "triplet-eighth")) rhythmicFeatures.push("Eighth-note triplets");
+    if (notes.some((note) => note.rhythmicFeature === "triplet-sixteenth")) rhythmicFeatures.push("Sixteenth-note triplets");
+  }
+  if (snareRollEvents) rhythmicFeatures.push("Phrase-boundary snare rolls");
+  if (ghostNoteEvents) rhythmicFeatures.push("Dynamic ghost notes");
+  if (auxiliaryRhythmEvents && rhythmIdentity?.percussionVoice) {
+    rhythmicFeatures.push(`${rhythmIdentity.percussionVoice[0].toUpperCase()}${rhythmIdentity.percussionVoice.slice(1)} accent lane`);
+  }
+  if (config.swing >= 0.16) rhythmicFeatures.push("Swung offbeats");
+  if (config.syncopation >= 0.5) rhythmicFeatures.push("Syncopated bass and accents");
+  if (performanceProfile?.feel?.label) rhythmicFeatures.push(performanceProfile.feel.label);
+  const phraseShapeLabels = {
+    questionAnswer: "Question-and-answer phrase",
+    syncopatedLoop: "Syncopated loop phrase",
+    longShort: "Long-short phrase",
+    staircase: "Stepping phrase",
+    sparseEcho: "Sparse echo phrase",
+  };
+  const timingPocketLabels = {
+    centered: "Centered timing",
+    laidBack: "Laid-back timing",
+    pushed: "Forward timing",
+    elastic: "Elastic timing",
+    live: "Live timing",
+  };
+  if (rhythmIdentity?.phraseShape) rhythmicFeatures.push(phraseShapeLabels[rhythmIdentity.phraseShape] ?? rhythmIdentity.phraseShape);
+  if (rhythmIdentity?.timingPocket) rhythmicFeatures.push(timingPocketLabels[rhythmIdentity.timingPocket] ?? rhythmIdentity.timingPocket);
+  if (rhythmIdentity?.motifBars) rhythmicFeatures.push(`${rhythmIdentity.motifBars}-bar motif`);
+  const genreRhythmGrammar = GENRE_RHYTHM_GRAMMARS[config.genre];
+  if (genreRhythmGrammar?.phrase) rhythmicFeatures.push(`Genre phrase: ${genreRhythmGrammar.phrase}`);
+  rhythmicFeatures.push("A/A′/B/C motif conversation");
+  rhythmicFeatures.push("Ensemble groove conductor");
+  const transitionTypes = [...new Set((songBlueprint?.transitions ?? []).map((transition) => transition.type))];
+  if (transitionTypes.length) rhythmicFeatures.push(`Transitions: ${transitionTypes.join(", ")}`);
+  const barChords = harmony.filter((event, index) => index === 0 || harmony[index - 1].bar !== event.bar);
+  return {
+    genreId: profile.id,
+    genreLabel: profile.label,
+    tempoRange: { ...profile.bpm },
+    tempoFit: config.tempo < profile.bpm.min ? "Below typical" : config.tempo > profile.bpm.max ? "Above typical" : "Genre pocket",
+    grooveLabel: grooveNames[style.drumGroove] ?? "Genre pocket",
+    rhythmIdentity,
+    halfTime: profile.halfTime || style.drumGroove === "halfTime",
+    tripletEvents,
+    snareRollEvents,
+    rhythmicFeatures,
+    chordProgression: barChords.slice(0, 8).map((event) => event.symbol),
+    harmonicStory: (songBlueprint?.sectionPlans ?? []).map((plan) => `${plan.sectionName}: ${plan.harmonicRole}`),
+    transitionTypes,
+    performanceFeel: performanceProfile?.feel?.label ?? "Generated pocket",
+    sectionArc: structure.map((section) => `${section.name} (${section.bars} ${section.bars === 1 ? "bar" : "bars"})`),
+    soundPalette: tracks.map((track) => ({
+      trackId: track.id,
+      program: track.program,
+      name: track.id === "drums"
+        ? `${oneShotKit.name} · ${oneShotKit.oneShots.kick} / ${oneShotKit.oneShots.snare}`
+        : programName(track.program),
+    })),
+  };
+}
+
+function normalizeContextTracks(input, config) {
+  const result = {};
+  if (!input || typeof input !== "object") return result;
+  const entries = Array.isArray(input)
+    ? input.map((track) => [track?.id, track])
+    : Object.entries(input);
+  const totalBeats = config.bars * beatsPerBar(config);
+  for (const [rawId, candidate] of entries) {
+    const id = String(rawId ?? "");
+    if (!TRACK_DEFINITIONS[id]) continue;
+    const sourceNotes = Array.isArray(candidate) ? candidate : candidate?.notes;
+    if (!Array.isArray(sourceNotes)) continue;
+    result[id] = sourceNotes
+      .filter((note) => note && Number.isFinite(Number(note.start)) && Number.isFinite(Number(note.pitch)))
+      .map((note) => {
+        const start = clamp(finite(note.start, 0), 0, Math.max(0, totalBeats - 0.02));
+        return {
+          pitch: clamp(Math.round(finite(note.pitch, 60)), 0, 127),
+          start,
+          duration: clamp(finite(note.duration, 0.25), 0.02, Math.max(0.02, totalBeats - start)),
+          velocity: clamp(Math.round(finite(note.velocity, 90)), 1, 127),
+          ...(note.rhythmicFeature ? { rhythmicFeature: String(note.rhythmicFeature) } : {}),
+          ...(Number.isFinite(note.subdivision) ? { subdivision: note.subdivision } : {}),
+        };
+      })
+      .sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+  }
+  return result;
+}
+
+function contextNotesForTarget(contextTracks, targetTrack, dependencyId) {
+  if (!targetTrack || !TRACK_DEFINITIONS[targetTrack]) return null;
+  if (!Object.prototype.hasOwnProperty.call(contextTracks, dependencyId)) return null;
+  return contextTracks[dependencyId];
+}
+
+function createGenerationInterlockPlan(
+  config,
+  structure,
+  harmony,
+  motifs,
+  songBlueprint,
+  grooveConductor,
+  performanceProfile,
+  route,
+) {
+  const orchestration = new Map(
+    (songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]),
+  );
+  const outgoing = new Map(
+    (songBlueprint?.transitions ?? []).map((transition) => [transition.fromSectionId, transition]),
+  );
+  const assignments = new Map(
+    (motifs?.sectionAssignments ?? []).map((assignment) => [assignment.sectionId, assignment]),
+  );
+  const sectionContracts = structure.map((section) => {
+    const plan = blueprintPlanForSection(songBlueprint, section);
+    const phraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const sectionHarmony = harmony.filter((event) => (
+      event.start >= section.startBeat - 1e-6 && event.start < section.endBeat - 1e-6
+    ));
+    const harmonicGoal = sectionHarmony.at(-1);
+    const bars = (grooveConductor?.bars ?? [])
+      .filter((bar) => bar.sectionId === section.id)
+      .map((bar) => ({
+        bar: bar.bar,
+        role: bar.role,
+        accent: round(bar.answers?.[0] ?? bar.anchors?.[1] ?? bar.anchors?.[0] ?? 0),
+      }));
+    return {
+      id: `interlock:${section.id}`,
+      sectionId: section.id,
+      role: plan?.role ?? section.intent?.role ?? "development",
+      cadence: plan?.cadence ?? section.intent?.cadence ?? "open",
+      energy: round(clamp(finite(plan?.energy, section.intensity / 1.18), 0, 1)),
+      tension: round(clamp(finite(plan?.tension, section.intent?.tension), 0, 1)),
+      motifId: assignments.get(section.id)?.motifId ?? "A",
+      harmonicGoalDegree: harmonicGoal?.degree ?? plan?.harmonicGoalDegree ?? 0,
+      harmonicGoalPitchClasses: [...new Set(harmonicGoal?.tones ?? [config.keyPc])],
+      featuredTrack: orchestration.get(section.id)?.featuredTrack ?? "melody",
+      performanceFeel: performanceProfile?.feel?.id ?? "balanced",
+      transitionOut: outgoing.get(section.id)?.type ?? null,
+      phraseMemory: phraseMemory ? clone(phraseMemory) : null,
+      bars,
+    };
+  });
+  return {
+    version: 1,
+    phase: 39,
+    routeId: route?.id ?? "harmony-first",
+    stages: [
+      { id: "intent", receives: ["settings"], publishes: ["structure", "style", "songBlueprint"] },
+      { id: "harmony", receives: ["structure", "songBlueprint"], publishes: ["harmony"] },
+      { id: "motif", receives: ["style", "songBlueprint", "harmony"], publishes: ["motifs"] },
+      { id: "groove", receives: ["structure", "style", "motifs"], publishes: ["grooveConductor"] },
+      {
+        id: "ensemble",
+        receives: ["songBlueprint", "harmony", "motifs", "grooveConductor"],
+        publishes: ["connectedTracks"],
+      },
+      {
+        id: "arrangement",
+        receives: ["connectedTracks", "songBlueprint"],
+        publishes: ["orchestratedTracks"],
+      },
+      {
+        id: "performance",
+        receives: ["orchestratedTracks", "performanceProfile"],
+        publishes: ["performedTracks"],
+      },
+      { id: "critic", receives: ["performedTracks", "generationInterlock"], publishes: ["evaluation"] },
+    ],
+    sectionContracts,
+  };
+}
+
+function applyGenerationInterlocks(
+  sourceTracks,
+  interlock,
+  structure,
+  config,
+  { adjustVelocity = true } = {},
+) {
+  const barBeats = beatsPerBar(config);
+  const contractBySection = new Map(
+    (interlock?.sectionContracts ?? []).map((contract) => [contract.sectionId, contract]),
+  );
+  return Object.fromEntries(Object.entries(sourceTracks).map(([trackId, source]) => [
+    trackId,
+    source.map((note) => {
+      const {
+        connectionId: _oldConnectionId,
+        connectionRole: _oldConnectionRole,
+        ensembleAccent: _oldEnsembleAccent,
+        ...cleanNote
+      } = note;
+      const section = structure.find((candidate) => (
+        note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+      )) ?? structure.at(-1);
+      const contract = contractBySection.get(section?.id);
+      if (!contract) return cleanNote;
+      const bar = Math.floor(note.start / barBeats);
+      const barContract = contract.bars.find((candidate) => candidate.bar === bar);
+      const accentBeat = bar * barBeats + finite(barContract?.accent, 0);
+      const ensembleAccent = Math.abs(note.start - accentBeat) <= 0.065;
+      const phraseRole = barContract?.role ?? "statement";
+      const phraseMemoryDelta = phrasePerformanceAdjustment(contract.phraseMemory, trackId, phraseRole);
+      const phraseMemoryDurationScale = contract.phraseMemory && phraseRole === "turnaround"
+        ? clamp(finite(contract.phraseMemory.performance?.durationScale, 1), 0.72, 1.28)
+        : 1;
+      const phraseDynamic = {
+        statement: 1,
+        answer: 0.97,
+        development: 1.025,
+        turnaround: 1.045,
+      }[phraseRole] ?? 1;
+      const conversationDynamic = (
+        (trackId === "melody" && phraseRole === "statement")
+        || (trackId === "counterpoint" && phraseRole === "answer")
+        || (trackId === "chords" && phraseRole === "development")
+        || (["drums", "bass"].includes(trackId) && phraseRole === "turnaround")
+      ) ? 1.035 : 1;
+      const sharedDynamic = (0.98 + (contract.energy - 0.5) * 0.06)
+        * phraseDynamic
+        * conversationDynamic;
+      const accentBoost = ensembleAccent
+        ? trackId === contract.featuredTrack ? 5 : ["bass", "chords", "drums"].includes(trackId) ? 3 : 1
+        : 0;
+      return {
+        ...cleanNote,
+        velocity: adjustVelocity
+          ? clamp(Math.round(note.velocity * sharedDynamic + accentBoost), 1, 127)
+          : note.velocity,
+        connectionId: contract.id,
+        connectionRole: contract.role,
+        sectionPatternId: `${contract.motifId}:${contract.role}`,
+        phraseRole,
+        ...(contract.phraseMemory ? {
+          phraseMemoryRole: contract.phraseMemory.sentenceRole,
+          phraseMemoryTransform: contract.phraseMemory.transform,
+          phraseMemoryLandingRole: contract.phraseMemory.landingRole,
+          phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
+          phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
+          phraseRecallStrength: contract.phraseMemory.recallStrength,
+        } : {}),
+        ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
+        ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
+          phrasePerformanceDurationScale: round(phraseMemoryDurationScale),
+        } : {}),
+        ...(ensembleAccent ? { ensembleAccent: true } : {}),
+      };
+    }),
+  ]));
+}
+
+function reconcileRepairedGenerationInterlock(song, config, diagnosis) {
+  const interlock = createGenerationInterlockPlan(
+    config,
+    song.structure,
+    song.harmony,
+    song.motifs,
+    song.songBlueprint,
+    song.grooveConductor,
+    song.performanceProfile,
+    song.compositionRoute,
+  );
+  interlock.version = 2;
+  interlock.reconciliation = {
+    phase: 40,
+    repairGroup: diagnosis.group,
+    source: "actual-repaired-song",
+  };
+  const source = Object.fromEntries(
+    (song.tracks ?? []).map((track) => [track.id, track.notes ?? []]),
+  );
+  const connected = applyGenerationInterlocks(
+    source,
+    interlock,
+    song.structure,
+    config,
+    { adjustVelocity: false },
+  );
+  song.tracks = (song.tracks ?? []).map((track) => ({
+    ...track,
+    notes: connected[track.id] ?? track.notes ?? [],
+  }));
+  song.generationInterlock = interlock;
+}
+
+function applyPhraseResolutions(
+  source,
+  structure,
+  harmony,
+  config,
+  songBlueprint,
+  rng,
+  trackId = "melody",
+  generationInterlock = null,
+) {
+  if (!source?.length) return source ?? [];
+  const result = source.map((note) => ({ ...note }));
+  const barBeats = beatsPerBar(config);
+  for (const section of structure) {
+    const plan = blueprintPlanForSection(songBlueprint, section);
+    const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const phraseBars = clamp(
+      Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
+      2,
+      4,
+    );
+    const boundaries = [];
+    for (
+      let boundary = section.startBeat + phraseBars * barBeats;
+      boundary <= section.endBeat + 1e-6;
+      boundary += phraseBars * barBeats
+    ) {
+      boundaries.push(Math.min(section.endBeat, boundary));
+    }
+    if (!boundaries.some((boundary) => Math.abs(boundary - section.endBeat) < 1e-6)) {
+      boundaries.push(section.endBeat);
+    }
+
+    for (let boundaryIndex = 0; boundaryIndex < boundaries.length; boundaryIndex += 1) {
+      const boundary = boundaries[boundaryIndex];
+      const candidates = result
+        .filter((note) => (
+          note.start < boundary - 0.04
+          && note.start >= Math.max(section.startBeat, boundary - barBeats * 1.35)
+        ))
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const landing = candidates.at(-1);
+      if (!landing) continue;
+      const chord = harmonyAt(harmony, Math.max(section.startBeat, boundary - 0.05));
+      if (!chord?.tones?.length) continue;
+      const previous = candidates.at(-2);
+      const sectionBoundary = boundary >= section.endBeat - 0.05;
+      const cadence = sectionBoundary ? (plan?.cadence ?? "resolve") : "continue";
+      const landingRole = phraseLandingRole({
+        boundaryIndex,
+        boundaryCount: boundaries.length,
+        cadence,
+        trackId,
+      });
+      const landingProfile = phraseLandingProfile(landingRole);
+      const melodicDirection = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
+      const direction = landingProfile.direction || melodicDirection;
+      const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
+      const forceTonic = finalSongLanding || sectionBoundary && cadence === "resolve";
+      const contract = generationInterlock?.sectionContracts?.find((candidate) => candidate.sectionId === section.id);
+      const contractTones = sectionBoundary ? contract?.harmonicGoalPitchClasses : null;
+      const targetChord = forceTonic
+        ? { ...chord, tones: [config.keyPc] }
+        : Array.isArray(contractTones) && contractTones.length
+          ? { ...chord, tones: contractTones }
+          : chord;
+      const expressiveTones = landingProfile.avoidRoot
+        ? targetChord.tones.filter((tone) => tone !== chord.rootPc && tone !== config.keyPc)
+        : targetChord.tones;
+      const landingChord = expressiveTones.length ? { ...targetChord, tones: expressiveTones } : targetChord;
+      const target = nearestChordTone(landing.pitch, landingChord, direction);
+      const maximumLeap = trackId === "counterpoint" ? 5 : 7;
+      if (Math.abs(target - landing.pitch) <= maximumLeap || forceTonic) {
+        landing.pitch = nearestScalePitch(target, config, direction);
+      }
+      landing.duration = round(clamp(
+        Math.max(
+          landing.duration * landingProfile.durationScale,
+          Math.min(barBeats * 0.55 * landingProfile.durationScale, boundary - landing.start - 0.03),
+        ),
+        0.08,
+        Math.max(0.08, boundary - landing.start - 0.02),
+      ));
+      landing.velocity = clamp(landing.velocity + landingProfile.velocityDelta, 1, 127);
+      landing.resolutionRole = forceTonic ? "tonic-landing" : "chord-landing";
+      landing.phraseCadenceRole = landingRole;
+      landing.phraseBoundary = round(boundary);
+      landing.articulationIntent = landingProfile.articulation;
+      if (sectionPhraseMemory) {
+        landing.phraseMemoryRole = sectionPhraseMemory.sentenceRole;
+        landing.phraseMemoryTransform = sectionPhraseMemory.transform;
+        landing.phraseMemoryLandingRole = sectionPhraseMemory.landingRole;
+        landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
+        landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
+        landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
+      }
+    }
+  }
+  return result;
+}
+
+function notesInWindow(track, startBeat, endBeat) {
+  return (track?.notes ?? []).filter((note) => (
+    note.start >= startBeat - 1e-6 && note.start < endBeat - 1e-6
+  ));
+}
+
+function genreBassResponseOffsets(genre) {
+  if (genre === "house") return [0.5];
+  if (["techno", "drumBass"].includes(genre)) return [0, 0.5];
+  if (["trap", "hipHop", "rap", "drill"].includes(genre)) return [0, 0.25];
+  return [0, 0.25, 0.5, 0.75];
+}
+
+function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => ({ ...note })),
+  }));
+  const drums = tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const bass = tracks.find((track) => track.id === "bass");
+  const kicks = drums.filter((note) => note.pitch === 36).map((note) => note.start);
+  if (!bass?.notes.length || !kicks.length) return { tracks, repairs: 0 };
+  const contextualGenres = new Set(["house", "techno", "trap", "hipHop", "rap", "drill", "drumBass", "neoSoul"]);
+  if (!contextualGenres.has(genre)) return { tracks, repairs: 0 };
+  const candidates = kicks.flatMap((kick) => genreBassResponseOffsets(genre).map((delay) => round(kick + delay)))
+    .filter((start) => start >= 0 && start < totalBeats - 0.019);
+  let repairs = 0;
+  for (const note of bass.notes) {
+    if (candidates.some((start) => Math.abs(start - note.start) < 1e-6)) continue;
+    // Cadence and transition contracts deliberately own their exact boundary
+    // timing. They take precedence over ordinary rhythm-section correction.
+    if (note.ensembleCadenceRole || note.transitionHandoffRole) {
+      const delay = genre === "house" ? 0.5 : 0;
+      const kickStart = round(note.start - delay);
+      if (kickStart >= 0 && !drums.some((drum) => drum.pitch === 36 && Math.abs(drum.start - kickStart) < 1e-6)) {
+        drums.push({
+          pitch: 36,
+          start: kickStart,
+          duration: 0.08,
+          velocity: clamp(note.velocity + 4, 48, 112),
+          rhythmLockRepair: "protected-bass-foundation",
+          preserveTiming: true,
+          finalMasterRole: "section-body",
+        });
+        candidates.push(round(kickStart + delay));
+        repairs += 1;
+      }
+      continue;
+    }
+    const nearest = [...candidates].sort((left, right) => (
+      Math.abs(left - note.start) - Math.abs(right - note.start) || left - right
+    ))[0];
+    if (!Number.isFinite(nearest)) continue;
+    note.start = nearest;
+    note.duration = round(Math.min(note.duration, Math.max(0.02, totalBeats - nearest)));
+    note.rhythmLockRepair = "surviving-kick";
+    note.preserveTiming = true;
+    repairs += 1;
+  }
+  bass.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  drums.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  bass.notes = bass.notes.filter((note, index, notes) => !notes.slice(0, index).some((previous) => (
+    previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 1e-6
+  )));
+  const previousByPitch = new Map();
+  for (const note of bass.notes) {
+    const previous = previousByPitch.get(note.pitch);
+    if (previous && previous.start + previous.duration > note.start) {
+      previous.duration = round(Math.max(0.02, note.start - previous.start));
+    }
+    previousByPitch.set(note.pitch, note);
+  }
+  return { tracks, repairs };
+}
+
+/** Critic 7.0 exposes weak short phrases hidden by a strong song average. */
+export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, grooveConductor = null) {
+  const tracks = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
+  const barBeats = beatsPerBar(config);
+  const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, config.professionalUpgrade ? 8 : 4);
+  const activeTrackIds = TRACK_IDS.filter((id) => (tracks.get(id)?.notes ?? []).length);
+  const profile = GENRE_CRITIC_PROFILES[config.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  const windows = [];
+  for (const section of structure) {
+    const sectionEndBar = section.startBar + section.bars;
+    for (let startBar = section.startBar; startBar < sectionEndBar; startBar += phraseBars) {
+      const endBar = Math.min(sectionEndBar, startBar + phraseBars);
+      const startBeat = startBar * barBeats;
+      const endBeat = endBar * barBeats;
+      const melody = notesInWindow(tracks.get("melody"), startBeat, endBeat)
+        .sort((left, right) => left.start - right.start);
+      const counterpoint = notesInWindow(tracks.get("counterpoint"), startBeat, endBeat);
+      const bass = notesInWindow(tracks.get("bass"), startBeat, endBeat);
+      const drums = notesInWindow(tracks.get("drums"), startBeat, endBeat);
+      const kicks = drums.filter((note) => [35, 36].includes(note.pitch));
+      const coverage = activeTrackIds.length
+        ? activeTrackIds.filter((id) => notesInWindow(tracks.get(id), startBeat, endBeat).length).length / activeTrackIds.length
+        : 0.7;
+      const melodyFit = clamp(melody.length / Math.max(2, (endBar - startBar) * 4), 0, 1);
+      const landing = melody.at(-1);
+      const landingChord = landing ? harmonyAt(harmony, landing.start) : null;
+      const resolves = Boolean(landing && (
+        landingChord?.tones?.includes(mod(landing.pitch, 12))
+        || mod(landing.pitch, 12) === config.keyPc
+      ));
+      const bassResponses = genreBassResponseOffsets(config.genre);
+      const bassLock = kicks.length && bass.length
+        ? bass.filter((note) => kicks.some((kick) => bassResponses.some((delay) => (
+          Math.abs(note.start - kick.start - delay) <= 0.08
+        )))).length / bass.length
+        : bass.length || kicks.length ? 0.28 : 0.65;
+      const collisionRatio = counterpoint.length
+        ? counterpoint.filter((note) => melody.some((lead) => Math.abs(lead.start - note.start) < 0.08)).length / counterpoint.length
+        : 0;
+      const noteCount = activeTrackIds.filter((id) => id !== "drums").reduce(
+        (sum, id) => sum + notesInWindow(tracks.get(id), startBeat, endBeat).length,
+        0,
+      );
+      const density = noteCount / Math.max(1, endBar - startBar);
+      const densityFit = clamp(1 - Math.abs(density - profile.density) / Math.max(18, profile.density * 1.35), 0, 1);
+      const score = clamp(Math.round(
+        18 + coverage * 15 + melodyFit * 15 + Number(resolves) * 18
+        + bassLock * 20 + (1 - collisionRatio) * 8 + densityFit * 6
+      ), 20, 100);
+      windows.push({
+        id: `${section.id}:${startBar}-${endBar}`,
+        sectionId: section.id,
+        startBar,
+        endBar,
+        startBeat: round(startBeat),
+        endBeat: round(endBeat),
+        score,
+        diagnostics: {
+          coverage: round(coverage),
+          melodyFit: round(melodyFit),
+          resolves,
+          bassLock: round(bassLock),
+          collisionRatio: round(collisionRatio),
+          densityFit: round(densityFit),
+          density: round(density),
+          densityTarget: round(profile.density),
+          densityDelta: round(density - profile.density),
+        },
+      });
+    }
+  }
+  return windows;
+}
+
+function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveConductor) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: track.notes.map((note) => ({ ...note })),
+  }));
+  const windows = evaluatePhraseWindows(tracks, structure, harmony, config, grooveConductor);
+  const repairTargets = [...windows]
+    .filter((window) => window.score < 82)
+    .sort((left, right) => left.score - right.score || left.startBeat - right.startBeat)
+    .slice(0, 2);
+  const repairs = [];
+  const track = (id) => tracks.find((candidate) => candidate.id === id);
+
+  for (const window of repairTargets) {
     const changedTracks = new Set();
     const melody = notesInWindow(track("melody"), window.startBeat, window.endBeat)
       .sort((left, right) => left.start - right.start);
