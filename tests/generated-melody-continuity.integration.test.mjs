@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
 import { analyzeMelodyContinuity } from "../src/core/melody-continuity-refinement.js";
+import { applyResultOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
 
 const GENRES = ["trap", "hipHop", "pop", "neoSoul"];
 const BAR_COUNTS = [16, 24, 32, 48, 64];
@@ -32,8 +33,16 @@ test("generated active verse and chorus melodies have no actionable interior sil
         swing: 0.16,
         humanize: 0.12,
       };
-      const song = engine.generateNew(options);
-      const repeated = engine.generateNew(options);
+      const composed = engine.generateNew(options);
+      const repeatedComposed = engine.generateNew(options);
+      const result = applyResultOutputQualityPipeline({ song: composed }, {
+        melodyContinuityRefinement: true,
+      });
+      const repeatedResult = applyResultOutputQualityPipeline({ song: repeatedComposed }, {
+        melodyContinuityRefinement: true,
+      });
+      const song = result.song;
+      const repeated = repeatedResult.song;
       assert.equal(melodyFingerprint(song), melodyFingerprint(repeated), `${genre}/${bars}: melody generation is not deterministic`);
 
       const analysis = analyzeMelodyContinuity(song);
