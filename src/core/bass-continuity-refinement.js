@@ -303,9 +303,6 @@ function candidateRequestSets(song) {
   if (!sections.length) return [];
   const weakest = sections[0];
   const balanced = sections.slice(0, 3).map((section) => ({ section, window: section.windows[0] }));
-  if (balanced.length === 1 && weakest.windows[1]) {
-    balanced.push({ section: weakest, window: weakest.windows[1] });
-  }
   return [
     { id: "focused-foundation-anchor", requests: [{ section: weakest, window: weakest.windows[0] }] },
     ...(balanced.length > 1 ? [{ id: "balanced-foundation-links", requests: balanced.slice(0, 3) }] : []),
