@@ -10,3 +10,86 @@
 @media(max-width:680px){.shape-director-panel{padding:14px;border-radius:17px}.shape-director-heading strong{font-size:15px}.shape-director-heading em{font-size:8px}.shape-director-scope{grid-template-columns:1fr 1fr}.shape-director-current{grid-column:1/-1;grid-row:2}.shape-director-directions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.shape-director-directions button{min-height:40px;border-radius:11px;padding-inline:8px}.shape-director-candidate{grid-template-columns:1fr;padding-top:31px}.shape-director-ab{justify-content:stretch}.shape-director-ab button{flex:1;min-height:42px}.shape-director-commit{grid-column:auto}.shape-director-commit button{flex:1;min-height:42px}.shape-director-commit button.is-primary{min-width:0}}
 @media(orientation:landscape) and (max-height:720px){.shape-director-panel{padding:12px}.shape-director-heading{margin-bottom:8px}.shape-director-scope,.shape-director-directions{padding-top:16px}.shape-director-directions{margin:8px 0;gap:5px}.shape-director-directions button{min-height:31px;padding:6px 9px}.shape-director-locks{padding:6px 0}.shape-director-candidate{margin-top:8px;padding:26px 10px 10px}.shape-director-status{margin-top:7px}}
 @media(prefers-reduced-motion:reduce){.shape-director-directions button,.shape-director-ab button,.shape-director-commit button{transition:none}}
+
+/* UIUX CLEANUP PHASE 1 — SHAPE hierarchy */
+#tab-arrange{max-width:1440px;width:100%;margin:0 auto;gap:10px}
+#tab-arrange .shape-dna-ribbon{margin:0;padding:10px 14px;border:1px solid var(--solar-line);border-radius:12px;background:#fff;box-shadow:none;color:var(--solar-ink);gap:7px}
+#tab-arrange .shape-dna-ribbon-top{align-items:center}
+#tab-arrange .shape-dna-ribbon-heading{gap:1px}
+#tab-arrange .shape-dna-ribbon-heading small{color:var(--soda-pop-red)}
+#tab-arrange .shape-dna-ribbon-heading strong{font-size:14px}
+#tab-arrange .shape-dna-ribbon-heading span{font-size:11px;color:var(--text-2)}
+#tab-arrange .shape-dna-ribbon button{min-height:36px;background:var(--solar-cream);border:1px solid var(--solar-line);color:var(--solar-ink);border-radius:9px}
+#tab-arrange .shape-dna-chips{gap:5px}
+#tab-arrange .shape-dna-chip{padding:4px 7px;background:var(--solar-cream);border-color:var(--solar-line);color:var(--text-2)}
+#tab-arrange .shape-dna-ribbon-meta{display:none}
+#tab-arrange .shape-focus-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:8px 12px}
+#tab-arrange .shape-focus-bar .thread-heading{display:none}
+#tab-arrange .shape-focus-bar .thread-live{min-width:190px}
+#tab-arrange .arrange-workflow{display:none}
+#tab-arrange .arrangement-panel>.section-heading{padding:14px 16px}
+#tab-arrange .shape-stage{grid-template-columns:minmax(0,1fr) 350px}
+#tab-arrange .section-shaper{padding:16px}
+#tab-arrange .section-macro-grid{gap:7px}
+#tab-arrange .section-macro-grid label{padding:9px}
+#tab-arrange .shape-director-panel{margin:12px 0;padding:12px;background:#fff;border-color:var(--solar-line)}
+#tab-arrange .shape-director-panel:before{display:none}
+#tab-arrange .shape-director-heading{margin-bottom:10px}
+#tab-arrange .shape-director-heading strong{font-size:15px;color:var(--solar-ink)}
+#tab-arrange .shape-director-scope{padding-top:16px;gap:7px}
+#tab-arrange .shape-director-scope:before{content:"TARGET & CHANGE SIZE"}
+#tab-arrange .shape-director-directions{margin:11px 0 10px;padding-top:17px;gap:6px}
+#tab-arrange .shape-director-directions:before{content:"TRY A MUSICAL CHANGE"}
+#tab-arrange .shape-element-suggestions{margin:0 0 10px;padding:10px;border:1px solid var(--solar-line);background:#fffaf5}
+#tab-arrange .shape-element-suggestion-list{gap:6px}
+#tab-arrange .shape-element-suggestion{min-height:42px;background:#fff;border-color:var(--solar-line);color:var(--solar-ink)}
+#tab-arrange .shape-director-locks{padding:8px 0}
+#tab-arrange .shape-director-candidate{margin-top:11px;padding:28px 11px 11px;background:rgba(43,192,210,.055)}
+#tab-arrange .section-edit-primary{margin-top:10px}
+#tab-arrange .section-quick-actions{opacity:.72}
+#tab-arrange .section-editor[aria-hidden="true"]{display:none}
+@media(min-width:901px){#tab-arrange .section-shaper{position:sticky;top:calc(var(--topbar-h) + var(--tabnav-h) + 10px);align-self:start;max-height:calc(100vh - var(--topbar-h) - var(--tabnav-h) - 24px);overflow:auto}}
+@media(max-width:680px){
+#tab-arrange{gap:8px}
+#tab-arrange .shape-dna-ribbon{padding:9px 10px}
+#tab-arrange .shape-dna-ribbon-heading span,#tab-arrange .shape-dna-chips{display:none}
+#tab-arrange .shape-dna-ribbon-top{flex-direction:row}
+#tab-arrange .shape-dna-ribbon button{width:auto;min-height:34px;padding:0 10px}
+#tab-arrange .shape-focus-bar{display:none}
+#tab-arrange .arrangement-panel>.section-heading{padding:11px 12px}
+#tab-arrange .arrangement-panel>.section-heading .section-description{display:none}
+#tab-arrange .section-shaper{padding:13px}
+#tab-arrange .section-macro-grid{grid-template-columns:1fr 1fr}
+#tab-arrange .shape-director-panel{padding:11px}
+#tab-arrange .shape-director-directions{grid-template-columns:1fr 1fr}
+#tab-arrange .section-quick-actions{display:grid;grid-template-columns:1fr 1fr}
+#tab-arrange .section-editor{position:fixed;inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 0;z-index:140;overflow:auto;border-radius:0}}
+
+/* UIUX CLEANUP PHASE 2 — progressive disclosure and precision workspace */
+#tab-arrange .shape-dna-chips{display:none}
+#tab-arrange .shape-focus-bar .thread-join{opacity:.38}
+#tab-arrange .section-actions-menu{margin-top:10px;border:1px solid var(--solar-line);border-radius:12px;background:#fff;overflow:hidden}
+#tab-arrange .section-actions-menu>summary{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;padding:9px 11px;cursor:pointer;list-style:none;color:var(--solar-ink)}
+#tab-arrange .section-actions-menu>summary::-webkit-details-marker{display:none}
+#tab-arrange .section-actions-menu>summary span{display:grid;gap:2px}
+#tab-arrange .section-actions-menu>summary small{font:800 8px/1 var(--font-mono);letter-spacing:.13em;color:var(--text-3)}
+#tab-arrange .section-actions-menu>summary strong{font:750 12px/1.15 var(--font-body)}
+#tab-arrange .section-actions-menu>summary>b{font-size:17px;letter-spacing:2px;color:var(--text-3)}
+#tab-arrange .section-actions-menu[open]>summary{border-bottom:1px solid var(--solar-line);background:var(--solar-cream)}
+#tab-arrange .section-actions-menu-body{display:grid;gap:8px;padding:10px}
+#tab-arrange .section-actions-menu .section-quick-actions{opacity:1}
+#tab-arrange .section-actions-menu :is(.section-quick-actions,.section-order-actions){gap:7px}
+#tab-arrange .section-actions-menu button{min-height:40px}
+#tab-arrange .section-editor.is-open{position:fixed;inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 var(--transport-h);z-index:135;margin:0;padding:18px 22px 24px;overflow:auto;border:0;border-radius:0;background:var(--solar-cream);box-shadow:0 0 0 1px var(--solar-line),0 16px 48px rgba(26,26,46,.16)}
+#tab-arrange .section-editor.is-open .editor-header{position:sticky;top:-18px;z-index:5;margin:-18px -22px 0;padding:14px 22px;background:rgba(255,248,240,.96);border-bottom:1px solid var(--solar-line);backdrop-filter:blur(12px)}
+#tab-arrange .section-editor.is-open .editor-focus-orbit{display:none}
+#tab-arrange .section-editor.is-open .editor-close-button{min-height:42px;padding:0 14px;border-radius:10px;background:var(--solar-ink);color:#fff;border-color:var(--solar-ink);font-weight:800}
+#tab-arrange .section-editor.is-open .piano-roll-shell{min-height:360px}
+@media(max-width:680px){
+#tab-arrange .section-actions-menu button{min-height:44px}
+#tab-arrange .section-editor.is-open{inset:calc(var(--topbar-h) + var(--tabnav-h)) 0 var(--transport-h);padding:12px 10px 18px}
+#tab-arrange .section-editor.is-open .editor-header{top:-12px;margin:-12px -10px 0;padding:10px}
+#tab-arrange .section-editor.is-open .editor-header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+#tab-arrange .section-editor.is-open .editor-close-button{width:100%}
+#tab-arrange .section-editor.is-open .piano-roll-shell{min-height:300px}
+}
