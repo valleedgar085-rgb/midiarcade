@@ -178,7 +178,7 @@ function candidateRequestSets(song) {
   if (!track) return [];
   const opportunities = melodicSections(song)
     .map((bounds) => sectionContinuity(song, track, bounds))
-    .filter(({ notes, windows, deficit }) => notes.length >= 2 && windows.length > 0 && deficit >= 0.35)
+    .filter(({ notes, windows, deficit }) => notes.length >= 2 && windows.length > 0 && deficit > 0.01)
     .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index);
   if (!opportunities.length) return [];
 
