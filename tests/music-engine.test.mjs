@@ -3281,8 +3281,13 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
     assert.equal(typeof candidate.outcomePassed, "boolean");
     assert.equal(typeof candidate.registerOutcomePassed, "boolean");
     assert.equal(typeof candidate.adaptiveTarget, "boolean");
-    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate|register-outcome-below-gate/);
+    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate|song-journey-below-gate|register-outcome-below-gate/);
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
+    assert.equal(typeof candidate.songJourneyPassed, "boolean");
+    assert.equal(typeof candidate.payoffEarned, "boolean");
+    assert.equal(typeof candidate.grooveFoundation, "boolean");
+    assert.equal(typeof candidate.motifReturn, "boolean");
+    assert.equal(typeof candidate.endingResolved, "boolean");
   }
 });
 
@@ -3438,6 +3443,76 @@ test("Track B production generation exposes section outcome QC inside the author
   assert.equal(outcome.sectionOutcomeScore, report.score);
   assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
   assert.ok(song.ideaEnginePhases.some((phase) => phase.id === "section-outcome-qc"));
+});
+
+test("whole-song journey QC protects groove, buildup, payoff, motif return, and resolution", () => {
+  for (const genre of ["trap", "hipHop", "pop", "neoSoul", "ambient", "jazz"]) {
+    const song = engine.generateNew({
+      ...CONFIG,
+      genre,
+      seed: `song-journey-${genre}`,
+      bars: 16,
+      candidateCount: 3,
+    });
+    const report = engine.evaluateSongJourneyQuality(song);
+    assert.equal(report.passed, true, `${genre} should complete one coherent song journey`);
+    assert.equal(report.openingRestrained, true, `${genre} should preserve opening headroom`);
+    assert.equal(report.payoffEarned, true, `${genre} should prepare and reveal its payoff`);
+    assert.equal(report.grooveFoundation, true, `${genre} should keep its drum-and-bass foundation coherent`);
+    assert.equal(report.motifReturn, true, `${genre} should carry recognizable musical memory`);
+    assert.equal(report.endingResolved, true, `${genre} should resolve instead of stopping arbitrarily`);
+    assert.equal(song.meta.songJourney.passed, report.passed);
+    assert.equal(song.meta.songJourney.payoffEarned, report.payoffEarned);
+    assert.equal(song.meta.songJourney.grooveFoundation, report.grooveFoundation);
+    assert.equal(song.meta.songJourney.motifReturn, report.motifReturn);
+    assert.equal(song.meta.songJourney.endingResolved, report.endingResolved);
+    assert.equal(song.meta.outputOutcome.songJourneyPassed, true);
+    assert.ok(song.ideaEnginePhases.some((phase) => phase.id === "song-journey-qc"));
+  }
+});
+
+test("whole-song journey QC rejects an unprepared loop with no pocket, memory, or ending", () => {
+  const repeatedNotes = [0, 4, 8].map((start) => ({
+    start,
+    duration: 0.5,
+    pitch: 60,
+    velocity: 80,
+    producerRole: "foreground",
+  }));
+  const song = {
+    meta: { beatsPerBar: 4, bars: 3 },
+    bars: 3,
+    structure: [
+      { id: "verse-1", name: "verse", startBeat: 0, endBeat: 4, bars: 1 },
+      { id: "chorus-1", name: "chorus", startBeat: 4, endBeat: 8, bars: 1 },
+      { id: "bridge-1", name: "bridge", startBeat: 8, endBeat: 12, bars: 1 },
+    ],
+    songBlueprint: {
+      producerIntent: { scenes: [
+        { sectionId: "verse-1", purpose: "develop", foregroundTrack: "melody" },
+        { sectionId: "chorus-1", purpose: "payoff", foregroundTrack: "melody" },
+        { sectionId: "bridge-1", purpose: "contrast", foregroundTrack: "melody" },
+      ] },
+      sectionPlans: [],
+      transitions: [],
+      memoryMap: [],
+    },
+    grooveConductor: { bars: [] },
+    tracks: [
+      { id: "drums", notes: [] },
+      { id: "bass", notes: [] },
+      { id: "chords", notes: [] },
+      { id: "melody", notes: repeatedNotes },
+      { id: "counterpoint", notes: [] },
+      { id: "pad", notes: [] },
+    ],
+  };
+  const report = engine.evaluateSongJourneyQuality(song);
+  assert.equal(report.passed, false);
+  assert.equal(report.payoffEarned, false);
+  assert.equal(report.grooveFoundation, false);
+  assert.equal(report.motifReturn, false);
+  assert.equal(report.endingResolved, false);
 });
 
 
