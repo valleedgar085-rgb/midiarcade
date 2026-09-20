@@ -73,6 +73,21 @@ function syncopationDistance(notes, target = 0.68) {
   return Math.abs(ratio - target);
 }
 
+function drumVarietyScore(song, notes) {
+  const barBeats = finite(song?.meta?.beatsPerBar, 4);
+  const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
+  const signatures = Array.from({ length: bars }, (_, bar) => notes
+    .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+    .map((note) => `${note.pitch}:${round6(mod(finite(note.start), barBeats))}`)
+    .join("|"));
+  const populated = signatures.filter(Boolean);
+  if (populated.length < 2) return 58;
+  const uniqueRatio = new Set(populated).size / populated.length;
+  const adjacentCopies = populated.slice(1).filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
+  const usefulVariation = 1 - Math.abs(uniqueRatio - 0.58) / 0.58;
+  return Math.round(48 + Math.max(0, Math.min(1, usefulVariation)) * 34 + (1 - adjacentCopies) * 18);
+}
+
 export function adjacentDrumDuplicateCount(song) {
   const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
   const signatures = Array.from({ length: bars }, (_, bar) => drumSignature(song, bar)).filter(Boolean);
@@ -110,11 +125,17 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       const beforeDistance = syncopationDistance(beforeDrumNotes);
       const afterDistance = syncopationDistance(targetDrums.notes);
       if (afterDistance > beforeDistance) {
+        const afterVariety = drumVarietyScore(song, targetDrums.notes);
         const bestAccent = [...targetNotes]
           .map((note) => {
             const candidateNotes = [...targetDrums.notes, note];
-            return { note, distance: syncopationDistance(candidateNotes) };
+            return {
+              note,
+              distance: syncopationDistance(candidateNotes),
+              variety: drumVarietyScore(song, candidateNotes),
+            };
           })
+          .filter((candidate) => candidate.variety >= afterVariety)
           .sort((left, right) => left.distance - right.distance)[0];
         if (bestAccent && bestAccent.distance < afterDistance) targetDrums.notes.push(bestAccent.note);
       }
