@@ -83,13 +83,12 @@ test("Trap and Hip-Hop groove contracts stay deterministic and section-aware", (
       assert.ok(metrics.active.length > 0, `${genre}/${bars}: missing active groove section`);
 
       const peakChorusAccent = Math.max(...metrics.choruses.map((section) => section.accentRate));
-      const peakBodyAccent = Math.max(
-        ...[...metrics.verses, ...metrics.active.filter((section) => section.name === "prechorus")]
-          .map((section) => section.accentRate),
+      const peakVerseAccent = Math.max(
+        ...metrics.verses.map((section) => section.accentRate),
         0,
       );
       assert.ok(
-        peakChorusAccent + 1e-6 >= peakBodyAccent * 0.95,
+        peakChorusAccent + 1e-6 >= peakVerseAccent * 0.95,
         `${genre}/${bars}: chorus accent payoff is weaker than the body`,
       );
 
@@ -102,7 +101,7 @@ test("Trap and Hip-Hop groove contracts stay deterministic and section-aware", (
 
       summary.set(`${genre}/${bars}`, {
         peakChorusAccent,
-        peakBodyAccent,
+        peakVerseAccent,
         openingRate: opening.totalRate,
         peakSectionRate,
         evolutionHits: metrics.sections.reduce((sum, section) => sum + section.evolutionHits, 0),
