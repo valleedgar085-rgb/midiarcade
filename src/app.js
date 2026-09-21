@@ -4011,12 +4011,12 @@ export function buildTrackRerollInput(id, song = state.song, seed = createSeed()
 async function regenerateTrack(id, options = {}) {
   if (state.isGenerating || !state.song) return;
   const original = state.song;
-  pushHistory(options.historySnapshot);
+  const historySnapshot = options.historySnapshot ?? createHistorySnapshot();
   appStore.transaction("generation:reroll-start", (draft) => {
     draft.isGenerating = true;
   });
   const operation = armGenerationSafetyTimer(() => {
-    restoreHistory({ captureFuture: false, announce: false });
+    if (historySnapshot) applyHistorySnapshot(historySnapshot);
   });
   showGenerationActivity(trackRewriteStatus(TRACK_META[id].name), { kind: "similar" });
   try {
@@ -4043,6 +4043,7 @@ async function regenerateTrack(id, options = {}) {
     if (id === "drums" && candidateSettings.rollAmount != null) {
       next.settings.rollAmount = candidateSettings.rollAmount;
     }
+    pushHistory(historySnapshot);
     state.song = applyTrackSettingsToSong(next);
     renderAll();
     scheduleSessionSave();
@@ -4054,7 +4055,7 @@ async function regenerateTrack(id, options = {}) {
   } catch (error) {
     if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
-    restoreHistory({ captureFuture: false, announce: false });
+    if (historySnapshot) applyHistorySnapshot(historySnapshot);
     showToast(`Could not safely rewrite ${TRACK_META[id].name.toLowerCase()} this time. The original part was restored.`);
   } finally {
     if (finishGenerationActivity(operation, "generation:reroll-finish")) hideGenerationActivity();
