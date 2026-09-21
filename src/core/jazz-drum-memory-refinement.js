@@ -212,6 +212,13 @@ function uniqueNotes(notes) {
   });
 }
 
+function barTimingSignature(notes) {
+  return notes
+    .map((note) => `${round6(finite(note?.start))}:${round6(finite(note?.duration, 0.25))}`)
+    .sort()
+    .join("|");
+}
+
 function shiftedSourceNotes(sourceNotes, delta) {
   return sourceNotes.map((note) => ({
     ...cloneValue(note),
@@ -258,6 +265,54 @@ function ornamentVariants(shifted, targetNotes) {
       noteKey(note) === noteKey(pair.targetNote) ? cloneValue(pair.sourceNote) : cloneValue(note)
     ))));
   }
+  // Pitch-color recall keeps every target onset, duration, kick and snare
+  // exactly where it already was. Only a non-skeleton drum voice is borrowed
+  // from the origin bar, so the return acquires memory without changing pocket,
+  // syncopation count, backbeat coverage or bass-lock timing.
+  const colorPairs = [];
+  for (let targetIndex = 0; targetIndex < targetOrnaments.length; targetIndex += 1) {
+    const targetNote = targetOrnaments[targetIndex];
+    for (let sourceIndex = 0; sourceIndex < sourceOrnamentPool.length; sourceIndex += 1) {
+      const sourceNote = sourceOrnamentPool[sourceIndex];
+      if (Number(sourceNote.pitch) === Number(targetNote.pitch)) continue;
+      colorPairs.push({ targetNote, sourceNote, targetIndex, sourceIndex });
+    }
+  }
+  for (const pair of colorPairs) {
+    variants.push(uniqueNotes(originalTarget.map((note) => (
+      noteKey(note) === noteKey(pair.targetNote)
+        ? {
+          ...cloneValue(note),
+          pitch: Number(pair.sourceNote.pitch),
+          velocity: finite(pair.sourceNote.velocity, finite(note.velocity, 80)),
+          jazzMemoryColorRecall: true,
+        }
+        : cloneValue(note)
+    ))));
+  }
+  for (let left = 0; left < colorPairs.length; left += 1) {
+    for (let right = left + 1; right < colorPairs.length; right += 1) {
+      const a = colorPairs[left];
+      const b = colorPairs[right];
+      if (a.targetIndex === b.targetIndex || a.sourceIndex === b.sourceIndex) continue;
+      const replacements = new Map([
+        [noteKey(a.targetNote), a.sourceNote],
+        [noteKey(b.targetNote), b.sourceNote],
+      ]);
+      variants.push(uniqueNotes(originalTarget.map((note) => {
+        const sourceNote = replacements.get(noteKey(note));
+        return sourceNote
+          ? {
+            ...cloneValue(note),
+            pitch: Number(sourceNote.pitch),
+            velocity: finite(sourceNote.velocity, finite(note.velocity, 80)),
+            jazzMemoryColorRecall: true,
+          }
+          : cloneValue(note);
+      })));
+    }
+  }
+
   // Two-event substitutions provide enough fingerprint movement for bars whose
   // variety score cannot improve from a single recalled ornament.
   for (let left = 0; left < compatiblePairs.length; left += 1) {
@@ -402,6 +457,8 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
         candidates.push({
           id: "jazz-return-groove-recall",
           song,
+          timingPreserved: barTimingSignature(replacement) === barTimingSignature(targetNotes),
+          noteCountDelta: replacement.length - targetNotes.length,
           changedBars: 1,
           sourceBar,
           targetBar,
@@ -420,7 +477,9 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   }
 
   candidates.sort((left, right) => (
-    (right.drumVarietyAfter - left.drumVarietyAfter)
+    (Number(right.timingPreserved) - Number(left.timingPreserved))
+    || (Math.abs(left.noteCountDelta) - Math.abs(right.noteCountDelta))
+    || (right.drumVarietyAfter - left.drumVarietyAfter)
     || (right.grooveAfter - left.grooveAfter)
     || (right.authenticityAfter - left.authenticityAfter)
     || (left.recalledNotes - right.recalledNotes)
