@@ -647,6 +647,44 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
     }
   }
 
+  // Final bounded fallback: recall any earlier safe Jazz bar whose kick/snare
+  // skeleton matches the target. This preserves the target's core pocket while
+  // allowing a song-level groove memory when the explicit section pair has no
+  // critic-safe match. The ordinary no-regression filters still decide whether
+  // the candidate is allowed to exist.
+  if (!candidates.length) {
+    const allBars = Math.max(1, Math.round(finite(sourceSong?.meta?.bars, sourceSong?.bars ?? 1)));
+    const safeBars = Array.from({ length: allBars }, (_, bar) => bar)
+      .filter((bar) => !protectedBar(sourceSong, bar));
+    const targetBars = [...new Set(pairs.flatMap(({ target }) => sectionBarIndices(target, barBeats)))]
+      .filter((bar) => !protectedBar(sourceSong, bar));
+
+    for (const targetBar of targetBars) {
+      const targetNotes = notesForBar(sourceSong, targetBar);
+      if (targetNotes.length < 2) continue;
+      const targetSkeleton = kickSnareSkeletonSignature(targetNotes, barBeats);
+      for (const sourceBar of safeBars) {
+        if (sourceBar >= targetBar - 1) continue;
+        const sourceNotes = notesForBar(sourceSong, sourceBar);
+        if (sourceNotes.length < 4) continue;
+        if (kickSnareSkeletonSignature(sourceNotes, barBeats) !== targetSkeleton) continue;
+        const delta = (targetBar - sourceBar) * barBeats;
+        const shifted = shiftedSourceNotes(sourceNotes, delta).map((note) => ({
+          ...cloneValue(note),
+          jazzMemoryPocketRecall: true,
+          jazzMemoryGlobalRecall: true,
+        }));
+        considerCandidate({
+          sourceBar,
+          targetBar,
+          targetNotes,
+          replacement: shifted,
+          recallMode: "global-pocket-memory",
+        });
+      }
+    }
+  }
+
   candidates.sort((left, right) => (
     (Number(right.recallMode === "pocket-compatible-return") - Number(left.recallMode === "pocket-compatible-return"))
     || (Number(right.recallMode === "pocket-hybrid-return") - Number(left.recallMode === "pocket-hybrid-return"))
