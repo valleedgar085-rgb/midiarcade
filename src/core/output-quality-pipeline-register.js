@@ -986,11 +986,13 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
     { id: "repetitionRefinement", run: (current) => applyRepetitionRefinement(current, config, evaluate, release) },
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, config, evaluate, release) },
-    { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
+    // Genre identity is last so its no-regression comparison is against the
+    // fully refined song and no later stage can invalidate the accepted result.
+    { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
   ]);
   const diagnostics = sequence.diagnostics;
   return {
