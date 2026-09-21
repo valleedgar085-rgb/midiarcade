@@ -87,6 +87,23 @@ test("Jazz fixed seeds gain drum memory without groove, performance, authenticit
 test("quality-lab-03 recalls a remembered Jazz pocket without weakening groove identity", () => {
   const source = jazzSong("quality-lab-03");
   const candidate = createJazzDrumMemoryCandidate(source);
+  if (!candidate) {
+    const drums = source.tracks.find((track) => track.id === "drums")?.notes ?? [];
+    const barBeats = finite(source.meta?.beatsPerBar, 4);
+    const bars = Math.max(1, Math.round(finite(source.meta?.bars, 1)));
+    const signatures = Array.from({ length: bars }, (_, bar) => drums
+      .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+      .map((note) => `${note.pitch}:${Math.round((((finite(note.start) % barBeats) + barBeats) % barBeats) * 1000) / 1000}`)
+      .join("|"));
+    console.log("JAZZ_MEMORY_Q03_DIAGNOSTIC", JSON.stringify({
+      score: evaluateSongCandidate(source),
+      structure: source.structure,
+      memoryMap: source.memoryMap,
+      signatures,
+      uniqueCount: new Set(signatures.filter(Boolean)).size,
+      populatedBars: signatures.filter(Boolean).length,
+    }));
+  }
   assert.ok(candidate, "quality-lab-03 needs a critic-safe Jazz memory candidate");
 
   const beforeDrums = source.tracks.find((track) => track.id === "drums").notes;
