@@ -233,6 +233,47 @@ function ornamentVariants(shifted, targetNotes) {
   const skeleton = targetSkeleton(targetNotes).map(cloneValue);
   const variants = [];
   const originalTarget = targetNotes.map(cloneValue);
+  const targetOrnaments = sourceOrnaments(targetNotes)
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  const sourceOrnamentPool = sourceOrnaments(shifted)
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  const offbeatClass = (note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08;
+
+  // One-for-one ornament substitutions preserve total note count and the exact
+  // syncopated-vs-straight count. Because kicks/snares are excluded, Critic 6.0
+  // groove and Jazz authenticity remain stable while the return bar can still
+  // inherit a recognizable event from its origin.
+  const compatiblePairs = [];
+  for (let targetIndex = 0; targetIndex < targetOrnaments.length; targetIndex += 1) {
+    const targetNote = targetOrnaments[targetIndex];
+    for (let sourceIndex = 0; sourceIndex < sourceOrnamentPool.length; sourceIndex += 1) {
+      const sourceNote = sourceOrnamentPool[sourceIndex];
+      if (offbeatClass(targetNote) !== offbeatClass(sourceNote)) continue;
+      if (noteKey(targetNote) === noteKey(sourceNote)) continue;
+      compatiblePairs.push({ targetNote, sourceNote, targetIndex, sourceIndex });
+    }
+  }
+  for (const pair of compatiblePairs) {
+    variants.push(uniqueNotes(originalTarget.map((note) => (
+      noteKey(note) === noteKey(pair.targetNote) ? cloneValue(pair.sourceNote) : cloneValue(note)
+    ))));
+  }
+  // Two-event substitutions provide enough fingerprint movement for bars whose
+  // variety score cannot improve from a single recalled ornament.
+  for (let left = 0; left < compatiblePairs.length; left += 1) {
+    for (let right = left + 1; right < compatiblePairs.length; right += 1) {
+      const a = compatiblePairs[left];
+      const b = compatiblePairs[right];
+      if (a.targetIndex === b.targetIndex || a.sourceIndex === b.sourceIndex) continue;
+      const replacements = new Map([
+        [noteKey(a.targetNote), a.sourceNote],
+        [noteKey(b.targetNote), b.sourceNote],
+      ]);
+      variants.push(uniqueNotes(originalTarget.map((note) => (
+        replacements.has(noteKey(note)) ? cloneValue(replacements.get(noteKey(note))) : cloneValue(note)
+      ))));
+    }
+  }
 
   // The least invasive recall keeps the target bar intact and introduces only
   // a bounded origin ornament. This is useful when the target's kick/snare and
