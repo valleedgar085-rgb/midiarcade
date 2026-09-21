@@ -1,5 +1,6 @@
 import { roleRegisterWindow } from "./role-register-policy.js";
 import { registerHealthScore } from "./register-health-refinement.js";
+import { compareJazzQuality } from "./jazz-quality-lab.js";
 
 const EPSILON = 1e-6;
 const PITCHED_ROLES = new Set(["bass", "chords", "melody", "counterpoint", "pad"]);
@@ -495,6 +496,9 @@ export function judgeCompositionCandidate(before, after, selection = {}, directi
   const candidate = analyzeCompositionCandidate(after, selection, directive);
   const hardIssues = [];
   const warnings = [];
+  const jazz = compareJazzQuality(before, after, selection);
+  hardIssues.push(...(jazz?.hardIssues ?? []));
+  warnings.push(...(jazz?.warnings ?? []));
 
   pushRegression(
     hardIssues,
@@ -625,6 +629,7 @@ export function judgeCompositionCandidate(before, after, selection = {}, directi
     passed: hardIssues.length === 0,
     hardIssues: Object.freeze(hardIssues),
     warnings: Object.freeze(warnings),
+    jazz,
     baseline,
     candidate,
     deltas: Object.freeze({
@@ -633,6 +638,7 @@ export function judgeCompositionCandidate(before, after, selection = {}, directi
       register: candidate.scores.register - baseline.scores.register,
       phrase: candidate.scores.phrase - baseline.scores.phrase,
       blueprint: candidate.scores.blueprint - baseline.scores.blueprint,
+      jazz: jazz?.deltas?.overall ?? 0,
       overall: candidate.scores.overall - baseline.scores.overall,
     }),
   });
