@@ -260,7 +260,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   }
   assert.match(htmlSource, /<details class="dna-integrated-card"/, "song analysis should be progressively disclosed");
   assert.match(htmlSource, /<details class="shape-controls"/, "key, tempo and song shape should be optional");
-  assert.match(htmlSource, /<details class="creator-recipe-side"/, "recipes and fine tuning should be optional");
+  assert.match(htmlSource, /<details class="creator-recipe-side" open>/, "groove recipes and performance controls should be visible by default");
   assert.doesNotMatch(htmlSource, /Start with a mood|moodPresetsTitle|moodGrid/, "retired mood presets should not ship");
   assert.match(cssSource, /\[hidden\]\{display:none!important\}/, "inactive workspace panels must not leak into the layout");
   assert.doesNotMatch(cssSource, /fonts\.googleapis\.com/, "app typography must stay available offline");

@@ -3074,6 +3074,60 @@ function assignMotifFamily(structure, songBlueprint = null) {
   });
 }
 
+function shapeQuestionAnswerDialogue(sourceEvents, lengthBeats, homeDegree, maximumDegree) {
+  const midpoint = lengthBeats / 2;
+  const originalAnswer = sourceEvents.filter((event) => event.offset >= midpoint - 0.12);
+  const question = sourceEvents
+    .filter((event) => event.offset < midpoint - 0.12)
+    .map((event) => ({ ...event, dialogueRole: "question" }));
+  if (question.length < 2) return sourceEvents;
+  while (question.length > 2 && question.at(-1).offset > midpoint - 0.5) question.pop();
+
+  const questionLanding = question.at(-1);
+  const openDirection = questionLanding.degree >= homeDegree ? 1 : -1;
+  questionLanding.degree = clamp(homeDegree + openDirection * 2, -maximumDegree, maximumDegree);
+  questionLanding.duration = round(clamp(
+    Math.min(questionLanding.duration, midpoint - questionLanding.offset - 0.38),
+    0.08,
+    questionLanding.duration,
+  ));
+  questionLanding.accent = round(clamp(questionLanding.accent * 0.9, 0.4, 1.1));
+  questionLanding.dialogueLanding = "open";
+
+  const answer = originalAnswer
+    .map((event, index) => {
+      const finalAnswer = index === originalAnswer.length - 1;
+      const questionEcho = question[index % question.length];
+      const composedDegree = event.degree;
+      const answeringDegree = finalAnswer
+        ? homeDegree
+        : clamp(
+          composedDegree + Math.sign(homeDegree - composedDegree) * (index % 2),
+          -maximumDegree,
+          maximumDegree,
+        );
+      return {
+        ...event,
+        duration: round(event.duration * (finalAnswer ? 1.22 : 1)),
+        degree: answeringDegree,
+        accent: round(clamp(
+          (event.accent * 0.7 + questionEcho.accent * 0.3) * (finalAnswer ? 1.14 : 1.03),
+          0.42,
+          1.2,
+        )),
+        dialogueRole: "answer",
+        ...(finalAnswer ? { dialogueLanding: "resolved" } : {}),
+      };
+    })
+    .filter((event) => event.offset >= midpoint && event.offset < lengthBeats - 0.08)
+    .map((event) => ({
+      ...event,
+      duration: round(Math.min(event.duration, Math.max(0.2, lengthBeats - event.offset - 0.04))),
+    }));
+
+  return answer.length >= 2 ? [...question, ...answer] : sourceEvents;
+}
+
 function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   const barBeats = beatsPerBar(config);
   const melodyGrammar = GENRE_MELODY_GRAMMARS[config.genre] ?? GENRE_MELODY_GRAMMARS.pop;
@@ -3171,6 +3225,14 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
       { offset: barBeats / 2, duration: 0.8, degree: 2, accent: 0.76 },
       { offset: Math.max(barBeats, lengthBeats - 1), duration: 0.9, degree: 0, accent: 0.9 },
     );
+  }
+  if (phraseShape === "questionAnswer") {
+    events.splice(0, events.length, ...shapeQuestionAnswerDialogue(
+      events,
+      lengthBeats,
+      homeDegree,
+      maximumDegree,
+    ));
   }
 
   const melody = {

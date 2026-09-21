@@ -67,9 +67,10 @@ test("A2 organizes Create around Song, Feel, Structure, and Generate without dup
   assert.match(presentation, /4 · GENERATE/);
 });
 
-test("advanced direction moves optional controls below the primary generation actions", () => {
+test("advanced direction keeps tonal precision optional while groove controls stay visible", () => {
   assert.match(presentation, /className = "phase1-advanced-direction"/);
-  assert.match(presentation, /body\.append\(shapeControls, recipeControls\)/);
+  assert.match(presentation, /body\.append\(shapeControls\)/);
+  assert.match(presentation, /generationActions\.insertAdjacentElement\("beforebegin", recipeControls\)/);
   assert.match(presentation, /generationActions\.insertAdjacentElement\("afterend", advanced\)/);
   assert.match(presentation, /creatorGrid\.classList\.add\("phase1-essentials-grid"\)/);
   assert.match(css, /#preGenSection \.phase1-advanced-direction-body\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);

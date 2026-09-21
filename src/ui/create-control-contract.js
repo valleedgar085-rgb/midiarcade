@@ -45,8 +45,8 @@ export const CREATE_SELECTOR_CONTRACT = Object.freeze([
   selectorEntry("song-insight-toggle", ".dna-integrated-card > summary", "Song insight", "Opens or closes the generated song DNA, harmony, groove and structural analysis without changing the music.", "current-song"),
   selectorEntry("workflow-guide-toggle", "#workflowPanel > summary", "Optional workflow guide", "Opens or closes the four-step Create guide. It changes only guidance visibility, never the song or staged direction.", "guidance"),
   selectorEntry("song-shape-toggle", ".shape-controls > summary", "Key, mode and harmony controls", "Opens or closes optional tonal controls for root key, scale and harmonic path without changing values by itself.", "advanced"),
-  selectorEntry("recipe-toggle", ".creator-recipe-side > summary", "Recipe and fine tuning", "Opens or closes the optional recipe and performance-tuning area without changing the staged song direction.", "advanced"),
-  selectorEntry("fine-tune-toggle", ".advanced-controls > summary", "Rhythm and variety fine tuning", "Opens or closes detailed swing, humanize, triplet, roll, variation, evolution and surprise controls.", "advanced"),
+  selectorEntry("recipe-toggle", ".creator-recipe-side > summary", "Groove recipe and performance", "The current recipe and performance controls are shown by default; this only collapses or reopens them and never changes the staged song direction.", "advanced"),
+  selectorEntry("fine-tune-toggle", ".advanced-controls > summary", "Rhythm and song variety", "The rhythm, human feel and generation-variety controls are shown by default; this only collapses or reopens them.", "advanced"),
 ]);
 
 const CREATE_CONTEXT_CONTRACT = Object.freeze({
