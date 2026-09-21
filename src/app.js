@@ -4021,39 +4021,32 @@ async function regenerateTrack(id, options = {}) {
   showGenerationActivity(trackRewriteStatus(TRACK_META[id].name), { kind: "similar" });
   try {
     const generationInput = buildTrackRerollInput(id, original, createSeed());
-    const work = generationExecutor.run("similar", { sourceSong: original, config: generationInput })
-      .then((result) => result?.song);
-    let [candidate] = await Promise.all([work, generationDelay()]);
+    const result = await generationExecutor.run("compositionCandidate", {
+      sourceSong: original,
+      selection: { target: "track", trackId: id },
+      input: generationInput,
+      maxAttempts: 3,
+    });
     if (!generationOwnership.isCurrent(operation)) return;
-    if (!candidate) candidate = generateSimilar(original, generationInput);
-    const replacement = songTracks(candidate).find((track, index) => trackId(track, index) === id);
-    if (!replacement) throw new Error(`No ${id} track was generated.`);
-    const next = deepClone(original);
-    next.id = candidate.id ?? next.id;
-    next.parentId = original.id ?? null;
-    next.generation = "similar";
-    next.revision = candidate.revision ?? (Number(original.revision) || 0) + 1;
-    next.seed = candidate.seed ?? createSeed();
-    next.tracks = songTracks(next).map((track, index) => trackId(track, index) === id ? deepClone(replacement) : track);
-    next.settings = { ...(next.settings || {}) };
-    const candidateSettings = candidate.settings || {};
-    if ((id === "drums" || id === "melody") && candidateSettings.tripletAmount != null) {
-      next.settings.tripletAmount = candidateSettings.tripletAmount;
+    const transaction = result?.transaction;
+    if (!transaction?.validation?.valid) {
+      const issue = transaction?.validation?.issues?.[0]?.replaceAll(":", " ");
+      throw new Error(issue || `No validated ${id} candidate was generated.`);
     }
-    if (id === "drums" && candidateSettings.rollAmount != null) {
-      next.settings.rollAmount = candidateSettings.rollAmount;
-    }
-    state.song = applyTrackSettingsToSong(next);
+
+    state.song = applyTrackSettingsToSong(acceptCompositionCandidate(transaction));
     renderAll();
+    scheduleSessionSave();
     const attitude = options.attitude ? ` with ${ATTITUDE_LABELS[options.attitude].toLowerCase()} attitude` : "";
-    const message = `${TRACK_META[id].name} found a fresh part${attitude}; the rest of the band stayed untouched.`;
+    const attempts = transaction.selfCorrection?.attemptCount ?? 1;
+    const message = `${TRACK_META[id].name} found a validated fresh part${attitude} in ${attempts} pass${attempts === 1 ? "" : "es"}; the rest of the band stayed untouched.`;
     renderAttitudeStrip(message);
     showToast(message);
   } catch (error) {
     if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
     restoreHistory({ captureFuture: false, announce: false });
-    showToast(`Could not rewrite ${TRACK_META[id].name.toLowerCase()} this time.`);
+    showToast(`Could not safely rewrite ${TRACK_META[id].name.toLowerCase()} this time. The original part was restored.`);
   } finally {
     if (finishGenerationActivity(operation, "generation:reroll-finish")) hideGenerationActivity();
   }
