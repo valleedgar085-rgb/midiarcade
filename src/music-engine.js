@@ -37,6 +37,7 @@ import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
+import { normalizeGenreId } from "./core/genre-contract.js";
 
 export const PPQ = 480;
 
@@ -552,54 +553,6 @@ const SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#",
 const FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
 const TRACK_IDS = Object.keys(TRACK_DEFINITIONS);
 
-const GENRE_ALIASES = {
-  neosoul: "neoSoul",
-  rnb: "neoSoul",
-  rhythmandblues: "neoSoul",
-  hiphop: "hipHop",
-  rap: "rap",
-  trap: "trap",
-  house: "house",
-  techno: "techno",
-  drumbass: "drumBass",
-  drumandbass: "drumBass",
-  dnb: "drumBass",
-  jungle: "drumBass",
-  synthwave: "synthwave",
-  retrowave: "synthwave",
-  pop: "pop",
-  // v2.0 genres
-  lofi: "loFiHipHop",
-  lofihiphop: "loFiHipHop",
-  loFiHipHop: "loFiHipHop",
-  chillhop: "loFiHipHop",
-  rnbsoul: "rnbSoul",
-  soul: "rnbSoul",
-  slowjam: "rnbSoul",
-  drill: "drill",
-  ukdrill: "drill",
-  reggaeton: "reggaeton",
-  dembow: "reggaeton",
-  afrobeats: "afrobeats",
-  afropop: "afrobeats",
-  jazz: "jazz",
-  swing: "jazz",
-  ambient: "ambient",
-  chillout: "ambient",
-  downtempo: "ambient",
-  funk: "funk",
-  groove: "funk",
-  country: "country",
-  americana: "country",
-  rock: "rock",
-  altrock: "rock",
-  alternativerock: "rock",
-  popradio: "popRadio",
-  popRadio: "popRadio",
-  synthpopradio: "synthPopRadio",
-  synthPopRadio: "synthPopRadio",
-};
-
 const SCALE_ALIASES = {
   ionian: "major",
   major: "major",
@@ -1066,8 +1019,8 @@ function normalizeChordPath(value, fallback = DEFAULT_CONFIG.chordPath) {
 }
 
 function normalizeGenre(value) {
-  const token = String(value ?? DEFAULT_CONFIG.genre).replace(/[\s_&/+-]/g, "").toLowerCase();
-  return GENRE_ALIASES[token] ?? DEFAULT_CONFIG.genre;
+  const canonical = normalizeGenreId(value ?? DEFAULT_CONFIG.genre);
+  return GENRE_PROFILES[canonical] ? canonical : DEFAULT_CONFIG.genre;
 }
 
 function normalizeTrapIntroMode(value) {
@@ -1351,10 +1304,11 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
       { name: "outro", weight: 0.5 },
     ],
     full: [
-      { name: "intro", weight: 0.7 }, { name: "chorus", weight: 1.5 },
-      { name: "verse", weight: 2.5 }, { name: "chorus", weight: 1.5 },
-      { name: "bridge", weight: 1.2 }, { name: "verse", weight: 2 },
-      { name: "chorus", weight: 1.8 }, { name: "outro", weight: 0.7 },
+      { name: "intro", weight: 0.7 }, { name: "verse", weight: 2.5 },
+      { name: "chorus", weight: 1.5 }, { name: "verse", weight: 2 },
+      { name: "bridge", weight: 1.2 }, { name: "chorus", weight: 1.8 },
+      { name: "chorus", weight: 1.2 },
+      { name: "outro", weight: 0.7 },
     ],
   },
   loop: {
@@ -1443,9 +1397,58 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
   },
 });
 
-function specialFormLayout(form, bars) {
+const LONG_FORM_VARIANTS = deepFreeze({
+  "half-time": [
+    { name: "intro", weight: 0.7 }, { name: "verse", weight: 2.5 },
+    { name: "chorus", weight: 1.5 }, { name: "bridge", weight: 1.2 },
+    { name: "verse", weight: 2 }, { name: "chorus", weight: 1.8 },
+    { name: "chorus", weight: 1.2 },
+    { name: "outro", weight: 0.7 },
+  ],
+  loop: [
+    { name: "intro", weight: 0.8 }, { name: "idea", weight: 2.8 },
+    { name: "breakdown", weight: 1.2 }, { name: "bridge", weight: 1.4 },
+    { name: "idea", weight: 2.5 }, { name: "breakdown", weight: 1.2 },
+    { name: "idea", weight: 2.8 }, { name: "outro", weight: 0.8 },
+  ],
+  "head-solos": [
+    { name: "intro", weight: 0.7 }, { name: "theme", weight: 1.4 },
+    { name: "solo", weight: 2.4 }, { name: "bridge", weight: 1.2 },
+    { name: "solo", weight: 2.4 }, { name: "theme", weight: 1.5 },
+    { name: "outro", weight: 0.7 },
+  ],
+  evolving: [
+    { name: "intro", weight: 1.5 }, { name: "idea", weight: 2.2 },
+    { name: "breakdown", weight: 1.8 }, { name: "theme", weight: 2.4 },
+    { name: "idea", weight: 2 }, { name: "breakdown", weight: 1.5 },
+    { name: "outro", weight: 1.5 },
+  ],
+  "story-song": [
+    { name: "intro", weight: 0.6 }, { name: "verse", weight: 2.3 },
+    { name: "chorus", weight: 1.4 }, { name: "bridge", weight: 1.3 },
+    { name: "verse", weight: 2.3 }, { name: "verse", weight: 2.1 },
+    { name: "chorus", weight: 1.6 }, { name: "outro", weight: 0.6 },
+  ],
+  anthem: [
+    { name: "intro", weight: 0.7 }, { name: "verse", weight: 2 },
+    { name: "chorus", weight: 2.2 }, { name: "bridge", weight: 1.3 },
+    { name: "verse", weight: 1.8 }, { name: "chorus", weight: 2.3 },
+    { name: "chorus", weight: 1.5 }, { name: "outro", weight: 0.7 },
+  ],
+  groove: [
+    { name: "intro", weight: 0.6 }, { name: "verse", weight: 2.4 },
+    { name: "chorus", weight: 1.4 }, { name: "verse", weight: 2.2 },
+    { name: "bridge", weight: 1.3 }, { name: "chorus", weight: 1.5 },
+    { name: "verse", weight: 2 }, { name: "outro", weight: 0.6 },
+  ],
+});
+
+function specialFormLayout(form, bars, seed = "") {
   const template = SPECIAL_FORM_LAYOUTS[form];
   if (!template || bars <= 4) return null;
+  if (bars > 20 && LONG_FORM_VARIANTS[form] && hashSeed(`${seed}:${form}:long-form`) % 2 === 1) {
+    return clone(LONG_FORM_VARIANTS[form]);
+  }
   return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
 }
 
@@ -1487,7 +1490,7 @@ function createStructure(config, rng) {
   // Reggaeton also has a club-ready profile, but its verse/chorus form must not
   // be mistaken for a House/Techno build-drop arrangement.
   const electronic = ["house", "techno", "drumBass"].includes(config.genre);
-  let layout = specialFormLayout(form, bars);
+  let layout = specialFormLayout(form, bars, config.seed);
   if (layout) {
     // The selected form is scaled below by allocateBars().
   } else if (bars <= 2) layout = [{ name: "theme", weight: 1 }];
@@ -3071,6 +3074,60 @@ function assignMotifFamily(structure, songBlueprint = null) {
   });
 }
 
+function shapeQuestionAnswerDialogue(sourceEvents, lengthBeats, homeDegree, maximumDegree) {
+  const midpoint = lengthBeats / 2;
+  const originalAnswer = sourceEvents.filter((event) => event.offset >= midpoint - 0.12);
+  const question = sourceEvents
+    .filter((event) => event.offset < midpoint - 0.12)
+    .map((event) => ({ ...event, dialogueRole: "question" }));
+  if (question.length < 2) return sourceEvents;
+  while (question.length > 2 && question.at(-1).offset > midpoint - 0.5) question.pop();
+
+  const questionLanding = question.at(-1);
+  const openDirection = questionLanding.degree >= homeDegree ? 1 : -1;
+  questionLanding.degree = clamp(homeDegree + openDirection * 2, -maximumDegree, maximumDegree);
+  questionLanding.duration = round(clamp(
+    Math.min(questionLanding.duration, midpoint - questionLanding.offset - 0.38),
+    0.08,
+    questionLanding.duration,
+  ));
+  questionLanding.accent = round(clamp(questionLanding.accent * 0.9, 0.4, 1.1));
+  questionLanding.dialogueLanding = "open";
+
+  const answer = originalAnswer
+    .map((event, index) => {
+      const finalAnswer = index === originalAnswer.length - 1;
+      const questionEcho = question[index % question.length];
+      const composedDegree = event.degree;
+      const answeringDegree = finalAnswer
+        ? homeDegree
+        : clamp(
+          composedDegree + Math.sign(homeDegree - composedDegree) * (index % 2),
+          -maximumDegree,
+          maximumDegree,
+        );
+      return {
+        ...event,
+        duration: round(event.duration * (finalAnswer ? 1.22 : 1)),
+        degree: answeringDegree,
+        accent: round(clamp(
+          (event.accent * 0.7 + questionEcho.accent * 0.3) * (finalAnswer ? 1.14 : 1.03),
+          0.42,
+          1.2,
+        )),
+        dialogueRole: "answer",
+        ...(finalAnswer ? { dialogueLanding: "resolved" } : {}),
+      };
+    })
+    .filter((event) => event.offset >= midpoint && event.offset < lengthBeats - 0.08)
+    .map((event) => ({
+      ...event,
+      duration: round(Math.min(event.duration, Math.max(0.2, lengthBeats - event.offset - 0.04))),
+    }));
+
+  return answer.length >= 2 ? [...question, ...answer] : sourceEvents;
+}
+
 function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   const barBeats = beatsPerBar(config);
   const melodyGrammar = GENRE_MELODY_GRAMMARS[config.genre] ?? GENRE_MELODY_GRAMMARS.pop;
@@ -3168,6 +3225,14 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
       { offset: barBeats / 2, duration: 0.8, degree: 2, accent: 0.76 },
       { offset: Math.max(barBeats, lengthBeats - 1), duration: 0.9, degree: 0, accent: 0.9 },
     );
+  }
+  if (phraseShape === "questionAnswer") {
+    events.splice(0, events.length, ...shapeQuestionAnswerDialogue(
+      events,
+      lengthBeats,
+      homeDegree,
+      maximumDegree,
+    ));
   }
 
   const melody = {
@@ -5171,6 +5236,72 @@ function bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, 
   return absolute.sort((a, b) => a - b).map((start) => round(Math.max(0, start - eventStart)));
 }
 
+const GENRE_BASS_STYLE_FAMILIES = deepFreeze({
+  ambient: ["pedal", "rootFifth"],
+  jazz: ["walking", "melodic", "rootFifth"],
+  neoSoul: ["syncopated", "melodic", "walking", "pedal"],
+  rnbSoul: ["syncopated", "melodic", "pedal", "walking"],
+  loFiHipHop: ["pedal", "walking", "syncopated", "melodic"],
+  hipHop: ["syncopated", "pedal", "octave"],
+  rap: ["syncopated", "pedal", "octave"],
+  trap: ["syncopated", "pedal", "octave"],
+  drill: ["syncopated", "octave", "pedal"],
+  funk: ["syncopated", "melodic", "octave", "walking"],
+  afrobeats: ["syncopated", "melodic", "octave"],
+  reggaeton: ["syncopated", "octave", "pedal"],
+  house: ["pulse", "octave", "pedal"],
+  techno: ["pulse", "pedal", "octave"],
+  drumBass: ["syncopated", "octave", "melodic"],
+  country: ["rootFifth", "walking", "octave"],
+  rock: ["rootFifth", "octave", "walking"],
+  pop: ["rootFifth", "syncopated", "octave", "melodic"],
+  popRadio: ["rootFifth", "syncopated", "octave", "melodic"],
+  synthwave: ["pulse", "octave", "rootFifth"],
+  synthPopRadio: ["pulse", "octave", "syncopated"],
+});
+
+function bassStyleForSection(config, style, section, sectionIndex, rng) {
+  // Keep signed fusion and DnB articulation calibrations stable. Those paths
+  // already supply their own hybrid/response bass treatment; rotating a second
+  // personality there can make downstream mastering non-idempotent.
+  if (
+    config.bars < 12
+    || config.isFusion
+    || ["drumBass", "afrobeats"].includes(config.genre)
+  ) return style.bassGroove;
+  const palette = GENRE_BASS_STYLE_FAMILIES[config.genre]
+    ?? [style.bassGroove, "rootFifth", "syncopated"];
+  if (["intro", "breakdown", "outro"].includes(section.name) && palette.includes("pedal")) return "pedal";
+  if (["bridge", "solo"].includes(section.name) && palette.includes("melodic")) return "melodic";
+  if (["chorus", "drop"].includes(section.name) && palette.includes("octave")) return "octave";
+  const baseIndex = Math.max(0, palette.indexOf(style.bassGroove));
+  const rotation = rng.fork(`bass-style-${section.id}`).int(0, Math.max(0, palette.length - 1));
+  return palette[mod(baseIndex + sectionIndex + rotation, palette.length)];
+}
+
+function bassOffsetsForStyle(offsets, bassStyle, chord, config, preserveRhythmPartner = false) {
+  const maximum = Math.max(0, chord.duration - 0.06);
+  const source = [...(offsets ?? [])];
+  if (preserveRhythmPartner) return source.sort((left, right) => left - right);
+  const add = (offset) => {
+    if (offset < -0.001 || offset >= maximum) return;
+    if (!source.some((value) => Math.abs(value - offset) < 0.01)) source.push(round(offset));
+  };
+  if (bassStyle === "pedal") {
+    const anchors = source.filter((offset) => Math.abs(mod(chord.start + offset, 1)) < 0.02);
+    return (anchors.length ? anchors : source.slice(0, 1)).slice(0, 2);
+  }
+  if (bassStyle === "walking") {
+    for (let offset = 0; offset < maximum; offset += 1) add(offset);
+  } else if (bassStyle === "melodic") {
+    add(Math.min(maximum - 0.01, chord.duration * 0.5));
+    if (config.syncopation >= 0.48) add(Math.min(maximum - 0.01, chord.duration - 0.75));
+  } else if (bassStyle === "octave") {
+    add(Math.min(maximum - 0.01, chord.duration >= 2 ? 1.5 : chord.duration * 0.5));
+  }
+  return source.sort((left, right) => left - right);
+}
+
 function generateBass(
   config,
   structure,
@@ -5188,9 +5319,15 @@ function generateBass(
   const barBeats = beatsPerBar(config);
   const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
   let harmonicLifts = 0;
+  const sectionBassStyles = new Map();
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
     const section = sectionForBar(structure, chord.bar);
+    const sectionIndex = Math.max(0, structure.findIndex((candidate) => candidate.id === section.id));
+    if (!sectionBassStyles.has(section.id)) {
+      sectionBassStyles.set(section.id, bassStyleForSection(config, style, section, sectionIndex, rng));
+    }
+    const bassStyle = sectionBassStyles.get(section.id);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const barPlan = grooveBar(grooveConductor, chord.bar);
     const plannedTension = plannedTensionAtBeat(songBlueprint, section, chord.start, barBeats);
@@ -5200,6 +5337,7 @@ function generateBass(
       1.25,
     );
     let offsets = bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor);
+    const preserveRhythmPartner = Array.isArray(offsets);
     if (Array.isArray(offsets)) {
       // An empty contextual result is deliberate space; non-empty offsets came
       // from kicks that actually survived drum generation.
@@ -5229,6 +5367,7 @@ function generateBass(
       offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
     }
 
+    offsets = bassOffsetsForStyle(offsets, bassStyle, chord, config, preserveRhythmPartner);
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
     for (let index = 0; index < offsets.length; index += 1) {
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
@@ -5243,10 +5382,17 @@ function generateBass(
             ? "pickup"
             : "movement";
       let pitch = rootMidi(chord, bassOctave);
-      if (style.bassGroove === "rootFifth" && index % 2 === 1) pitch += 7;
-      if (style.bassGroove === "walking") {
-        const choices = [0, 2, 4, 5];
-        pitch = midiForDegree(config, chord.degree + choices[index % choices.length], bassOctave);
+      if (bassStyle === "rootFifth" && index % 2 === 1) pitch += 7;
+      if (bassStyle === "octave" && index % 2 === 1) pitch += 12;
+      if (bassStyle === "walking") {
+        const chordTargets = [0, 1, 2, 1];
+        const targetPc = chord.tones[chordTargets[index % chordTargets.length] % chord.tones.length];
+        pitch = nearestChordTone(rootMidi(chord, bassOctave) + (index % 2 ? 3 : 0), { ...chord, tones: [targetPc] }, 1);
+      } else if (bassStyle === "melodic") {
+        const targetPc = chord.tones[index % chord.tones.length];
+        pitch = nearestChordTone(rootMidi(chord, bassOctave) + Math.min(7, index * 2), { ...chord, tones: [targetPc] }, index ? 1 : 0);
+      } else if (bassStyle === "pedal") {
+        pitch = rootMidi(chord, bassOctave);
       } else if (index > 0 && rng.bool(settings.variation * 0.45)) {
         const movement = bassGrooveRole === "pickup"
           ? rng.pick([-1, 1, 2])
@@ -5304,6 +5450,11 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          bassStyle,
+          bassArticulation: bassStyle === "pedal" ? "sustain"
+            : bassStyle === "walking" ? "connected"
+              : bassStyle === "melodic" ? "singing"
+                : bassStyle === "octave" ? "bounce" : "pocket",
         },
       );
     }
@@ -6988,6 +7139,8 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(Number.isFinite(note.answerToBeat) ? { answerToBeat: round(note.answerToBeat) } : {}),
       ...(note.dialogueSectionId ? { dialogueSectionId: note.dialogueSectionId } : {}),
       ...(note.bassGrooveRole ? { bassGrooveRole: note.bassGrooveRole } : {}),
+      ...(note.bassStyle ? { bassStyle: note.bassStyle } : {}),
+      ...(note.bassArticulation ? { bassArticulation: note.bassArticulation } : {}),
       ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
       ...(note.motifHandoffRole ? { motifHandoffRole: note.motifHandoffRole } : {}),
       ...(note.motifHandoffOriginSectionId ? { motifHandoffOriginSectionId: note.motifHandoffOriginSectionId } : {}),
@@ -10740,17 +10893,21 @@ function normalizeRecentSongs(value) {
   return result;
 }
 
-export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
-  const recent = normalizeRecentSongs(recentSongs);
+function noveltyFingerprint(song) {
   const normalizedRegister = applyDawRegisterPolicy(
     song?.tracks ?? [],
     song?.structure ?? song?.sections ?? [],
     { genre: song?.genre ?? song?.meta?.genre ?? "" },
   );
-  const fingerprint = createSongFingerprint({
+  return createSongFingerprint({
     ...song,
     tracks: normalizedRegister.tracks,
   });
+}
+
+export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
+  const recent = normalizeRecentSongs(recentSongs);
+  const fingerprint = noveltyFingerprint(song);
   if (!recent.length) {
     return {
       version: 1,
@@ -10767,7 +10924,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
   }
   const comparisons = recent.map((candidate) => ({
     songId: candidate.id ?? null,
-    ...fingerprintSimilarity(fingerprint, candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate)),
+    ...fingerprintSimilarity(fingerprint, noveltyFingerprint(candidate)),
   })).sort((left, right) => right.similarity - left.similarity);
   const closest = comparisons[0];
   const immediate = comparisons.find((comparison) => comparison.songId === (recent[0]?.id ?? null)) ?? comparisons[0];
@@ -12651,6 +12808,26 @@ function commitCandidate(candidates, search = {}) {
   const ranked = rankCandidates(candidates);
   const selected = ranked[0];
   if (!selected) throw new Error("Generation produced no candidates.");
+  // Candidate scoring and calibrated repair selection must observe the exact
+  // produced performance. Repaired winners alone need one final metadata-only
+  // refresh because their interlock plan was rebuilt after initial rendering.
+  if (
+    selected.song.generationInterlock?.version >= 2
+    && selected.song.criticRepair?.mode !== "surgical-window"
+  ) {
+    const selectedConfig = normalizeConfig(configFromSong(selected.song));
+    const finalConnectedById = applyGenerationInterlocks(
+      Object.fromEntries(selected.song.tracks.map((track) => [track.id, track.notes ?? []])),
+      selected.song.generationInterlock,
+      selected.song.structure,
+      selectedConfig,
+      { adjustVelocity: false },
+    );
+    selected.song.tracks = selected.song.tracks.map((track) => ({
+      ...track,
+      notes: finalConnectedById[track.id] ?? track.notes,
+    }));
+  }
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
   const releaseGate = candidateReleaseGate(selected);
   const balance = evaluateCandidateBalance(selected.evaluation);

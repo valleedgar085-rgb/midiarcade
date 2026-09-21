@@ -37,6 +37,8 @@ test("constrained Android DSP budget removes expensive graph layers without muti
   assert.equal(budget.filterMotion, false);
   assert.ok(budget.sendFloor >= 0.07);
   assert.ok(budget.masterFadeSeconds >= 0.025);
+  assert.ok(budget.outputMakeupGain > 1 && budget.outputMakeupGain <= 1.4);
+  assert.ok(budget.presenceGainDb > 0 && budget.presenceGainDb <= 2);
 });
 
 test("desktop preview keeps the full synthesis and DSP profile", () => {
@@ -50,6 +52,7 @@ test("desktop preview keeps the full synthesis and DSP profile", () => {
   assert.equal(budget.reverbSeconds, 2.2);
   assert.equal(budget.reverbChannels, 2);
   assert.equal(budget.filterMotion, true);
+  assert.ok(budget.outputMakeupGain > 1 && budget.outputMakeupGain < 1.3);
   assert.deepEqual(previewVoiceFeatures("bass", profile), { layer: true, transient: true, sub: true });
 });
 

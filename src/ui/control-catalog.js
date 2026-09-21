@@ -171,7 +171,7 @@ export function resolveControlHelp(element) {
     return copy ? [`Workflow step ${step}: ${copy.title}`, copy.text] : null;
   }
   if (element.dataset?.section) return ["Focus arrangement section", "Highlight this section in the song map so you can inspect which instruments play there."];
-  if (element.matches?.(".advanced-controls > summary")) return ["Optional fine-tuning", "Open detailed rhythm, human feel and generation-variety controls. Beginners can safely leave these closed."];
+  if (element.matches?.(".advanced-controls > summary")) return ["Rhythm and song variety", "These controls are visible by default so you can see what shapes each new song. Collapse them whenever you want a shorter page."];
   if (element.matches?.(".track-expression > summary")) return ["Shape instrument", "Open sound, performance and space controls for this instrument without cluttering the whole mixer."];
   if (element.matches?.(".guide-groups summary")) return ["Guide topic", "Open this topic for plain-language control explanations."];
   return null;

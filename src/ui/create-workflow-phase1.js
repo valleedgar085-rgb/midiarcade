@@ -150,7 +150,7 @@ function consolidateAdvancedDirection(rootDocument, createPanel) {
   advanced.innerHTML = `
     <summary>
       <span><small>OPTIONAL PRECISION</small><strong>Advanced direction</strong></span>
-      <span>Key · scale · harmony · recipe · rhythm detail</span>
+      <span>Key · scale · harmony</span>
     </summary>
     <div class="phase1-advanced-direction-body"></div>
   `;
@@ -159,10 +159,8 @@ function consolidateAdvancedDirection(rootDocument, createPanel) {
 
   const shapeSummary = shapeControls.querySelector("summary strong");
   if (shapeSummary) shapeSummary.textContent = "Key, scale & harmonic path";
-  const recipeSummary = recipeControls.querySelector(":scope > summary strong");
-  if (recipeSummary) recipeSummary.textContent = "Creative recipe & performance detail";
-
-  body.append(shapeControls, recipeControls);
+  body.append(shapeControls);
+  generationActions.insertAdjacentElement("beforebegin", recipeControls);
   generationActions.insertAdjacentElement("afterend", advanced);
   creatorGrid.classList.add("phase1-essentials-grid");
 }

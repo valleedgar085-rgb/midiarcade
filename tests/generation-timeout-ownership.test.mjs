@@ -44,7 +44,7 @@ function appHarness() {
     pushHistory: (snapshot = { song: state.song }) => state.history.push(snapshot),
     createHistorySnapshot: () => ({ song: state.song }),
     restoreHistory: () => { const snapshot = state.history.pop(); if (snapshot) state.song = snapshot.song; },
-    createSeed: () => "seed", chooseNewGenrePrograms: noop, buildConfig: () => ({}),
+    createSeed: () => "seed", advanceRecipe: noop, chooseNewGenrePrograms: noop, buildConfig: () => ({}),
     recentSongsForGeneration: () => [], generationDelay: () => Promise.resolve(),
     preserveLockedTracks: (_song, candidate) => candidate,
     captureResolvedAutoTrackSettings: noop, applyTrackSettingsToSong: (song) => song,

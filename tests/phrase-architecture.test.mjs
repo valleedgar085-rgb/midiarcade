@@ -60,3 +60,28 @@ test("rendered songs retain audible phrase-cadence roles through final performan
   assert.ok(roles.has("resolution"), "lead should resolve at planned section endings");
   assert.ok(melody.some(({ phraseRole }) => phraseRole), "ensemble phrase roles must survive final rendering");
 });
+
+test("question-and-answer motifs leave a breath, retain a response, and resolve", () => {
+  let motif = null;
+  for (let seed = 0; seed < 40 && !motif; seed += 1) {
+    const song = generateNew({
+      seed: `question-answer-dialogue-${seed}`,
+      genre: "popRadio",
+      bars: 24,
+      candidateCount: 1,
+      adaptiveCandidates: false,
+    });
+    if (song.motifs.melody.phraseShape === "questionAnswer") motif = song.motifs.melody;
+  }
+  assert.ok(motif, "the deterministic seed sweep should include a question-and-answer motif");
+  const midpoint = motif.lengthBeats / 2;
+  const question = motif.events.filter(({ dialogueRole }) => dialogueRole === "question");
+  const answer = motif.events.filter(({ dialogueRole }) => dialogueRole === "answer");
+  assert.ok(question.length >= 2 && answer.length >= 2);
+  assert.ok(question.at(-1).offset + question.at(-1).duration <= midpoint - 0.3, "the question should leave audible breathing room");
+  assert.ok(answer[0].offset >= midpoint, "the response should begin in the answer half");
+  assert.ok(answer.some(({ accent }, index) => Math.abs(accent - question[index % question.length].accent) < 0.25), "the response should retain recognizable emphasis from the question");
+  assert.equal(question.at(-1).dialogueLanding, "open");
+  assert.equal(answer.at(-1).dialogueLanding, "resolved");
+  assert.ok(Math.abs(answer.at(-1).degree) <= Math.abs(question.at(-1).degree), "the answer should settle closer to home");
+});
