@@ -41,6 +41,17 @@ function issueGroup(issue) {
     || value.startsWith("track-missing:")
     || value === "invalid-transaction"
   ) return "safety";
+  if (
+    value.startsWith("jazz:guide-tone")
+    || value.startsWith("jazz:unresolved-chromaticism")
+    || value === "jazz:quality-regression"
+  ) return "harmony";
+  if (
+    value.startsWith("jazz:walking-bass")
+    || value.startsWith("jazz:swing")
+    || value.startsWith("jazz:comping")
+  ) return "groove";
+  if (value.startsWith("jazz:phrase")) return "phrase";
   if (value.startsWith("out-of-scale:") || value.startsWith("harmony:")) return "harmony";
   if (value.startsWith("register:")) return "register";
   if (value.startsWith("collision:")) return "separation";
