@@ -1,4 +1,4 @@
-import { Chord, Note, Scale } from "tonal";
+import { Note, Scale } from "tonal";
 import { generateNew } from "../src/music-engine.js";
 
 const SCALE_NAMES = Object.freeze({
@@ -85,11 +85,6 @@ function inspectSong(song) {
         });
       }
     }
-
-    const chordNames = (event.tones ?? []).length >= 3
-      ? Chord.detect((event.tones ?? []).map((tone) => Note.fromMidi(60 + (Number(tone) % 12))))
-      : [];
-    if (chordNames.length) event.tonalShadowDetectedChord = chordNames[0];
   }
 
   return {
