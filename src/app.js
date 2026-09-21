@@ -2472,7 +2472,9 @@ function renderShapeDirector(section = editorSection()) {
   const composeButton = $("#shapeDirectorCompose");
   if (composeButton) {
     const notesOnly = director.target === "notes";
-    composeButton.disabled = notesOnly || state.isGenerating;
+    const composeDisabled = notesOnly || state.isGenerating;
+    composeButton.disabled = composeDisabled;
+    composeButton.setAttribute?.("aria-disabled", String(composeDisabled));
     const composeLabel = $("#shapeDirectorComposeLabel");
     if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
     composeButton.title = notesOnly
@@ -6187,7 +6189,10 @@ function toggleFullscreen() {
       renderShapeDirector();
       return;
     }
-    if (event.target.closest?.("[data-shape-compose]")) {
+    const composeControl = event.target.closest?.("[data-shape-compose]");
+    if (composeControl) {
+      event.preventDefault?.();
+      if (composeControl.disabled || composeControl.getAttribute?.("aria-disabled") === "true") return;
       void prepareBlueprintCompositionCandidate();
       return;
     }
