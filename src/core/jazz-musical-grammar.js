@@ -198,3 +198,29 @@ export function createJazzGrammarDirective(song, selection = {}) {
     }),
   });
 }
+
+function bounded(value, fallback, min, max) {
+  const numeric = Number.isFinite(Number(value)) ? Number(value) : fallback;
+  return Math.min(max, Math.max(min, numeric));
+}
+
+/**
+ * Final-attempt Jazz fallback. It narrows creative variance but never changes
+ * release thresholds, scope authority, deterministic seeds, or user-selected
+ * composition routes.
+ */
+export function createConservativeJazzComposerInput(song, input = {}) {
+  if (genreOf(song) !== "jazz") return { ...input };
+  const archetype = jazzArchetypeForSong(song);
+  const source = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  return {
+    ...source,
+    compositionRoute: source.compositionRoute ?? "harmony-first",
+    syncopation: bounded(source.syncopation, archetype?.syncopation ?? 0.55, 0.34, 0.62),
+    variation: bounded(source.variation, 0.32, 0.16, 0.42),
+    evolution: bounded(source.evolution, 0.4, 0.2, 0.52),
+    surprise: bounded(source.surprise, 0.16, 0.05, 0.2),
+    professionalUpgrade: true,
+    jazzConservativeMode: true,
+  };
+}
