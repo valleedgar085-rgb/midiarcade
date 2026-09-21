@@ -31,20 +31,25 @@ test("app generation fallback preserves runner semantics for new and similar", a
   ]);
 });
 
-test("app generation fallback sends variation requests through the shared API", async () => {
+test("app generation fallback sends variation and scoped composition requests through the shared API", async () => {
   const requests = [];
   const fallback = createAppGenerationFallback({
     generationRunner: { generate() { throw new Error("runner should not handle variations"); } },
     runRequest(kind, payload) {
       requests.push([kind, payload]);
-      return kind === "sectionVariations"
-        ? { status: "committed", options: [{ id: "section-a" }] }
-        : { status: "committed", variations: [{ id: "song-a" }] };
+      if (kind === "sectionVariations") return { status: "committed", options: [{ id: "section-a" }] };
+      if (kind === "compositionCandidate") return { status: "candidate", transaction: { validation: { valid: true } } };
+      return { status: "committed", variations: [{ id: "song-a" }] };
     },
   });
 
   const sectionPayload = { sourceSong: { id: "source" }, sectionId: "chorus", input: { intensity: 0.8 } };
   const songPayload = { sourceSong: { id: "source" }, config: { seed: "variation" } };
+  const compositionPayload = {
+    sourceSong: { id: "source" },
+    selection: { target: "section-track", sectionId: "chorus", trackId: "bass" },
+    input: { seed: "scope" },
+  };
   assert.deepEqual(await fallback("sectionVariations", sectionPayload), {
     status: "committed",
     options: [{ id: "section-a" }],
@@ -53,9 +58,14 @@ test("app generation fallback sends variation requests through the shared API", 
     status: "committed",
     variations: [{ id: "song-a" }],
   });
+  assert.deepEqual(await fallback("compositionCandidate", compositionPayload), {
+    status: "candidate",
+    transaction: { validation: { valid: true } },
+  });
   assert.deepEqual(requests, [
     ["sectionVariations", sectionPayload],
     ["songVariations", songPayload],
+    ["compositionCandidate", compositionPayload],
   ]);
 });
 
