@@ -1,4 +1,5 @@
 import { createCompositionCandidate } from "./blueprint-composer.js";
+import { createConservativeJazzComposerInput } from "./jazz-musical-grammar.js";
 
 export const MAX_COMPOSITION_CORRECTION_ATTEMPTS = 3;
 
@@ -144,6 +145,11 @@ export function createCompositionCorrectionInput(
 
   if (!explicitRoute && focusRoute) next.compositionRoute = focusRoute;
   if (diagnosis?.focusGroup === "register") next.professionalUpgrade = true;
+  if (pass >= 2) {
+    const conservative = createConservativeJazzComposerInput(sourceSong, next);
+    if (explicitRoute) conservative.compositionRoute = source.compositionRoute;
+    return conservative;
+  }
   return next;
 }
 
