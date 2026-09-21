@@ -70,6 +70,30 @@ function protectedBar(song, bar) {
   });
 }
 
+function sectionBarIndices(section, barBeats) {
+  const first = Math.floor(startOf(section) / barBeats + 1e-6);
+  const last = Math.max(first, Math.ceil(endOf(section) / barBeats - 1e-6) - 1);
+  return Array.from({ length: Math.max(0, last - first + 1) }, (_, index) => first + index);
+}
+
+function rhythmicOffbeatCount(notes) {
+  return notes.filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08).length;
+}
+
+function kickSnareSkeletonSignature(notes, barBeats) {
+  return notes
+    .filter((note) => KICK_PITCHES.has(Number(note.pitch)) || SNARE_PITCHES.has(Number(note.pitch)))
+    .map((note) => `${Number(note.pitch)}:${round6(mod(finite(note.start), barBeats))}`)
+    .sort()
+    .join("|");
+}
+
+function pocketCompatibleRecall(sourceNotes, targetNotes, barBeats) {
+  return sourceNotes.length === targetNotes.length
+    && rhythmicOffbeatCount(sourceNotes) === rhythmicOffbeatCount(targetNotes)
+    && kickSnareSkeletonSignature(sourceNotes, barBeats) === kickSnareSkeletonSignature(targetNotes, barBeats);
+}
+
 function drumSignature(song, bar) {
   const barBeats = finite(song?.meta?.beatsPerBar, 4);
   return notesForBar(song, bar)
@@ -459,6 +483,29 @@ function ornamentVariants(shifted, targetNotes) {
   });
 }
 
+function pocketHybridReplacement(shiftedSourceNotes, targetNotes) {
+  const skeleton = targetSkeleton(targetNotes).map(cloneValue);
+  const targetOrnaments = sourceOrnaments(targetNotes);
+  const neededOffbeats = rhythmicOffbeatCount(targetOrnaments);
+  const neededOnbeats = targetOrnaments.length - neededOffbeats;
+  const sourcePool = sourceOrnaments(shiftedSourceNotes);
+  const sourceOffbeats = sourcePool
+    .filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) > 0.08)
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  const sourceOnbeats = sourcePool
+    .filter((note) => Math.abs(finite(note.start) - Math.round(finite(note.start))) <= 0.08)
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  if (sourceOffbeats.length < neededOffbeats || sourceOnbeats.length < neededOnbeats) return null;
+  const recalled = [
+    ...sourceOffbeats.slice(0, neededOffbeats),
+    ...sourceOnbeats.slice(0, neededOnbeats),
+  ].map((note) => ({
+    ...cloneValue(note),
+    jazzMemoryPocketRecall: true,
+  }));
+  return uniqueNotes([...skeleton, ...recalled]);
+}
+
 function candidateSong(sourceSong, targetNotes, replacementNotes) {
   const song = cloneValue(sourceSong);
   const targetDrums = song.tracks.find((track) => track.id === "drums");
@@ -481,7 +528,51 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   const adjacentBefore = adjacentDrumDuplicateCount(sourceSong);
   const candidates = [];
 
-  for (const { origin, target } of sectionPairs(sourceSong)) {
+  const considerCandidate = ({
+    sourceBar,
+    targetBar,
+    targetNotes,
+    replacement,
+    recallMode = "offset-memory",
+  }) => {
+    if (!Array.isArray(replacement) || replacement.length < 1) return;
+    const song = candidateSong(sourceSong, targetNotes, replacement);
+    const candidateDrums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
+    const variety = drumVarietyScore(song, candidateDrums);
+    if (variety < sourceVariety + 2) return;
+    const adjacentAfter = adjacentDrumDuplicateCount(song);
+    if (adjacentAfter > adjacentBefore) return;
+    const rhythm = jazzRhythmMetrics(song, candidateDrums);
+    if (rhythm.groove < sourceRhythm.groove) return;
+    if (rhythm.authenticity < sourceRhythm.authenticity) return;
+
+    candidates.push({
+      id: "jazz-return-groove-recall",
+      song,
+      recallMode,
+      timingPreserved: barTimingSignature(replacement) === barTimingSignature(targetNotes),
+      noteCountDelta: replacement.length - targetNotes.length,
+      colorEditCount: replacement.filter((note) => note.jazzMemoryColorRecall === true).length,
+      changedBars: 1,
+      sourceBar,
+      targetBar,
+      adjacentDuplicatesBefore: adjacentBefore,
+      adjacentDuplicatesAfter: adjacentAfter,
+      drumVarietyBefore: sourceVariety,
+      drumVarietyAfter: variety,
+      grooveBefore: sourceRhythm.groove,
+      grooveAfter: rhythm.groove,
+      authenticityBefore: sourceRhythm.authenticity,
+      authenticityAfter: rhythm.authenticity,
+      recalledNotes: replacement.length,
+    });
+  };
+
+  const pairs = sectionPairs(sourceSong);
+
+  // First preserve the previous behavior exactly: corresponding bars in a
+  // remembered section can recall/develop their origin pattern.
+  for (const { origin, target } of pairs) {
     const originStart = Math.floor(startOf(origin) / barBeats + 1e-6);
     const targetStart = Math.floor(startOf(target) / barBeats + 1e-6);
     const span = Math.min(
@@ -502,41 +593,64 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
       const shifted = shiftedSourceNotes(sourceNotes, delta);
 
       for (const replacement of ornamentVariants(shifted, targetNotes)) {
-        const song = candidateSong(sourceSong, targetNotes, replacement);
-        const candidateDrums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
-        const variety = drumVarietyScore(song, candidateDrums);
-        if (variety < sourceVariety + 2) continue;
-        const adjacentAfter = adjacentDrumDuplicateCount(song);
-        if (adjacentAfter > adjacentBefore) continue;
-        const rhythm = jazzRhythmMetrics(song, candidateDrums);
-        if (rhythm.groove < sourceRhythm.groove) continue;
-        if (rhythm.authenticity < sourceRhythm.authenticity) continue;
+        considerCandidate({ sourceBar, targetBar, targetNotes, replacement, recallMode: "offset-memory" });
+      }
+    }
+  }
 
-        candidates.push({
-          id: "jazz-return-groove-recall",
-          song,
-          timingPreserved: barTimingSignature(replacement) === barTimingSignature(targetNotes),
-          noteCountDelta: replacement.length - targetNotes.length,
-          colorEditCount: replacement.filter((note) => note.jazzMemoryColorRecall === true).length,
-          changedBars: 1,
-          sourceBar,
-          targetBar,
-          adjacentDuplicatesBefore: adjacentBefore,
-          adjacentDuplicatesAfter: adjacentAfter,
-          drumVarietyBefore: sourceVariety,
-          drumVarietyAfter: variety,
-          grooveBefore: sourceRhythm.groove,
-          grooveAfter: rhythm.groove,
-          authenticityBefore: sourceRhythm.authenticity,
-          authenticityAfter: rhythm.authenticity,
-          recalledNotes: replacement.length,
-        });
+  // If the matching-offset return has no critic-safe option, search the same
+  // remembered section for another non-adjacent bar with an equivalent pocket
+  // class. Equal note count + offbeat count + kick/snare skeleton guarantees
+  // the Critic 6.0 groove/authenticity terms remain stable while a real earlier
+  // bar is recalled into the return.
+  if (!candidates.length) {
+    for (const { origin, target } of pairs) {
+      const sourceBars = sectionBarIndices(origin, barBeats)
+        .filter((bar) => !protectedBar(sourceSong, bar));
+      const targetBars = sectionBarIndices(target, barBeats)
+        .filter((bar) => !protectedBar(sourceSong, bar));
+
+      for (const targetBar of targetBars) {
+        const targetNotes = notesForBar(sourceSong, targetBar);
+        if (targetNotes.length < 2) continue;
+        for (const sourceBar of sourceBars) {
+          if (Math.abs(sourceBar - targetBar) <= 1) continue;
+          const sourceNotes = notesForBar(sourceSong, sourceBar);
+          if (sourceNotes.length < 4) continue;
+          const delta = (targetBar - sourceBar) * barBeats;
+          const shifted = shiftedSourceNotes(sourceNotes, delta);
+
+          if (pocketCompatibleRecall(sourceNotes, targetNotes, barBeats)) {
+            considerCandidate({
+              sourceBar,
+              targetBar,
+              targetNotes,
+              replacement: shifted.map((note) => ({ ...cloneValue(note), jazzMemoryPocketRecall: true })),
+              recallMode: "pocket-compatible-return",
+            });
+          }
+
+          const hybrid = pocketHybridReplacement(shifted, targetNotes);
+          if (hybrid && hybrid.length === targetNotes.length
+            && rhythmicOffbeatCount(hybrid) === rhythmicOffbeatCount(targetNotes)
+            && kickSnareSkeletonSignature(hybrid, barBeats) === kickSnareSkeletonSignature(targetNotes, barBeats)) {
+            considerCandidate({
+              sourceBar,
+              targetBar,
+              targetNotes,
+              replacement: hybrid,
+              recallMode: "pocket-hybrid-return",
+            });
+          }
+        }
       }
     }
   }
 
   candidates.sort((left, right) => (
-    (Number(right.timingPreserved) - Number(left.timingPreserved))
+    (Number(right.recallMode === "pocket-compatible-return") - Number(left.recallMode === "pocket-compatible-return"))
+    || (Number(right.recallMode === "pocket-hybrid-return") - Number(left.recallMode === "pocket-hybrid-return"))
+    || (Number(right.timingPreserved) - Number(left.timingPreserved))
     || (Math.abs(left.noteCountDelta) - Math.abs(right.noteCountDelta))
     || (left.colorEditCount - right.colorEditCount)
     || (right.drumVarietyAfter - left.drumVarietyAfter)
