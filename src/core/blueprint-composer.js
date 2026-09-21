@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { createJazzGrammarDirective } from "./jazz-musical-grammar.js";
 import { judgeCompositionCandidate } from "./composition-candidate-judge.js";
 import { generateSimilar } from "../music-engine.js";
 
@@ -134,6 +135,7 @@ export function createDirectorDirective(song, selection = {}) {
     : (songPlan?.orchestrationMatrix ?? []).find(
       (entry) => String(entry?.sectionId) === normalized.sectionId,
     ) ?? null;
+  const jazzGrammar = createJazzGrammarDirective(song, normalized);
   const interlock = normalized.sectionId == null
     ? null
     : (song?.generationInterlock?.sectionContracts ?? []).find(
@@ -148,6 +150,7 @@ export function createDirectorDirective(song, selection = {}) {
     orchestration: cloneValue(orchestration),
     interlock: cloneValue(interlock),
     harmony: cloneValue(song?.harmony ?? []),
+    jazzGrammar: cloneValue(jazzGrammar),
     sourceSongId: song?.id ?? null,
     sourceSeed: song?.seed ?? null,
   });
@@ -155,8 +158,24 @@ export function createDirectorDirective(song, selection = {}) {
 
 function candidateInput(sourceSong, directive, input) {
   const normalized = directive.selection;
+  const archetype = directive?.jazzGrammar?.archetype ?? null;
+  const jazzDefaults = archetype
+    ? {
+      ...(input?.syncopation == null ? { syncopation: archetype.syncopation } : {}),
+      ...(input?.humanize == null ? { humanize: archetype.humanize } : {}),
+      ...(input?.compositionRoute == null
+        ? {
+          compositionRoute: ["bebop", "cool", "modal", "ballad"].includes(archetype.id)
+            ? "harmony-first"
+            : "groove-first",
+        }
+        : {}),
+    }
+    : {};
   return {
     ...input,
+    ...jazzDefaults,
+    jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
