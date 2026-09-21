@@ -8,6 +8,7 @@ const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 
 test("Shape Director exposes scope, strength, directions, locks and A/B commit controls", () => {
   assert.match(html, /id="shapeDirectorPanel"[\s\S]*?id="shapeDirectorTarget"[\s\S]*?id="shapeDirectorSize"/);
+  assert.match(html, /id="shapeDirectorCompose"[\s\S]*?data-shape-compose/);
   assert.match(html, /id="shapeDirectorDirections"/);
   assert.doesNotMatch(html, /data-shape-direction=/);
   assert.match(app, /Object\.values\(SHAPE_QUICK_DIRECTIONS\)[\s\S]*?data-shape-direction/);
@@ -20,6 +21,8 @@ test("Shape Director exposes scope, strength, directions, locks and A/B commit c
 test("Shape Director runtime remains candidate-first and history-safe", () => {
   assert.match(app, /createShapeIntent[\s\S]*?createShapeCandidate/);
   assert.match(app, /function prepareShapeDirectorCandidate[\s\S]*?transaction\.status !== "candidate"/);
+  assert.match(app, /function prepareBlueprintCompositionCandidate[\s\S]*?generationExecutor\.run\("compositionCandidate"/);
+  assert.match(app, /acceptShapeDirectorCandidate[\s\S]*?acceptCompositionCandidate\(transaction\)/);
   assert.match(app, /function auditionShapeDirector[\s\S]*?auditionShapeCandidate/);
   assert.match(app, /function acceptShapeDirectorCandidate[\s\S]*?pushHistory[\s\S]*?transaction\.after/);
   assert.match(app, /function discardShapeDirectorCandidate[\s\S]*?transaction\.before/);
@@ -39,4 +42,10 @@ test("Shape Director is touch friendly and landscape aware", () => {
   assert.match(css, /@media\(max-width:680px\)[\s\S]*?min-height:42px/);
   assert.match(css, /@media\(orientation:landscape\) and \(max-height:720px\)[\s\S]*?\.shape-director-panel/);
   assert.match(css, /@media\(prefers-reduced-motion:reduce\)/);
+});
+
+test("Blueprint Composer is a distinct touch-safe Shape action", () => {
+  assert.match(css, /\.shape-blueprint-compose\{[\s\S]*?min-height:46px/);
+  assert.match(css, /\.shape-blueprint-compose:disabled/);
+  assert.match(app, /director\.target === "notes"[\s\S]*?Recompose section \/ instrument instead/);
 });
