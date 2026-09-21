@@ -84,6 +84,34 @@ test("Jazz fixed seeds gain drum memory without groove, performance, authenticit
   console.log("JAZZ_DRUM_MEMORY_FIXED_SEEDS", JSON.stringify(rows));
 });
 
+test("quality-lab-03 recalls drum color without moving the established pocket", () => {
+  const source = jazzSong("quality-lab-03");
+  const candidate = createJazzDrumMemoryCandidate(source);
+  assert.ok(candidate, "quality-lab-03 needs a critic-safe Jazz memory candidate");
+
+  const beforeDrums = source.tracks.find((track) => track.id === "drums").notes;
+  const afterDrums = candidate.song.tracks.find((track) => track.id === "drums").notes;
+  const timing = (notes) => notes
+    .map((note) => [Number(note.start), Number(note.duration)])
+    .sort((left, right) => left[0] - right[0] || left[1] - right[1]);
+  const skeleton = (notes) => notes
+    .filter((note) => [35, 36, 37, 38, 39, 40].includes(Number(note.pitch)))
+    .map((note) => [Number(note.pitch), Number(note.start), Number(note.duration)])
+    .sort((left, right) => left[1] - right[1] || left[0] - right[0]);
+
+  assert.equal(candidate.timingPreserved, true);
+  assert.equal(candidate.noteCountDelta, 0);
+  assert.deepEqual(timing(afterDrums), timing(beforeDrums), "Jazz memory must not move the established drum pocket");
+  assert.deepEqual(skeleton(afterDrums), skeleton(beforeDrums), "kick/snare timing must remain byte-equivalent");
+  assert.ok(afterDrums.some((note) => note.jazzMemoryColorRecall === true), "return memory should be carried by a non-skeleton drum color");
+
+  const before = evaluateSongCandidate(source);
+  const after = evaluateSongCandidate(candidate.song);
+  assert.ok(finite(after.subscores?.drumVariety) - finite(before.subscores?.drumVariety) >= 2);
+  assert.ok(finite(after.subscores?.groove) >= finite(before.subscores?.groove));
+  assert.ok(finite(after.subscores?.genreAuthenticity) >= finite(before.subscores?.genreAuthenticity));
+});
+
 test("explicit Jazz identity opt-in accepts only critic-safe groove memory", () => {
   const rows = [];
   for (const seed of SEEDS) {
