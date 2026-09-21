@@ -5236,6 +5236,72 @@ function bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, 
   return absolute.sort((a, b) => a - b).map((start) => round(Math.max(0, start - eventStart)));
 }
 
+const GENRE_BASS_STYLE_FAMILIES = deepFreeze({
+  ambient: ["pedal", "rootFifth"],
+  jazz: ["walking", "melodic", "rootFifth"],
+  neoSoul: ["syncopated", "melodic", "walking", "pedal"],
+  rnbSoul: ["syncopated", "melodic", "pedal", "walking"],
+  loFiHipHop: ["pedal", "walking", "syncopated", "melodic"],
+  hipHop: ["syncopated", "pedal", "octave"],
+  rap: ["syncopated", "pedal", "octave"],
+  trap: ["syncopated", "pedal", "octave"],
+  drill: ["syncopated", "octave", "pedal"],
+  funk: ["syncopated", "melodic", "octave", "walking"],
+  afrobeats: ["syncopated", "melodic", "octave"],
+  reggaeton: ["syncopated", "octave", "pedal"],
+  house: ["pulse", "octave", "pedal"],
+  techno: ["pulse", "pedal", "octave"],
+  drumBass: ["syncopated", "octave", "melodic"],
+  country: ["rootFifth", "walking", "octave"],
+  rock: ["rootFifth", "octave", "walking"],
+  pop: ["rootFifth", "syncopated", "octave", "melodic"],
+  popRadio: ["rootFifth", "syncopated", "octave", "melodic"],
+  synthwave: ["pulse", "octave", "rootFifth"],
+  synthPopRadio: ["pulse", "octave", "syncopated"],
+});
+
+function bassStyleForSection(config, style, section, sectionIndex, rng) {
+  // Keep signed fusion and DnB articulation calibrations stable. Those paths
+  // already supply their own hybrid/response bass treatment; rotating a second
+  // personality there can make downstream mastering non-idempotent.
+  if (
+    config.bars < 12
+    || config.isFusion
+    || ["drumBass", "afrobeats"].includes(config.genre)
+  ) return style.bassGroove;
+  const palette = GENRE_BASS_STYLE_FAMILIES[config.genre]
+    ?? [style.bassGroove, "rootFifth", "syncopated"];
+  if (["intro", "breakdown", "outro"].includes(section.name) && palette.includes("pedal")) return "pedal";
+  if (["bridge", "solo"].includes(section.name) && palette.includes("melodic")) return "melodic";
+  if (["chorus", "drop"].includes(section.name) && palette.includes("octave")) return "octave";
+  const baseIndex = Math.max(0, palette.indexOf(style.bassGroove));
+  const rotation = rng.fork(`bass-style-${section.id}`).int(0, Math.max(0, palette.length - 1));
+  return palette[mod(baseIndex + sectionIndex + rotation, palette.length)];
+}
+
+function bassOffsetsForStyle(offsets, bassStyle, chord, config, preserveRhythmPartner = false) {
+  const maximum = Math.max(0, chord.duration - 0.06);
+  const source = [...(offsets ?? [])];
+  if (preserveRhythmPartner) return source.sort((left, right) => left - right);
+  const add = (offset) => {
+    if (offset < -0.001 || offset >= maximum) return;
+    if (!source.some((value) => Math.abs(value - offset) < 0.01)) source.push(round(offset));
+  };
+  if (bassStyle === "pedal") {
+    const anchors = source.filter((offset) => Math.abs(mod(chord.start + offset, 1)) < 0.02);
+    return (anchors.length ? anchors : source.slice(0, 1)).slice(0, 2);
+  }
+  if (bassStyle === "walking") {
+    for (let offset = 0; offset < maximum; offset += 1) add(offset);
+  } else if (bassStyle === "melodic") {
+    add(Math.min(maximum - 0.01, chord.duration * 0.5));
+    if (config.syncopation >= 0.48) add(Math.min(maximum - 0.01, chord.duration - 0.75));
+  } else if (bassStyle === "octave") {
+    add(Math.min(maximum - 0.01, chord.duration >= 2 ? 1.5 : chord.duration * 0.5));
+  }
+  return source.sort((left, right) => left - right);
+}
+
 function generateBass(
   config,
   structure,
@@ -5253,9 +5319,15 @@ function generateBass(
   const barBeats = beatsPerBar(config);
   const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
   let harmonicLifts = 0;
+  const sectionBassStyles = new Map();
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
     const section = sectionForBar(structure, chord.bar);
+    const sectionIndex = Math.max(0, structure.findIndex((candidate) => candidate.id === section.id));
+    if (!sectionBassStyles.has(section.id)) {
+      sectionBassStyles.set(section.id, bassStyleForSection(config, style, section, sectionIndex, rng));
+    }
+    const bassStyle = sectionBassStyles.get(section.id);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const barPlan = grooveBar(grooveConductor, chord.bar);
     const plannedTension = plannedTensionAtBeat(songBlueprint, section, chord.start, barBeats);
@@ -5265,6 +5337,7 @@ function generateBass(
       1.25,
     );
     let offsets = bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor);
+    const preserveRhythmPartner = Array.isArray(offsets);
     if (Array.isArray(offsets)) {
       // An empty contextual result is deliberate space; non-empty offsets came
       // from kicks that actually survived drum generation.
@@ -5294,6 +5367,7 @@ function generateBass(
       offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
     }
 
+    offsets = bassOffsetsForStyle(offsets, bassStyle, chord, config, preserveRhythmPartner);
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
     for (let index = 0; index < offsets.length; index += 1) {
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
@@ -5308,10 +5382,17 @@ function generateBass(
             ? "pickup"
             : "movement";
       let pitch = rootMidi(chord, bassOctave);
-      if (style.bassGroove === "rootFifth" && index % 2 === 1) pitch += 7;
-      if (style.bassGroove === "walking") {
-        const choices = [0, 2, 4, 5];
-        pitch = midiForDegree(config, chord.degree + choices[index % choices.length], bassOctave);
+      if (bassStyle === "rootFifth" && index % 2 === 1) pitch += 7;
+      if (bassStyle === "octave" && index % 2 === 1) pitch += 12;
+      if (bassStyle === "walking") {
+        const chordTargets = [0, 1, 2, 1];
+        const targetPc = chord.tones[chordTargets[index % chordTargets.length] % chord.tones.length];
+        pitch = nearestChordTone(rootMidi(chord, bassOctave) + (index % 2 ? 3 : 0), { ...chord, tones: [targetPc] }, 1);
+      } else if (bassStyle === "melodic") {
+        const targetPc = chord.tones[index % chord.tones.length];
+        pitch = nearestChordTone(rootMidi(chord, bassOctave) + Math.min(7, index * 2), { ...chord, tones: [targetPc] }, index ? 1 : 0);
+      } else if (bassStyle === "pedal") {
+        pitch = rootMidi(chord, bassOctave);
       } else if (index > 0 && rng.bool(settings.variation * 0.45)) {
         const movement = bassGrooveRole === "pickup"
           ? rng.pick([-1, 1, 2])
@@ -5369,6 +5450,11 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          bassStyle,
+          bassArticulation: bassStyle === "pedal" ? "sustain"
+            : bassStyle === "walking" ? "connected"
+              : bassStyle === "melodic" ? "singing"
+                : bassStyle === "octave" ? "bounce" : "pocket",
         },
       );
     }
@@ -7053,6 +7139,8 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(Number.isFinite(note.answerToBeat) ? { answerToBeat: round(note.answerToBeat) } : {}),
       ...(note.dialogueSectionId ? { dialogueSectionId: note.dialogueSectionId } : {}),
       ...(note.bassGrooveRole ? { bassGrooveRole: note.bassGrooveRole } : {}),
+      ...(note.bassStyle ? { bassStyle: note.bassStyle } : {}),
+      ...(note.bassArticulation ? { bassArticulation: note.bassArticulation } : {}),
       ...(note.phraseAnchor ? { phraseAnchor: true } : {}),
       ...(note.motifHandoffRole ? { motifHandoffRole: note.motifHandoffRole } : {}),
       ...(note.motifHandoffOriginSectionId ? { motifHandoffOriginSectionId: note.motifHandoffOriginSectionId } : {}),
@@ -12720,6 +12808,26 @@ function commitCandidate(candidates, search = {}) {
   const ranked = rankCandidates(candidates);
   const selected = ranked[0];
   if (!selected) throw new Error("Generation produced no candidates.");
+  // Candidate scoring and calibrated repair selection must observe the exact
+  // produced performance. Repaired winners alone need one final metadata-only
+  // refresh because their interlock plan was rebuilt after initial rendering.
+  if (
+    selected.song.generationInterlock?.version >= 2
+    && selected.song.criticRepair?.mode !== "surgical-window"
+  ) {
+    const selectedConfig = normalizeConfig(configFromSong(selected.song));
+    const finalConnectedById = applyGenerationInterlocks(
+      Object.fromEntries(selected.song.tracks.map((track) => [track.id, track.notes ?? []])),
+      selected.song.generationInterlock,
+      selected.song.structure,
+      selectedConfig,
+      { adjustVelocity: false },
+    );
+    selected.song.tracks = selected.song.tracks.map((track) => ({
+      ...track,
+      notes: finalConnectedById[track.id] ?? track.notes,
+    }));
+  }
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
   const releaseGate = candidateReleaseGate(selected);
   const balance = evaluateCandidateBalance(selected.evaluation);
