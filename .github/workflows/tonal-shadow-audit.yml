@@ -1,0 +1,33 @@
+name: Tonal Shadow Authority
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "scripts/tonal-shadow-check.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/tonal-shadow-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tonal-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      - name: Install Tonal shadow dependency
+        run: npm install --no-save --package-lock=false --ignore-scripts tonal@6.4.3
+      - name: Run Tonal secondary authority audit
+        run: node scripts/tonal-shadow-check.mjs
