@@ -316,6 +316,21 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     /generationExecutor\.run\("compositionCandidate"[\s\S]*?sourceSong: original[\s\S]*?selection: \{ target: "track", trackId: id \}[\s\S]*?input: generationInput/,
     "whole-instrument rerolls must pass isolated contextual input through the judged composition boundary",
   );
+  assert.match(
+    rerollSource,
+    /const historySnapshot = options\.historySnapshot \?\? createHistorySnapshot\(\)[\s\S]*?pushHistory\(historySnapshot\)[\s\S]*?state\.song = applyTrackSettingsToSong\(next\)/,
+    "successful rerolls must create Undo history only after the candidate passes",
+  );
+  assert.match(
+    rerollSource,
+    /catch \(error\)[\s\S]*?applyHistorySnapshot\(historySnapshot\)/,
+    "rejected rerolls must restore their snapshot without consuming Undo",
+  );
+  assert.doesNotMatch(
+    rerollSource,
+    /catch \(error\)[\s\S]*?restoreHistory\(/,
+    "a rejected candidate must not pop the user's history stack",
+  );
   assert.match(rerollSource, /acceptCompositionCandidate\(transaction\)/, "instrument rerolls must commit only validated composition transactions");
   assert.match(appSource, /for \(const \[index, point\] of expressionCurve\.slice\(1\)\.entries\(\)\)/, "preview gain must schedule every interior expression point");
   assert.match(appSource, /createConvolver/, "preview audio must include a real ambience bus");
