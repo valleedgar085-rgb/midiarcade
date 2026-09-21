@@ -327,6 +327,8 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /previewGraphBudget/, "preview audio must resolve a runtime DSP budget");
   assert.match(appSource, /this\.previewBudget\.saturation/, "constrained playback must be able to bypass saturation");
   assert.match(appSource, /saturation\.oversample = this\.previewBudget\.oversample/, "oversampling must follow the runtime graph budget");
+  assert.match(appSource, /outputMakeup\.gain\.value = this\.previewBudget\.outputMakeupGain/, "preview mastering must restore level after compression");
+  assert.match(appSource, /presence\.gain\.value = this\.previewBudget\.presenceGainDb/, "preview mastering must preserve phone-speaker presence");
   assert.match(appSource, /createDelay/, "preview audio must include a tempo-safe stereo space bus");
   assert.match(appSource, /filter\.frequency\.exponentialRampToValueAtTime/, "preview voices must use animated filters");
   assert.match(appSource, /periodicWaveForVoice[\s\S]*?createPeriodicWave/, "instrument timbres must reuse cached harmonic waves");

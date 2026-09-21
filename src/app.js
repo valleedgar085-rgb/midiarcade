@@ -4651,6 +4651,14 @@ export class PreviewPlayer {
       warmth.frequency.value = 135;
       warmth.gain.value = 2.2;
 
+      // Restore perceived level after dynamics control without flattening MIDI
+      // velocity accents. Presence helps the full band translate on a phone.
+      const presence = this.context.createBiquadFilter();
+      presence.type = "peaking";
+      presence.frequency.value = 1850;
+      presence.Q.value = 0.72;
+      presence.gain.value = this.previewBudget.presenceGainDb;
+
       // Main compressor — tighter knee, lower threshold for punchy mobile playback.
       const compressor = this.context.createDynamicsCompressor();
       compressor.threshold.value = -18;
@@ -4666,10 +4674,14 @@ export class PreviewPlayer {
       limiter.ratio.value = 20;
       limiter.attack.value = 0.002;
       limiter.release.value = 0.075;
+      const outputMakeup = this.context.createGain();
+      outputMakeup.gain.value = this.previewBudget.outputMakeupGain;
       this.audioGraphNodes.add(this.master);
       this.audioGraphNodes.add(highpass);
       this.audioGraphNodes.add(warmth);
+      this.audioGraphNodes.add(presence);
       this.audioGraphNodes.add(compressor);
+      this.audioGraphNodes.add(outputMakeup);
       this.audioGraphNodes.add(limiter);
 
       // Soft-clip waveshaper — reduced drive (1.08) for less harshness on phone.
@@ -4683,9 +4695,9 @@ export class PreviewPlayer {
         saturation.curve = curve;
         saturation.oversample = this.previewBudget.oversample;
         this.audioGraphNodes.add(saturation);
-        this.master.connect(highpass).connect(warmth).connect(saturation).connect(compressor).connect(limiter).connect(this.context.destination);
+        this.master.connect(highpass).connect(warmth).connect(presence).connect(saturation).connect(compressor).connect(outputMakeup).connect(limiter).connect(this.context.destination);
       } else {
-        this.master.connect(highpass).connect(warmth).connect(compressor).connect(limiter).connect(this.context.destination);
+        this.master.connect(highpass).connect(warmth).connect(presence).connect(compressor).connect(outputMakeup).connect(limiter).connect(this.context.destination);
       }
 
       // Reverb bus — extended to 2.2 s with smoother exponential decay (2.2 exponent).

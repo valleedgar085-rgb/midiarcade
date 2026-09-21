@@ -1304,10 +1304,11 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
       { name: "outro", weight: 0.5 },
     ],
     full: [
-      { name: "intro", weight: 0.7 }, { name: "chorus", weight: 1.5 },
-      { name: "verse", weight: 2.5 }, { name: "chorus", weight: 1.5 },
-      { name: "bridge", weight: 1.2 }, { name: "verse", weight: 2 },
-      { name: "chorus", weight: 1.8 }, { name: "outro", weight: 0.7 },
+      { name: "intro", weight: 0.7 }, { name: "verse", weight: 2.5 },
+      { name: "chorus", weight: 1.5 }, { name: "verse", weight: 2 },
+      { name: "bridge", weight: 1.2 }, { name: "chorus", weight: 1.8 },
+      { name: "chorus", weight: 1.2 },
+      { name: "outro", weight: 0.7 },
     ],
   },
   loop: {
@@ -1396,9 +1397,58 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
   },
 });
 
-function specialFormLayout(form, bars) {
+const LONG_FORM_VARIANTS = deepFreeze({
+  "half-time": [
+    { name: "intro", weight: 0.7 }, { name: "verse", weight: 2.5 },
+    { name: "chorus", weight: 1.5 }, { name: "bridge", weight: 1.2 },
+    { name: "verse", weight: 2 }, { name: "chorus", weight: 1.8 },
+    { name: "chorus", weight: 1.2 },
+    { name: "outro", weight: 0.7 },
+  ],
+  loop: [
+    { name: "intro", weight: 0.8 }, { name: "idea", weight: 2.8 },
+    { name: "breakdown", weight: 1.2 }, { name: "bridge", weight: 1.4 },
+    { name: "idea", weight: 2.5 }, { name: "breakdown", weight: 1.2 },
+    { name: "idea", weight: 2.8 }, { name: "outro", weight: 0.8 },
+  ],
+  "head-solos": [
+    { name: "intro", weight: 0.7 }, { name: "theme", weight: 1.4 },
+    { name: "solo", weight: 2.4 }, { name: "bridge", weight: 1.2 },
+    { name: "solo", weight: 2.4 }, { name: "theme", weight: 1.5 },
+    { name: "outro", weight: 0.7 },
+  ],
+  evolving: [
+    { name: "intro", weight: 1.5 }, { name: "idea", weight: 2.2 },
+    { name: "breakdown", weight: 1.8 }, { name: "theme", weight: 2.4 },
+    { name: "idea", weight: 2 }, { name: "breakdown", weight: 1.5 },
+    { name: "outro", weight: 1.5 },
+  ],
+  "story-song": [
+    { name: "intro", weight: 0.6 }, { name: "verse", weight: 2.3 },
+    { name: "chorus", weight: 1.4 }, { name: "bridge", weight: 1.3 },
+    { name: "verse", weight: 2.3 }, { name: "verse", weight: 2.1 },
+    { name: "chorus", weight: 1.6 }, { name: "outro", weight: 0.6 },
+  ],
+  anthem: [
+    { name: "intro", weight: 0.7 }, { name: "verse", weight: 2 },
+    { name: "chorus", weight: 2.2 }, { name: "bridge", weight: 1.3 },
+    { name: "verse", weight: 1.8 }, { name: "chorus", weight: 2.3 },
+    { name: "chorus", weight: 1.5 }, { name: "outro", weight: 0.7 },
+  ],
+  groove: [
+    { name: "intro", weight: 0.6 }, { name: "verse", weight: 2.4 },
+    { name: "chorus", weight: 1.4 }, { name: "verse", weight: 2.2 },
+    { name: "bridge", weight: 1.3 }, { name: "chorus", weight: 1.5 },
+    { name: "verse", weight: 2 }, { name: "outro", weight: 0.6 },
+  ],
+});
+
+function specialFormLayout(form, bars, seed = "") {
   const template = SPECIAL_FORM_LAYOUTS[form];
   if (!template || bars <= 4) return null;
+  if (bars > 20 && LONG_FORM_VARIANTS[form] && hashSeed(`${seed}:${form}:long-form`) % 2 === 1) {
+    return clone(LONG_FORM_VARIANTS[form]);
+  }
   return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
 }
 
@@ -1440,7 +1490,7 @@ function createStructure(config, rng) {
   // Reggaeton also has a club-ready profile, but its verse/chorus form must not
   // be mistaken for a House/Techno build-drop arrangement.
   const electronic = ["house", "techno", "drumBass"].includes(config.genre);
-  let layout = specialFormLayout(form, bars);
+  let layout = specialFormLayout(form, bars, config.seed);
   if (layout) {
     // The selected form is scaled below by allocateBars().
   } else if (bars <= 2) layout = [{ name: "theme", weight: 1 }];

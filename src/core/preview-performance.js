@@ -27,6 +27,8 @@ const FULL_GRAPH_BUDGET = Object.freeze({
   filterMotion: true,
   sendFloor: 0,
   masterFadeSeconds: 0.015,
+  outputMakeupGain: 1.18,
+  presenceGainDb: 0.9,
 });
 
 const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
@@ -42,6 +44,8 @@ const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
   filterMotion: false,
   sendFloor: 0.07,
   masterFadeSeconds: 0.04,
+  outputMakeupGain: 1.34,
+  presenceGainDb: 1.8,
 });
 
 const CONSTRAINED_LAYER_TRACKS = new Set(["melody"]);
