@@ -10,6 +10,8 @@ const JAZZ_BACKBEATS = 2;
 const JAZZ_BASS_LOCK_TARGET = 0.46;
 const KICK_PITCHES = new Set([35, 36]);
 const SNARE_PITCHES = new Set([37, 38, 39, 40]);
+const JAZZ_CYMBAL_COLOR_FAMILY = Object.freeze([42, 44, 46, 51, 53, 59]);
+const JAZZ_TOM_COLOR_FAMILY = Object.freeze([41, 43, 45, 47, 48, 50]);
 
 function sectionsOf(song) {
   return Array.isArray(song?.structure) ? song.structure : Array.isArray(song?.sections) ? song.sections : [];
@@ -234,6 +236,16 @@ function sourceOrnaments(notes) {
   return notes.filter((note) => !KICK_PITCHES.has(Number(note.pitch)) && !SNARE_PITCHES.has(Number(note.pitch)));
 }
 
+function jazzDevelopedColorPitches(pitch) {
+  const value = Number(pitch);
+  const family = JAZZ_CYMBAL_COLOR_FAMILY.includes(value)
+    ? JAZZ_CYMBAL_COLOR_FAMILY
+    : JAZZ_TOM_COLOR_FAMILY.includes(value)
+      ? JAZZ_TOM_COLOR_FAMILY
+      : JAZZ_CYMBAL_COLOR_FAMILY;
+  return family.filter((candidate) => candidate !== value);
+}
+
 function ornamentVariants(shifted, targetNotes) {
   const ornaments = sourceOrnaments(shifted)
     .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
@@ -307,6 +319,52 @@ function ornamentVariants(shifted, targetNotes) {
             pitch: Number(sourceNote.pitch),
             velocity: finite(sourceNote.velocity, finite(note.velocity, 80)),
             jazzMemoryColorRecall: true,
+          }
+          : cloneValue(note);
+      })));
+    }
+  }
+
+  // Developed return color is the fallback when origin and return bars are
+  // literally identical. It preserves the complete rhythmic fingerprint and
+  // develops only a non-skeleton Jazz drum color (hat/ride/tom family). This
+  // breaks stale bar duplication while retaining the remembered onset pattern.
+  const developedPairs = [];
+  for (let targetIndex = 0; targetIndex < targetOrnaments.length; targetIndex += 1) {
+    const targetNote = targetOrnaments[targetIndex];
+    for (const pitch of jazzDevelopedColorPitches(targetNote.pitch).slice(0, 3)) {
+      developedPairs.push({ targetNote, targetIndex, pitch });
+      variants.push(uniqueNotes(originalTarget.map((note) => (
+        noteKey(note) === noteKey(targetNote)
+          ? {
+            ...cloneValue(note),
+            pitch,
+            jazzMemoryColorRecall: true,
+            jazzMemoryDevelopedRecall: true,
+            jazzMemorySourcePitch: Number(targetNote.pitch),
+          }
+          : cloneValue(note)
+      ))));
+    }
+  }
+  for (let left = 0; left < developedPairs.length; left += 1) {
+    for (let right = left + 1; right < developedPairs.length; right += 1) {
+      const a = developedPairs[left];
+      const b = developedPairs[right];
+      if (a.targetIndex === b.targetIndex) continue;
+      const replacements = new Map([
+        [noteKey(a.targetNote), a],
+        [noteKey(b.targetNote), b],
+      ]);
+      variants.push(uniqueNotes(originalTarget.map((note) => {
+        const replacement = replacements.get(noteKey(note));
+        return replacement
+          ? {
+            ...cloneValue(note),
+            pitch: replacement.pitch,
+            jazzMemoryColorRecall: true,
+            jazzMemoryDevelopedRecall: true,
+            jazzMemorySourcePitch: Number(note.pitch),
           }
           : cloneValue(note);
       })));
@@ -459,6 +517,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
           song,
           timingPreserved: barTimingSignature(replacement) === barTimingSignature(targetNotes),
           noteCountDelta: replacement.length - targetNotes.length,
+          colorEditCount: replacement.filter((note) => note.jazzMemoryColorRecall === true).length,
           changedBars: 1,
           sourceBar,
           targetBar,
@@ -479,6 +538,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   candidates.sort((left, right) => (
     (Number(right.timingPreserved) - Number(left.timingPreserved))
     || (Math.abs(left.noteCountDelta) - Math.abs(right.noteCountDelta))
+    || (left.colorEditCount - right.colorEditCount)
     || (right.drumVarietyAfter - left.drumVarietyAfter)
     || (right.grooveAfter - left.grooveAfter)
     || (right.authenticityAfter - left.authenticityAfter)
