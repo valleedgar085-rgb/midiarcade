@@ -21,6 +21,7 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
+import { acceptCompositionCandidate } from "./core/blueprint-composer.js";
 import { createGenerationOwnership } from "./core/generation-ownership.js";
 import { normalizeCreativeRange } from "./core/creative-range-policy.js";
 import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
@@ -2386,6 +2387,43 @@ function shapeDirectorSelection(section = editorSection()) {
   return { target: "section", sectionId: section.id };
 }
 
+function blueprintCompositionSelection(section = editorSection()) {
+  const selection = shapeDirectorSelection(section);
+  if (!selection || selection.target === "notes") return null;
+  if (selection.target === "track") {
+    return {
+      target: "section-track",
+      sectionId: selection.sectionId,
+      trackId: selection.trackId,
+    };
+  }
+  return {
+    target: "section",
+    sectionId: selection.sectionId,
+  };
+}
+
+function blueprintCompositionLabel(transaction, section = editorSection()) {
+  const selection = transaction?.selection;
+  if (selection?.target === "section-track") {
+    return `${section?.name ?? "Section"} · ${TRACK_META[selection.trackId]?.name ?? selection.trackId}`;
+  }
+  return section?.name ?? "Selected section";
+}
+
+function wrapBlueprintCompositionCandidate(transaction) {
+  return {
+    ...transaction,
+    compositionCandidate: true,
+    intent: {
+      selection: transaction.selection,
+      direction: { id: "blueprintRecompose", label: "Blueprint Recompose" },
+      size: { id: "validated", label: "Validated" },
+      preserve: [],
+    },
+  };
+}
+
 function shapeDirectorPersistenceState() {
   const director = state.shapeDirector;
   if (director?.transaction && director.audition === "after") {
@@ -2431,6 +2469,15 @@ function renderShapeDirector(section = editorSection()) {
   const candidate = $("#shapeDirectorCandidate");
   const directions = $("#shapeDirectorDirections");
   const auditionControls = $("#shapeDirectorAudition");
+  const composeButton = $("#shapeDirectorCompose");
+  if (composeButton) {
+    const notesOnly = director.target === "notes";
+    composeButton.disabled = notesOnly || state.isGenerating;
+    composeButton.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
+    composeButton.title = notesOnly
+      ? "Blueprint recomposition works on the current instrument or whole section; note-level edits stay with Shape Director."
+      : "Generate a new scoped part from the song blueprint, then validate harmony and groove before audition.";
+  }
   if (directions && !directions.childElementCount) {
     directions.innerHTML = Object.values(SHAPE_QUICK_DIRECTIONS)
       .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
@@ -2498,8 +2545,21 @@ function renderShapeDirector(section = editorSection()) {
   }
   const summary = director.transaction.summary;
   if (candidate) candidate.hidden = false;
-  $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
-  $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+  if (director.transaction.compositionCandidate) {
+    const correction = director.transaction.selfCorrection;
+    const scores = director.transaction.validation?.judge?.candidate?.scores ?? {};
+    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · Blueprint validated";
+    $("#shapeDirectorCandidateMeta").textContent = [
+      `${correction?.attemptCount ?? 1} pass${(correction?.attemptCount ?? 1) === 1 ? "" : "es"}`,
+      `harmony ${scores.harmony ?? "—"}`,
+      `groove ${scores.groove ?? "—"}`,
+      `register ${scores.register ?? "—"}`,
+      `phrase ${scores.phrase ?? "—"}`,
+    ].join(" · ");
+  } else {
+    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
+    $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+  }
   $$('[data-shape-audition]', panel).forEach((button) => {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
   });
@@ -2547,10 +2607,75 @@ function prepareShapeDirectorCandidate(direction) {
   return true;
 }
 
+async function prepareBlueprintCompositionCandidate() {
+  const section = editorSection();
+  if (!section || !state.song || state.isGenerating) return false;
+  if (state.sectionVariations) {
+    showToast("Finish or cancel the current A/B section variation before recomposing this scope.");
+    return false;
+  }
+  const selection = blueprintCompositionSelection(section);
+  if (!selection) {
+    showToast("Blueprint recomposition works on the whole section or current instrument. Use Shape Director for selected-note edits.");
+    return false;
+  }
+
+  clearShapeDirectorCandidate({ restore: true, rerender: false });
+  const original = deepClone(state.song);
+  appStore.transaction("generation:blueprint-recompose-start", (draft) => {
+    draft.isGenerating = true;
+  });
+  const operation = armGenerationSafetyTimer();
+  showGenerationActivity("COMPOSING + CHECKING HARMONY AND GROOVE", {
+    kind: "similar",
+    threadCopy: "Director → Composer → Judge",
+  });
+
+  try {
+    const seed = createSeed();
+    const input = {
+      ...buildConfig(seed),
+      recentSongs: recentSongsForGeneration(original),
+      ...(original.compositionRoute?.id ? { compositionRoute: original.compositionRoute.id } : {}),
+    };
+    const result = await generationExecutor.run("compositionCandidate", {
+      sourceSong: original,
+      selection,
+      input,
+      maxAttempts: 3,
+    });
+    if (!generationOwnership.isCurrent(operation)) return false;
+    const transaction = result?.transaction;
+    if (!transaction?.validation?.valid) {
+      const reason = transaction?.validation?.issues?.[0]?.replaceAll(":", " ") ?? "quality judge rejected the candidate";
+      renderShapeDirector(section);
+      showToast(`No safe blueprint candidate was committed — ${reason}. The original music is unchanged.`);
+      return false;
+    }
+
+    const director = shapeDirectorState();
+    director.transaction = wrapBlueprintCompositionCandidate(transaction);
+    director.audition = "before";
+    director.direction = null;
+    renderShapeDirector(section);
+    const attempts = transaction.selfCorrection?.attemptCount ?? 1;
+    showToast(`Blueprint candidate passed the Harmony + Groove Judge in ${attempts} pass${attempts === 1 ? "" : "es"}. Compare Before and After.`);
+    return true;
+  } catch (error) {
+    if (!generationOwnership.isCurrent(operation)) return false;
+    console.error(error);
+    renderShapeDirector(section);
+    showToast("Blueprint recomposition could not finish safely. The original music is unchanged.");
+    return false;
+  } finally {
+    if (finishGenerationActivity(operation, "generation:blueprint-recompose-finish")) hideGenerationActivity();
+  }
+}
+
 async function auditionShapeDirector(side) {
   const director = shapeDirectorState();
   const transaction = director.transaction;
-  const sectionId = transaction?.intent?.selection?.sectionId;
+  const sectionId = transaction?.intent?.selection?.sectionId ?? transaction?.selection?.sectionId;
   if (!transaction || !sectionId) return false;
   const song = auditionShapeCandidate(transaction, side);
   if (!song) return false;
@@ -2575,9 +2700,15 @@ function acceptShapeDirectorCandidate() {
   if (!transaction) return false;
   player.stop();
   pushHistory({ ...createHistorySnapshot(), song: deepClone(transaction.before) });
-  state.song = deepClone(transaction.after);
+  if (transaction.compositionCandidate && transaction.validation?.valid !== true) {
+    showToast("That blueprint candidate no longer passes validation, so it was not committed.");
+    return false;
+  }
+  state.song = transaction.compositionCandidate
+    ? acceptCompositionCandidate(transaction)
+    : deepClone(transaction.after);
   applyTrackSettingsToSong(state.song);
-  const label = transaction.intent.direction.label;
+  const label = transaction.compositionCandidate ? "Blueprint recompose" : transaction.intent.direction.label;
   director.transaction = null;
   director.audition = "before";
   director.direction = null;
@@ -6035,6 +6166,10 @@ function toggleFullscreen() {
       const panel = $("#shapeDirectorPanel");
       if (panel) panel.dataset.shapeMore = panel.dataset.shapeMore === "true" ? "false" : "true";
       renderShapeDirector();
+      return;
+    }
+    if (event.target.closest?.("[data-shape-compose]")) {
+      void prepareBlueprintCompositionCandidate();
       return;
     }
     const direction = event.target.closest?.("[data-shape-direction]")?.dataset.shapeDirection;
