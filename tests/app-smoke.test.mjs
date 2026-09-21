@@ -359,6 +359,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(htmlSource, /id="tasteRating"[\s\S]*?value="like"[\s\S]*?value="reject"[\s\S]*?value="favorite"/, "the home showcase must expose explicit taste learning");
   assert.match(appSource, /function rateCurrentSong[\s\S]*?Future Auto choices will gently favor this direction/, "song ratings must update the persistent taste profile");
   assert.match(appSource, /tasteAverages[\s\S]*?selected \* 0\.72 \+ learned \* 0\.28/, "taste learning should gently bias only Auto generation values");
+  assert.match(appSource, /resolvedValue[\s\S]*?`\$\{resolvedValue\} · AUTO`/, "Auto controls must reveal each song's resolved value instead of looking frozen");
   assert.match(appSource, /function renderGenerationIntent\(\)[\s\S]*?generationIntentCopy\(staged\)/, "generation intent must resolve its copy from the shared catalog");
   assert.match(appSource, /function showGenerationActivity[\s\S]*?function hideGenerationActivity/, "every generation path must share one null-safe busy-state lifecycle");
   assert.equal([...appSource.matchAll(/wash\?\.classList\.add\("visible"\)/g)].length, 1, "the generation overlay should have one lifecycle owner");
@@ -713,6 +714,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(elementFor("#workflowProgress").textContent, "STEP 2 OF 4");
 
   const initialGeneration = app.getAppStateSnapshot();
+  const initialRecipeTitle = elementFor("#recipeTitle").textContent;
   elementFor("#generateNew").dispatch("click");
   elementFor("#generateNew").dispatch("click");
   assert.equal(app.getAppStateSnapshot().isGenerating, true);
@@ -725,6 +727,8 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(freshGeneration.song.meta.scoreDetails.criticVersion, 6, "New must be selected by genre-aware Critic 6.0");
   assert.equal(freshGeneration.song.generationInterlock.phase, 39, "New must connect every generation stage");
   assert.equal(freshGeneration.song.producerPass.phase, 9, "New must complete the phase 9 producer pass");
+  assert.notEqual(freshGeneration.recipeIndex, initialGeneration.recipeIndex, "New must advance to a visibly different creative recipe");
+  assert.notEqual(elementFor("#recipeTitle").textContent, initialRecipeTitle, "the recipe card must refresh with the generated song");
 
   elementFor("#generateSimilar").dispatch("click");
   const relatedGeneration = await waitForGenerationCommit(app, freshGeneration.generationCount);
