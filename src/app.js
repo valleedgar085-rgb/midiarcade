@@ -2473,7 +2473,8 @@ function renderShapeDirector(section = editorSection()) {
   if (composeButton) {
     const notesOnly = director.target === "notes";
     composeButton.disabled = notesOnly || state.isGenerating;
-    composeButton.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
+    const composeLabel = $("#shapeDirectorComposeLabel");
+    if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
     composeButton.title = notesOnly
       ? "Blueprint recomposition works on the current instrument or whole section; note-level edits stay with Shape Director."
       : "Generate a new scoped part from the song blueprint, then validate harmony and groove before audition.";
