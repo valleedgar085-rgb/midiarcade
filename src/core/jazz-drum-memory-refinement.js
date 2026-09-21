@@ -5,6 +5,7 @@ const round6 = (value) => Math.round((finite(value) + Number.EPSILON) * 1e6) / 1
 const mod = (value, divisor) => ((value % divisor) + divisor) % divisor;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, finite(value, min)));
 const JAZZ_SYNCOPATION_TARGET = 0.68;
+const JAZZ_REPETITION_TARGET = 0.46;
 const JAZZ_BACKBEATS = 2;
 const JAZZ_BASS_LOCK_TARGET = 0.46;
 const KICK_PITCHES = new Set([35, 36]);
@@ -80,6 +81,31 @@ export function adjacentDrumDuplicateCount(song) {
   return signatures.slice(1).filter((signature, index) => signature === signatures[index]).length;
 }
 
+function average(values, fallback = 0) {
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : fallback;
+}
+
+function phraseRepetition(song, melodyNotes) {
+  const length = finite(song?.motifs?.melody?.lengthBeats, 0);
+  if (length <= 0 || melodyNotes.length < 4) return 0.55;
+  const signatures = [];
+  for (const section of song?.structure ?? []) {
+    const repeats = Math.min(4, Math.floor((finite(section?.endBeat) - finite(section?.startBeat)) / length));
+    for (let repeat = 0; repeat < repeats; repeat += 1) {
+      const start = finite(section?.startBeat) + repeat * length;
+      const notes = melodyNotes.filter((note) => finite(note?.start) >= start - 1e-6 && finite(note?.start) < start + length - 1e-6);
+      if (notes.length < 2) continue;
+      signatures.push(new Set(notes.map((note) => `${Math.round((finite(note?.start) - start) * 4) / 4}`)));
+    }
+  }
+  if (signatures.length < 2) return 0.55;
+  const reference = signatures[0];
+  return average(signatures.slice(1).map((signature) => {
+    const shared = [...reference].filter((item) => signature.has(item)).length;
+    return shared / Math.max(1, Math.min(reference.size, signature.size));
+  }), 0.55);
+}
+
 function drumVarietyScore(song, drumNotes) {
   const barBeats = finite(song?.meta?.beatsPerBar, 4);
   const bars = Math.max(1, Math.round(finite(song?.meta?.bars, song?.bars ?? 1)));
@@ -135,14 +161,31 @@ function jazzRhythmMetrics(song, drumNotes) {
     25,
     100,
   );
-  // Density and repetition are unchanged by this drum-only refinement, so this
-  // is the complete mutable portion of Critic 6.0 genre authenticity.
-  const authenticityRhythmTerm = syncopationFit * 0.25
+  const pitched = song?.tracks?.filter((track) => track.id !== "drums").flatMap((track) => track.notes ?? []) ?? [];
+  const notesPerBar = pitched.length / bars;
+  const density = clamp(Math.round(
+    100 - Math.abs(notesPerBar - 36) / 36 * 42
+  ), 35, 100);
+  const repetitionRatio = phraseRepetition(song, melody);
+  const repetitionTarget = average([
+    finite(song?.songBlueprint?.qualityTargets?.repetition, JAZZ_REPETITION_TARGET),
+    JAZZ_REPETITION_TARGET,
+  ], JAZZ_REPETITION_TARGET);
+  const repetition = clamp(Math.round(
+    100 - Math.abs(repetitionRatio - repetitionTarget) * 125
+  ), 30, 100);
+  const authenticity = clamp(Math.round(
+    density * 0.2
+    + repetition * 0.2
+    + syncopationFit * 0.25
     + backbeatCoverage * 100 * 0.15
-    + bassLockFit * 0.2;
+    + bassLockFit * 0.2
+  ), 20, 100);
   return {
     groove,
-    authenticityRhythmTerm,
+    authenticity,
+    density,
+    repetition,
     measuredSyncopation,
     syncopationFit,
     backbeatCoverage,
@@ -192,6 +235,16 @@ function ornamentVariants(shifted, targetNotes) {
 
   // Full return-bar recall remains an option when it is already critic-safe.
   variants.push(uniqueNotes(shifted.map(cloneValue)));
+
+  const targetKicks = targetNotes.filter((note) => KICK_PITCHES.has(Number(note.pitch))).map(cloneValue);
+  const targetSnares = targetNotes.filter((note) => SNARE_PITCHES.has(Number(note.pitch))).map(cloneValue);
+  variants.push(uniqueNotes([...shifted.map(cloneValue), ...targetKicks.map(cloneValue)]));
+  variants.push(uniqueNotes([...shifted.map(cloneValue), ...targetSnares.map(cloneValue)]));
+  variants.push(uniqueNotes([
+    ...shifted.map(cloneValue),
+    ...targetKicks.map(cloneValue),
+    ...targetSnares.map(cloneValue),
+  ]));
 
   // The target bar's kick/snare skeleton carries its pocket and bass lock. Keep
   // that identity while recalling increasing amounts of the origin's hats and
@@ -278,7 +331,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
         if (adjacentAfter > adjacentBefore) continue;
         const rhythm = jazzRhythmMetrics(song, candidateDrums);
         if (rhythm.groove < sourceRhythm.groove) continue;
-        if (rhythm.authenticityRhythmTerm + 1e-7 < sourceRhythm.authenticityRhythmTerm) continue;
+        if (rhythm.authenticity < sourceRhythm.authenticity) continue;
 
         candidates.push({
           id: "jazz-return-groove-recall",
@@ -292,8 +345,8 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
           drumVarietyAfter: variety,
           grooveBefore: sourceRhythm.groove,
           grooveAfter: rhythm.groove,
-          authenticityRhythmBefore: round4(sourceRhythm.authenticityRhythmTerm),
-          authenticityRhythmAfter: round4(rhythm.authenticityRhythmTerm),
+          authenticityBefore: sourceRhythm.authenticity,
+          authenticityAfter: rhythm.authenticity,
           recalledNotes: replacement.length,
         });
       }
@@ -303,7 +356,7 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   candidates.sort((left, right) => (
     (right.drumVarietyAfter - left.drumVarietyAfter)
     || (right.grooveAfter - left.grooveAfter)
-    || (right.authenticityRhythmAfter - left.authenticityRhythmAfter)
+    || (right.authenticityAfter - left.authenticityAfter)
     || (left.recalledNotes - right.recalledNotes)
     || (left.sourceBar - right.sourceBar)
     || (left.targetBar - right.targetBar)
