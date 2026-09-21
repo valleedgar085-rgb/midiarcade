@@ -21,6 +21,7 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
 
 async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs = 12000) {
@@ -294,7 +295,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /draggable="true"[\s\S]*?Alt plus an arrow key/, "Phase 60 section ordering must support pointer and keyboard interaction");
   assert.match(appSource, /function duplicateFocusedSection[\s\S]*?type: "duplicate"[\s\S]*?commitArrangementCommand/, "section duplication must use the unified arrangement command engine");
   assert.match(appSource, /function renderArrangeWorkflow\(\)[\s\S]*?data-arrange-step/, "arrangement guidance must follow real section and note focus");
-  assert.match(cssSource, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy");
+  assert.match(`${cssSource}\n${generationExperienceCssSource}`, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy in a shipped stylesheet");
   assert.match(appSource, /function renderMixOverview\(\)[\s\S]*?mixAudibleCount/, "the mix overview must render from live mixer state");
   assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?MORE INSTRUMENT CONTROL/, "deep track controls must use progressive disclosure");
   assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationRunner[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the Phase 10 core modules");
