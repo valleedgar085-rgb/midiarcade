@@ -143,7 +143,11 @@ test("discarded Shape never becomes generation authority", async () => {
 
 test("application commit and generation wiring keep current state.song authoritative", () => {
   const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
-  assert.match(appSource, /state\.song\s*=\s*deepClone\(transaction\.after\)/);
+  assert.match(
+    appSource,
+    /state\.song\s*=\s*transaction\.compositionCandidate[\s\S]*?acceptCompositionCandidate\(transaction\)[\s\S]*?:\s*deepClone\(transaction\.after\)/,
+    "accepted local Shape and validated Blueprint candidates must both become canonical state.song",
+  );
   assert.match(appSource, /const sourceSong\s*=\s*options\.sourceSong\s*\?\?\s*state\.song/);
   assert.match(appSource, /generationExecutor\.run\(kind,\s*\{\s*sourceSong,\s*config\s*\}\)/);
   assert.match(appSource, /generateSongVariations\(sourceSong,\s*config\)/);
