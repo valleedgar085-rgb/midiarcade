@@ -707,8 +707,6 @@ function syncAutoRangeControl(input, key = autoKeyForRange(input)) {
     button.setAttribute("aria-pressed", String(active));
     button.textContent = active ? "AUTO ✓" : "AUTO";
   }
-  const output = input.closest("label")?.querySelector("output");
-  if (active && output) output.textContent = "AUTO";
 }
 
 function decorateAutoRangeControls(root = document) {
@@ -1693,6 +1691,7 @@ function createHistorySnapshot() {
     focusedSection: state.focusedSection,
     editorTrack: state.editorTrack,
     sectionEditorOpen: state.sectionEditorOpen,
+    recipeIndex: state.recipeIndex,
   };
 }
 
@@ -1732,6 +1731,7 @@ export function getAppStateSnapshot() {
     isGenerating: state.isGenerating,
     songVariationCount: state.songVariations.length,
     activeSongVariation: state.activeSongVariation,
+    recipeIndex: state.recipeIndex,
   });
 }
 
@@ -1747,6 +1747,9 @@ function applyHistorySnapshot(snapshot) {
   state.focusedSection = snapshot.focusedSection ?? null;
   state.editorTrack = TRACK_ORDER.includes(snapshot.editorTrack) ? snapshot.editorTrack : state.selectedTrack;
   state.sectionEditorOpen = Boolean(snapshot.sectionEditorOpen && state.focusedSection);
+  state.recipeIndex = Number.isInteger(snapshot.recipeIndex)
+    ? clamp(snapshot.recipeIndex, 0, RECIPES.length - 1)
+    : state.recipeIndex;
   state.songVariations = [];
   state.activeSongVariation = -1;
   state.editorSelection.clear();
@@ -3487,7 +3490,12 @@ function updateRangeDisplays() {
   ];
   for (const [inputSelector, outputSelector, formatter] of mappings) {
     const input = $(inputSelector);
-    $(outputSelector).textContent = state.autoControls.has(input.id) ? "AUTO" : formatter(input.value);
+    const resolvedValue = formatter(input.value);
+    // Auto is a mode, not a hidden value. Show the resolved number so every
+    // fresh seed's performance profile is visible to the producer.
+    $(outputSelector).textContent = state.autoControls.has(input.id)
+      ? `${resolvedValue} · AUTO`
+      : resolvedValue;
     updateRangeFill(input);
   }
   renderTempoPocket();
@@ -3640,6 +3648,13 @@ function chooseNewGenrePrograms(seed) {
   }
 }
 
+function advanceRecipe(seed = createSeed()) {
+  if (RECIPES.length < 2) return state.recipeIndex;
+  const offset = 1 + (hashNumber(`${seed}:creative-recipe`) % (RECIPES.length - 1));
+  state.recipeIndex = (state.recipeIndex + offset) % RECIPES.length;
+  return state.recipeIndex;
+}
+
 async function runGeneration(kind, options = {}) {
   if (state.isGenerating) return;
   resolvePendingShapeDirectorCandidate({ rerender: false });
@@ -3656,7 +3671,10 @@ async function runGeneration(kind, options = {}) {
     showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
 
     const seed = createSeed();
-    if (kind === "new") chooseNewGenrePrograms(seed);
+    if (kind === "new") {
+      advanceRecipe(seed);
+      chooseNewGenrePrograms(seed);
+    }
     const sourceSong = options.sourceSong ?? state.song;
     const config = {
       ...buildConfig(seed),
@@ -3970,7 +3988,7 @@ function reshapeArrangement() {
 }
 
 function chooseRecipe() {
-  state.recipeIndex = (state.recipeIndex + 1 + Math.floor(Math.random() * (RECIPES.length - 1))) % RECIPES.length;
+  advanceRecipe();
   const recipe = RECIPES[state.recipeIndex];
   $("#modeControl").value = recipe.mode;
   $("#grooveControl").value = recipe.groove;
