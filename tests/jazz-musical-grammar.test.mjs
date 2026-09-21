@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   JAZZ_ARCHETYPES,
   JAZZ_PHRASE_TRANSFORMATIONS,
+  createConservativeJazzComposerInput,
   createJazzGrammarDirective,
   jazzArchetypeForSong,
 } from "../src/core/jazz-musical-grammar.js";
@@ -88,4 +89,19 @@ test("Jazz critic failures route into focused self-correction", () => {
   });
   assert.equal(guide.focusGroup, "harmony");
   assert.equal(guide.focusRoute, "harmony-first");
+});
+
+test("conservative Jazz fallback narrows variance without overriding an explicit route", () => {
+  const safe = createConservativeJazzComposerInput(jazzSong(), {
+    compositionRoute: "hook-first",
+    surprise: 0.9,
+    variation: 0.9,
+    evolution: 0.9,
+  });
+  assert.equal(safe.compositionRoute, "hook-first");
+  assert.equal(safe.jazzConservativeMode, true);
+  assert.ok(safe.surprise <= 0.2);
+  assert.ok(safe.variation <= 0.42);
+  assert.ok(safe.evolution <= 0.52);
+  assert.equal(safe.professionalUpgrade, true);
 });
