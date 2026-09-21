@@ -232,6 +232,31 @@ function ornamentVariants(shifted, targetNotes) {
     .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
   const skeleton = targetSkeleton(targetNotes).map(cloneValue);
   const variants = [];
+  const originalTarget = targetNotes.map(cloneValue);
+
+  // The least invasive recall keeps the target bar intact and introduces only
+  // a bounded origin ornament. This is useful when the target's kick/snare and
+  // syncopation are already critic-optimal but its bar fingerprint is too repetitive.
+  const chronologicalShifted = [...shifted]
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  for (let count = 1; count <= chronologicalShifted.length; count += 1) {
+    variants.push(uniqueNotes([
+      ...originalTarget.map(cloneValue),
+      ...chronologicalShifted.slice(0, count).map(cloneValue),
+    ]));
+  }
+
+  const targetPlusSyncopated = [...shifted].sort((left, right) => {
+    const leftOffbeat = Math.abs(finite(left.start) - Math.round(finite(left.start))) > 0.08 ? 0 : 1;
+    const rightOffbeat = Math.abs(finite(right.start) - Math.round(finite(right.start))) > 0.08 ? 0 : 1;
+    return leftOffbeat - rightOffbeat || finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch);
+  });
+  for (let count = 1; count <= targetPlusSyncopated.length; count += 1) {
+    variants.push(uniqueNotes([
+      ...originalTarget.map(cloneValue),
+      ...targetPlusSyncopated.slice(0, count).map(cloneValue),
+    ]));
+  }
 
   // Full return-bar recall remains an option when it is already critic-safe.
   variants.push(uniqueNotes(shifted.map(cloneValue)));
