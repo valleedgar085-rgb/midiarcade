@@ -15,6 +15,14 @@ function fakeEngine(calls) {
       calls.push(["similar", sourceSong, config]);
       return { id: "similar-song" };
     },
+    createSelfCorrectingCompositionCandidate(sourceSong, selection, input, options) {
+      calls.push(["compositionCandidate", sourceSong, selection, input, options]);
+      return {
+        status: "candidate",
+        validation: { valid: true, issues: [] },
+        after: { id: "scoped-candidate" },
+      };
+    },
     generateSectionVariations(sourceSong, sectionId, input) {
       calls.push(["sectionVariations", sourceSong, sectionId, input]);
       return [{ id: "section-a" }, { id: "section-b" }];
@@ -39,6 +47,19 @@ test("generation dispatcher owns the complete background generation command surf
     status: "committed",
     song: { id: "similar-song" },
   });
+  assert.deepEqual(dispatchGenerationRequest("compositionCandidate", {
+    sourceSong,
+    selection: { target: "section-track", sectionId: "chorus-1", trackId: "bass" },
+    input: { seed: "scope" },
+    maxAttempts: 3,
+  }, engine), {
+    status: "candidate",
+    transaction: {
+      status: "candidate",
+      validation: { valid: true, issues: [] },
+      after: { id: "scoped-candidate" },
+    },
+  });
   assert.deepEqual(dispatchGenerationRequest("sectionVariations", {
     sourceSong,
     sectionId: "chorus-1",
@@ -58,6 +79,7 @@ test("generation dispatcher owns the complete background generation command surf
   assert.deepEqual(calls, [
     ["new", { seed: "one" }],
     ["similar", sourceSong, { seed: "two" }],
+    ["compositionCandidate", sourceSong, { target: "section-track", sectionId: "chorus-1", trackId: "bass" }, { seed: "scope" }, { maxAttempts: 3 }],
     ["sectionVariations", sourceSong, "chorus-1", { intensity: 0.8 }],
     ["songVariations", sourceSong, { candidatesPerVariation: 3 }],
   ]);
@@ -83,6 +105,7 @@ test("generation dispatcher applies stable empty payload defaults without mutati
 test("generation dispatcher rejects unknown commands and incomplete engine contracts precisely", () => {
   assert.equal(isGenerationKind("new"), true);
   assert.equal(isGenerationKind("songVariations"), true);
+  assert.equal(isGenerationKind("compositionCandidate"), true);
   assert.equal(isGenerationKind("renderAudio"), false);
   assert.throws(
     () => dispatchGenerationRequest("renderAudio", {}, {}),
