@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { judgeCompositionCandidate } from "./composition-candidate-judge.js";
 import { generateSimilar } from "../music-engine.js";
 
 const EPSILON = 1e-7;
@@ -273,13 +274,22 @@ function validateScaleSafety(after, selection, issues) {
 export function validateCompositionCandidate(transaction) {
   const issues = [];
   if (!transaction || transaction.status !== "candidate") {
-    return { valid: false, issues: ["invalid-transaction"] };
+    return { valid: false, issues: ["invalid-transaction"], judge: null };
   }
   validateScopeIntegrity(transaction.before, transaction.after, transaction.selection, issues);
   validateScaleSafety(transaction.after, transaction.selection, issues);
+  const judge = judgeCompositionCandidate(
+    transaction.before,
+    transaction.after,
+    transaction.selection,
+    transaction.directive,
+  );
+  issues.push(...judge.hardIssues);
+  const uniqueIssues = [...new Set(issues)];
   return {
-    valid: issues.length === 0,
-    issues,
+    valid: uniqueIssues.length === 0,
+    issues: uniqueIssues,
+    judge,
   };
 }
 
