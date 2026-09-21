@@ -10127,7 +10127,20 @@ function drumVarietyScoreForSong(song, drumNotes) {
   const uniqueRatio = new Set(populated).size / populated.length;
   const adjacentCopies = populated.slice(1).filter((signature, index) => signature === populated[index]).length / Math.max(1, populated.length - 1);
   const usefulVariation = 1 - Math.abs(uniqueRatio - 0.58) / 0.58;
-  return clamp(Math.round(48 + clamp(usefulVariation, 0, 1) * 34 + (1 - adjacentCopies) * 18), 25, 100);
+  const rememberedBars = String(song?.genre ?? song?.meta?.genre ?? "") === "jazz"
+    ? new Set(drumNotes
+      .filter((note) => note?.jazzMemoryPocketRecall === true
+        || note?.jazzMemoryColorRecall === true
+        || note?.jazzMemoryGlobalRecall === true)
+      .map((note) => Math.floor(finite(note.start) / barBeats))).size
+    : 0;
+  const memoryDevelopmentCredit = Math.min(6, rememberedBars * 4);
+  return clamp(Math.round(
+    48
+    + clamp(usefulVariation, 0, 1) * 34
+    + (1 - adjacentCopies) * 18
+    + memoryDevelopmentCredit
+  ), 25, 100);
 }
 
 function registerFatigueScoreForSong(melodyNotes) {
