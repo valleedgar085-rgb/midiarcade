@@ -313,9 +313,10 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(rerollSource, /buildTrackRerollInput\(id, original/, "single-track generation must use its isolated contextual input");
   assert.match(
     rerollSource,
-    /generationExecutor\.run\("similar", \{ sourceSong: original, config: generationInput \}\)/,
-    "contextual input must be passed through the background generation boundary",
+    /generationExecutor\.run\("compositionCandidate"[\s\S]*?sourceSong: original[\s\S]*?selection: \{ target: "track", trackId: id \}[\s\S]*?input: generationInput/,
+    "whole-instrument rerolls must pass isolated contextual input through the judged composition boundary",
   );
+  assert.match(rerollSource, /acceptCompositionCandidate\(transaction\)/, "instrument rerolls must commit only validated composition transactions");
   assert.match(appSource, /for \(const \[index, point\] of expressionCurve\.slice\(1\)\.entries\(\)\)/, "preview gain must schedule every interior expression point");
   assert.match(appSource, /createConvolver/, "preview audio must include a real ambience bus");
   assert.match(appSource, /createWaveShaper/, "full preview audio must retain the saturation stage");
@@ -340,6 +341,8 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /pushHistory\(\);[\s\S]*?if \(action === "delete"\)/, "destructive piano-roll edits must capture undo history first");
   assert.match(htmlSource, /data-editor-action="quantize"[\s\S]*?data-editor-action="humanize"/);
   assert.match(htmlSource, /Double-click empty space to draw/);
+  assert.match(htmlSource, /id="shapeDirectorCompose"[\s\S]*?data-shape-compose/, "Shape must expose blueprint recomposition");
+  assert.match(appSource, /prepareBlueprintCompositionCandidate[\s\S]*?generationExecutor\.run\("compositionCandidate"/, "Shape blueprint recomposition must use the judged worker boundary");
   assert.match(htmlSource, /id="sectionVariationLab"/);
   assert.match(htmlSource, /data-workspace="finish"[\s\S]*?id="finishCoverImage"/);
   assert.match(cssSource, /\.section-editor\.is-open[\s\S]*?transform:\s*translateY\(0\) scale\(1\)/, "section editor must animate into a zoomed workspace");
