@@ -4034,7 +4034,16 @@ async function regenerateTrack(id, options = {}) {
       throw new Error(issue || `No validated ${id} candidate was generated.`);
     }
 
-    state.song = applyTrackSettingsToSong(acceptCompositionCandidate(transaction));
+    const next = acceptCompositionCandidate(transaction);
+    next.settings = { ...(next.settings || {}) };
+    const candidateSettings = transaction.generated?.settings || {};
+    if ((id === "drums" || id === "melody") && candidateSettings.tripletAmount != null) {
+      next.settings.tripletAmount = candidateSettings.tripletAmount;
+    }
+    if (id === "drums" && candidateSettings.rollAmount != null) {
+      next.settings.rollAmount = candidateSettings.rollAmount;
+    }
+    state.song = applyTrackSettingsToSong(next);
     renderAll();
     scheduleSessionSave();
     const attitude = options.attitude ? ` with ${ATTITUDE_LABELS[options.attitude].toLowerCase()} attitude` : "";
