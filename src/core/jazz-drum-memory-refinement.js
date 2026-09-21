@@ -506,6 +506,65 @@ function pocketHybridReplacement(shiftedSourceNotes, targetNotes) {
   return uniqueNotes([...skeleton, ...recalled]);
 }
 
+function sourceColorRecallVariants(sourceNotes, targetNotes) {
+  const sourcePitches = [...new Set(
+    sourceOrnaments(sourceNotes)
+      .map((note) => Number(note.pitch))
+      .filter(Number.isFinite),
+  )].sort((left, right) => left - right);
+  const targets = sourceOrnaments(targetNotes)
+    .slice()
+    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  if (!sourcePitches.length || !targets.length) return [];
+
+  const variants = [];
+  const replacementFor = (changes) => targetNotes.map((note) => {
+    const change = changes.get(noteKey(note));
+    if (change == null) return cloneValue(note);
+    return {
+      ...cloneValue(note),
+      pitch: change,
+      jazzMemoryColorRecall: true,
+      jazzMemorySourcePitch: change,
+    };
+  });
+
+  // Preserve the target bar's complete rhythmic/performance fingerprint and
+  // borrow only drum color from the remembered origin. Critic 6.0's Jazz
+  // authenticity inputs (density, repetition, syncopation, backbeat coverage,
+  // bass lock) therefore remain invariant while the bar fingerprint can evolve.
+  const choices = [];
+  for (const target of targets) {
+    for (const pitch of sourcePitches) {
+      if (pitch === Number(target.pitch)) continue;
+      choices.push({ target, pitch });
+      variants.push(replacementFor(new Map([[noteKey(target), pitch]])));
+    }
+  }
+
+  // Some high-variety seeds need two color changes before the bar becomes a
+  // materially distinct memory return. Keep the search bounded and deterministic.
+  for (let left = 0; left < choices.length; left += 1) {
+    for (let right = left + 1; right < choices.length; right += 1) {
+      const a = choices[left];
+      const b = choices[right];
+      if (noteKey(a.target) === noteKey(b.target)) continue;
+      variants.push(replacementFor(new Map([
+        [noteKey(a.target), a.pitch],
+        [noteKey(b.target), b.pitch],
+      ])));
+    }
+  }
+
+  const seen = new Set();
+  return variants.filter((notes) => {
+    const signature = notes.map(noteKey).sort().join("|");
+    if (!signature || seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 function candidateSong(sourceSong, targetNotes, replacementNotes) {
   const song = cloneValue(sourceSong);
   const targetDrums = song.tracks.find((track) => track.id === "drums");
@@ -642,6 +701,16 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
               recallMode: "pocket-hybrid-return",
             });
           }
+
+          for (const replacement of sourceColorRecallVariants(shifted, targetNotes)) {
+            considerCandidate({
+              sourceBar,
+              targetBar,
+              targetNotes,
+              replacement,
+              recallMode: "source-color-return",
+            });
+          }
         }
       }
     }
@@ -686,7 +755,8 @@ export function createJazzDrumMemoryCandidate(sourceSong) {
   }
 
   candidates.sort((left, right) => (
-    (Number(right.recallMode === "pocket-compatible-return") - Number(left.recallMode === "pocket-compatible-return"))
+    (Number(right.recallMode === "source-color-return") - Number(left.recallMode === "source-color-return"))
+    || (Number(right.recallMode === "pocket-compatible-return") - Number(left.recallMode === "pocket-compatible-return"))
     || (Number(right.recallMode === "pocket-hybrid-return") - Number(left.recallMode === "pocket-hybrid-return"))
     || (Number(right.timingPreserved) - Number(left.timingPreserved))
     || (Math.abs(left.noteCountDelta) - Math.abs(right.noteCountDelta))
