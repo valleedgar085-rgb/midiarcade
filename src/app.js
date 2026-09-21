@@ -4031,6 +4031,21 @@ async function regenerateTrack(id, options = {}) {
     const transaction = result?.transaction;
     if (!transaction?.validation?.valid) {
       const issue = transaction?.validation?.issues?.[0]?.replaceAll(":", " ");
+      if (options.attitude && historySnapshot) {
+        // Three critic-gated note attempts can legitimately all fail. An
+        // attitude command still has a safe meaning: keep the canonical notes
+        // and apply only the user's performance controls. This creates one
+        // truthful undo step instead of exposing an older unrelated history
+        // entry after a rejected reroll.
+        pushHistory(historySnapshot);
+        state.song = applyTrackSettingsToSong(deepClone(original));
+        renderAll();
+        scheduleSessionSave();
+        const message = `${TRACK_META[id].name} kept its safe notes and applied ${ATTITUDE_LABELS[options.attitude].toLowerCase()} performance only; the rest of the band stayed untouched.`;
+        renderAttitudeStrip(message);
+        showToast(message);
+        return;
+      }
       throw new Error(issue || `No validated ${id} candidate was generated.`);
     }
 
