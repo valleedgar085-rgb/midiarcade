@@ -18,6 +18,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Focused Rock identity
+        run: node --test --test-name-pattern="Rock writes power-chord" tests/music-engine.test.mjs
       - name: Full repository quality
         run: npm run quality
       - name: Seeded music quality
