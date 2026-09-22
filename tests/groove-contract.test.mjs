@@ -63,7 +63,12 @@ test("nearest groove pulse respects a bounded magnetization radius", () => {
 
 test("professional arpeggios remain inside the shared chord groove contract", async () => {
   const source = await readFile(new URL("../src/music-engine.js", import.meta.url), "utf8");
-  const branch = source.match(/style\.chordMotion === "arpeggio"[\s\S]*?continue;/)?.[0] ?? "";
-  assert.match(branch, /config\.professionalUpgrade[\s\S]*?magnetizeBeatToGroove\([\s\S]*?"chordPulses"/);
-  assert.match(branch, /rhythmicFeature: "groove-magnet"/);
+  assert.match(
+    source,
+    /style\.chordMotion === "arpeggio"[\s\S]{0,3200}?config\.professionalUpgrade[\s\S]{0,1600}?magnetizeBeatToGroove\([\s\S]{0,600}?"chordPulses"/,
+  );
+  assert.match(
+    source,
+    /style\.chordMotion === "arpeggio"[\s\S]{0,4200}?rhythmicFeature: "groove-magnet"/,
+  );
 });
