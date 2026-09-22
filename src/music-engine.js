@@ -6711,6 +6711,13 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
             ? 0.68
             : 1;
+      const rockPowerChordStarts = config.genre === "rock" && id === "chords"
+        ? [...new Set(notes
+          .filter((note) => note.genrePhrase === "power-chord-drive")
+          .map((note) => round(note.start, 4)))]
+          .sort((left, right) => left - right)
+        : [];
+      const rockPowerChordDecisions = new Map();
       const roleVelocity = {
         foreground: 1.05,
         foundation: 0.98,
@@ -6754,6 +6761,58 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
           Math.abs(foreground.start - note.start) < 0.105
         ));
+        const rockPowerChordAttack = rockPowerChordStarts.length > 0
+          && note.genrePhrase === "power-chord-drive";
+        if (rockPowerChordAttack) {
+          const attackKey = round(note.start, 4);
+          let keepAttack = rockPowerChordDecisions.get(attackKey);
+          if (keepAttack == null) {
+            const attackNotes = notes.filter((candidate) => (
+              candidate.genrePhrase === "power-chord-drive"
+              && Math.abs(candidate.start - note.start) < 0.01
+            ));
+            const attackProtected = attackNotes.some((candidate) => (
+              candidate.phraseAnchor
+              || candidate.resolutionRole
+              || candidate.transitionRole
+              || candidate.transitionFeature
+              || candidate.transitionHandoffRole
+              || candidate.memoryRole
+              || candidate.motifHandoffRole
+              || candidate.ensembleAccent
+              || candidate.finalAssemblyRole
+            ));
+            const outsideAttackGate = !attackProtected && Boolean(
+              (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
+              || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
+            );
+            const attackStructural = attackProtected
+              || (producerRole !== "rest" && attackKey === rockPowerChordStarts[0])
+              || note.start <= section.startBeat + 0.04;
+            const attackCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
+              Math.abs(foreground.start - note.start) < 0.105
+            ));
+            const attackRng = rng.fork(`phase7-${section.id}-${id}-${attackKey}-power-chord`);
+            keepAttack = !outsideAttackGate
+              && (producerRole !== "rest" || attackProtected)
+              && (attackProtected || !attackCollision)
+              && (attackStructural || attackRng.bool(clamp(
+                lane.presence * rolePresence * developmentPresence,
+                0.04,
+                1,
+              )));
+            rockPowerChordDecisions.set(attackKey, keepAttack);
+          }
+          if (!keepAttack) continue;
+          kept.push({
+            ...note,
+            velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+            orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
+          });
+          continue;
+        }
         if (outsideRoleGate) continue;
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
