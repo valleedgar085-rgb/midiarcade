@@ -20,6 +20,16 @@ This document defines mandatory engineering guidelines, architectural constraint
   - Laidback Genres (Neo-Soul, Lo-Fi, R&B): apply deliberate push offsets (`+0.016` beat lag) on snares and bass.
   - Four-on-the-Floor Grid Genres (House, Techno, Synthwave, Trap): enforce strict grid timing with 50% jitter attenuation.
 
+### 1.4 Ensemble Teamwork — Quality Over Quantity
+- Every section MUST have exactly **one foreground owner**. Other melodic/harmonic tracks must support, answer, texture, or rest; they must not independently compete for attention.
+- Allow at most **one answer voice** against the foreground, and keep answer attacks separated unless a protected cadence, transition, memory, or motif handoff explicitly requires a shared onset.
+- Do not use “all instruments playing” as the default way to create energy. The producer-intent contract MUST cap ordinary scenes at **5 active tracks** and at most **3 non-foundation voices**.
+- Drums and bass form the protected rhythm foundation unless a section contract intentionally spotlights one of them. Chords/pad/melody/counterpoint must be selected around that foundation, not generated as six unrelated lanes.
+- Prefer **resting a redundant support part** over adding another weak layer. Silence is a valid arrangement decision and must remain deterministic.
+- In verse/develop sections, prioritize one foreground + one answer + one harmonic bed. In reset/resolve sections, reduce upper voices further. Builds/payoffs may increase intensity through velocity, register, rhythm, and articulation before adding extra simultaneous parts.
+- Instrument program/timbre selection MUST respect role separation: avoid unnecessary family collisions between melody/counterpoint and chords/pad, and never use timbral novelty to justify overcrowding.
+- Any change that increases note count or active lanes MUST prove a musical benefit through existing critic/ensemble checks; raw density is never a success metric by itself.
+
 ---
 
 ## 2. Web Audio & Synthesis Architecture
