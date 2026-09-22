@@ -141,3 +141,56 @@ test("phase 3 reports the post-groove final rhythm lock", () => {
     "final master diagnostics must describe the same post-groove lock exposed by the song",
   );
 });
+
+test("groove conductor never reserves negative space on an authored motif attack", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "motif-space-contract",
+    bars: 24,
+    candidateCount: 1,
+    professionalUpgrade: true,
+    complexity: 0.78,
+    variation: 0.72,
+  });
+  const barBeats = song.meta?.beatsPerBar ?? 4;
+  const mod = (value, divisor) => ((value % divisor) + divisor) % divisor;
+
+  for (const barPlan of song.grooveConductor?.bars ?? []) {
+    const section = song.structure.find((entry) => entry.id === barPlan.sectionId);
+    const assignment = song.motifs?.sectionAssignments?.find((entry) => entry.sectionId === barPlan.sectionId);
+    const motif = song.motifs?.family?.[assignment?.motifId ?? "A"]?.melody;
+    if (!section || !motif?.events?.length) continue;
+
+    const motifBars = Math.max(1, Math.ceil((motif.lengthBeats ?? barBeats) / barBeats));
+    const motifBar = mod(barPlan.bar - section.startBar, motifBars);
+    const motifPulses = motif.events
+      .filter((event) => Math.floor(Number(event.offset ?? 0) / barBeats) === motifBar)
+      .map((event) => mod(Number(event.offset ?? 0), barBeats));
+
+    for (const pulse of motifPulses) {
+      assert.equal(
+        (barPlan.spaces ?? []).some((space) => Math.abs(space - pulse) < 0.01),
+        false,
+        `bar ${barPlan.bar} must not mark motif pulse ${pulse} as negative space`,
+      );
+    }
+  }
+});
+
+test("pocket cohesion reports conductor-lane coordination separately from transient fallback", () => {
+  const song = generateNew({
+    genre: "techno",
+    seed: "conductor-pocket-report",
+    bars: 16,
+    candidateCount: 1,
+    professionalUpgrade: true,
+    humanize: 0.28,
+  });
+  assert.equal(song.pocketCohesion?.version, 2);
+  assert.ok(song.pocketCohesion?.conductorAlignedNotes >= 0);
+  assert.ok(song.pocketCohesion?.transientFallbackAlignments >= 0);
+  assert.equal(
+    song.pocketCohesion.alignedNotes,
+    song.pocketCohesion.conductorAlignedNotes + song.pocketCohesion.transientFallbackAlignments,
+  );
+});

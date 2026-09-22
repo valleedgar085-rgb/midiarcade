@@ -119,6 +119,8 @@ test("Phase 6B arrangement families are deterministic and respect explicit enabl
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "manual-off", bars: 16, arrangementEvolution: false }, { kind: "new" }).arrangementEvolution, false);
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "similar-default", bars: 16 }, { kind: "similar" }).arrangementEvolution, false);
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "similar-manual", bars: 16, arrangementEvolution: true }, { kind: "similar" }).arrangementEvolution, true);
+  assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-default-on", bars: 16 }, { kind: "new" }).transitionFxRefinement, true);
+  assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-similar-off", bars: 16 }, { kind: "similar" }).transitionFxRefinement, false);
 });
 
 test("arrangement evolution moves complete sections atomically without changing song duration or section identity", () => {

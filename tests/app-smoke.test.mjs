@@ -21,6 +21,7 @@ const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
 
 async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs = 12000) {
@@ -294,7 +295,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /draggable="true"[\s\S]*?Alt plus an arrow key/, "Phase 60 section ordering must support pointer and keyboard interaction");
   assert.match(appSource, /function duplicateFocusedSection[\s\S]*?type: "duplicate"[\s\S]*?commitArrangementCommand/, "section duplication must use the unified arrangement command engine");
   assert.match(appSource, /function renderArrangeWorkflow\(\)[\s\S]*?data-arrange-step/, "arrangement guidance must follow real section and note focus");
-  assert.match(cssSource, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy");
+  assert.match(`${cssSource}\n${generationExperienceCssSource}`, /PHASE 15: MIX WORKSPACE[\s\S]*?\.mix-overview/, "Phase 15 must expose the simplified mixer hierarchy in a shipped stylesheet");
   assert.match(appSource, /function renderMixOverview\(\)[\s\S]*?mixAudibleCount/, "the mix overview must render from live mixer state");
   assert.match(appSource, /class="track-expression track-shaping"[\s\S]*?MORE INSTRUMENT CONTROL/, "deep track controls must use progressive disclosure");
   assert.match(appSource, /createAppStore[\s\S]*?createSessionStorage[\s\S]*?createGenerationRunner[\s\S]*?createWorkspaceController/, "app lifecycle boundaries must use the Phase 10 core modules");
@@ -313,9 +314,25 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(rerollSource, /buildTrackRerollInput\(id, original/, "single-track generation must use its isolated contextual input");
   assert.match(
     rerollSource,
-    /generationExecutor\.run\("similar", \{ sourceSong: original, config: generationInput \}\)/,
-    "contextual input must be passed through the background generation boundary",
+    /generationExecutor\.run\("compositionCandidate"[\s\S]*?sourceSong: original[\s\S]*?selection: \{ target: "track", trackId: id \}[\s\S]*?input: generationInput/,
+    "whole-instrument rerolls must pass isolated contextual input through the judged composition boundary",
   );
+  assert.match(
+    rerollSource,
+    /const historySnapshot = options\.historySnapshot \?\? createHistorySnapshot\(\)[\s\S]*?pushHistory\(historySnapshot\)[\s\S]*?state\.song = applyTrackSettingsToSong\(next\)/,
+    "successful rerolls must create Undo history only after the candidate passes",
+  );
+  assert.match(
+    rerollSource,
+    /catch \(error\)[\s\S]*?applyHistorySnapshot\(historySnapshot\)/,
+    "rejected rerolls must restore their snapshot without consuming Undo",
+  );
+  assert.doesNotMatch(
+    rerollSource,
+    /catch \(error\)[\s\S]*?restoreHistory\(/,
+    "a rejected candidate must not pop the user's history stack",
+  );
+  assert.match(rerollSource, /acceptCompositionCandidate\(transaction\)/, "instrument rerolls must commit only validated composition transactions");
   assert.match(appSource, /for \(const \[index, point\] of expressionCurve\.slice\(1\)\.entries\(\)\)/, "preview gain must schedule every interior expression point");
   assert.match(appSource, /createConvolver/, "preview audio must include a real ambience bus");
   assert.match(appSource, /createWaveShaper/, "full preview audio must retain the saturation stage");
@@ -340,6 +357,8 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(appSource, /pushHistory\(\);[\s\S]*?if \(action === "delete"\)/, "destructive piano-roll edits must capture undo history first");
   assert.match(htmlSource, /data-editor-action="quantize"[\s\S]*?data-editor-action="humanize"/);
   assert.match(htmlSource, /Double-click empty space to draw/);
+  assert.match(htmlSource, /id="shapeDirectorCompose"[\s\S]*?data-shape-compose/, "Shape must expose blueprint recomposition");
+  assert.match(appSource, /prepareBlueprintCompositionCandidate[\s\S]*?generationExecutor\.run\("compositionCandidate"/, "Shape blueprint recomposition must use the judged worker boundary");
   assert.match(htmlSource, /id="sectionVariationLab"/);
   assert.match(htmlSource, /data-workspace="finish"[\s\S]*?id="finishCoverImage"/);
   assert.match(cssSource, /\.section-editor\.is-open[\s\S]*?transform:\s*translateY\(0\) scale\(1\)/, "section editor must animate into a zoomed workspace");
@@ -882,6 +901,30 @@ test("browser app initializes against the engine contract", async () => {
     { type: "cc", controller: 11, beat: 8, value: 32 },
   ];
   assert.equal(app.expressionAtBeat(automation, 4), 79.5, "CC11 must interpolate linearly between expression points");
+  const transitionAutomation = [
+    { type: "cc", controller: 74, beat: 0, value: 48 },
+    { type: "cc", controller: 74, beat: 4, value: 112 },
+    { type: "cc", controller: 91, beat: 0, value: 24 },
+    { type: "cc", controller: 91, beat: 4, value: 88 },
+  ];
+  assert.equal(app.controllerValueAtBeat(transitionAutomation, 74, 2, 64), 80, "CC74 must interpolate like exported MIDI automation");
+  const transitionPreview = app.buildPreviewEvents({
+    bpm: 120,
+    genre: "techno",
+    meta: { genre: "techno", tempo: 120 },
+    tracks: [{
+      id: "chords",
+      program: 81,
+      settings: { volume: 0.78, velocity: 0.82, pan: 0, reverb: 0.3, cutoff: 8000, resonance: 0.2, gate: 0.9 },
+      automation: transitionAutomation,
+      notes: [
+        { pitch: 60, start: 0, duration: 1, velocity: 88 },
+        { pitch: 64, start: 4, duration: 1, velocity: 88 },
+      ],
+    }],
+  }, { muted: [], solo: [], trackSettings: {} });
+  assert.ok(transitionPreview[1].cutoff > transitionPreview[0].cutoff, "CC74 transition sweep must brighten preview at the arrival");
+  assert.ok(transitionPreview[1].reverb > transitionPreview[0].reverb, "CC91 transition bloom must be audible in preview");
   const fadeEvents = app.buildPreviewEvents({
     bpm: 120,
     tracks: [{

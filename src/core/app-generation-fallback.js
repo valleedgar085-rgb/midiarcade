@@ -3,7 +3,7 @@ import { runGenerationRequest } from "./generation-api.js";
 /**
  * Create the synchronous fallback used when the generation worker is unavailable.
  * New/Similar retain the runner's overlap and validation contract; variation
- * requests use the same stable generation API as the worker.
+ * and scoped composition requests use the same stable generation API as the worker.
  */
 export function createAppGenerationFallback({
   generationRunner,
@@ -17,7 +17,7 @@ export function createAppGenerationFallback({
   }
 
   return function generationFallback(kind, payload = {}) {
-    if (kind === "sectionVariations" || kind === "songVariations") {
+    if (kind === "sectionVariations" || kind === "songVariations" || kind === "compositionCandidate") {
       return Promise.resolve(runRequest(kind, payload));
     }
     return generationRunner.generate(kind, {

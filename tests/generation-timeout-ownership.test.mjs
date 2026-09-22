@@ -43,6 +43,7 @@ function appHarness() {
     player: { stop: noop },
     pushHistory: (snapshot = { song: state.song }) => state.history.push(snapshot),
     createHistorySnapshot: () => ({ song: state.song }),
+    applyHistorySnapshot: (snapshot) => { if (snapshot?.song) state.song = snapshot.song; return Boolean(snapshot); },
     restoreHistory: () => { const snapshot = state.history.pop(); if (snapshot) state.song = snapshot.song; },
     createSeed: () => "seed", chooseNewGenrePrograms: noop, buildConfig: () => ({}),
     recentSongsForGeneration: () => [], generationDelay: () => Promise.resolve(),
