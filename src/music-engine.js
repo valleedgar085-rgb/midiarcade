@@ -7334,6 +7334,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
+      ...(note.rockChordRole ? { rockChordRole: note.rockChordRole } : {}),
       ...(note.melodyRole ? { melodyRole: note.melodyRole } : {}),
       ...(note.counterMelodyRole ? { counterMelodyRole: note.counterMelodyRole } : {}),
       ...(note.melodicRelationship ? { melodicRelationship: note.melodicRelationship } : {}),
