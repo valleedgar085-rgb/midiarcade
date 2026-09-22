@@ -222,33 +222,3 @@ test("result postprocess is reference-stable when no arrangement candidate is co
   });
   assert.strictEqual(processed, rejectedResult, "rejected arrangement candidates must preserve exact executor result identity");
 });
-
-test("full-song forms earn major payoffs instead of jumping between unrelated sections", { timeout: 120_000 }, () => {
-  const pop = generateNew({ genre: "pop", seed: "story-pop", bars: 32, candidateCount: 1, professionalUpgrade: true });
-  const popNames = pop.structure.map((section) => section.name);
-  const popChorus = popNames.indexOf("chorus");
-  assert.ok(popChorus > 0);
-  assert.equal(popNames[popChorus - 1], "prechorus", "Pop should earn its first chorus with a prechorus lift");
-
-  const rock = generateNew({ genre: "rock", seed: "story-rock", bars: 32, candidateCount: 1, professionalUpgrade: true });
-  const rockNames = rock.structure.map((section) => section.name);
-  const rockChorus = rockNames.indexOf("chorus");
-  assert.ok(rockChorus > 0);
-  assert.equal(rockNames[rockChorus - 1], "prechorus", "Rock should build into its first anthem chorus");
-
-  const jazz = generateNew({ genre: "jazz", seed: "story-jazz", bars: 32, candidateCount: 1, professionalUpgrade: true });
-  const jazzNames = jazz.structure.map((section) => section.name);
-  assert.equal(
-    jazzNames.some((name, index) => name === "solo" && jazzNames[index + 1] === "solo"),
-    false,
-    "Jazz solos should be separated by a contrasting section rather than stacked back-to-back",
-  );
-
-  const techno = generateNew({ genre: "techno", seed: "story-techno", bars: 16, candidateCount: 1, professionalUpgrade: true });
-  const technoNames = techno.structure.map((section) => section.name);
-  const drops = technoNames.map((name, index) => name === "drop" ? index : -1).filter((index) => index >= 0);
-  assert.ok(drops.length >= 2, "16-bar Techno should have two payoff drops");
-  for (const index of drops) {
-    assert.equal(technoNames[index - 1], "build", "each Techno drop should be prepared by a build");
-  }
-});

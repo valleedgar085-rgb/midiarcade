@@ -1375,29 +1375,14 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
     short: [{ name: "theme", weight: 1.2 }, { name: "solo", weight: 1.8 }],
     medium: [
       { name: "intro", weight: 0.6 }, { name: "theme", weight: 1.2 },
-      { name: "solo", weight: 2.1 }, { name: "bridge", weight: 0.9 },
-      { name: "theme", weight: 1.3 }, { name: "outro", weight: 0.6 },
+      { name: "solo", weight: 2.4 }, { name: "theme", weight: 1.2 },
+      { name: "outro", weight: 0.6 },
     ],
     full: [
       { name: "intro", weight: 0.7 }, { name: "theme", weight: 1.4 },
-      { name: "solo", weight: 2.2 }, { name: "bridge", weight: 1.1 },
-      { name: "solo", weight: 2.2 }, { name: "theme", weight: 1.6 },
+      { name: "solo", weight: 2.4 }, { name: "solo", weight: 2.4 },
+      { name: "bridge", weight: 1.2 }, { name: "theme", weight: 1.5 },
       { name: "outro", weight: 0.7 },
-    ],
-  },
-  rave: {
-    short: [{ name: "build", weight: 1 }, { name: "drop", weight: 1.7 }],
-    medium: [
-      { name: "intro", weight: 0.7 }, { name: "build", weight: 1.1 },
-      { name: "drop", weight: 1.8 }, { name: "breakdown", weight: 1.1 },
-      { name: "build", weight: 0.9 }, { name: "drop", weight: 2 },
-      { name: "outro", weight: 0.55 },
-    ],
-    full: [
-      { name: "intro", weight: 0.8 }, { name: "build", weight: 1.2 },
-      { name: "drop", weight: 2.1 }, { name: "breakdown", weight: 1.4 },
-      { name: "build", weight: 1 }, { name: "drop", weight: 2.4 },
-      { name: "outro", weight: 0.6 },
     ],
   },
   evolving: {
@@ -1431,16 +1416,15 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
   anthem: {
     short: [{ name: "verse", weight: 1 }, { name: "chorus", weight: 1.4 }],
     medium: [
-      { name: "intro", weight: 0.6 }, { name: "verse", weight: 1.7 },
-      { name: "prechorus", weight: 0.7 }, { name: "chorus", weight: 2 },
-      { name: "bridge", weight: 0.9 }, { name: "chorus", weight: 1.9 },
-      { name: "outro", weight: 0.6 },
+      { name: "intro", weight: 0.6 }, { name: "verse", weight: 1.6 },
+      { name: "chorus", weight: 2 }, { name: "bridge", weight: 1 },
+      { name: "chorus", weight: 1.8 }, { name: "outro", weight: 0.6 },
     ],
     full: [
       { name: "intro", weight: 0.7 }, { name: "verse", weight: 2 },
-      { name: "prechorus", weight: 0.75 }, { name: "chorus", weight: 2.2 },
-      { name: "verse", weight: 1.8 }, { name: "bridge", weight: 1.3 },
-      { name: "chorus", weight: 2.4 }, { name: "outro", weight: 0.7 },
+      { name: "chorus", weight: 2.2 }, { name: "verse", weight: 1.8 },
+      { name: "bridge", weight: 1.3 }, { name: "chorus", weight: 2.3 },
+      { name: "chorus", weight: 1.5 }, { name: "outro", weight: 0.7 },
     ],
   },
   groove: {
@@ -1461,7 +1445,7 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
 
 function specialFormLayout(form, bars) {
   const template = SPECIAL_FORM_LAYOUTS[form];
-  if (!template || bars <= 4 || (form === "rave" && bars < 12)) return null;
+  if (!template || bars <= 4) return null;
   return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
 }
 
@@ -1532,8 +1516,7 @@ function createStructure(config, rng) {
             { name: "outro", weight: 0.6 },
           ];
   } else {
-    const storyBuildRequired = ["pop", "popRadio"].includes(config.genre);
-    const alternate = storyBuildRequired ? false : rng.bool(form === "half-time" ? 0.58 : 0.35);
+    const alternate = rng.bool(form === "half-time" ? 0.58 : 0.35);
     layout = electronic
       ? [
           { name: "intro", weight: 1 }, { name: "build", weight: 1 }, { name: "drop", weight: 3 },

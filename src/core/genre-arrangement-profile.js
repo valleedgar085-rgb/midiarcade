@@ -54,6 +54,26 @@ const PROFILES = Object.freeze({
       { id: "perc-spark", trackId: "drums", instrument: "percussion", sections: ["verse", "chorus", "drop"], probability: 0.14, durationBeats: 0.12, startOffsets: [0.75, 2.75], velocityRange: [54, 92], drumPitches: [56, 75] },
     ],
   },
+  afropop: {
+    id: "afropop",
+    phraseBars: [4, 8],
+    rhythmTemplates: [
+      { id: "anthem-grid", weight: 1.8, steps: [0, 4, 8, 12], syncopationBias: 0.24 },
+      { id: "lifted-offbeat", weight: 1.2, steps: [0, 6, 8, 12, 14], syncopationBias: 0.34 },
+    ],
+    harmonicGoals: [
+      { id: "I-V-vi-IV", weight: 1.5, sections: ["verse", "chorus", "drop", "theme"], moods: ["neutral", "intense"], progression: [0, 4, 5, 3] },
+      { id: "I-IV-V-I", weight: 1.3, sections: ["verse", "chorus", "idea"], moods: ["calm", "neutral", "intense"], progression: [0, 3, 4, 0] },
+      { id: "ii-V-I", weight: 0.9, sections: ["prechorus", "bridge"], moods: ["neutral", "intense"], progression: [1, 4, 0, 0] },
+    ],
+    melodyMotion: { stepBias: 0.7, legatoBias: 0.32, staccatoBias: 0.24 },
+    humanization: { laidBackOffsetBeats: 0, gridJitterAttenuation: 0.54, velocityVarianceScale: 0.96 },
+    optionalLayers: [
+      { id: "pad-swells", trackId: "pad", instrument: "pads", sections: ["intro", "chorus", "bridge", "outro"], probability: 0.18, durationBeats: 3.5, startOffsets: [0], velocityRange: [56, 88], degreeOffsets: [0, 3, 4] },
+      { id: "bells", trackId: "melody", instrument: "bells", sections: ["chorus", "drop"], probability: 0.11, durationBeats: 0.5, startOffsets: [1.5, 3], velocityRange: [62, 96], degreeOffsets: [4, 5] },
+      { id: "perc-spark", trackId: "drums", instrument: "percussion", sections: ["verse", "chorus", "drop"], probability: 0.14, durationBeats: 0.12, startOffsets: [0.75, 2.75], velocityRange: [54, 92], drumPitches: [56, 75] },
+    ],
+  },
   hipHopTrap: {
     id: "hipHopTrap",
     phraseBars: [4, 8],
@@ -64,8 +84,7 @@ const PROFILES = Object.freeze({
     harmonicGoals: [
       { id: "i-bVII-bVI", weight: 1.4, sections: ["verse", "chorus", "drop"], moods: ["neutral", "intense"], progression: [0, 6, 5, 0] },
       { id: "i-iv-v-i", weight: 1.1, sections: ["verse", "bridge"], moods: ["calm", "neutral"], progression: [0, 3, 4, 0] },
-      { id: "I-bVII-IV-I", weight: 1.35, sections: ["verse", "chorus", "bridge"], moods: ["neutral", "intense"], progression: [0, 6, 3, 0] },
-      { id: "i-bVII-bVI-bVII", weight: 1.05, sections: ["verse", "bridge"], moods: ["calm", "neutral", "intense"], progression: [0, 6, 5, 6] },
+      { id: "ii-V-I", weight: 0.8, sections: ["bridge", "prechorus"], moods: ["intense"], progression: [1, 4, 0, 0] },
     ],
     melodyMotion: { stepBias: 0.76, legatoBias: 0.36, staccatoBias: 0.22 },
     humanization: { laidBackOffsetBeats: 0.016, gridJitterAttenuation: 0.5, velocityVarianceScale: 1.04 },
@@ -194,8 +213,8 @@ const PROFILES = Object.freeze({
       { id: "fx-hit", trackId: "pad", instrument: "fx", sections: ["bridge", "breakdown"], probability: 0.12, durationBeats: 2.2, startOffsets: [2], velocityRange: [36, 60], degreeOffsets: [6] },
     ],
   },
-  rock: {
-    id: "rock",
+  country: {
+    id: "country",
     phraseBars: [4, 8],
     rhythmTemplates: [
       { id: "backbeat-drive", weight: 1.8, steps: [0, 4, 8, 11, 14], syncopationBias: 0.28 },
@@ -205,6 +224,27 @@ const PROFILES = Object.freeze({
       { id: "I-IV-V-I", weight: 1.7, sections: ["verse", "chorus", "drop"], moods: ["neutral", "intense"], progression: [0, 3, 4, 0] },
       { id: "modal-interchange", weight: 1, sections: ["bridge"], moods: ["calm", "intense"], progression: [0, 5, 6, 4] },
       { id: "ii-V-I", weight: 0.8, sections: ["bridge", "prechorus"], moods: ["intense"], progression: [1, 4, 0, 0] },
+    ],
+    melodyMotion: { stepBias: 0.64, legatoBias: 0.3, staccatoBias: 0.32 },
+    humanization: { laidBackOffsetBeats: 0, gridJitterAttenuation: 0.56, velocityVarianceScale: 1 },
+    optionalLayers: [
+      { id: "power-plucks", trackId: "counterpoint", instrument: "plucks", sections: ["chorus", "bridge", "drop"], probability: 0.15, durationBeats: 0.35, startOffsets: [0.5, 2.5], velocityRange: [62, 102], degreeOffsets: [0, 4] },
+      { id: "perc-spark", trackId: "drums", instrument: "percussion", sections: ["verse", "chorus"], probability: 0.1, durationBeats: 0.1, startOffsets: [1.75, 3.75], velocityRange: [58, 95], drumPitches: [54, 56] },
+    ],
+  },
+  rock: {
+    id: "rock",
+    phraseBars: [4, 8],
+    rhythmTemplates: [
+      { id: "backbeat-drive", weight: 1.8, steps: [0, 4, 8, 11, 14], syncopationBias: 0.28 },
+      { id: "anthem-push", weight: 1.1, steps: [0, 3, 8, 12, 15], syncopationBias: 0.3 },
+      { id: "power-eighth-drive", weight: 1.35, steps: [0, 2, 4, 6, 8, 10, 12, 14], syncopationBias: 0.18 },
+    ],
+    harmonicGoals: [
+      { id: "I-IV-V-I", weight: 1.7, sections: ["verse", "chorus", "drop"], moods: ["neutral", "intense"], progression: [0, 3, 4, 0] },
+      { id: "modal-interchange", weight: 1, sections: ["bridge"], moods: ["calm", "intense"], progression: [0, 5, 6, 4] },
+      { id: "I-bVII-IV-I", weight: 1.35, sections: ["verse", "chorus", "bridge"], moods: ["neutral", "intense"], progression: [0, 6, 3, 0] },
+      { id: "i-bVII-bVI-bVII", weight: 1.05, sections: ["verse", "bridge"], moods: ["calm", "neutral", "intense"], progression: [0, 6, 5, 6] },
     ],
     melodyMotion: { stepBias: 0.64, legatoBias: 0.3, staccatoBias: 0.32 },
     humanization: { laidBackOffsetBeats: 0, gridJitterAttenuation: 0.56, velocityVarianceScale: 1 },
@@ -249,14 +289,14 @@ const PROFILE_BY_GENRE = Object.freeze({
   synthwave: "edm",
   synthPopRadio: "edm",
   reggaeton: "edm",
-  afrobeats: "pop",
+  afrobeats: "afropop",
   rnbSoul: "rnb",
   neoSoul: "rnb",
   funk: "rnb",
   jazz: "jazz",
   ambient: "ambient",
   rock: "rock",
-  country: "rock",
+  country: "country",
 });
 
 export function genreArrangementProfile(genre) {
