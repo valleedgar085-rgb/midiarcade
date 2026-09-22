@@ -4263,14 +4263,23 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           ],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
+    const rockDrivePulses = role === "statement"
+      ? [0, 1, 2, 3]
+      : role === "answer"
+        ? [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+        : role === "development"
+          ? [0, 0.5, 1.5, 2, 2.5, 3.5]
+          : [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5];
     const chordPulses = uniqueGrooveOffsets(
-      route?.id === "harmony-first"
-        ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
-        : style.chordMotion === "offbeat"
-        ? answers
-        : style.chordMotion === "sustained"
-          ? [0]
-          : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
+      config.genre === "rock"
+        ? rockDrivePulses
+        : route?.id === "harmony-first"
+          ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
+          : style.chordMotion === "offbeat"
+          ? answers
+          : style.chordMotion === "sustained"
+            ? [0]
+            : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
     const leadPulses = uniqueGrooveOffsets(
@@ -5903,7 +5912,38 @@ function applySpectrumPlan(sourceTracks, structure, spectrumPlan, config) {
   };
 }
 
+function rockPowerChordVoicing(chord, octave, previous = null) {
+  const root = rootMidi(chord, octave);
+  const rootPc = mod(chord.rootPc, 12);
+  const intervals = [...new Set((chord.tones ?? []).map((tone) => mod(tone - rootPc, 12)))];
+  const fifthInterval = intervals
+    .filter((interval) => interval !== 0)
+    .sort((left, right) => Math.abs(left - 7) - Math.abs(right - 7) || left - right)[0] ?? 7;
+  const previousCenter = previous?.length
+    ? previous.reduce((sum, pitch) => sum + pitch, 0) / previous.length
+    : clamp(root - 2, 48, 64);
+  const previousTop = previous?.at(-1);
+  const candidates = [-12, 0, 12]
+    .map((shift) => {
+      const base = root + shift;
+      const pitches = [base, base + fifthInterval, base + 12];
+      return pitches.every((pitch) => pitch >= 45 && pitch <= 88) ? pitches : null;
+    })
+    .filter(Boolean);
+  candidates.sort((left, right) => {
+    const leftCenter = left.reduce((sum, pitch) => sum + pitch, 0) / left.length;
+    const rightCenter = right.reduce((sum, pitch) => sum + pitch, 0) / right.length;
+    const leftScore = Math.abs(leftCenter - previousCenter)
+      + (Number.isFinite(previousTop) ? Math.abs(left.at(-1) - previousTop) * 0.45 : 0);
+    const rightScore = Math.abs(rightCenter - previousCenter)
+      + (Number.isFinite(previousTop) ? Math.abs(right.at(-1) - previousTop) * 0.45 : 0);
+    return leftScore - rightScore || left[0] - right[0];
+  });
+  return candidates[0] ?? [root, root + fifthInterval, root + 12];
+}
+
 function chordVoicing(chord, octave, previous, spread, rng, config = null) {
+  if (config?.genre === "rock") return rockPowerChordVoicing(chord, octave, previous);
   const root = rootMidi(chord, octave);
   const intervals = chord.tones.map((tone) => mod(tone - chord.rootPc, 12));
   const candidates = [];
@@ -5996,8 +6036,23 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
-      for (const pitch of voicing) {
-        addNote(notes, pitch, chord.start + offsets[index], duration, eventVelocity(config, settings, intensity, rng, 0.74), totalBeats);
+      for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
+        const pitch = voicing[voiceIndex];
+        const rockMetadata = config.genre === "rock"
+          ? {
+            genrePhrase: "power-chord-drive",
+            rockChordRole: ["root", "fifth", "octave"][voiceIndex] ?? "support",
+          }
+          : undefined;
+        addNote(
+          notes,
+          pitch,
+          chord.start + offsets[index],
+          duration,
+          eventVelocity(config, settings, intensity, rng, 0.74),
+          totalBeats,
+          rockMetadata,
+        );
       }
     }
   }
