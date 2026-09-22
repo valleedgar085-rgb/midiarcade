@@ -56,8 +56,8 @@ function fixture() {
     },
     grooveConductor: {
       bars: [
-        { anchors: [0, 2], answers: [], chordPulses: [0, 2], counterPulses: [1, 3] },
-        { anchors: [0, 2], answers: [], chordPulses: [0, 2], counterPulses: [1, 3] },
+        { anchors: [0, 2], answers: [], bassPulses: [0, 2], chordPulses: [0, 2], leadPulses: [0, 2], counterPulses: [1, 3] },
+        { anchors: [0, 2], answers: [], bassPulses: [0, 2], chordPulses: [0, 2], leadPulses: [0, 2], counterPulses: [1, 3] },
       ],
     },
     tracks: [
@@ -155,6 +155,24 @@ test("candidate judge exposes inspectable harmony, groove, register, phrase and 
   assert.equal(report.blueprint.missingTracks.length, 0);
   assert.ok(report.scores.overall >= 0 && report.scores.overall <= 100);
   assert.equal(judgeCompositionCandidate(song, structuredClone(song), MELODY_SELECTION, directive()).passed, true);
+});
+
+test("candidate groove scoring follows the track-specific conductor lane", () => {
+  const aligned = fixture();
+  const alignedReport = analyzeCompositionCandidate(aligned, MELODY_SELECTION, directive());
+  assert.equal(alignedReport.groove.conductor.alignment, 1);
+
+  const laneMismatch = structuredClone(aligned);
+  for (const bar of laneMismatch.grooveConductor.bars) {
+    bar.leadPulses = [1, 3];
+    // Generic anchors deliberately stay at the melody's old positions. If the
+    // Judge accidentally scores anchors instead of leadPulses this regression
+    // would remain invisible.
+    bar.anchors = [0, 2];
+  }
+  const mismatchReport = analyzeCompositionCandidate(laneMismatch, MELODY_SELECTION, directive());
+  assert.equal(mismatchReport.groove.conductor.alignment, 0);
+  assert.ok(mismatchReport.scores.groove < alignedReport.scores.groove);
 });
 
 test("new harsh strong-beat color tone is rejected even when it remains in the selected scale", () => {

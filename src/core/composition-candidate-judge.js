@@ -264,11 +264,26 @@ function conductorPulses(song, id, selection) {
   if (!Array.isArray(conductor?.bars) || !conductor.bars.length) return [];
   const ranges = scopeRanges(song, selection);
   const pulses = [];
-  const lanes = id === "drums" ? ["anchors", "answers"]
-    : id === "bass" ? ["anchors", "answers"]
-      : id === "chords" || id === "pad" ? ["chordPulses", "anchors"]
-        : id === "counterpoint" ? ["counterPulses", "answers"]
-          : ["anchors", "answers"];
+  const preferredLanes = {
+    drums: ["anchors"],
+    bass: ["bassPulses"],
+    chords: ["chordPulses"],
+    melody: ["leadPulses"],
+    counterpoint: ["counterPulses"],
+    pad: ["chordPulses"],
+  }[id] ?? ["anchors"];
+  const fallbackLanes = {
+    drums: ["anchors", "answers"],
+    bass: ["anchors", "answers"],
+    chords: ["chordPulses", "anchors"],
+    melody: ["anchors", "answers"],
+    counterpoint: ["counterPulses", "answers"],
+    pad: ["chordPulses", "anchors"],
+  }[id] ?? ["anchors", "answers"];
+  const hasPreferredLane = conductor.bars.some((bar) => (
+    preferredLanes.some((lane) => Array.isArray(bar?.[lane]) && bar[lane].length > 0)
+  ));
+  const lanes = hasPreferredLane ? preferredLanes : fallbackLanes;
 
   for (const range of ranges) {
     const firstBar = Math.floor(range.start / range.beatsPerBar);

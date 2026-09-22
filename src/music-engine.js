@@ -4216,8 +4216,20 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     anchors = uniqueGrooveOffsets([0, ...anchors], barBeats);
     const answers = uniqueGrooveOffsets(anchors.map((offset) => offset + responseDelay), barBeats)
       .filter((offset) => !anchors.includes(offset));
+    const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
+    const activeMotif = familyMember?.melody;
+    const motifBars = validMotif(activeMotif) ? Math.max(1, Math.ceil(activeMotif.lengthBeats / barBeats)) : 1;
+    const motifBar = mod(bar - section.startBar, motifBars);
+    const motifPulses = validMotif(activeMotif)
+      ? activeMotif.events
+        .filter((event) => Math.floor(event.offset / barBeats) === motifBar)
+        .map((event) => mod(event.offset, barBeats))
+      : [];
     const gridStep = config.complexity > 0.62 ? 0.25 : 0.5;
-    const occupied = new Set([...anchors, ...answers].map((offset) => round(offset)));
+    // The conductor must never reserve silence on top of a motif attack.
+    // Every lane negotiates around the same rhythmic intent instead of
+    // independently erasing a phrase event later in generation.
+    const occupied = new Set([...anchors, ...answers, ...motifPulses].map((offset) => round(offset)));
     const available = [];
     for (let offset = gridStep; offset < barBeats - 0.01; offset += gridStep) {
       if (!occupied.has(round(offset))) available.push(round(offset));
@@ -4257,15 +4269,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
-    const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
-    const activeMotif = familyMember?.melody;
-    const motifBars = validMotif(activeMotif) ? Math.max(1, Math.ceil(activeMotif.lengthBeats / barBeats)) : 1;
-    const motifBar = mod(bar - section.startBar, motifBars);
-    const motifPulses = validMotif(activeMotif)
-      ? activeMotif.events
-        .filter((event) => Math.floor(event.offset / barBeats) === motifBar)
-        .map((event) => mod(event.offset, barBeats))
-      : [];
     const leadPulses = uniqueGrooveOffsets(
       [
         ...answers,
@@ -7906,7 +7909,7 @@ function runVoiceLeadingPass(sourceTracks, config) {
   };
 }
 
-function runPocketCohesionPass(sourceTracks, structure) {
+function runPocketCohesionPass(sourceTracks, structure, grooveConductor = null, config = null) {
   const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
   const tracks = sourceTracks.map((track) => ({
     ...track,
@@ -7917,21 +7920,44 @@ function runPocketCohesionPass(sourceTracks, structure) {
     .filter((note) => [36, 38, 39].includes(note.pitch))
     .map((note) => note.start)
     .sort((left, right) => left - right);
+  const barBeats = config ? beatsPerBar(config) : 4;
+  const laneForTrack = (id) => id === "bass" ? "bassPulses" : id === "chords" ? "chordPulses" : null;
+  const laneTargets = (id, beat) => {
+    const lane = laneForTrack(id);
+    if (!lane || !Array.isArray(grooveConductor?.bars)) return [];
+    const bar = Math.max(0, Math.floor(beat / barBeats));
+    const barPlan = grooveConductor.bars[bar];
+    const barStart = bar * barBeats;
+    return (barPlan?.[lane] ?? []).map((offset) => round(barStart + offset));
+  };
   let alignedNotes = 0;
+  let conductorAlignedNotes = 0;
+  let transientFallbackAlignments = 0;
   let totalCorrection = 0;
   for (const track of tracks) {
-    // Lead and counterpoint already follow their genre phrase grids. Tighten
-    // only the rhythm section here so expressive melodic placement survives.
+    // Lead/counterpoint keep expressive phrase timing. Bass and chords are
+    // gently pulled back toward the exact lane that composed them, not toward
+    // whichever drum transient happens to be nearby.
     if (!["bass", "chords"].includes(track.id)) continue;
     for (const note of track.notes) {
       if (note.rhythmicFeature || note.transitionFeature) continue;
-      const anchor = anchors.find((beat) => Math.abs(beat - note.start) <= 0.065);
+      const intended = laneTargets(track.id, note.start)
+        .filter((beat) => Math.abs(beat - note.start) <= 0.065)
+        .sort((left, right) => Math.abs(left - note.start) - Math.abs(right - note.start))[0];
+      const fallback = Number.isFinite(intended)
+        ? null
+        : anchors
+          .filter((beat) => Math.abs(beat - note.start) <= 0.065)
+          .sort((left, right) => Math.abs(left - note.start) - Math.abs(right - note.start))[0];
+      const anchor = Number.isFinite(intended) ? intended : fallback;
       if (!Number.isFinite(anchor)) continue;
       const correction = clamp((anchor - note.start) * 0.45, -0.028, 0.028);
       if (Math.abs(correction) < 0.002) continue;
       note.start = round(clamp(note.start + correction, 0, Math.max(0, totalBeats - 0.02)));
-      note.pocketCohesion = "shared-transient";
+      note.pocketCohesion = Number.isFinite(intended) ? `conductor-${laneForTrack(track.id)}` : "shared-transient";
       alignedNotes += 1;
+      if (Number.isFinite(intended)) conductorAlignedNotes += 1;
+      else transientFallbackAlignments += 1;
       totalCorrection += Math.abs(correction);
     }
     track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
@@ -7940,9 +7966,11 @@ function runPocketCohesionPass(sourceTracks, structure) {
     tracks,
     report: {
       phase: 47,
-      version: 1,
+      version: 2,
       status: "complete",
       alignedNotes,
+      conductorAlignedNotes,
+      transientFallbackAlignments,
       averageCorrection: round(alignedNotes ? totalCorrection / alignedNotes : 0),
       anchorCount: anchors.length,
     },
@@ -8293,9 +8321,9 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
   };
 }
 
-function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint, config) {
+function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint, config, grooveConductor = null) {
   const voiceLeading = runVoiceLeadingPass(sourceTracks, config);
-  const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure);
+  const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure, grooveConductor, config);
   const negativeSpace = runNegativeSpacePass(pocketCohesion.tracks, structure, config);
   const vocalSpace = runVocalSpacePass(negativeSpace.tracks, structure, config);
   const ensembleCadence = runEnsembleCadencePass(
@@ -9342,6 +9370,19 @@ function compose(config, options = {}) {
     rootRng.fork("groove-conductor"),
     route,
   );
+  // The ensemble contract is planned before any instrument writes notes.
+  // Track generators and every later repair now share one authoritative
+  // section/phrase/groove picture instead of discovering it after the fact.
+  const generationInterlock = createGenerationInterlockPlan(
+    config,
+    structure,
+    harmony,
+    motifs,
+    songBlueprint,
+    grooveConductor,
+    performanceProfile,
+    route,
+  );
 
   const contextTracks = normalizeContextTracks(options.contextTracks, config);
   const targetTrack = TRACK_DEFINITIONS[options.targetTrack] ? options.targetTrack : null;
@@ -9460,16 +9501,6 @@ function compose(config, options = {}) {
   const rhythmTurnaround = applyRhythmSectionTurnaroundConversation(arrangementLayering.tracks, harmony, config);
 
   const totalBeats = round(config.bars * beatsPerBar(config));
-  const generationInterlock = createGenerationInterlockPlan(
-    config,
-    structure,
-    harmony,
-    motifs,
-    songBlueprint,
-    grooveConductor,
-    performanceProfile,
-    route,
-  );
   const connected = applyGenerationInterlocks(rhythmTurnaround.tracks, generationInterlock, structure, config);
   const orchestrated = applyOrchestrationMatrix(
     connected,
@@ -9595,6 +9626,7 @@ function compose(config, options = {}) {
     harmony,
     songBlueprint,
     config,
+    grooveConductor,
   );
   const melodicFlow = shapeRenderedMelodicFlow(creativePolish.tracks, structure);
   const finalAssemblyRepair = runFinalAssemblyPass(
