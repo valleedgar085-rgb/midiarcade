@@ -5455,6 +5455,195 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
   };
 }
 
+function runDirectorEnsembleCoordination(
+  sourceTracks,
+  structure,
+  harmony,
+  generationInterlock,
+  config,
+  directorContext = null,
+) {
+  const tracks = Object.fromEntries(
+    Object.entries(sourceTracks).map(([id, notes]) => [
+      id,
+      (notes ?? []).map((note) => ({ ...note })),
+    ]),
+  );
+  const contracts = new Map(
+    (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
+  );
+  const barBeats = beatsPerBar(config);
+  const sectionForBeat = (beat) => structure.find((section) => (
+    beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
+  )) ?? structure.at(-1);
+  const intentForSection = (section) => {
+    const contract = contracts.get(String(section?.id ?? "")) ?? {};
+    if (directorContext?.sectionId != null && String(directorContext.sectionId) === String(section?.id)) {
+      return { ...contract, ...(directorContext.intent ?? {}) };
+    }
+    return contract;
+  };
+  const barContractFor = (section, beat) => {
+    const contract = contracts.get(String(section?.id ?? ""));
+    const absoluteBar = Math.max(0, Math.floor(beat / barBeats));
+    return contract?.bars?.find((entry) => Number(entry.bar) === absoluteBar) ?? null;
+  };
+  const near = (values, beat, threshold = 0.09) => values.some((value) => Math.abs(value - beat) <= threshold);
+  const drums = tracks.drums ?? [];
+  const bass = tracks.bass ?? [];
+  const chords = tracks.chords ?? [];
+  const melody = tracks.melody ?? [];
+  const counterpoint = tracks.counterpoint ?? [];
+  const kickOnsets = drums.filter((note) => note.pitch === 36).map((note) => note.start);
+  const bassOnsets = bass.map((note) => note.start);
+  let rhythmLocksObserved = 0;
+  let harmonicPocketMoves = 0;
+  let harmonicPocketSoftens = 0;
+  let counterAnswersMoved = 0;
+
+  // The rhythm section remains authoritative. Bass is already composed from
+  // surviving kicks; this pass records the relationship before later repair
+  // stages so the Composer and Judge can inspect the same musical intent.
+  const responseDelay = genreBassResponseOffsets(config.genre)[0] ?? 0;
+  for (const note of bass) {
+    const section = sectionForBeat(note.start);
+    const sectionKicks = kickOnsets.filter((beat) => (
+      beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
+    ));
+    const locked = sectionKicks.some((kick) => Math.abs(kick + responseDelay - note.start) <= 0.14);
+    if (!locked) continue;
+    note.ensembleCoordinationRole = "rhythm-section-lock";
+    note.ensemblePartner = "drums";
+    rhythmLocksObserved += 1;
+  }
+
+  // Chord attacks yield a little space when the complete low-frequency
+  // foundation lands on the same instant. Prefer an authored chord lane from
+  // the shared groove contract; if there is no clean nearby lane, keep timing
+  // intact and soften the harmonic bed instead of deleting harmony.
+  const chordGroups = new Map();
+  for (const note of chords) {
+    const key = round(note.start, 4);
+    if (!chordGroups.has(key)) chordGroups.set(key, []);
+    chordGroups.get(key).push(note);
+  }
+  const originalChordStarts = [...chordGroups.keys()].map(Number);
+  for (const [groupKey, group] of chordGroups) {
+    const start = Number(groupKey);
+    const section = sectionForBeat(start);
+    const intent = intentForSection(section);
+    if (intent.featuredTrack === "chords" || intent.featuredTrack === "pad") continue;
+    const foundationStack = near(kickOnsets, start, 0.08) && near(bassOnsets, start, 0.1);
+    if (!foundationStack) continue;
+    const barContract = barContractFor(section, start);
+    const barStart = Math.floor(start / barBeats) * barBeats;
+    const currentHarmony = harmonyAt(harmony, start);
+    const harmonyEnd = currentHarmony
+      ? finite(currentHarmony.start, start) + Math.max(0.1, finite(currentHarmony.duration, barBeats))
+      : section.endBeat;
+    const candidates = (barContract?.chordPulses ?? [])
+      .map((offset) => round(barStart + finite(offset)))
+      .filter((beat) => (
+        beat >= section.startBeat - 1e-6
+        && beat < section.endBeat - 0.04
+        && beat >= finite(currentHarmony?.start, section.startBeat) - 1e-6
+        && beat < harmonyEnd - 0.04
+        && Math.abs(beat - start) >= 0.09
+        && Math.abs(beat - start) <= 0.5
+        && !near(kickOnsets, beat, 0.08)
+        && !near(bassOnsets, beat, 0.1)
+        && !originalChordStarts.some((existing) => existing !== start && Math.abs(existing - beat) <= 0.06)
+      ))
+      .sort((left, right) => Math.abs(left - start) - Math.abs(right - start) || left - right);
+    const target = candidates[0];
+    if (Number.isFinite(target)) {
+      const maximumDuration = Math.max(0.08, Math.min(section.endBeat, harmonyEnd) - target - 0.02);
+      for (const note of group) {
+        note.start = target;
+        note.duration = round(Math.min(note.duration, maximumDuration));
+        note.ensembleCoordinationRole = "harmonic-pocket";
+        note.ensemblePartner = "rhythm-section";
+      }
+      harmonicPocketMoves += 1;
+    } else {
+      for (const note of group) {
+        note.velocity = clamp(note.velocity - 4, 1, 127);
+        note.ensembleCoordinationRole = "harmonic-bed-yield";
+        note.ensemblePartner = "rhythm-section";
+      }
+      harmonicPocketSoftens += 1;
+    }
+  }
+
+  // Counterpoint is an answer voice. When it lands directly on the lead call,
+  // move the whole answer to the nearest authored counter lane (or a bounded
+  // quarter-beat answer) rather than allowing both voices to race on one onset.
+  const melodyOnsets = melody.map((note) => note.start);
+  const counterOnsets = counterpoint.map((note) => note.start);
+  for (const note of melody) {
+    note.ensembleCoordinationRole = note.ensembleCoordinationRole ?? "lead-call";
+    note.ensemblePartner = note.ensemblePartner ?? "counterpoint";
+  }
+  for (const note of counterpoint) {
+    const section = sectionForBeat(note.start);
+    const intent = intentForSection(section);
+    if (intent.featuredTrack === "counterpoint") {
+      note.ensembleCoordinationRole = note.ensembleCoordinationRole ?? "featured-answer";
+      note.ensemblePartner = note.ensemblePartner ?? "melody";
+      continue;
+    }
+    if (!near(melodyOnsets, note.start, 0.105)) {
+      note.ensembleCoordinationRole = note.ensembleCoordinationRole ?? "counter-answer";
+      note.ensemblePartner = note.ensemblePartner ?? "melody";
+      continue;
+    }
+    const barContract = barContractFor(section, note.start);
+    const barStart = Math.floor(note.start / barBeats) * barBeats;
+    const authored = (barContract?.counterPulses ?? []).map((offset) => round(barStart + finite(offset)));
+    const fallback = [note.start + 0.25, note.start + 0.5, note.start - 0.25].map((beat) => round(beat));
+    const candidates = [...authored, ...fallback]
+      .filter((beat, index, values) => (
+        values.indexOf(beat) === index
+        && beat >= section.startBeat - 1e-6
+        && beat < section.endBeat - 0.04
+        && Math.abs(beat - note.start) <= 0.55
+        && !near(melodyOnsets, beat, 0.105)
+        && !counterOnsets.some((existing) => existing !== note.start && Math.abs(existing - beat) <= 0.06)
+      ))
+      .sort((left, right) => Math.abs(left - note.start) - Math.abs(right - note.start) || left - right);
+    const target = candidates[0];
+    if (Number.isFinite(target)) {
+      note.start = target;
+      note.duration = round(Math.min(note.duration, Math.max(0.06, section.endBeat - target - 0.02)));
+      note.ensembleCoordinationRole = "counter-answer-moved";
+      note.ensemblePartner = "melody";
+      counterAnswersMoved += 1;
+    } else {
+      note.velocity = clamp(note.velocity - 5, 1, 127);
+      note.ensembleCoordinationRole = "counter-answer-softened";
+      note.ensemblePartner = "melody";
+    }
+  }
+
+  for (const id of Object.keys(tracks)) {
+    tracks[id].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  }
+  return {
+    tracks,
+    report: {
+      phase: 43,
+      version: 1,
+      status: "complete",
+      directorSectionId: directorContext?.sectionId ?? null,
+      rhythmLocksObserved,
+      harmonicPocketMoves,
+      harmonicPocketSoftens,
+      counterAnswersMoved,
+      sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
+    },
+  };
+}
+
 function harmonyAtBeat(harmony = [], beat = 0) {
   return harmony.find((event) => (
     beat >= event.start - 1e-6 && beat < event.start + event.duration - 1e-6
@@ -8795,6 +8984,13 @@ function createGenerationInterlockPlan(
         bar: bar.bar,
         role: bar.role,
         accent: round(bar.answers?.[0] ?? bar.anchors?.[1] ?? bar.anchors?.[0] ?? 0),
+        anchors: clone(bar.anchors ?? []),
+        answers: clone(bar.answers ?? []),
+        bassPulses: clone(bar.bassPulses ?? []),
+        chordPulses: clone(bar.chordPulses ?? []),
+        leadPulses: clone(bar.leadPulses ?? []),
+        counterPulses: clone(bar.counterPulses ?? []),
+        spaces: clone(bar.spaces ?? []),
       }));
     return {
       id: `interlock:${section.id}`,
@@ -9532,9 +9728,17 @@ function compose(config, options = {}) {
     rootRng.fork("arrangement-layers"),
   );
   const rhythmTurnaround = applyRhythmSectionTurnaroundConversation(arrangementLayering.tracks, harmony, config);
+  const ensembleCoordination = runDirectorEnsembleCoordination(
+    rhythmTurnaround.tracks,
+    structure,
+    harmony,
+    generationInterlock,
+    config,
+    options.ensembleContext,
+  );
 
   const totalBeats = round(config.bars * beatsPerBar(config));
-  const connected = applyGenerationInterlocks(rhythmTurnaround.tracks, generationInterlock, structure, config);
+  const connected = applyGenerationInterlocks(ensembleCoordination.tracks, generationInterlock, structure, config);
   const orchestrated = applyOrchestrationMatrix(
     connected,
     structure,
@@ -9837,6 +10041,7 @@ function compose(config, options = {}) {
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
     melodicDialogue: melodicDialogue.report,
+    ensembleCoordination: ensembleCoordination.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     vocalSpace: creativePolish.vocalSpace,
@@ -9874,6 +10079,7 @@ function compose(config, options = {}) {
       { phase: 39, id: "generation-interlocks", status: "complete" },
       { phase: 41, id: "phrase-critic-surgical-repair", status: "complete" },
       { phase: 42, id: "perceptual-mix-critic", status: "complete" },
+      { phase: 43, id: "director-ensemble-coordination", status: "complete" },
       { phase: 44, id: "performance-phrasing", status: "complete" },
       { phase: 46, id: "harmonic-voice-leading", status: "complete" },
       { phase: 47, id: "ensemble-pocket-cohesion", status: "complete" },
@@ -13599,6 +13805,7 @@ export function generateSimilar(current, input = {}) {
       compositionRoute: routeId,
       targetTrack,
       contextTracks: targetContextTracks,
+      ensembleContext: input.ensembleContext ?? input.directorDirective?.ensembleContext ?? null,
     });
 
     const identitySong = normalizedSongForIdentity(candidateSong);
