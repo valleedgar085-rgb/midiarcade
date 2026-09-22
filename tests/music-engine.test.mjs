@@ -200,9 +200,9 @@ test("Rock writes power-chord drive instead of generic keyboard comping", () => 
       tagged.filter((note) => note.rockChordRole === role).length,
     ]),
   );
-  assert.ok(roleCounts.root >= 2, "Rock should expose repeated power-chord roots");
-  assert.ok(roleCounts.fifth >= 2, "Rock should expose repeated power-chord fifths");
-  assert.ok(roleCounts.octave >= 2, "Rock should expose repeated power-chord octaves");
+  assert.ok(roleCounts.root >= 2, "Rock should expose repeated complete power-chord attacks");
+  assert.equal(roleCounts.fifth, roleCounts.root, "orchestration must keep the fifth with every Rock root");
+  assert.equal(roleCounts.octave, roleCounts.root, "orchestration must keep the octave with every Rock root");
   assert.ok(
     tagged.every((note) => ["root", "fifth", "octave"].includes(note.rockChordRole)),
     "Rock chord grammar should omit generic third/extension roles from the power-chord lane",
