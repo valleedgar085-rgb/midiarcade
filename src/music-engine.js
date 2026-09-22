@@ -5472,6 +5472,23 @@ function runDirectorEnsembleCoordination(
   const contracts = new Map(
     (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
   );
+  if (!directorContext) {
+    return {
+      tracks,
+      report: {
+        phase: 43,
+        version: 1,
+        status: "complete",
+        active: false,
+        directorSectionId: null,
+        rhythmLocksObserved: 0,
+        harmonicPocketMoves: 0,
+        harmonicPocketSoftens: 0,
+        counterAnswersMoved: 0,
+        sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
+      },
+    };
+  }
   const barBeats = beatsPerBar(config);
   const sectionForBeat = (beat) => structure.find((section) => (
     beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
@@ -5634,6 +5651,7 @@ function runDirectorEnsembleCoordination(
       phase: 43,
       version: 1,
       status: "complete",
+      active: true,
       directorSectionId: directorContext?.sectionId ?? null,
       rhythmLocksObserved,
       harmonicPocketMoves,
