@@ -1,0 +1,26 @@
+name: Validate Rock Identity
+
+on:
+  push:
+    branches: [quality/rock-power-chord-drive]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-rock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused Rock identity
+        run: node --test --test-name-pattern="Rock writes power-chord" tests/music-engine.test.mjs
+      - name: Full repository quality
+        run: npm run quality
+      - name: Seeded music quality
+        run: npm run quality:music
