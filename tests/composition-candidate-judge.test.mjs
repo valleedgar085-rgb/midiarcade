@@ -152,6 +152,7 @@ test("candidate judge exposes inspectable harmony, groove, register, phrase and 
   assert.equal(report.harmony.harshStrongNotes, 0);
   assert.equal(report.register.violations, 0);
   assert.equal(report.collisions.sameTrack, 0);
+  assert.equal(report.ensemble.leadConversation.simultaneousRatio, 0);
   assert.equal(report.blueprint.missingTracks.length, 0);
   assert.ok(report.scores.overall >= 0 && report.scores.overall <= 100);
   assert.equal(judgeCompositionCandidate(song, structuredClone(song), MELODY_SELECTION, directive()).passed, true);
@@ -213,6 +214,17 @@ test("new overlapping unison inside a selected track is rejected", () => {
   const result = judgeCompositionCandidate(before, after, MELODY_SELECTION, directive());
   assert.equal(result.passed, false);
   assert.ok(result.hardIssues.includes("collision:new-same-track-overlap"));
+});
+
+test("candidate that makes melody and counterpoint race on the same attacks is rejected", () => {
+  const before = fixture();
+  const after = structuredClone(before);
+  after.tracks.find((track) => track.id === "melody").notes
+    .forEach((note, index) => { note.start = 1 + index * 2; });
+  const result = judgeCompositionCandidate(before, after, MELODY_SELECTION, directive());
+  assert.equal(result.passed, false);
+  assert.ok(result.hardIssues.includes("ensemble:lead-turn-taking-regression"));
+  assert.ok(result.candidate.ensemble.leadConversation.simultaneousRatio > 0.4);
 });
 
 test("bass candidate that abandons a previously strong kick relationship is rejected", () => {
