@@ -149,6 +149,10 @@ test("seeded new-song generation is deterministic and structurally complete", ()
     "pad",
   ]);
   assert.equal(first.ensembleCoordination.status, "complete");
+  assert.equal(first.ensembleCoordination.active, true);
+  assert.equal(first.ensembleCoordination.mode, "whole-song-contract");
+  assert.equal(first.ensembleCoordination.mutating, true);
+  assert.equal(first.ensembleCoordination.sharedIntentSections, first.structure.length);
   assert.ok(
     first.generationPhases.some((phase) => phase.id === "director-ensemble-coordination" && phase.status === "complete"),
   );

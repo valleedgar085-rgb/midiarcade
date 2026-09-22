@@ -5472,23 +5472,15 @@ function runDirectorEnsembleCoordination(
   const contracts = new Map(
     (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
   );
-  if (!directorContext) {
-    return {
-      tracks,
-      report: {
-        phase: 43,
-        version: 1,
-        status: "complete",
-        active: false,
-        directorSectionId: null,
-        rhythmLocksObserved: 0,
-        harmonicPocketMoves: 0,
-        harmonicPocketSoftens: 0,
-        counterAnswersMoved: 0,
-        sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
-      },
-    };
-  }
+  // Whole-song generation and scoped Director recomposition now use the same
+  // ensemble contract. Scoped work may override one section's intent, while
+  // normal generation follows the pre-composed interlock contract unchanged.
+  // This keeps coordination deterministic and bounded instead of deferring
+  // ensemble awareness until a later repair pass.
+  const coordinationMode = directorContext ? "scoped-director" : "whole-song-contract";
+  const coordinationMutationsEnabled = Boolean(directorContext)
+    || finite(config?.energy, 0.5) >= 0.22
+    || finite(config?.complexity, 0.5) >= 0.26;
   const barBeats = beatsPerBar(config);
   const sectionForBeat = (beat) => structure.find((section) => (
     beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
@@ -5552,6 +5544,13 @@ function runDirectorEnsembleCoordination(
     if (intent.featuredTrack === "chords" || intent.featuredTrack === "pad") continue;
     const foundationStack = near(kickOnsets, start, 0.08) && near(bassOnsets, start, 0.1);
     if (!foundationStack) continue;
+    if (!coordinationMutationsEnabled) {
+      for (const note of group) {
+        note.ensembleCoordinationRole = note.ensembleCoordinationRole ?? "harmonic-pocket-observed";
+        note.ensemblePartner = note.ensemblePartner ?? "rhythm-section";
+      }
+      continue;
+    }
     const barContract = barContractFor(section, start);
     const barStart = Math.floor(start / barBeats) * barBeats;
     const currentHarmony = harmonyAt(harmony, start);
@@ -5614,6 +5613,11 @@ function runDirectorEnsembleCoordination(
       note.ensemblePartner = note.ensemblePartner ?? "melody";
       continue;
     }
+    if (!coordinationMutationsEnabled) {
+      note.ensembleCoordinationRole = note.ensembleCoordinationRole ?? "counter-answer-observed";
+      note.ensemblePartner = note.ensemblePartner ?? "melody";
+      continue;
+    }
     const barContract = barContractFor(section, note.start);
     const barStart = Math.floor(note.start / barBeats) * barBeats;
     const authored = (barContract?.counterPulses ?? []).map((offset) => round(barStart + finite(offset)));
@@ -5652,6 +5656,8 @@ function runDirectorEnsembleCoordination(
       version: 1,
       status: "complete",
       active: true,
+      mode: coordinationMode,
+      mutating: coordinationMutationsEnabled,
       directorSectionId: directorContext?.sectionId ?? null,
       rhythmLocksObserved,
       harmonicPocketMoves,
