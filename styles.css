@@ -536,6 +536,7 @@ h1{
 }
 .mobile-dock button span{font-size:17px}.mobile-dock small{font-size:9px;font-weight:700}
 .mobile-dock .mobile-play{background:var(--accent);color:#fff}
+#mobilePlayText{font-size:13px;font-weight:900;letter-spacing:.02em;line-height:1.05}
 .mobile-dock svg{width:20px;height:20px;fill:currentColor}
 
 /* IDEA VISUAL ORBS */
