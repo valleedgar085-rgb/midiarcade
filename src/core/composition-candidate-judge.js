@@ -1,6 +1,7 @@
 import { roleRegisterWindow } from "./role-register-policy.js";
 import { registerHealthScore } from "./register-health-refinement.js";
 import { compareJazzQuality } from "./jazz-quality-lab.js";
+import { trackId, tracksOf } from "./composition-scope.js";
 
 const EPSILON = 1e-6;
 const PITCHED_ROLES = new Set(["bass", "chords", "melody", "counterpoint", "pad"]);
@@ -33,14 +34,6 @@ function noteDuration(note) {
 
 function noteEnd(note) {
   return noteStart(note) + noteDuration(note);
-}
-
-function trackId(track) {
-  return String(track?.id ?? track?.role ?? track?.name ?? "");
-}
-
-function tracksOf(song) {
-  return Array.isArray(song?.tracks) ? song.tracks : [];
 }
 
 function track(song, id) {
