@@ -102,6 +102,33 @@ export function createDirectorDirective(song, selection = {}) {
   });
 }
 
+function directorCompositionRoute(directive, requested = null) {
+  if (["harmony-first", "groove-first", "hook-first"].includes(String(requested ?? ""))) return requested;
+  const intent = directive?.ensembleContext?.intent ?? {};
+  const featured = String(intent.featuredTrack ?? "");
+  const role = String(intent.role ?? "");
+  if (["drums", "bass"].includes(featured)) return "groove-first";
+  if (["payoff", "peak", "hook"].includes(role)) return "hook-first";
+  return "harmony-first";
+}
+
+function directorExpressiveInput(directive, input = {}) {
+  const intent = directive?.ensembleContext?.intent ?? {};
+  const energy = Number(intent.energy);
+  const tension = Number(intent.tension);
+  const result = {};
+  if (input.compositionRoute == null) {
+    result.compositionRoute = directorCompositionRoute(directive);
+  }
+  if (input.syncopation == null && Number.isFinite(tension)) {
+    result.syncopation = Math.min(1, Math.max(0, 0.42 + tension * 0.34));
+  }
+  if (input.humanize == null && Number.isFinite(energy)) {
+    result.humanize = Math.min(1, Math.max(0, 0.12 + (1 - energy) * 0.22));
+  }
+  return result;
+}
+
 function candidateInput(sourceSong, directive, input) {
   const normalized = directive.selection;
   const archetype = directive?.jazzGrammar?.archetype ?? null;
@@ -118,11 +145,14 @@ function candidateInput(sourceSong, directive, input) {
         : {}),
     }
     : {};
+  const directorDefaults = directorExpressiveInput(directive, { ...input, ...jazzDefaults });
   return {
     ...input,
+    ...directorDefaults,
     ...jazzDefaults,
     jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
+    ensembleContext: directive?.ensembleContext ?? null,
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
       : {}),
