@@ -4229,7 +4229,11 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     // The conductor must never reserve silence on top of a motif attack.
     // Every lane negotiates around the same rhythmic intent instead of
     // independently erasing a phrase event later in generation.
-    const occupied = new Set([...anchors, ...answers, ...motifPulses].map((offset) => round(offset)));
+    const occupied = new Set([
+      ...anchors,
+      ...answers,
+      ...(config.professionalUpgrade ? motifPulses : []),
+    ].map((offset) => round(offset)));
     const available = [];
     for (let offset = gridStep; offset < barBeats - 0.01; offset += gridStep) {
       if (!occupied.has(round(offset))) available.push(round(offset));
@@ -7924,7 +7928,7 @@ function runPocketCohesionPass(sourceTracks, structure, grooveConductor = null, 
   const laneForTrack = (id) => id === "bass" ? "bassPulses" : id === "chords" ? "chordPulses" : null;
   const laneTargets = (id, beat) => {
     const lane = laneForTrack(id);
-    if (!lane || !Array.isArray(grooveConductor?.bars)) return [];
+    if (!config?.professionalUpgrade || !lane || !Array.isArray(grooveConductor?.bars)) return [];
     const bar = Math.max(0, Math.floor(beat / barBeats));
     const barPlan = grooveConductor.bars[bar];
     const barStart = bar * barBeats;
