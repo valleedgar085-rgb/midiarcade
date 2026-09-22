@@ -121,6 +121,11 @@ test("Director directive publishes the exact section blueprint, orchestration, a
   assert.equal(directive.sectionPlan.cadence, "resolve");
   assert.equal(directive.orchestration.featuredTrack, "bass");
   assert.equal(directive.interlock.role, "payoff");
+  assert.equal(directive.ensembleContext.sectionId, "chorus-1");
+  assert.equal(directive.ensembleContext.intent.cadence, "resolve");
+  assert.equal(directive.ensembleContext.intent.featuredTrack, "bass");
+  assert.deepEqual(directive.ensembleContext.coordination.rhythmSection, ["drums", "bass"]);
+  assert.deepEqual(directive.ensembleContext.coordination.leadConversation, ["melody", "counterpoint"]);
 });
 
 test("Chorus 1 → Bass changes only contained chorus bass notes and preserves boundary-crossing notes", () => {
