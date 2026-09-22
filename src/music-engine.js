@@ -1864,6 +1864,77 @@ function answerTrackForForeground(foregroundTrack, section, config) {
   return ["breakdown", "outro"].includes(section.name) ? "counterpoint" : "melody";
 }
 
+const PRODUCER_NON_FOUNDATION_BUDGETS = deepFreeze({
+  establish: 2,
+  develop: 3,
+  build: 3,
+  payoff: 3,
+  contrast: 3,
+  reset: 2,
+  resolve: 2,
+  spotlight: 3,
+});
+
+const PRODUCER_SUPPORT_PRIORITY = deepFreeze({
+  establish: ["chords", "pad", "melody", "counterpoint"],
+  develop: ["chords", "pad", "melody", "counterpoint"],
+  build: ["chords", "pad", "melody", "counterpoint"],
+  payoff: ["chords", "melody", "pad", "counterpoint"],
+  contrast: ["pad", "chords", "counterpoint", "melody"],
+  reset: ["pad", "chords", "counterpoint", "melody"],
+  resolve: ["pad", "chords", "melody", "counterpoint"],
+  spotlight: ["chords", "pad", "melody", "counterpoint"],
+});
+
+function producerNonFoundationBudget(purpose) {
+  return PRODUCER_NON_FOUNDATION_BUDGETS[purpose] ?? 3;
+}
+
+function enforceProducerTeamworkRoles({
+  roles,
+  matrix,
+  foregroundTrack,
+  answerTrack,
+  purpose,
+} = {}) {
+  const nextRoles = { ...(roles ?? {}) };
+  const nonFoundationIds = TRACK_IDS.filter((id) => !["drums", "bass"].includes(id));
+  const budget = producerNonFoundationBudget(purpose);
+  const protectedIds = new Set(
+    [foregroundTrack, answerTrack]
+      .filter((id) => nonFoundationIds.includes(id) && nextRoles[id] !== "rest"),
+  );
+  const priority = PRODUCER_SUPPORT_PRIORITY[purpose] ?? PRODUCER_SUPPORT_PRIORITY.develop;
+  const candidates = nonFoundationIds
+    .filter((id) => !protectedIds.has(id) && nextRoles[id] !== "rest")
+    .sort((left, right) => {
+      const leftPresence = finite(matrix?.lanes?.[left]?.presence, 0);
+      const rightPresence = finite(matrix?.lanes?.[right]?.presence, 0);
+      const leftPriority = priority.indexOf(left);
+      const rightPriority = priority.indexOf(right);
+      const leftScore = leftPresence * 100 + (leftPriority === -1 ? 0 : (priority.length - leftPriority) * 8);
+      const rightScore = rightPresence * 100 + (rightPriority === -1 ? 0 : (priority.length - rightPriority) * 8);
+      return rightScore - leftScore || TRACK_IDS.indexOf(left) - TRACK_IDS.indexOf(right);
+    });
+  const kept = new Set(protectedIds);
+  for (const id of candidates) {
+    if (kept.size >= budget) break;
+    kept.add(id);
+  }
+  for (const id of nonFoundationIds) {
+    if (nextRoles[id] !== "rest" && !kept.has(id)) nextRoles[id] = "rest";
+  }
+  const activeNonFoundation = nonFoundationIds.filter((id) => nextRoles[id] !== "rest");
+  return {
+    roles: nextRoles,
+    voiceBudget: {
+      maxNonFoundationVoices: budget,
+      activeNonFoundationVoices: activeNonFoundation.length,
+      qualityOverQuantity: true,
+    },
+  };
+}
+
 /**
  * Create one compact creative brief shared by every generator. Local track
  * rules can still express the genre, but they must agree on who owns the
@@ -1906,7 +1977,7 @@ function createProducerIntentContract(
       0.05,
       0.4,
     ));
-    const roles = Object.fromEntries(TRACK_IDS.map((id) => {
+    const provisionalRoles = Object.fromEntries(TRACK_IDS.map((id) => {
       const lane = matrix?.lanes?.[id];
       let role = "support";
       if (id === foregroundTrack) role = "foreground";
@@ -1927,6 +1998,14 @@ function createProducerIntentContract(
       ) role = "rest";
       return [id, role];
     }));
+    const teamwork = enforceProducerTeamworkRoles({
+      roles: provisionalRoles,
+      matrix,
+      foregroundTrack,
+      answerTrack,
+      purpose,
+    });
+    const roles = teamwork.roles;
     return {
       sectionId: section.id,
       sectionName: section.name,
@@ -1937,6 +2016,7 @@ function createProducerIntentContract(
       answerTrack: roles[answerTrack] === "answer" ? answerTrack : null,
       silenceBudget,
       densityCeiling: round(clamp(0.64 + plan.energy * 0.3 - silenceBudget * 0.12, 0.58, 0.96)),
+      voiceBudget: teamwork.voiceBudget,
       roles,
     };
   });
@@ -1964,6 +2044,11 @@ function createProducerIntentContract(
     },
     rules: {
       maxForegroundVoices: 1,
+      maxAnswerVoices: 1,
+      maxActiveTracksPerScene: 5,
+      maxNonFoundationVoices: 3,
+      qualityOverQuantity: true,
+      restBeforeRedundantSupport: true,
       protectFoundation: true,
       separateAnswers: true,
       preserveCadences: true,
@@ -6808,6 +6893,8 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
     const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
+    const activeTrackIds = Object.entries(scene.roles).filter(([, role]) => role !== "rest").map(([id]) => id);
+    const activeNonFoundationTrackIds = activeTrackIds.filter((id) => !["drums", "bass"].includes(id));
     return {
       sectionId: scene.sectionId,
       purpose: scene.purpose,
@@ -6820,6 +6907,9 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       protectedSharedAnchors,
       restTracks: restTrackIds.length,
       restNotes,
+      activeTracks: activeTrackIds.length,
+      activeNonFoundationVoices: activeNonFoundationTrackIds.length,
+      maxNonFoundationVoices: finite(scene?.voiceBudget?.maxNonFoundationVoices, 3),
     };
   });
   const allNotes = tracks.flatMap((track) => track.notes);
@@ -6835,6 +6925,13 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
   const developedReturns = (producerIntent?.scenes ?? [])
     .filter((scene) => finite(scene.returnIndex, 0) > 0)
     .every((scene) => ["rhythm", "density", "register", "dialogue"].includes(scene.developmentAxis));
+  const singleAnswer = (producerIntent?.scenes ?? []).every((scene) => (
+    Object.values(scene.roles ?? {}).filter((role) => role === "answer").length <= 1
+  ));
+  const voiceBudgetRespected = sceneReports.every((scene) => (
+    scene.activeNonFoundationVoices <= scene.maxNonFoundationVoices
+  ));
+  const noFullBandWall = sceneReports.every((scene) => scene.activeTracks <= 5);
   return {
     tracks,
     report: {
@@ -6848,10 +6945,15 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
         foregroundCoverage: round(foregroundCoverage),
         answerCollisionRate: round(answerCollisionRate),
         restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+        maxActiveTracks: Math.max(0, ...sceneReports.map((scene) => scene.activeTracks)),
+        maxNonFoundationVoices: Math.max(0, ...sceneReports.map((scene) => scene.activeNonFoundationVoices)),
       },
       checks: {
         completeRoles,
         singleForeground,
+        singleAnswer,
+        voiceBudgetRespected,
+        noFullBandWall,
         developedReturns,
         foregroundAudible: foregroundCoverage >= 0.9,
         answersSeparated: answerCollisionRate <= 0.28,
