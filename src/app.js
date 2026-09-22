@@ -4332,10 +4332,11 @@ async function exportSong() {
   }
 }
 
-function expressionPoints(automation) {
+function controllerPoints(automation, controller) {
+  const targetController = Number(controller);
   const sorted = (Array.isArray(automation) ? automation : [])
     .filter((event) => String(event?.type).toLowerCase() === "cc"
-      && Number(event?.controller) === 11
+      && Number(event?.controller) === targetController
       && Number.isFinite(Number(event?.beat))
       && Number.isFinite(Number(event?.value)))
     .map((event) => ({ beat: Number(event.beat), value: clamp(Number(event.value), 0, 127) }))
@@ -4347,8 +4348,8 @@ function expressionPoints(automation) {
   }, []);
 }
 
-export function expressionAtBeat(automation, beat, fallback = 127) {
-  const points = expressionPoints(automation);
+export function controllerValueAtBeat(automation, controller, beat, fallback = 64) {
+  const points = controllerPoints(automation, controller);
   const targetBeat = Number(beat);
   if (!points.length || !Number.isFinite(targetBeat)) return clamp(Number(fallback), 0, 127);
   if (targetBeat < points[0].beat) return clamp(Number(fallback), 0, 127);
@@ -4358,6 +4359,14 @@ export function expressionAtBeat(automation, beat, fallback = 127) {
   const right = points[rightIndex];
   const ratio = (targetBeat - left.beat) / Math.max(0.000001, right.beat - left.beat);
   return left.value + (right.value - left.value) * ratio;
+}
+
+function expressionPoints(automation) {
+  return controllerPoints(automation, 11);
+}
+
+export function expressionAtBeat(automation, beat, fallback = 127) {
+  return controllerValueAtBeat(automation, 11, beat, fallback);
 }
 
 export function expressionCurveBetween(automation, startBeat, endBeat) {
@@ -4472,6 +4481,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const startBeat = Math.max(0, noteStart(note));
       const durationBeats = Math.max(0.01, noteDuration(note));
       const phrasePerformance = renderPhrasePerformance(note);
+      const baseReverb = clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1);
+      const automatedReverb = controllerValueAtBeat(automation, 91, startBeat, baseReverb * 127) / 127;
+      const brightnessCc = controllerValueAtBeat(automation, 74, startBeat, 64);
+      const brightnessScale = clamp(0.5 + brightnessCc / 128, 0.5, 1.5);
       const audibleDurationBeats = durationBeats
         * clamp(gateScale, 0.65, 1.4)
         * phrasePerformance.durationScale;
@@ -4504,9 +4517,9 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         mixGain,
         spotlight: spotlight.active,
         pan: clamp(Number(settings.pan ?? defaults.pan ?? 0) * mixProfile.panWidth, -1, 1),
-        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2) * Number(mixProfile.reverbScale[id] ?? 1) * spotlight.reverb, 0, 1),
+        reverb: clamp(automatedReverb * Number(mixProfile.reverbScale[id] ?? 1) * spotlight.reverb, 0, 1),
         delaySend: clamp(Number(mixProfile.delaySend[id] ?? 0) * spotlight.delay, 0, 0.24),
-        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * spotlight.cutoff, 1000, 14000),
+        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * brightnessScale * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
         articulation: String(note.articulation || "natural"),

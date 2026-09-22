@@ -89,3 +89,31 @@ test("step bias rewards stepwise legato motion and penalizes larger connected le
   assert.ok(mediumLeapBias > largeLeapBias);
   assert.ok(largeLeapBias < 0, "large connected leaps should reduce legato probability");
 });
+
+test("Jazz, Techno, Pop, and Rock expose distinct professional arrangement vocabulary", () => {
+  const techno = genreArrangementProfile("techno");
+  const pop = genreArrangementProfile("pop");
+  const jazz = genreArrangementProfile("jazz");
+  const rock = genreArrangementProfile("rock");
+
+  assert.equal(techno.id, "techno", "Techno must not silently inherit the generic EDM profile");
+  assert.ok(techno.rhythmTemplates.some((template) => template.id === "machine-drive"));
+  assert.ok(progressionGoalsFor(pop, "prechorus", "intense").some((goal) => goal.id === "prechorus-lift"));
+  assert.ok(progressionGoalsFor(jazz, "solo", "intense").some((goal) => goal.id === "bebop-turnaround"));
+  assert.ok(progressionGoalsFor(rock, "bridge", "intense").some((goal) => goal.id === "I-bVII-IV-I"));
+  assert.equal(
+    progressionGoalsFor(rock, "bridge", "intense").some((goal) => goal.id === "ii-V-I"),
+    false,
+    "Rock must not inherit a Jazz-functional ii-V-I as a preferred bridge cadence",
+  );
+});
+
+test("Techno normalization keeps its dedicated grammar contract", () => {
+  const techno = normalizeConfig({
+    genre: "techno",
+    seed: "techno-dedicated-profile",
+    professionalUpgrade: true,
+  });
+  assert.equal(techno.arrangementProfileId, "techno");
+  assert.equal(techno.phraseBars, 8);
+});

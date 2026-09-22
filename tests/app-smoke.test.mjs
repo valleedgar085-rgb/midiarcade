@@ -901,6 +901,30 @@ test("browser app initializes against the engine contract", async () => {
     { type: "cc", controller: 11, beat: 8, value: 32 },
   ];
   assert.equal(app.expressionAtBeat(automation, 4), 79.5, "CC11 must interpolate linearly between expression points");
+  const transitionAutomation = [
+    { type: "cc", controller: 74, beat: 0, value: 48 },
+    { type: "cc", controller: 74, beat: 4, value: 112 },
+    { type: "cc", controller: 91, beat: 0, value: 24 },
+    { type: "cc", controller: 91, beat: 4, value: 88 },
+  ];
+  assert.equal(app.controllerValueAtBeat(transitionAutomation, 74, 2, 64), 80, "CC74 must interpolate like exported MIDI automation");
+  const transitionPreview = app.buildPreviewEvents({
+    bpm: 120,
+    genre: "techno",
+    meta: { genre: "techno", tempo: 120 },
+    tracks: [{
+      id: "chords",
+      program: 81,
+      settings: { volume: 0.78, velocity: 0.82, pan: 0, reverb: 0.3, cutoff: 8000, resonance: 0.2, gate: 0.9 },
+      automation: transitionAutomation,
+      notes: [
+        { pitch: 60, start: 0, duration: 1, velocity: 88 },
+        { pitch: 64, start: 4, duration: 1, velocity: 88 },
+      ],
+    }],
+  }, { muted: [], solo: [], trackSettings: {} });
+  assert.ok(transitionPreview[1].cutoff > transitionPreview[0].cutoff, "CC74 transition sweep must brighten preview at the arrival");
+  assert.ok(transitionPreview[1].reverb > transitionPreview[0].reverb, "CC91 transition bloom must be audible in preview");
   const fadeEvents = app.buildPreviewEvents({
     bpm: 120,
     tracks: [{

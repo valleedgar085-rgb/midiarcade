@@ -5,7 +5,8 @@ import { normalizeGenreId } from "./genre-contract.js";
 
 const ELECTRONIC_GENRES = new Set(["house", "techno", "drumBass"]);
 const LOOP_GENRES = new Set(["loFiHipHop", "ambient"]);
-const HOOK_FORWARD_GENRES = new Set(["pop", "popRadio", "synthPopRadio", "synthwave", "rock"]);
+const HOOK_FORWARD_GENRES = new Set(["synthPopRadio", "synthwave"]);
+const STORY_FORWARD_GENRES = new Set(["pop", "popRadio", "rock"]);
 const VERSE_FORWARD_GENRES = new Set(["rap", "hipHop", "country"]);
 const TRANSITION_ENERGY = Object.freeze({
   intro: 0.34,
@@ -49,8 +50,10 @@ function weight(name, amount = 1) {
 }
 
 function songFamilyCandidates(genre) {
+  if (genre === "techno") return [FAMILIES.slowBloom, FAMILIES.doublePeak, FAMILIES.hypnoticWave];
   if (ELECTRONIC_GENRES.has(genre)) return [FAMILIES.doublePeak, FAMILIES.earlyImpact, FAMILIES.hypnoticWave, FAMILIES.slowBloom];
   if (LOOP_GENRES.has(genre)) return [FAMILIES.loopDevelopment, FAMILIES.slowBloom, FAMILIES.bridgePayoff];
+  if (STORY_FORWARD_GENRES.has(genre)) return [FAMILIES.verseDriven, FAMILIES.bridgePayoff, FAMILIES.slowBloom];
   if (HOOK_FORWARD_GENRES.has(genre)) return [FAMILIES.hookFirst, FAMILIES.bridgePayoff, FAMILIES.slowBloom, FAMILIES.verseDriven];
   if (VERSE_FORWARD_GENRES.has(genre)) return [FAMILIES.verseDriven, FAMILIES.bridgePayoff, FAMILIES.hookFirst];
   return [FAMILIES.verseDriven, FAMILIES.bridgePayoff, FAMILIES.slowBloom, FAMILIES.hookFirst];
