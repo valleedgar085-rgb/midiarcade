@@ -16,6 +16,56 @@ import { generateSimilar } from "../music-engine.js";
 
 export { normalizeCompositionSelection };
 
+function createEnsembleContext(song, selection, sectionPlan, orchestration, interlock) {
+  const sectionId = selection.sectionId ?? null;
+  const conductor = song?.grooveConductor ?? null;
+  const section = sectionId == null
+    ? null
+    : (song?.structure ?? song?.sections ?? []).find((entry) => String(entry?.id) === String(sectionId)) ?? null;
+  const beatsPerBar = Math.max(1, Number(song?.meta?.beatsPerBar) || 4);
+  const startBeat = Number.isFinite(Number(section?.startBeat))
+    ? Number(section.startBeat)
+    : (Number(section?.startBar ?? section?.start) || 0) * beatsPerBar;
+  const endBeat = Number.isFinite(Number(section?.endBeat))
+    ? Number(section.endBeat)
+    : startBeat + Math.max(1, Number(section?.bars) || 1) * beatsPerBar;
+  const bars = (conductor?.bars ?? [])
+    .filter((bar) => sectionId == null || String(bar?.sectionId) === String(sectionId))
+    .map((bar) => ({
+      bar: bar.bar,
+      role: bar.role,
+      anchors: cloneValue(bar.anchors ?? []),
+      answers: cloneValue(bar.answers ?? []),
+      chordPulses: cloneValue(bar.chordPulses ?? []),
+      counterPulses: cloneValue(bar.counterPulses ?? []),
+    }));
+  return {
+    version: 1,
+    sectionId,
+    range: sectionId == null ? null : { startBeat, endBeat, beatsPerBar },
+    intent: {
+      role: interlock?.role ?? sectionPlan?.role ?? section?.intent?.role ?? "development",
+      cadence: interlock?.cadence ?? sectionPlan?.cadence ?? section?.intent?.cadence ?? "open",
+      energy: interlock?.energy ?? sectionPlan?.energy ?? section?.intensity ?? null,
+      tension: interlock?.tension ?? sectionPlan?.tension ?? section?.intent?.tension ?? null,
+      featuredTrack: interlock?.featuredTrack ?? orchestration?.featuredTrack ?? null,
+      motifId: interlock?.motifId ?? null,
+      transitionOut: interlock?.transitionOut ?? null,
+    },
+    lanes: cloneValue(orchestration?.lanes ?? {}),
+    groove: {
+      feel: conductor?.feel ?? conductor?.id ?? null,
+      bars,
+    },
+    coordination: {
+      rhythmSection: ["drums", "bass"],
+      harmonicBed: ["chords", "pad"],
+      leadConversation: ["melody", "counterpoint"],
+      priority: ["rhythm-section-lock", "harmonic-support", "lead-call-response", "shared-cadence"],
+    },
+  };
+}
+
 export function createDirectorDirective(song, selection = {}) {
   if (!song || typeof song !== "object") throw new TypeError("createDirectorDirective requires a source song");
   const normalized = normalizeCompositionSelection(selection, song);
@@ -46,6 +96,7 @@ export function createDirectorDirective(song, selection = {}) {
     interlock: cloneValue(interlock),
     harmony: cloneValue(song?.harmony ?? []),
     jazzGrammar: cloneValue(jazzGrammar),
+    ensembleContext: cloneValue(createEnsembleContext(song, normalized, sectionPlan, orchestration, interlock)),
     sourceSongId: song?.id ?? null,
     sourceSeed: song?.seed ?? null,
   });
