@@ -148,6 +148,15 @@ test("seeded new-song generation is deterministic and structurally complete", ()
     "counterpoint",
     "pad",
   ]);
+  assert.equal(first.ensembleCoordination.status, "complete");
+  assert.ok(
+    first.generationPhases.some((phase) => phase.id === "director-ensemble-coordination" && phase.status === "complete"),
+  );
+  assert.ok(
+    first.generationInterlock.sectionContracts.every((contract) => (
+      contract.bars.every((bar) => Array.isArray(bar.chordPulses) && Array.isArray(bar.counterPulses))
+    )),
+  );
 
   for (const track of first.tracks) {
     assert.ok(track.notes.length > 0, `${track.id} should contain notes`);
