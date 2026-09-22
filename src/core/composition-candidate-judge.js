@@ -242,6 +242,43 @@ function collisionMetrics(song, selection) {
   };
 }
 
+function leadConversationMetrics(song, selection) {
+  const melody = scopedNotes(song, "melody", selection);
+  const counterpoint = scopedNotes(song, "counterpoint", selection);
+  const protectedAnchor = (note) => Boolean(
+    note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.motifHandoffRole
+    || note?.finalAssemblyRole
+  );
+  const answers = counterpoint.filter((note) => !protectedAnchor(note));
+  if (!answers.length || !melody.length) {
+    return {
+      compared: answers.length,
+      simultaneous: 0,
+      simultaneousRatio: 0,
+      underLead: 0,
+      underLeadRatio: 0,
+    };
+  }
+  const simultaneous = answers.filter((note) => (
+    melody.some((lead) => Math.abs(noteStart(lead) - noteStart(note)) <= 0.105 + EPSILON)
+  )).length;
+  const underLead = answers.filter((note) => (
+    melody.some((lead) => (
+      noteStart(note) > noteStart(lead) - 0.04 - EPSILON
+      && noteStart(note) < noteEnd(lead) + 0.08 + EPSILON
+    ))
+  )).length;
+  return {
+    compared: answers.length,
+    simultaneous,
+    simultaneousRatio: answers.length ? simultaneous / answers.length : 0,
+    underLead,
+    underLeadRatio: answers.length ? underLead / answers.length : 0,
+  };
+}
+
 function nearestDistance(value, candidates = []) {
   if (!candidates.length) return Infinity;
   return Math.min(...candidates.map((candidate) => Math.abs(value - candidate)));
@@ -430,6 +467,7 @@ export function analyzeCompositionCandidate(song, selection = {}, directive = {}
   const groove = grooveMetrics(song, selection);
   const cadence = cadenceMetrics(song, selection, directive);
   const blueprint = blueprintMetrics(song, selection, directive);
+  const leadConversation = leadConversationMetrics(song, selection);
   const harmonyScore = scoreFromRatio(harmony.chordFit) - Math.min(35, harmony.harshStrongNotes * 12);
   const registerScore = Math.max(0, 100 - register.violations * 25 - Math.round((1 - register.preferredRatio) * 18));
   const grooveScore = Math.round((
@@ -454,6 +492,15 @@ export function analyzeCompositionCandidate(song, selection = {}, directive = {}
       melodyHealth: register.melodyHealth,
     }),
     collisions: Object.freeze({ ...collisions }),
+    ensemble: Object.freeze({
+      leadConversation: Object.freeze({
+        compared: leadConversation.compared,
+        simultaneous: leadConversation.simultaneous,
+        simultaneousRatio: round(leadConversation.simultaneousRatio),
+        underLead: leadConversation.underLead,
+        underLeadRatio: round(leadConversation.underLeadRatio),
+      }),
+    }),
     groove: Object.freeze({
       kickBass: Object.freeze({
         compared: groove.kickBass.compared,
@@ -549,6 +596,27 @@ export function judgeCompositionCandidate(before, after, selection = {}, directi
     warnings,
     candidate.collisions.leadUnisons > baseline.collisions.leadUnisons,
     "collision:new-lead-counterpoint-unison",
+  );
+
+  pushRegression(
+    hardIssues,
+    warnings,
+    candidate.ensemble.leadConversation.compared >= 3
+      && baseline.ensemble.leadConversation.compared >= 3
+      && candidate.ensemble.leadConversation.simultaneousRatio > 0.4
+      && candidate.ensemble.leadConversation.simultaneousRatio
+        > baseline.ensemble.leadConversation.simultaneousRatio + 0.25,
+    "ensemble:lead-turn-taking-regression",
+  );
+  pushRegression(
+    hardIssues,
+    warnings,
+    candidate.ensemble.leadConversation.compared >= 3
+      && candidate.ensemble.leadConversation.underLeadRatio > 0.5
+      && candidate.ensemble.leadConversation.underLeadRatio
+        > baseline.ensemble.leadConversation.underLeadRatio + 0.2,
+    "warning:lead-answer-space-regression",
+    true,
   );
 
   pushRegression(
