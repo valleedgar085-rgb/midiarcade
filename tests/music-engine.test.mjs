@@ -200,7 +200,10 @@ test("Rock writes power-chord drive instead of generic keyboard comping", () => 
       tagged.filter((note) => note.rockChordRole === role).length,
     ]),
   );
-  assert.ok(roleCounts.root >= 2, "Rock should expose repeated complete power-chord attacks");
+  assert.ok(
+    roleCounts.root >= 2,
+    `Rock should expose repeated complete power-chord attacks: ${JSON.stringify(roleCounts)}`,
+  );
   assert.equal(roleCounts.fifth, roleCounts.root, "orchestration must keep the fifth with every Rock root");
   assert.equal(roleCounts.octave, roleCounts.root, "orchestration must keep the octave with every Rock root");
   assert.ok(
