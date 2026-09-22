@@ -128,6 +128,25 @@ test("Director directive publishes the exact section blueprint, orchestration, a
   assert.deepEqual(directive.ensembleContext.coordination.leadConversation, ["melody", "counterpoint"]);
 });
 
+test("Director ensemble intent steers the Composer before scoped notes are accepted", () => {
+  let observedInput = null;
+  const observingComposer = (source, input) => {
+    observedInput = structuredClone(input);
+    return composerStub(source, input);
+  };
+  createCompositionCandidate(
+    sourceSong(),
+    { target: "track", sectionId: "chorus-1", trackId: "bass" },
+    { seed: "director-route" },
+    { composer: observingComposer },
+  );
+
+  assert.equal(observedInput.compositionRoute, "groove-first");
+  assert.equal(observedInput.ensembleContext.intent.featuredTrack, "bass");
+  assert.equal(observedInput.ensembleContext.intent.role, "payoff");
+});
+
+
 test("Chorus 1 → Bass changes only contained chorus bass notes and preserves boundary-crossing notes", () => {
   const source = sourceSong();
   const transaction = createCompositionCandidate(
