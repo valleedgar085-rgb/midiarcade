@@ -175,6 +175,13 @@ test("candidate groove scoring follows the track-specific conductor lane", () =>
   assert.ok(mismatchReport.scores.groove < alignedReport.scores.groove);
 });
 
+test("candidate rhythm metrics count stacked harmony as one rhythmic attack", () => {
+  const song = fixture();
+  const report = analyzeCompositionCandidate(song, { target: "song" }, {});
+  assert.equal(report.groove.density.byTrack.chords, 1, "two triad onsets across two bars equal one chord attack per bar");
+  assert.equal(report.groove.density.byTrack.pad, 1, "sustained pad onsets must not be multiplied by chord voices");
+});
+
 test("new harsh strong-beat color tone is rejected even when it remains in the selected scale", () => {
   const before = fixture();
   const after = structuredClone(before);

@@ -5745,7 +5745,25 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
       for (let offset = 0, index = 0; offset < chord.duration - 0.05; offset += step, index += 1) {
         if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.12, 0.98))) continue;
         const pitch = voicing[index % voicing.length] + (index >= voicing.length && rng.bool(0.35) ? 12 : 0);
-        addNote(notes, pitch, chord.start + offset, Math.min(step * 0.9, chord.duration - offset), eventVelocity(config, settings, intensity, rng, index % voicing.length === 0 ? 0.9 : 0.72), totalBeats);
+        const proposedStart = chord.start + offset;
+        const synchronized = config.professionalUpgrade
+          ? magnetizeBeatToGroove(
+            grooveConductor,
+            proposedStart,
+            "chordPulses",
+            beatsPerBar(config),
+            Math.min(0.12, step * 0.45),
+          )
+          : { beat: proposedStart, snapped: false };
+        addNote(
+          notes,
+          pitch,
+          synchronized.beat,
+          Math.min(step * 0.9, chord.duration - offset),
+          eventVelocity(config, settings, intensity, rng, index % voicing.length === 0 ? 0.9 : 0.72),
+          totalBeats,
+          synchronized.snapped ? { rhythmicFeature: "groove-magnet", grooveLane: "chordPulses" } : undefined,
+        );
       }
       continue;
     } else {

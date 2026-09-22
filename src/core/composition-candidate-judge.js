@@ -1,6 +1,7 @@
 import { roleRegisterWindow } from "./role-register-policy.js";
 import { registerHealthScore } from "./register-health-refinement.js";
 import { compareJazzQuality } from "./jazz-quality-lab.js";
+import { grooveLaneForTrack } from "./groove-contract.js";
 import { trackId, tracksOf } from "./composition-scope.js";
 
 const EPSILON = 1e-6;
@@ -246,6 +247,10 @@ function nearestDistance(value, candidates = []) {
   return Math.min(...candidates.map((candidate) => Math.abs(value - candidate)));
 }
 
+function uniqueAttackStarts(notes = []) {
+  return [...new Set(notes.map((note) => round(noteStart(note), 4)))].sort((left, right) => left - right);
+}
+
 function kickBassLock(song, selection) {
   if (!targetTrackIds(song, selection).has("bass") && selection.target !== "section" && selection.target !== "song") {
     return { compared: 0, lock: 1 };
@@ -264,14 +269,7 @@ function conductorPulses(song, id, selection) {
   if (!Array.isArray(conductor?.bars) || !conductor.bars.length) return [];
   const ranges = scopeRanges(song, selection);
   const pulses = [];
-  const preferredLanes = {
-    drums: ["anchors"],
-    bass: ["bassPulses"],
-    chords: ["chordPulses"],
-    melody: ["leadPulses"],
-    counterpoint: ["counterPulses"],
-    pad: ["chordPulses"],
-  }[id] ?? ["anchors"];
+  const preferredLanes = [grooveLaneForTrack(id)];
   const fallbackLanes = {
     drums: ["anchors", "answers"],
     bass: ["anchors", "answers"],
@@ -309,9 +307,9 @@ function conductorAlignment(song, selection) {
   for (const id of targetIds) {
     const pulses = conductorPulses(song, id, selection);
     if (!pulses.length) continue;
-    for (const note of scopedNotes(song, id, selection)) {
+    for (const start of uniqueAttackStarts(scopedNotes(song, id, selection))) {
       compared += 1;
-      if (nearestDistance(noteStart(note), pulses) <= 0.14 + EPSILON) aligned += 1;
+      if (nearestDistance(start, pulses) <= 0.14 + EPSILON) aligned += 1;
     }
   }
   return { compared, alignment: compared ? aligned / compared : 1 };
@@ -324,7 +322,7 @@ function densityMetrics(song, selection) {
   const byTrack = {};
   let attacks = 0;
   for (const id of targetIds) {
-    const count = scopedNotes(song, id, selection).length;
+    const count = uniqueAttackStarts(scopedNotes(song, id, selection)).length;
     byTrack[id] = round(count / bars, 3);
     attacks += count;
   }
