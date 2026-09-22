@@ -5472,23 +5472,12 @@ function runDirectorEnsembleCoordination(
   const contracts = new Map(
     (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
   );
-  if (!directorContext) {
-    return {
-      tracks,
-      report: {
-        phase: 43,
-        version: 1,
-        status: "complete",
-        active: false,
-        directorSectionId: null,
-        rhythmLocksObserved: 0,
-        harmonicPocketMoves: 0,
-        harmonicPocketSoftens: 0,
-        counterAnswersMoved: 0,
-        sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
-      },
-    };
-  }
+  // Whole-song generation and scoped Director recomposition now use the same
+  // ensemble contract. Scoped work may override one section's intent, while
+  // normal generation follows the pre-composed interlock contract unchanged.
+  // This keeps coordination deterministic and bounded instead of deferring
+  // ensemble awareness until a later repair pass.
+  const coordinationMode = directorContext ? "scoped-director" : "whole-song-contract";
   const barBeats = beatsPerBar(config);
   const sectionForBeat = (beat) => structure.find((section) => (
     beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
@@ -5652,6 +5641,7 @@ function runDirectorEnsembleCoordination(
       version: 1,
       status: "complete",
       active: true,
+      mode: coordinationMode,
       directorSectionId: directorContext?.sectionId ?? null,
       rhythmLocksObserved,
       harmonicPocketMoves,
