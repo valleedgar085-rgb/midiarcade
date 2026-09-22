@@ -175,6 +175,48 @@ test("seeded new-song generation is deterministic and structurally complete", ()
   }
 });
 
+test("Rock writes power-chord drive instead of generic keyboard comping", () => {
+  const song = engine.generateNew({
+    genre: "rock",
+    seed: "rock-power-chord-drive-proof",
+    bars: 12,
+    candidateCount: 1,
+  });
+
+  assert.equal(song.style.drumGroove, "backbeat");
+  assert.ok(song.grooveConductor.bars.every((bar) => bar.genrePhrase === "live-backbeat"));
+  assert.ok(
+    song.grooveConductor.bars.some((bar) => bar.chordPulses.length >= 4),
+    "Rock should publish a driving guitar pulse lane",
+  );
+
+  const chords = song.tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const tagged = chords.filter((note) => note.genrePhrase === "power-chord-drive");
+  assert.ok(tagged.length >= 6, "Rock harmony should retain explicit power-chord writing");
+
+  const groups = new Map();
+  for (const note of tagged) {
+    const key = note.start.toFixed(4);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(note);
+  }
+  const complete = [...groups.values()].filter((notes) => (
+    ["root", "fifth", "octave"].every((role) => notes.some((note) => note.rockChordRole === role))
+  ));
+  assert.ok(complete.length >= 2, "Rock should expose multiple complete power-chord attacks");
+  for (const notes of complete.slice(0, 4)) {
+    const root = notes.find((note) => note.rockChordRole === "root");
+    const fifth = notes.find((note) => note.rockChordRole === "fifth");
+    const octave = notes.find((note) => note.rockChordRole === "octave");
+    assert.equal(octave.pitch - root.pitch, 12);
+    assert.ok(
+      fifth.pitch - root.pitch >= 5 && fifth.pitch - root.pitch <= 8,
+      "power-chord support voice should remain a chord-safe fifth region",
+    );
+  }
+  assertAllGeneratedPitchesInScale(song);
+});
+
 test("genre fusion engine blends two distinct genres into a valid hybrid profile", () => {
   const fusion = engine.createFusedGenreProfile("jazz", "drill", 0.5);
   assert.equal(fusion.isFusion, true);
