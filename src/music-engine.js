@@ -7964,7 +7964,9 @@ function runPocketCohesionPass(sourceTracks, structure, grooveConductor = null, 
       const maximumStart = section
         ? Math.max(minimumStart, section.endBeat - 0.02)
         : Math.max(0, totalBeats - 0.02);
-      const movedStart = round(clamp(note.start + correction, minimumStart, maximumStart));
+      const movedStart = config?.professionalUpgrade
+        ? round(clamp(note.start + correction, minimumStart, maximumStart))
+        : round(clamp(note.start + correction, 0, Math.max(0, totalBeats - 0.02)));
       if (Math.abs(movedStart - note.start) < 0.002) continue;
       note.start = movedStart;
       note.pocketCohesion = Number.isFinite(intended) ? `conductor-${laneForTrack(track.id)}` : "shared-transient";
