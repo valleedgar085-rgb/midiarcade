@@ -4143,8 +4143,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       : phrasePosition === grammarCycle - 1 ? "turnaround"
         : phrasePosition === 1 ? "answer"
           : "development";
-    const local = rng.fork(`groove-family-${sectionFamilyId}-${phrasePosition}`);
-    const sectionRotation = hashSeed(`${config.seed}:${config.genre}:${sectionFamilyId}:groove`) % 4;
     const grooveDNALanes = grooveDNAConductorLanes(grooveDNA, bar);
     if (!grooveDNALanes) {
       throw new Error(`Groove DNA did not compile bar ${bar}`);
@@ -4222,7 +4220,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       pipeline: [...grooveDNA.pipeline],
     },
     phraseBars: clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
-    subdivision: config.complexity > 0.62 ? 0.25 : 0.5,
+    subdivision: grooveDNA.beatsPerStep,
     humanGroovePrior: humanGroovePrior ? {
       sourceStyles: [...humanGroovePrior.sourceStyles],
       performances: humanGroovePrior.performances,
