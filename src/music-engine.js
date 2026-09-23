@@ -5015,19 +5015,20 @@ function runDirectorEnsembleCoordination(
     || note?.ensembleCadenceRole
   );
 
-  // The rhythm section remains authoritative. Bass is already composed from
-  // surviving kicks; this pass records the relationship before later repair
-  // stages so the Composer and Judge can inspect the same musical intent.
-  const responseDelay = genreBassResponseOffsets(config.genre)[0] ?? 0;
+  // Groove DNA owns the low-end relationship. This pass only annotates notes
+  // that already sit on the authored bass lane; it never derives bass timing
+  // from kick positions.
   for (const note of bass) {
-    const section = sectionForBeat(note.start);
-    const sectionKicks = kickOnsets.filter((beat) => (
-      beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
-    ));
-    const locked = sectionKicks.some((kick) => Math.abs(kick + responseDelay - note.start) <= 0.14);
-    if (!locked) continue;
-    note.ensembleCoordinationRole = "rhythm-section-lock";
-    note.ensemblePartner = "drums";
+    const relationship = nearestGroovePulse(
+      grooveConductor,
+      "bassPulses",
+      note.start,
+      barBeats,
+      0.14,
+    );
+    if (relationship?.distance == null || relationship.distance > 0.14) continue;
+    note.ensembleCoordinationRole = "groove-dna-bass-relationship";
+    note.ensemblePartner = "groove-dna";
     rhythmLocksObserved += 1;
   }
 
@@ -9115,103 +9116,6 @@ function notesInWindow(track, startBeat, endBeat) {
   ));
 }
 
-function genreBassResponseOffsets(genre) {
-  if (genre === "house") return [0.5];
-  if (["techno", "drumBass"].includes(genre)) return [0, 0.5];
-  if (genre === "neoSoul") return [-0.25, 0, 0.25, 0.5, 0.75];
-  if (["trap", "hipHop", "rap", "drill"].includes(genre)) return [0, 0.25, 0.5];
-  return [0, 0.25, 0.5, 0.75];
-}
-
-function finalBassRelationshipProfile(genre) {
-  const profiles = {
-    house: { minimumFit: 0.78, tolerance: 0.1, maxRepairRatio: 0.48, maxMove: 0.42 },
-    techno: { minimumFit: 0.68, tolerance: 0.12, maxRepairRatio: 0.42, maxMove: 0.45 },
-    drumBass: { minimumFit: 0.62, tolerance: 0.14, maxRepairRatio: 0.38, maxMove: 0.48 },
-    trap: { minimumFit: 0.62, tolerance: 0.14, maxRepairRatio: 0.34, maxMove: 0.48 },
-    hipHop: { minimumFit: 0.5, tolerance: 0.16, maxRepairRatio: 0.28, maxMove: 0.55 },
-    rap: { minimumFit: 0.5, tolerance: 0.16, maxRepairRatio: 0.28, maxMove: 0.55 },
-    drill: { minimumFit: 0.58, tolerance: 0.14, maxRepairRatio: 0.32, maxMove: 0.48 },
-    neoSoul: { minimumFit: 0.38, tolerance: 0.18, maxRepairRatio: 0.2, maxMove: 0.62 },
-  };
-  return profiles[genre] ?? null;
-}
-
-function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
-  const tracks = sourceTracks.map((track) => ({
-    ...track,
-    notes: track.notes.map((note) => ({ ...note })),
-  }));
-  const drums = tracks.find((track) => track.id === "drums")?.notes ?? [];
-  const bass = tracks.find((track) => track.id === "bass");
-  const kicks = drums.filter((note) => note.pitch === 36).map((note) => note.start);
-  const profile = finalBassRelationshipProfile(genre);
-  if (!bass?.notes.length || !kicks.length || !profile) {
-    return { tracks, repairs: 0, relationshipFit: 1 };
-  }
-
-  const candidates = [...new Set(kicks.flatMap((kick) => (
-    genreBassResponseOffsets(genre).map((delay) => round(kick + delay))
-  )).filter((start) => start >= 0 && start < totalBeats - 0.019))].sort((a, b) => a - b);
-
-  const distanceToCandidate = (note) => candidates.length
-    ? Math.min(...candidates.map((start) => Math.abs(start - note.start)))
-    : Infinity;
-  const matched = (note) => distanceToCandidate(note) <= profile.tolerance + 1e-9;
-
-  let matchedCount = bass.notes.filter(matched).length;
-  const targetMatched = Math.ceil(profile.minimumFit * bass.notes.length);
-  const repairBudget = Math.min(
-    Math.max(0, targetMatched - matchedCount),
-    Math.ceil(profile.maxRepairRatio * bass.notes.length),
-  );
-  const repairable = bass.notes
-    .filter((note) => (
-      !matched(note)
-      && !note.ensembleCadenceRole
-      && !note.transitionHandoffRole
-      && !note.motifHandoffRole
-    ))
-    .map((note) => ({
-      note,
-      nearest: candidates
-        .map((start) => ({ start, distance: Math.abs(start - note.start) }))
-        .sort((left, right) => left.distance - right.distance || left.start - right.start)[0],
-    }))
-    .filter((entry) => Number.isFinite(entry.nearest?.start) && entry.nearest.distance <= profile.maxMove)
-    .sort((left, right) => left.nearest.distance - right.nearest.distance || left.note.start - right.note.start);
-
-  let repairs = 0;
-  for (const { note, nearest } of repairable.slice(0, repairBudget)) {
-    note.start = nearest.start;
-    note.duration = round(Math.min(note.duration, Math.max(0.02, totalBeats - nearest.start)));
-    note.rhythmLockRepair = "relationship-minimum";
-    note.grooveSource = `${genre}.bass-relationship-repair`;
-    repairs += 1;
-    matchedCount += 1;
-  }
-
-  bass.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-  bass.notes = bass.notes.filter((note, index, notes) => !notes.slice(0, index).some((previous) => (
-    previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 1e-6
-  )));
-  const previousByPitch = new Map();
-  for (const note of bass.notes) {
-    const previous = previousByPitch.get(note.pitch);
-    if (previous && previous.start + previous.duration > note.start) {
-      previous.duration = round(Math.max(0.02, note.start - previous.start));
-    }
-    previousByPitch.set(note.pitch, note);
-  }
-
-  return {
-    tracks,
-    repairs,
-    relationshipFit: round(matchedCount / Math.max(1, bass.notes.length)),
-    relationshipTarget: profile.minimumFit,
-  };
-}
-
 /** Critic 7.0 exposes weak short phrases hidden by a strong song average. */
 export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, grooveConductor = null) {
   const tracks = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
@@ -9231,7 +9135,13 @@ export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, 
       const counterpoint = notesInWindow(tracks.get("counterpoint"), startBeat, endBeat);
       const bass = notesInWindow(tracks.get("bass"), startBeat, endBeat);
       const drums = notesInWindow(tracks.get("drums"), startBeat, endBeat);
-      const kicks = drums.filter((note) => [35, 36].includes(note.pitch));
+      const bassPulses = absoluteGroovePulses(
+        grooveConductor,
+        "bassPulses",
+        startBeat,
+        endBeat,
+        barBeats,
+      );
       const coverage = activeTrackIds.length
         ? activeTrackIds.filter((id) => notesInWindow(tracks.get(id), startBeat, endBeat).length).length / activeTrackIds.length
         : 0.7;
@@ -9242,12 +9152,11 @@ export function evaluatePhraseWindows(sourceTracks, structure, harmony, config, 
         landingChord?.tones?.includes(mod(landing.pitch, 12))
         || mod(landing.pitch, 12) === config.keyPc
       ));
-      const bassResponses = genreBassResponseOffsets(config.genre);
-      const bassLock = kicks.length && bass.length
-        ? bass.filter((note) => kicks.some((kick) => bassResponses.some((delay) => (
-          Math.abs(note.start - kick.start - delay) <= 0.08
-        )))).length / bass.length
-        : bass.length || kicks.length ? 0.28 : 0.65;
+      const bassLock = bassPulses.length && bass.length
+        ? bass.filter((note) => bassPulses.some((pulse) => (
+          Math.abs(note.start - pulse) <= 0.08
+        ))).length / bass.length
+        : bass.length || bassPulses.length ? 0.28 : 0.65;
       const collisionRatio = counterpoint.length
         ? counterpoint.filter((note) => melody.some((lead) => Math.abs(lead.start - note.start) < 0.08)).length / counterpoint.length
         : 0;
@@ -9337,17 +9246,23 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
     }
 
     if (window.diagnostics.bassLock < 0.52) {
-      const kick = notesInWindow(track("drums"), window.startBeat, window.endBeat)
-        .filter((note) => [35, 36].includes(note.pitch))
-        .sort((left, right) => left.start - right.start)[0];
       const bass = notesInWindow(track("bass"), window.startBeat, window.endBeat)
-        .filter((note) => !note.preserveTiming && !note.motifHandoffRole)
+        .filter((note) => !note.motifHandoffRole)
         .sort((left, right) => left.start - right.start)[0];
-      if (kick && bass) {
-        const response = genreBassResponseOffsets(config.genre)[0] ?? 0;
-        bass.start = round(Math.min(kick.start + response, window.endBeat - 0.02));
-        bass.phraseRepair = "kick-bass-lock";
-        bass.preserveTiming = true;
+      const pulses = absoluteGroovePulses(
+        grooveConductor,
+        "bassPulses",
+        window.startBeat,
+        window.endBeat,
+        beatsPerBar(config),
+      );
+      if (bass && pulses.length) {
+        const target = [...pulses].sort(
+          (left, right) => Math.abs(left - bass.start) - Math.abs(right - bass.start) || left - right,
+        )[0];
+        bass.start = round(Math.min(target, window.endBeat - 0.02));
+        bass.phraseRepair = "groove-dna-bass-relationship";
+        bass.grooveSource = "groove-dna.phrase-repair";
         changedTracks.add("bass");
       }
     }
@@ -9786,8 +9701,7 @@ function compose(config, options = {}) {
   );
   const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
   const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
-  const finalRhythmLock = lockFinalBassToSurvivingKicks(finalScaleSafety.tracks, config.genre, totalBeats);
-  const characteristicVoice = applyCharacteristicVoice(finalRhythmLock.tracks, structure, config);
+  const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
   const producerIntentAudit = auditProducerIntentContract(
     characteristicVoice.tracks,
     structure,
@@ -9804,35 +9718,18 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  // Phase 3 groove memory runs only after the existing producer/master pipeline
-  // has converged. It recalls matching interior roles from repeated sections,
-  // never transition boundary bars. Bass is re-locked to the surviving kick
-  // pattern, producer intent is re-audited, and final assembly gets the last word.
-  const finalGrooveMemoryTracks = targetTrack
-    ? finalProducerIntentAudit.tracks
-    : applyFinalGrooveMemory(
-      finalProducerIntentAudit.tracks,
-      config,
-      structure,
-      songBlueprint,
-      grooveConductor,
-    );
-  const finalGrooveRhythmLock = lockFinalBassToSurvivingKicks(
-    finalGrooveMemoryTracks,
-    config.genre,
-    totalBeats,
-  );
-  const postGrooveIntentAudit = auditProducerIntentContract(
-    finalGrooveRhythmLock.tracks,
-    structure,
-    songBlueprint.producerIntent,
-  );
   const finalGrooveAssembly = runFinalAssemblyPass(
-    postGrooveIntentAudit.tracks,
     finalProducerIntentAudit.tracks,
+    postIntentAssembly.tracks,
     structure,
     songBlueprint,
   );
+  const postGrooveIntentAudit = auditProducerIntentContract(
+    finalGrooveAssembly.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
     finalGrooveAssembly.tracks,
     harmony,
@@ -12571,31 +12468,18 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  const repairedGrooveMemoryTracks = sourceCandidate.targetTrack
-    ? finalProducerIntentAudit.tracks
-    : applyFinalGrooveMemory(
-      finalProducerIntentAudit.tracks,
-      config,
-      song.structure,
-      song.songBlueprint,
-      song.grooveConductor,
-    );
-  const repairedGrooveRhythmLock = lockFinalBassToSurvivingKicks(
-    repairedGrooveMemoryTracks,
-    config.genre,
-    config.bars * beatsPerBar(config),
-  );
-  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
-    repairedGrooveRhythmLock.tracks,
-    song.structure,
-    song.songBlueprint?.producerIntent,
-  );
   const repairedFinalGrooveAssembly = runFinalAssemblyPass(
-    repairedPostGrooveIntentAudit.tracks,
     finalProducerIntentAudit.tracks,
+    postIntentAssembly.tracks,
     song.structure,
     song.songBlueprint,
   );
+  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
+    repairedFinalGrooveAssembly.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  const repairedGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
   const repairedTonalIntegrity = refineTonalIntegrity(
     repairedFinalGrooveAssembly.tracks,
     song.harmony,
