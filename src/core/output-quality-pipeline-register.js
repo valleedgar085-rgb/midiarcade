@@ -1065,10 +1065,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     evaluateCandidate: evaluators.evaluateCandidate ?? evaluateSongCandidate,
     evaluateReleaseGate: evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate,
   });
-  if (processed.song === result.song) return result;
-
-  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
-  const acceptedStages = [
+  const stageEntries = [
     ["arrangement", processed.diagnostics],
     ["returnDevelopment", processed.returnDiagnostics],
     ["groovePocket", processed.grooveDiagnostics],
@@ -1083,13 +1080,20 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
   ];
-  for (const [key, diagnostics] of acceptedStages) {
+  const outputQualityStageDiagnostics = {
+    ...(result.outputQualityStageDiagnostics ?? {}),
+    ...Object.fromEntries(stageEntries.filter(([, diagnostics]) => diagnostics != null)),
+  };
+  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
+  for (const [key, diagnostics] of stageEntries) {
     if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
   }
 
+  if (processed.song === result.song && !Object.keys(outputQualityStageDiagnostics).length) return result;
   return {
     ...result,
     song: processed.song,
     outputQualityDiagnostics,
+    outputQualityStageDiagnostics,
   };
 }
