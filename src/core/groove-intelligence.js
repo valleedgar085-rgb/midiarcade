@@ -559,7 +559,7 @@ export function createGrooveDNA(input = {}, {
     genre,
     grammarId: grammar.id,
     philosophy: grammar.philosophy,
-    bars,
+    barCount: bars,
     beatsPerBar,
     gridSteps,
     beatsPerStep: round(beatsPerStep),
@@ -611,11 +611,11 @@ export function validateGrooveDNA(grooveDNA) {
   const issues = [];
   if (grooveDNA?.id !== "groove-dna-v1") issues.push("groove-dna:invalid-id");
   if (!Array.isArray(grooveDNA?.pipeline) || grooveDNA.pipeline.length !== 6) issues.push("groove-dna:pipeline");
-  if (!Array.isArray(grooveDNA?.bars) || grooveDNA.bars.length !== grooveDNA?.bars) {
-    // kept below as explicit numeric check; this branch intentionally catches malformed objects
-  }
   if (!Array.isArray(grooveDNA?.bars)) issues.push("groove-dna:bars");
   else {
+    if (grooveDNA.bars.length !== Math.max(1, Math.round(finite(grooveDNA?.barCount, 1)))) {
+      issues.push("groove-dna:bar-count");
+    }
     for (const bar of grooveDNA.bars) {
       for (const lane of ["kick", "snare", "hat", "percussion"]) {
         if (!Array.isArray(bar?.[lane]?.steps)) issues.push(`groove-dna:${lane}:steps`);
