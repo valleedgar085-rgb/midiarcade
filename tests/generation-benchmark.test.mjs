@@ -31,7 +31,17 @@ test("phase 50 calibration benchmark measures quality, safety, novelty, and Phas
   assert.ok(report.recommendations.length >= 3);
   assert.deepEqual(report.phase5Floors, PHASE5_DIMENSION_FLOORS);
   assert.ok(Array.isArray(report.failureMap));
+  assert.ok(Array.isArray(report.attentionMap));
+  assert.equal(report.attentionMap.length, genres.length);
+  assert.ok(report.attentionMap.every((entry) => entry.weakestDimension.id !== "unknown"));
+  assert.ok(report.repetitionRefinementAttemptRate >= 0 && report.repetitionRefinementAttemptRate <= 1);
+  assert.ok(report.repetitionRefinementAcceptanceRate >= 0 && report.repetitionRefinementAcceptanceRate <= 1);
   assert.ok(report.perGenre.every((entry) => (
+    entry.repetitionRefinementAttemptRate >= 0
+    && entry.repetitionRefinementAttemptRate <= 1
+    && entry.repetitionRefinementAcceptanceRate >= 0
+    && entry.repetitionRefinementAcceptanceRate <= 1
+    &&
     entry.minimumDimensionScores
     && Array.isArray(entry.floorBreaches)
     && Number.isInteger(entry.floorBreachCount)
