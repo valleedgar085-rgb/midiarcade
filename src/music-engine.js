@@ -4203,7 +4203,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           : "development";
     const local = rng.fork(`groove-family-${sectionFamilyId}-${phrasePosition}`);
     const sectionRotation = hashSeed(`${config.seed}:${config.genre}:${sectionFamilyId}:groove`) % 4;
-    const grooveDNALanes = grooveDNAConductorLanes(grooveDNA, bar);
+    const grooveDNAEnabled = grooveDNA.genre !== "general";
+    const grooveDNALanes = grooveDNAEnabled ? grooveDNAConductorLanes(grooveDNA, bar) : null;
     const grooveDNAAuthoritative = Boolean(grooveDNALanes?.anchors?.length);
     let anchors = grooveDNAAuthoritative
       ? [...grooveDNALanes.anchors]
