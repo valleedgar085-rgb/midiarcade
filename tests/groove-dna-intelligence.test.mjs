@@ -80,9 +80,9 @@ test("genre changes select different structural rhythm grammars", () => {
   const grammars = [hipHop, trap, pop, house, neoSoul, jazz, rock].map((dna) => dna.grammarId);
   assert.equal(new Set(grammars).size, 7);
 
-  assert.deepEqual(house.grammar.kick.locked, [0, 4, 8, 12]);
-  assert.deepEqual(trap.grammar.snare.locked, [8]);
-  assert.deepEqual(hipHop.grammar.snare.locked, [4, 12]);
+  assert.deepEqual(house.grammar.kick.required, [0, 4, 8, 12]);
+  assert.deepEqual(trap.grammar.snare.required, [8]);
+  assert.deepEqual(hipHop.grammar.snare.required, [4, 12]);
   assert.ok(neoSoul.humanization.laidBackBeats > 0);
   assert.ok(jazz.humanization.swing > rock.humanization.swing);
   assert.notDeepEqual(
