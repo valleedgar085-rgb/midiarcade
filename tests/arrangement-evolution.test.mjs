@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createArrangementEvolution,
+  evolveArrangementLayout,
   evolveSongArrangement,
 } from "../src/core/arrangement-evolution.js";
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
@@ -121,6 +122,58 @@ test("Phase 6B arrangement families are deterministic and respect explicit enabl
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "similar-manual", bars: 16, arrangementEvolution: true }, { kind: "similar" }).arrangementEvolution, true);
   assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-default-on", bars: 16 }, { kind: "new" }).transitionFxRefinement, true);
   assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-similar-off", bars: 16 }, { kind: "similar" }).transitionFxRefinement, false);
+});
+
+test("genre storytelling layouts give Pop, Rock, and Techno distinct long-form arcs", () => {
+  const base = [
+    { name: "intro", weight: 1 },
+    { name: "verse", weight: 1 },
+    { name: "chorus", weight: 1 },
+    { name: "bridge", weight: 1 },
+    { name: "chorus", weight: 1 },
+    { name: "outro", weight: 1 },
+  ];
+
+  const pop = evolveArrangementLayout(base, {
+    genre: "pop",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+  const rock = evolveArrangementLayout(base, {
+    genre: "rock",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+  const techno = evolveArrangementLayout(base, {
+    genre: "techno",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+
+  assert.notDeepEqual(pop, rock, "Pop and Rock must not share the same generic song form");
+  assert.notDeepEqual(pop, techno, "Pop and Techno must not share the same generic song form");
+  assert.notDeepEqual(rock, techno, "Rock and Techno must not share the same generic song form");
+
+  const finalPopChorus = pop.lastIndexOf("chorus");
+  assert.ok(finalPopChorus > 0);
+  assert.ok(
+    pop[finalPopChorus - 1] === "prechorus" || pop.includes("bridge"),
+    "Pop must earn the final chorus with a prechorus or bridge setup",
+  );
+
+  assert.ok(rock.includes("solo") || rock.includes("bridge"), "Rock must reserve a live-band contrast section");
+  assert.equal(rock.includes("drop"), false, "Rock should not inherit EDM drop grammar");
+
+  const finalDrop = techno.lastIndexOf("drop");
+  assert.ok(finalDrop > 1);
+  assert.equal(techno[finalDrop - 1], "build", "Techno must rebuild immediately into its final drop");
+  assert.ok(
+    techno.slice(0, finalDrop - 1).includes("breakdown"),
+    "Techno must create a reset/breath before the final rebuild",
+  );
 });
 
 test("arrangement evolution moves complete sections atomically without changing song duration or section identity", () => {
