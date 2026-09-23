@@ -267,6 +267,7 @@ export function createSpecialistDirectorPlan(song) {
 
 function stageDirective(plan, specialist, song, index) {
   const directorDirective = createDirectorDirective(song, { target: "track", trackId: specialist.trackId });
+  const currentGauntletSong = createProfessionalGenerationGauntletSong(song);
   return Object.freeze({
     version: 1,
     specialistId: specialist.id,
@@ -277,7 +278,7 @@ function stageDirective(plan, specialist, song, index) {
     reads: specialist.reads,
     trackId: specialist.trackId,
     route: specialist.compositionRoute,
-    context: specialist.context,
+    context: contextForSpecialist(currentGauntletSong, specialist.id),
     directorDirective,
   });
 }
@@ -296,6 +297,10 @@ export function runSpecialistMusicianGeneration(
     const specialist = plan.specialists[index];
 
     if (specialist.kind === "authority") {
+      const authorityContext = contextForSpecialist(
+        createProfessionalGenerationGauntletSong(current),
+        specialist.id,
+      );
       stages.push(Object.freeze({
         specialistId: specialist.id,
         label: specialist.label,
@@ -303,7 +308,7 @@ export function runSpecialistMusicianGeneration(
         status: "published",
         trackId: null,
         seed: null,
-        result: authorityResult(specialist, specialist.context),
+        result: authorityResult(specialist, authorityContext),
       }));
       continue;
     }
