@@ -211,3 +211,28 @@ test("every selectable song length keeps the full six-track arrangement valid en
     }
   }
 });
+
+test("bass continuity prefers authored bassPulses over surviving kick positions", () => {
+  const source = bassDropoutSong();
+  source.grooveConductor = {
+    bars: Array.from({ length: 12 }, (_, bar) => ({
+      bar,
+      sectionId: bar < 2 ? "intro-1" : bar < 6 ? "verse-1" : bar < 10 ? "chorus-1" : "outro-1",
+      anchors: [0],
+      bassPulses: [0.5],
+    })),
+  };
+  const candidates = createBassContinuityCandidates(source);
+  assert.ok(candidates.length > 0);
+  const additions = candidates[0].song.tracks
+    .find((track) => track.id === "bass").notes
+    .filter((note) => note.continuityRole === "bass-foundation-link");
+  assert.ok(additions.length > 0);
+  for (const note of additions) {
+    const offset = ((note.start % 4) + 4) % 4;
+    assert.ok(Math.abs(offset - 0.5) < 1e-6, `expected bass Groove DNA pulse, got ${note.start}`);
+    assert.equal(source.tracks.find((track) => track.id === "drums").notes.some(
+      (kick) => Math.abs(kick.start - note.start) < 1e-6,
+    ), false);
+  }
+});
