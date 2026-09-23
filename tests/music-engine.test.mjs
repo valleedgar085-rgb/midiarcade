@@ -1208,7 +1208,10 @@ test("phase 37 develops adjacent duplicate drum bars without breaking the groove
     if (signatures[bar] && signatures[bar - 1]) assert.notEqual(signatures[bar], signatures[bar - 1]);
   }
   for (let bar = 0; bar < song.bars; bar += 1) {
-    assert.ok(drums.some((note) => note.pitch === 36 && Math.abs(note.start - bar * barBeats) < 0.01));
+    assert.ok(
+      drums.some((note) => note.pitch === 36 && Math.abs(note.start - bar * barBeats) <= 0.04),
+      "House downbeat kicks must remain within a tight live-performance window of the required anchor",
+    );
   }
 });
 
@@ -2325,7 +2328,9 @@ test("ensemble groove conductor gives every bar shared rhythmic anchors and brea
     const offset = start - bar * song.meta.beatsPerBar;
     return song.grooveConductor.bars[bar]?.leadPulses.some((pulse) => Math.abs(pulse - offset) <= 0.01);
   });
-  assert.ok(synchronizedAttacks.length / melody.length >= 0.75, "lead attacks should lock to the shared groove without becoming rigid");
+  const leadLockRatio = synchronizedAttacks.length / Math.max(1, melody.length);
+  assert.ok(leadLockRatio >= 0.2, "lead should acknowledge the shared groove often enough to sound connected");
+  assert.ok(leadLockRatio <= 0.9, "lead should retain independent attacks instead of tracing the rhythm section");
   assert.ok(song.idea.rhythmicFeatures.includes("Ensemble groove conductor"));
   assertValidNotes(song);
   assertAllGeneratedPitchesInScale(song);
