@@ -7,7 +7,7 @@ import {
   MAX_ARRANGEMENT_CANDIDATES,
 } from "../src/core/arrangement-candidates.js";
 import { applySongOutputQualityPostprocess } from "../src/core/output-quality-postprocess.js";
-import { generateNew } from "../src/music-engine.js";
+import { evaluateSongSequenceAuthority, generateNew } from "../src/music-engine.js";
 
 function orderKey(song) {
   return (song?.structure ?? song?.sections ?? [])
@@ -119,6 +119,7 @@ test("Phase 6B arrangement audition is deterministic, unique, immutable, and har
       assert.ok(section);
       assert.ok(bar.bar >= section.startBar && bar.bar < section.startBar + section.bars);
     }
+    assert.equal(evaluateSongSequenceAuthority(song).passed, true);
   }
 });
 
