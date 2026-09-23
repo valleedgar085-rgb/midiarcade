@@ -326,6 +326,121 @@ function reorderSectionAddressedArray(entries, orderedIds) {
   return [...ordered, ...entries.filter((entry) => !addressed.has(String(entry?.sectionId ?? "")))];
 }
 
+function sectionStartBar(section) {
+  return finite(section?.startBar, finite(section?.start, 0));
+}
+
+function reorderBlueprintAuthorities(blueprint, orderedIds) {
+  if (!blueprint || typeof blueprint !== "object") return blueprint;
+  const next = { ...blueprint };
+  for (const key of ["sectionPlans", "tensionCurve", "orchestrationMatrix", "memoryMap"]) {
+    if (Array.isArray(next[key])) next[key] = reorderSectionAddressedArray(next[key], orderedIds);
+  }
+  if (next.phraseMemory?.sections) {
+    next.phraseMemory = {
+      ...next.phraseMemory,
+      sections: reorderSectionAddressedArray(next.phraseMemory.sections, orderedIds),
+    };
+  }
+  if (next.songDNA?.sections) {
+    next.songDNA = {
+      ...next.songDNA,
+      sections: reorderSectionAddressedArray(next.songDNA.sections, orderedIds),
+    };
+  }
+  if (next.producerIntent?.scenes) {
+    const scenes = reorderSectionAddressedArray(next.producerIntent.scenes, orderedIds);
+    next.producerIntent = {
+      ...next.producerIntent,
+      identity: {
+        ...(next.producerIntent.identity ?? {}),
+        structuralArc: scenes.map((scene) => `${scene?.purpose ?? "develop"}:${scene?.developmentAxis ?? "statement"}`),
+      },
+      scenes,
+    };
+  }
+  return next;
+}
+
+function relocateSectionBars(entries, sourceById, destinationById) {
+  if (!Array.isArray(entries)) return entries;
+  return entries
+    .map((entry) => {
+      const next = cloneValue(entry);
+      const sectionId = String(next?.sectionId ?? "");
+      const source = sourceById.get(sectionId);
+      const destination = destinationById.get(sectionId);
+      const bar = Number(next?.bar);
+      if (!source || !destination || !Number.isFinite(bar)) return next;
+      next.bar = Math.round(destination.startBar + (bar - sectionStartBar(source)));
+      return next;
+    })
+    .sort((left, right) => finite(left?.bar, 0) - finite(right?.bar, 0));
+}
+
+function realignSequenceAuthorities(song, originalSections, reordered, orderedIds) {
+  const sourceById = new Map(originalSections.map((section) => [String(section?.id ?? ""), section]));
+  const destinationById = new Map(reordered.map((section) => [String(section?.id ?? ""), section]));
+  let relocatedBarEntries = 0;
+
+  if (song.songBlueprint) song.songBlueprint = reorderBlueprintAuthorities(song.songBlueprint, orderedIds);
+  if (song.songPlan) song.songPlan = reorderBlueprintAuthorities(song.songPlan, orderedIds);
+
+  if (song.phraseMemory?.sections) {
+    song.phraseMemory = {
+      ...song.phraseMemory,
+      sections: reorderSectionAddressedArray(song.phraseMemory.sections, orderedIds),
+    };
+  }
+  if (song.songDNA?.sections) {
+    song.songDNA = {
+      ...song.songDNA,
+      sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
+    };
+  }
+  if (song.motifs?.sectionAssignments) {
+    song.motifs = {
+      ...song.motifs,
+      sectionAssignments: reorderSectionAddressedArray(song.motifs.sectionAssignments, orderedIds),
+    };
+  }
+
+  if (song.grooveConductor?.bars) {
+    const before = song.grooveConductor.bars;
+    const bars = relocateSectionBars(before, sourceById, destinationById);
+    relocatedBarEntries += bars.filter((bar, index) => Number(bar?.bar) !== Number(before[index]?.bar)).length;
+    song.grooveConductor = { ...song.grooveConductor, bars };
+  }
+
+  if (song.generationInterlock?.sectionContracts) {
+    const contracts = reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds)
+      .map((contract) => {
+        const barsBefore = contract?.bars ?? [];
+        const bars = relocateSectionBars(barsBefore, sourceById, destinationById);
+        relocatedBarEntries += bars.filter((bar, index) => Number(bar?.bar) !== Number(barsBefore[index]?.bar)).length;
+        return { ...contract, bars };
+      });
+    song.generationInterlock = {
+      ...song.generationInterlock,
+      sectionContracts: contracts,
+    };
+  }
+
+  return { relocatedBarEntries };
+}
+
+function syncInterlockTransitions(song, transitions) {
+  if (!song.generationInterlock?.sectionContracts) return;
+  const outgoing = new Map(transitions.map((transition) => [String(transition.fromSectionId), transition]));
+  song.generationInterlock = {
+    ...song.generationInterlock,
+    sectionContracts: song.generationInterlock.sectionContracts.map((contract) => ({
+      ...contract,
+      transitionOut: outgoing.get(String(contract.sectionId))?.type ?? null,
+    })),
+  };
+}
+
 function clampRange(value, min, max) {
   return Math.min(max, Math.max(min, finite(value, min)));
 }
@@ -473,32 +588,9 @@ export function evolveSongArrangement(sourceSong, config = {}) {
     bars: cursorBars,
     totalBeats: cursorBars * beatsPerBar,
   };
-  if (song.songBlueprint?.sectionPlans) {
-    song.songBlueprint = {
-      ...song.songBlueprint,
-      sectionPlans: reorderSectionAddressedArray(song.songBlueprint.sectionPlans, orderedIds),
-    };
-  }
-  if (song.phraseMemory?.sections) {
-    song.phraseMemory = {
-      ...song.phraseMemory,
-      sections: reorderSectionAddressedArray(song.phraseMemory.sections, orderedIds),
-    };
-  }
-  if (song.songDNA?.sections) {
-    song.songDNA = {
-      ...song.songDNA,
-      sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
-    };
-  }
-  if (song.generationInterlock?.sectionContracts) {
-    song.generationInterlock = {
-      ...song.generationInterlock,
-      sectionContracts: reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds),
-    };
-  }
-
+  const sequenceAlignment = realignSequenceAuthorities(song, original, reordered, orderedIds);
   const transitionContext = recontextualizeTransitions(song);
+  syncInterlockTransitions(song, transitionContext.transitions);
   song.outputQualityEvolution = {
     ...(song.outputQualityEvolution ?? {}),
     arrangement: {
@@ -509,6 +601,8 @@ export function evolveSongArrangement(sourceSong, config = {}) {
       sectionOrder: orderedIds,
       transitionsRebuilt: transitionContext.transitions.length,
       transitionNotesShaped: transitionContext.shapedNotes,
+      sequenceAuthoritiesRealigned: true,
+      relocatedBarEntries: sequenceAlignment.relocatedBarEntries,
     },
   };
   return { changed: true, song, evolution };
