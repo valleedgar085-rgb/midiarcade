@@ -64,12 +64,20 @@ function findDrumTrack(song) {
   return tracks.find((track) => track?.id === "drums" || track?.type === "drums") ?? null;
 }
 
+function protectedGrooveSpace(song, start) {
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const bar = Math.max(0, Math.floor(finite(start) / beatsPerBar));
+  const local = ((finite(start) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+  const plan = song?.grooveConductor?.bars?.[bar];
+  return (plan?.spaces ?? []).some((space) => Math.abs(finite(space) - local) < 0.01);
+}
+
 function noteAt(notes, pitch, start, tolerance = 1e-5) {
   return notes.some((note) => Number(note?.pitch) === pitch && Math.abs(finite(note?.start) - start) <= tolerance);
 }
 
-function addHit(notes, pitch, start, velocity, duration, metadata) {
-  if (!(start >= 0) || noteAt(notes, pitch, start)) return false;
+function addHit(notes, pitch, start, velocity, duration, metadata, song = null) {
+  if (!(start >= 0) || noteAt(notes, pitch, start) || protectedGrooveSpace(song, start)) return false;
   notes.push({
     pitch,
     start: round(start),
@@ -149,7 +157,7 @@ function buildCandidate(song, config, genre) {
         rhythmicFeature: "bounce-snare",
         snareVoice: "lower",
         phraseRole: "pickup",
-      })) {
+      }, candidate)) {
         figureNotes += 1;
         lowerVoiceHits += 1;
       }
@@ -163,7 +171,7 @@ function buildCandidate(song, config, genre) {
           rhythmicFeature: placement.feature,
           snareVoice: placement.pitch === 40 ? "lower" : "main",
           phraseRole: "pickup",
-        })) {
+        }, candidate)) {
           figureNotes += 1;
           if (placement.pitch === 40) lowerVoiceHits += 1;
           else rollHits += 1;
@@ -181,7 +189,8 @@ function buildCandidate(song, config, genre) {
           snareVoice: pitch === 40 ? "lower" : "main",
           phraseRole: "pickup",
           subdivision: round(step),
-        })) {
+          preserveSubdivision: true,
+        }, candidate)) {
           figureNotes += 1;
           if (pitch === 40) lowerVoiceHits += 1;
           else rollHits += 1;
