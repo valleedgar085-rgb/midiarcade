@@ -4263,14 +4263,23 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           ],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
+    const rockDrivePulses = role === "statement"
+      ? [0, 1, 2, 3]
+      : role === "answer"
+        ? [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
+        : role === "development"
+          ? [0, 0.5, 1.5, 2, 2.5, 3.5]
+          : [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5];
     const chordPulses = uniqueGrooveOffsets(
-      route?.id === "harmony-first"
-        ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
-        : style.chordMotion === "offbeat"
-        ? answers
-        : style.chordMotion === "sustained"
-          ? [0]
-          : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
+      config.genre === "rock"
+        ? rockDrivePulses
+        : route?.id === "harmony-first"
+          ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
+          : style.chordMotion === "offbeat"
+          ? answers
+          : style.chordMotion === "sustained"
+            ? [0]
+            : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
       barBeats,
     ).filter((offset) => !spaces.includes(offset));
     const leadPulses = uniqueGrooveOffsets(
@@ -5903,7 +5912,38 @@ function applySpectrumPlan(sourceTracks, structure, spectrumPlan, config) {
   };
 }
 
+function rockPowerChordVoicing(chord, octave, previous = null) {
+  const root = rootMidi(chord, octave);
+  const rootPc = mod(chord.rootPc, 12);
+  const intervals = [...new Set((chord.tones ?? []).map((tone) => mod(tone - rootPc, 12)))];
+  const fifthInterval = intervals
+    .filter((interval) => interval !== 0)
+    .sort((left, right) => Math.abs(left - 7) - Math.abs(right - 7) || left - right)[0] ?? 7;
+  const previousCenter = previous?.length
+    ? previous.reduce((sum, pitch) => sum + pitch, 0) / previous.length
+    : clamp(root - 2, 48, 64);
+  const previousTop = previous?.at(-1);
+  const candidates = [-12, 0, 12]
+    .map((shift) => {
+      const base = root + shift;
+      const pitches = [base, base + fifthInterval, base + 12];
+      return pitches.every((pitch) => pitch >= 45 && pitch <= 88) ? pitches : null;
+    })
+    .filter(Boolean);
+  candidates.sort((left, right) => {
+    const leftCenter = left.reduce((sum, pitch) => sum + pitch, 0) / left.length;
+    const rightCenter = right.reduce((sum, pitch) => sum + pitch, 0) / right.length;
+    const leftScore = Math.abs(leftCenter - previousCenter)
+      + (Number.isFinite(previousTop) ? Math.abs(left.at(-1) - previousTop) * 0.45 : 0);
+    const rightScore = Math.abs(rightCenter - previousCenter)
+      + (Number.isFinite(previousTop) ? Math.abs(right.at(-1) - previousTop) * 0.45 : 0);
+    return leftScore - rightScore || left[0] - right[0];
+  });
+  return candidates[0] ?? [root, root + fifthInterval, root + 12];
+}
+
 function chordVoicing(chord, octave, previous, spread, rng, config = null) {
+  if (config?.genre === "rock") return rockPowerChordVoicing(chord, octave, previous);
   const root = rootMidi(chord, octave);
   const intervals = chord.tones.map((tone) => mod(tone - chord.rootPc, 12));
   const candidates = [];
@@ -5996,8 +6036,23 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
       if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
-      for (const pitch of voicing) {
-        addNote(notes, pitch, chord.start + offsets[index], duration, eventVelocity(config, settings, intensity, rng, 0.74), totalBeats);
+      for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
+        const pitch = voicing[voiceIndex];
+        const rockMetadata = config.genre === "rock"
+          ? {
+            genrePhrase: "power-chord-drive",
+            rockChordRole: ["root", "fifth", "octave"][voiceIndex] ?? "support",
+          }
+          : undefined;
+        addNote(
+          notes,
+          pitch,
+          chord.start + offsets[index],
+          duration,
+          eventVelocity(config, settings, intensity, rng, 0.74),
+          totalBeats,
+          rockMetadata,
+        );
       }
     }
   }
@@ -6656,6 +6711,13 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
             ? 0.68
             : 1;
+      const rockPowerChordStarts = config.genre === "rock" && id === "chords"
+        ? [...new Set(notes
+          .filter((note) => note.genrePhrase === "power-chord-drive")
+          .map((note) => round(note.start, 4)))]
+          .sort((left, right) => left - right)
+        : [];
+      const rockPowerChordDecisions = new Map();
       const roleVelocity = {
         foreground: 1.05,
         foundation: 0.98,
@@ -6699,6 +6761,58 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
           Math.abs(foreground.start - note.start) < 0.105
         ));
+        const rockPowerChordAttack = rockPowerChordStarts.length > 0
+          && note.genrePhrase === "power-chord-drive";
+        if (rockPowerChordAttack) {
+          const attackKey = round(note.start, 4);
+          let keepAttack = rockPowerChordDecisions.get(attackKey);
+          if (keepAttack == null) {
+            const attackNotes = notes.filter((candidate) => (
+              candidate.genrePhrase === "power-chord-drive"
+              && Math.abs(candidate.start - note.start) < 0.01
+            ));
+            const attackProtected = attackNotes.some((candidate) => (
+              candidate.phraseAnchor
+              || candidate.resolutionRole
+              || candidate.transitionRole
+              || candidate.transitionFeature
+              || candidate.transitionHandoffRole
+              || candidate.memoryRole
+              || candidate.motifHandoffRole
+              || candidate.ensembleAccent
+              || candidate.finalAssemblyRole
+            ));
+            const outsideAttackGate = !attackProtected && Boolean(
+              (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
+              || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
+            );
+            const attackStructural = attackProtected
+              || (producerRole !== "rest" && attackKey === rockPowerChordStarts[0])
+              || note.start <= section.startBeat + 0.04;
+            const attackCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
+              Math.abs(foreground.start - note.start) < 0.105
+            ));
+            const attackRng = rng.fork(`phase7-${section.id}-${id}-${attackKey}-power-chord`);
+            keepAttack = !outsideAttackGate
+              && (producerRole !== "rest" || attackProtected)
+              && (attackProtected || !attackCollision)
+              && (attackStructural || attackRng.bool(clamp(
+                lane.presence * rolePresence * developmentPresence,
+                0.04,
+                1,
+              )));
+            rockPowerChordDecisions.set(attackKey, keepAttack);
+          }
+          if (!keepAttack) continue;
+          kept.push({
+            ...note,
+            velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+            orchestrationRole: lane.role,
+            producerRole,
+            producerScenePurpose: scene?.purpose ?? "develop",
+          });
+          continue;
+        }
         if (outsideRoleGate) continue;
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
@@ -7220,6 +7334,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.ensembleAccent ? { ensembleAccent: true } : {}),
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
+      ...(note.rockChordRole ? { rockChordRole: note.rockChordRole } : {}),
       ...(note.melodyRole ? { melodyRole: note.melodyRole } : {}),
       ...(note.counterMelodyRole ? { counterMelodyRole: note.counterMelodyRole } : {}),
       ...(note.melodicRelationship ? { melodicRelationship: note.melodicRelationship } : {}),
