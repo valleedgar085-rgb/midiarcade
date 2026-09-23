@@ -389,6 +389,9 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   const historySource = appSource.slice(appSource.indexOf("function createHistorySnapshot"), appSource.indexOf("function pushHistory"));
   const generationSource = appSource.slice(appSource.indexOf("async function runGeneration"), appSource.indexOf("function handleTrackAction"));
   assert.doesNotMatch(generationSource, /nextKey|keyControl"\)\.value/, "New song must honor the staged root key instead of silently replacing it");
+  assert.match(generationSource, /const referenceSong = options\.sourceSong \?\? state\.song;[\s\S]*?const sourceSong = kind === "new" \? null : referenceSong;/, "New song generation must not carry the previous song as a composition source");
+  assert.match(generationSource, /recentSongsForGeneration\(referenceSong\)/, "New song generation must still use prior songs for novelty avoidance");
+
   assert.match(htmlSource, /id="generationIntent"[\s\S]*?id="generationIntentCopy"/, "Create must explain whether settings are current or staged");
   assert.match(htmlSource, /id="tasteRating"[\s\S]*?value="like"[\s\S]*?value="reject"[\s\S]*?value="favorite"/, "the home showcase must expose explicit taste learning");
   assert.match(appSource, /function rateCurrentSong[\s\S]*?Future Auto choices will gently favor this direction/, "song ratings must update the persistent taste profile");
