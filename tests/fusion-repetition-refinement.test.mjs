@@ -95,7 +95,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   }));
 });
 
-test("Pop Rap fusion uses the calibrated signed repetition repair while uncalibrated families stay isolated", () => {
+test("Pop Rap fusion keeps its calibrated repair while unrelated fusions stay isolated and pure Hip-Hop uses Phase 5 repair", () => {
   const config = configFor("pop", "rap", "fusion-quality-03:pop+rap");
   const generated = generateNew(config);
   const before = evaluateSongCandidate(generated);
@@ -136,8 +136,13 @@ test("Pop Rap fusion uses the calibrated signed repetition repair while uncalibr
     candidateCount: 1,
   }, { kind: "new" }));
 
+  // Unsupported fusion families stay isolated, while Phase 5 intentionally
+  // calibrates pure Hip-Hop through the same bounded signed repair.
   assert.equal(repetitionRefinementFamily(popHipHop), null);
-  assert.equal(repetitionRefinementFamily(plainHipHop), null);
+  assert.equal(repetitionRefinementFamily(plainHipHop), "hiphop");
   assert.deepEqual(createRepetitionRefinementCandidates(popHipHop, { target: 0.7 }), []);
-  assert.deepEqual(createRepetitionRefinementCandidates(plainHipHop, { target: 0.7 }), []);
+  const plainCandidates = createRepetitionRefinementCandidates(plainHipHop, { target: 0.7 });
+  assert.ok(plainCandidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
+  assert.ok(plainCandidates.every((candidate) => candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS));
+  assert.ok(plainCandidates.every((candidate) => candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT));
 });

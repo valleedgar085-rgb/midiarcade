@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { QUALITY_DIMENSION_GROUPS, runGenerationBenchmark } from "../src/generation-benchmark.js";
+import { PHASE5_DIMENSION_FLOORS, QUALITY_DIMENSION_GROUPS, runGenerationBenchmark } from "../src/generation-benchmark.js";
 import { GENRE_PROFILES } from "../src/music-engine.js";
 
 test("phase 50 calibration benchmark measures quality, safety, novelty, and Phase 6 postprocess evolution", () => {
@@ -29,6 +29,36 @@ test("phase 50 calibration benchmark measures quality, safety, novelty, and Phas
   assert.ok(Object.hasOwn(QUALITY_DIMENSION_GROUPS, report.weakestGroup.id));
   assert.ok(report.weakestDimension.id !== "unknown");
   assert.ok(report.recommendations.length >= 3);
+  assert.deepEqual(report.phase5Floors, PHASE5_DIMENSION_FLOORS);
+  assert.ok(Array.isArray(report.failureMap));
+  assert.ok(Array.isArray(report.attentionMap));
+  assert.equal(report.attentionMap.length, genres.length);
+  assert.ok(report.attentionMap.every((entry) => entry.weakestDimension.id !== "unknown"));
+  assert.ok(report.repetitionRefinementAttemptRate >= 0 && report.repetitionRefinementAttemptRate <= 1);
+  assert.ok(report.repetitionRefinementAcceptanceRate >= 0 && report.repetitionRefinementAcceptanceRate <= 1);
+  assert.ok(report.perGenre.every((entry) => (
+    entry.repetitionRefinementAttemptRate >= 0
+    && entry.repetitionRefinementAttemptRate <= 1
+    && entry.repetitionRefinementAcceptanceRate >= 0
+    && entry.repetitionRefinementAcceptanceRate <= 1
+    &&
+    entry.minimumDimensionScores
+    && Array.isArray(entry.floorBreaches)
+    && Number.isInteger(entry.floorBreachCount)
+    && entry.variety
+    && typeof entry.variety.weakestAxis === "string"
+    && entry.variety.weakestRatio >= 0
+    && entry.variety.weakestRatio <= 1
+  )));
+  assert.ok(report.results.every(({ varietySignatures }) => (
+    varietySignatures
+    && typeof varietySignatures.arrangement === "string"
+    && typeof varietySignatures.featuredOrder === "string"
+    && typeof varietySignatures.compositionRoute === "string"
+    && typeof varietySignatures.kickRhythm === "string"
+    && typeof varietySignatures.bassRhythm === "string"
+    && typeof varietySignatures.melodyContour === "string"
+  )));
   assert.ok(report.results.every(({
     scaleFit,
     finalChecks,
