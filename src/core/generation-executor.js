@@ -216,6 +216,8 @@ export function createGenerationExecutor({
         focusGroup: diagnosis.focusGroup,
         totalScore: diagnosis.totalScore,
         creativeFloor: diagnosis.creativeFloor,
+        criticalFloor: diagnosis.criticalFloor,
+        lowestCriticalDimension: diagnosis.lowestCriticalDimension,
       });
 
       let selectedResult = originalResult;
