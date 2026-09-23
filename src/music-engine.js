@@ -6447,10 +6447,9 @@ function magnetizeBeatToGroove(conductor, beat, lane, barBeats, maximumDistance)
     barBeats,
     maximumDistance,
   );
-  if (!Number.isFinite(closest)) return { beat, snapped: false };
   return {
-    beat: round(closest),
-    snapped: Math.abs(closest - beat) > 0.001,
+    beat: round(finite(closest?.beat, beat)),
+    snapped: Boolean(closest?.snapped),
   };
 }
 
