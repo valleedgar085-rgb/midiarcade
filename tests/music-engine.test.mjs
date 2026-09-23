@@ -1796,19 +1796,11 @@ test("defaultChordPathForGenre keeps genre-to-path defaults stable", () => {
   assert.equal(engine.defaultChordPathForGenre("country"), "pop");
 });
 
-test("bass phrases respond to the kick notes that actually survived drum generation", () => {
-  const interactionRules = {
-    house: [0.5],
-    techno: [0, 0.5],
-    trap: [0, 0.25],
-    hipHop: [0, 0.25],
-    drumBass: [0, 0.5],
-    neoSoul: [0, 0.25, 0.5, 0.75],
-  };
-  for (const [genre, expectedDeltas] of Object.entries(interactionRules)) {
+test("bass phrases obey Groove DNA relationship lanes without universal kick snapping", () => {
+  for (const genre of ["house", "techno", "trap", "hipHop", "drumBass", "neoSoul"]) {
     const config = {
       genre,
-      seed: `interaction-${genre}`,
+      seed: `groove-dna-bass-${genre}`,
       bars: 16,
       humanize: 0,
       swing: 0,
@@ -1816,76 +1808,49 @@ test("bass phrases respond to the kick notes that actually survived drum generat
       complexity: 0.85,
       tripletAmount: 0,
       rollAmount: 0,
+      candidateCount: 1,
       tracks: { bass: { density: 1, variation: 0.7 }, drums: { density: 1, variation: 0.7 } },
     };
     const first = engine.generateNew(config);
-    const second = engine.generateNew(config);
-    assert.deepEqual(first, second);
-    const kicks = first.tracks.find((track) => track.id === "drums").notes.filter((note) => note.pitch === 36).map((note) => note.start);
-    const bass = first.tracks.find((track) => track.id === "bass").notes;
-    assert.ok(kicks.length > 0 && bass.length > 0);
-    const related = bass.filter((note) => (
-      kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001))
-    ));
-    const minimumRelationshipFit = {
-      house: 0.65,
-      techno: 0.7,
-      trap: 0.62,
-      hipHop: 0.55,
-      drumBass: 0.7,
-      neoSoul: 0.45,
-    }[genre] ?? 0.55;
-    assert.ok(
-      related.length / bass.length >= minimumRelationshipFit,
-      `${genre} bass should keep a genre-appropriate relationship with surviving kicks`,
-    );
-    if (genre === "house") {
-      const exactLocks = bass.filter((note) => kicks.some((kick) => Math.abs(note.start - kick) < 0.00001));
-      assert.ok(exactLocks.length / bass.length <= 0.2, "house bass should mostly leave the kick transient clear");
-    }
-    if (genre === "trap") {
-      const lockOrShortReply = bass.filter((note) => kicks.some((kick) => [0, 0.25].some((delay) => Math.abs(note.start - kick - delay) < 0.00001)));
-      assert.ok(lockOrShortReply.length / bass.length >= 0.6, "trap 808s should strongly converse with kicks without cloning every onset");
-    }
-    if (genre === "neoSoul") assert.ok(bass.some((note) => kicks.some((kick) => [0.25, 0.5, 0.75].some((delay) => Math.abs(note.start - kick - delay) < 0.00001))), "neo soul should answer the kick more loosely");
-    assertValidNotes(first);
-  }
+    assert.deepEqual(first, engine.generateNew(config));
 
-  for (const [genre, expectedDeltas] of Object.entries(interactionRules)) {
-    const sparse = engine.generateNew({
-      genre,
-      seed: `sparse-interaction-${genre}`,
-      bars: 12,
-      energy: 0.78,
-      complexity: 0.82,
-      harmonicRhythm: 1,
-      humanize: 0,
-      swing: 0,
-      tripletAmount: 0,
-      rollAmount: 0,
-      tracks: { bass: { density: 1, variation: 0.5 }, drums: { density: 0.08, variation: 0.15 } },
+    const bass = first.tracks.find((track) => track.id === "bass").notes;
+    assert.ok(bass.length > 0, `${genre} should retain bass activity`);
+    const barBeats = first.meta.beatsPerBar;
+    const aligned = bass.filter((note) => {
+      const bar = Math.floor(note.start / barBeats);
+      const offset = note.start - bar * barBeats;
+      return first.grooveConductor.bars[bar]?.bassPulses.some((pulse) => Math.abs(pulse - offset) < 0.00001);
     });
-    const kicks = sparse.tracks.find((track) => track.id === "drums").notes.filter((note) => note.pitch === 36).map((note) => note.start);
-    const bass = sparse.tracks.find((track) => track.id === "bass").notes;
-    assert.ok(kicks.length > 0 && bass.length > 0, `${genre} should retain a sparse kick/bass conversation`);
-    const related = bass.filter((note) => (
-      kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001))
-    ));
     assert.ok(
-      related.length / bass.length >= 0.45,
-      `${genre} sparse bass should still respond to surviving kicks without universal snapping`,
+      aligned.length / bass.length >= 0.6,
+      `${genre} bass should obey the authored Groove DNA bass lane`,
     );
-    assertValidNotes(sparse);
+    assert.ok(bass.every((note) => {
+      const bar = Math.floor(note.start / barBeats);
+      const offset = note.start - bar * barBeats;
+      return !(first.grooveConductor.bars[bar]?.spaces ?? []).some((space) => Math.abs(space - offset) < 0.00001);
+    }), `${genre} bass must not fill protected Groove DNA rests`);
+
+    if (genre === "house") {
+      const kicks = first.tracks.find((track) => track.id === "drums").notes
+        .filter((note) => note.pitch === 36)
+        .map((note) => note.start);
+      const exactLocks = bass.filter((note) => kicks.some((kick) => Math.abs(note.start - kick) < 0.00001));
+      assert.ok(exactLocks.length / bass.length <= 0.2, "House bass should preserve offbeat kick clearance");
+    }
+    assertValidNotes(first);
   }
 
   const drumless = engine.generateNew({
     genre: "neoSoul",
     seed: "independent-bass-without-drums",
     bars: 8,
+    candidateCount: 1,
     tracks: { drums: { density: 0 }, bass: { density: 1 } },
   });
   assert.equal(drumless.tracks.find((track) => track.id === "drums").notes.length, 0);
-  assert.ok(drumless.tracks.find((track) => track.id === "bass").notes.length > 0, "a deliberately drumless song should still have an independent bass line");
+  assert.ok(drumless.tracks.find((track) => track.id === "bass").notes.length > 0);
   assertValidNotes(drumless);
 });
 
@@ -3044,11 +3009,11 @@ test("phase 51 reserves deterministic verse space for vocals without weakening i
   assertAllGeneratedPitchesInScale(rap);
 });
 
-test("four-floor grooves preserve the pulse while developing quieter kick pickups", () => {
+test("four-floor Groove DNA preserves the core pulse without legacy ghost-kick mutation", () => {
   for (const genre of ["house", "techno"]) {
     const song = engine.generateNew({
       genre,
-      seed: "four-floor-development-0",
+      seed: `four-floor-groove-dna-${genre}`,
       bars: 16,
       complexity: 0.9,
       variation: 0.9,
@@ -3059,21 +3024,16 @@ test("four-floor grooves preserve the pulse while developing quieter kick pickup
       candidateCount: 1,
     });
     const kicks = song.tracks.find((track) => track.id === "drums").notes.filter((note) => note.pitch === 36);
-    const pickups = kicks.filter((note) => note.rhythmicFeature === "ghost-kick");
-    const core = kicks.filter((note) => note.rhythmicFeature !== "ghost-kick");
-    const averageVelocity = (notes) => notes.reduce((sum, note) => sum + note.velocity, 0) / notes.length;
-
-    if (genre === "techno") {
-      assert.ok(pickups.length > 0, "techno should retain its legacy syncopated kick development");
-      assert.ok(averageVelocity(pickups) < averageVelocity(core), "techno pickups should support, not overpower, the four-floor pulse");
-    } else {
-      assert.equal(pickups.length, 0, "House Groove DNA should keep kick pickups out of protected structural cells");
-      for (const plan of song.grooveConductor.bars) {
-        assert.deepEqual(plan.hatPulses, [0.5, 1.5, 2.5, 3.5], "House should retain structural offbeat hats");
-      }
-    }
+    assert.equal(
+      kicks.filter((note) => note.rhythmicFeature === "ghost-kick").length,
+      0,
+      `${genre} should not receive legacy post-DNA kick pickups`,
+    );
     for (const plan of song.grooveConductor.bars) {
-      for (const beat of [0, 1, 2, 3]) assert.ok(plan.anchors.includes(beat), `${genre} must retain kick beat ${beat + 1}`);
+      for (const beat of [0, 1, 2, 3]) {
+        assert.ok(plan.anchors.includes(beat), `${genre} must retain kick beat ${beat + 1}`);
+      }
+      assert.deepEqual(plan.hatPulses, [0.5, 1.5, 2.5, 3.5], `${genre} should retain structural offbeat hats`);
     }
     assertValidNotes(song);
   }
