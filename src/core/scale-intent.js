@@ -66,19 +66,39 @@ export function resolveAutoScale({
     1,
   );
   const targetColor = genreColor(genre, chordPath);
-  const seedBias = hashSeed(`${seed}::auto-scale`);
+  const scored = choices.map((scale) => {
+    const character = SCALE_CHARACTER[scale];
+    const distance = Math.abs(character.brightness - targetBrightness) * 0.38
+      + Math.abs(character.tension - targetTension) * 0.38
+      + Math.abs(character.color - targetColor) * 0.24;
+    return { scale, distance };
+  });
 
-  return choices
-    .map((scale, index) => {
-      const character = SCALE_CHARACTER[scale];
-      const distance = Math.abs(character.brightness - targetBrightness) * 0.38
-        + Math.abs(character.tension - targetTension) * 0.38
-        + Math.abs(character.color - targetColor) * 0.24;
-      const genrePriority = (choices.length - index) / choices.length;
-      const tieBreak = ((seedBias + hashSeed(scale)) % 997) / 997 * 0.012;
-      return { scale, score: 1 - distance + genrePriority * 0.08 + tieBreak };
-    })
-    .sort((left, right) => right.score - left.score || left.scale.localeCompare(right.scale))[0].scale;
+  const ranked = [...scored].sort((left, right) => (
+    left.distance - right.distance || left.scale.localeCompare(right.scale)
+  ));
+  if (ranked.length === 1) return ranked[0].scale;
+
+  // When musical intent clearly favors one scale, keep it authoritative.
+  // Otherwise rotate deterministically across the genre-approved pool so
+  // one flexible mode (especially Mixolydian) cannot dominate every seed.
+  if (ranked[1].distance - ranked[0].distance >= 0.22) return ranked[0].scale;
+
+  const weighted = scored.map(({ scale, distance }) => {
+    const fit = clamp(1 - distance, 0, 1);
+    return {
+      scale,
+      weight: 0.35 + fit * fit * 0.65,
+    };
+  });
+  const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
+  const roll = (hashSeed(`${seed}::auto-scale-rotation`) / 4294967296) * totalWeight;
+  let cursor = 0;
+  for (const entry of weighted) {
+    cursor += entry.weight;
+    if (roll < cursor) return entry.scale;
+  }
+  return weighted.at(-1).scale;
 }
 
-export const SCALE_INTENT_VERSION = "1.0";
+export const SCALE_INTENT_VERSION = "1.1";
