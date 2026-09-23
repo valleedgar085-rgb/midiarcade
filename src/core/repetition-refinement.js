@@ -23,6 +23,10 @@ function melody(song) {
 export function repetitionRefinementFamily(song) {
   const primary = normalizeGenreId(song?.genre ?? song?.meta?.genre);
   if (primary === "rnbSoul") return "rnb";
+  if (primary === "hipHop") return "hiphop";
+  if (primary === "trap") return "trap";
+  if (primary === "pop") return "pop";
+  if (primary === "neoSoul") return "neo-soul";
   const secondary = normalizeGenreId(song?.meta?.secondaryGenre ?? song?.secondaryGenre);
   if (song?.meta?.isFusion !== true) return null;
   const hipHopRap = (primary === "hipHop" && secondary === "rap")
