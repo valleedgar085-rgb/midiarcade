@@ -386,16 +386,17 @@ function realignSequenceAuthorities(song, originalSections, reordered, orderedId
   if (song.songBlueprint) song.songBlueprint = reorderBlueprintAuthorities(song.songBlueprint, orderedIds);
   if (song.songPlan) song.songPlan = reorderBlueprintAuthorities(song.songPlan, orderedIds);
 
-  if (song.phraseMemory?.sections) {
-    song.phraseMemory = {
-      ...song.phraseMemory,
-      sections: reorderSectionAddressedArray(song.phraseMemory.sections, orderedIds),
-    };
-  }
-  if (song.songDNA?.sections) {
-    song.songDNA = {
-      ...song.songDNA,
-      sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
+  // songBlueprint is the canonical authority. Refresh public aliases from it
+  // instead of independently evolving duplicate copies that can drift.
+  if (song.songBlueprint?.songDNA) song.songDNA = cloneValue(song.songBlueprint.songDNA);
+  if (song.songBlueprint?.producerIntent) song.producerIntent = cloneValue(song.songBlueprint.producerIntent);
+  if (song.songBlueprint?.orchestrationMatrix) song.orchestrationMatrix = cloneValue(song.songBlueprint.orchestrationMatrix);
+  if (song.songBlueprint?.memoryMap) song.memoryMap = cloneValue(song.songBlueprint.memoryMap);
+  if (song.songBlueprint?.phraseMemory) song.phraseMemory = cloneValue(song.songBlueprint.phraseMemory);
+  if (song.spectrumPlan?.sections) {
+    song.spectrumPlan = {
+      ...song.spectrumPlan,
+      sections: reorderSectionAddressedArray(song.spectrumPlan.sections, orderedIds),
     };
   }
   if (song.motifs?.sectionAssignments) {
@@ -507,6 +508,12 @@ function recontextualizeTransitions(song) {
     ...(song.songBlueprint ?? {}),
     transitions: cloneValue(transitions),
   };
+  if (song.songPlan) {
+    song.songPlan = {
+      ...song.songPlan,
+      transitions: cloneValue(transitions),
+    };
+  }
   song.arrangementTransitions = transitions.map((transition) => ({
     ...transition,
     handoffId: `handoff:${transition.fromSectionId}->${transition.toSectionId}`,
