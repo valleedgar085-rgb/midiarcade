@@ -16,7 +16,7 @@ import { generateSimilar } from "../music-engine.js";
 
 export { normalizeCompositionSelection };
 
-function createEnsembleContext(song, selection, sectionPlan, orchestration, interlock) {
+function createEnsembleContext(song, selection, sectionPlan, orchestration, interlock, directorSection = null) {
   const sectionId = selection.sectionId ?? null;
   const conductor = song?.grooveConductor ?? null;
   const section = sectionId == null
@@ -50,7 +50,11 @@ function createEnsembleContext(song, selection, sectionPlan, orchestration, inte
       tension: interlock?.tension ?? sectionPlan?.tension ?? section?.intent?.tension ?? null,
       featuredTrack: interlock?.featuredTrack ?? orchestration?.featuredTrack ?? null,
       motifId: interlock?.motifId ?? null,
-      transitionOut: interlock?.transitionOut ?? null,
+      transitionOut: directorSection?.transitionOut ?? interlock?.transitionOut ?? null,
+      purpose: directorSection?.purpose ?? null,
+      density: cloneValue(directorSection?.density ?? null),
+      harmonicTension: cloneValue(directorSection?.harmonicTension ?? null),
+      instrumentDirectives: cloneValue(directorSection?.instruments ?? null),
     },
     lanes: cloneValue(orchestration?.lanes ?? {}),
     groove: {
@@ -81,6 +85,11 @@ export function createDirectorDirective(song, selection = {}) {
       (entry) => String(entry?.sectionId) === normalized.sectionId,
     ) ?? null;
   const jazzGrammar = createJazzGrammarDirective(song, normalized);
+  const directorSection = normalized.sectionId == null
+    ? null
+    : (songPlan?.director?.sections ?? []).find(
+      (entry) => String(entry?.sectionId) === normalized.sectionId,
+    ) ?? null;
   const interlock = normalized.sectionId == null
     ? null
     : (song?.generationInterlock?.sectionContracts ?? []).find(
@@ -94,9 +103,18 @@ export function createDirectorDirective(song, selection = {}) {
     sectionPlan: cloneValue(sectionPlan),
     orchestration: cloneValue(orchestration),
     interlock: cloneValue(interlock),
+    director: cloneValue(songPlan?.director ?? null),
+    directorSection: cloneValue(directorSection),
     harmony: cloneValue(song?.harmony ?? []),
     jazzGrammar: cloneValue(jazzGrammar),
-    ensembleContext: cloneValue(createEnsembleContext(song, normalized, sectionPlan, orchestration, interlock)),
+    ensembleContext: cloneValue(createEnsembleContext(
+      song,
+      normalized,
+      sectionPlan,
+      orchestration,
+      interlock,
+      directorSection,
+    )),
     sourceSongId: song?.id ?? null,
     sourceSeed: song?.seed ?? null,
   });
@@ -152,6 +170,8 @@ function candidateInput(sourceSong, directive, input) {
     ...jazzDefaults,
     jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
+    songDirector: directive?.director ?? null,
+    directorSection: directive?.directorSection ?? null,
     ensembleContext: directive?.ensembleContext ?? null,
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
