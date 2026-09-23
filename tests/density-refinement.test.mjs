@@ -135,7 +135,7 @@ test("density candidates are deterministic, immutable, support-only, and move to
   const repeated = createDensityRefinementCandidates(source, { densityTarget: 8 });
 
   assert.deepEqual(source, before);
-  assert.equal(candidates.length, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.equal(candidates.length, 3);
   assert.deepEqual(
     repeated.map(({ id, changedNotes, beforeNotesPerBar, afterNotesPerBar }) => [id, changedNotes, beforeNotesPerBar, afterNotesPerBar]),
     candidates.map(({ id, changedNotes, beforeNotesPerBar, afterNotesPerBar }) => [id, changedNotes, beforeNotesPerBar, afterNotesPerBar]),
@@ -185,7 +185,7 @@ test("density pipeline commits the strongest critic-verified support articulatio
   assert.equal(processed.densityDiagnostics.id, "full-support");
   assert.ok(processed.densityDiagnostics.densityDelta >= 0.75);
   assert.ok(processed.densityDiagnostics.densityErrorDelta < 0);
-  assert.equal(processed.densityDiagnostics.candidatesEvaluated, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.equal(processed.densityDiagnostics.candidatesEvaluated, 3);
   assert.equal(processed.song.outputQualityEvolution.densityRefinement.accepted, true);
 });
 
