@@ -4103,6 +4103,17 @@ function applyGradualEvolution(notes, trackId, config, structure, rng) {
   });
 }
 
+function uniqueGrooveOffsets(values, barBeats) {
+  return [...new Set((values ?? [])
+    .map((value) => round(value))
+    .filter((value) => value >= 0 && value < barBeats - 0.01))]
+    .sort((a, b) => a - b);
+}
+
+function grooveBar(conductor, bar) {
+  return grooveBarPlan(conductor, bar);
+}
+
 function createGrooveConductor(config, structure, style, motifs, rng, route = null) {
   const barBeats = beatsPerBar(config);
   const rhythmIdentity = style.rhythmIdentity
