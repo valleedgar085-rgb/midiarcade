@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import { runGenerationBenchmark } from "../src/generation-benchmark.js";
 
 function numericFlag(name, fallback) {
@@ -7,10 +9,23 @@ function numericFlag(name, fallback) {
   return Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
 }
 
+function stringFlag(name, fallback = null) {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return fallback;
+  const value = process.argv[index + 1];
+  return value && !value.startsWith("--") ? value : fallback;
+}
+
 const seedCount = numericFlag("--seeds", 3);
 const bars = numericFlag("--bars", 16);
 const seeds = Array.from({ length: seedCount }, (_, index) => `quality-lab-${String(index + 1).padStart(2, "0")}`);
 const report = runGenerationBenchmark({ seeds, bars });
+const jsonPath = stringFlag("--json");
+if (jsonPath) {
+  const target = path.resolve(jsonPath);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, JSON.stringify(report, null, 2) + "\n", "utf8");
+}
 
 console.log(`\nMIDI Arcade Music Quality Lab v${report.labVersion}`);
 console.log(`${report.generations} generated songs · ${bars} bars · ${seedCount} deterministic seeds per genre\n`);
@@ -36,6 +51,8 @@ console.table(report.perGenre.map((genre) => ({
   pocketDelta: genre.averageGroovePocketDelta,
   weakestSubsystem: `${genre.weakestGroup.id} ${genre.weakestGroup.score}`,
   weakestDimension: `${genre.weakestDimension.id} ${genre.weakestDimension.score}`,
+  floorBreaches: genre.floorBreachCount,
+  weakestVariety: `${genre.variety.weakestAxis} ${Math.round(genre.variety.weakestRatio * 100)}%`,
   band: genre.healthBand,
 })));
 
@@ -83,6 +100,19 @@ console.log(
   + ` · subsystem: ${report.weakestGroup.id} (${report.weakestGroup.score})`
   + ` · dimension: ${report.weakestDimension.id} (${report.weakestDimension.score})`,
 );
+if (report.failureMap.length) {
+  console.log("\nPhase 5 genre failure map:");
+  console.table(report.failureMap.map((entry) => ({
+    genre: entry.genre,
+    release: `${Math.round(entry.releasePassRate * 100)}%`,
+    weakestSubsystem: `${entry.weakestGroup.id} ${entry.weakestGroup.score}`,
+    weakestDimension: `${entry.weakestDimension.id} ${entry.weakestDimension.score}`,
+    floorBreaches: entry.floorBreaches.map((breach) => `${breach.dimension}:${breach.score}<${breach.floor}`).join(", "),
+    weakestVariety: `${entry.weakestVarietyAxis} ${Math.round(entry.weakestVarietyRatio * 100)}%`,
+  })));
+} else {
+  console.log("\nPhase 5 genre failure map: no diagnostic floor breaches.");
+}
 for (const recommendation of report.recommendations) console.log(`→ ${recommendation}`);
 
 if (report.failures.length) {
