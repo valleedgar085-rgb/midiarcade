@@ -36,8 +36,11 @@ function createEnsembleContext(song, selection, sectionPlan, orchestration, inte
       role: bar.role,
       anchors: cloneValue(bar.anchors ?? []),
       answers: cloneValue(bar.answers ?? []),
+      bassPulses: cloneValue(bar.bassPulses ?? []),
       chordPulses: cloneValue(bar.chordPulses ?? []),
+      leadPulses: cloneValue(bar.leadPulses ?? []),
       counterPulses: cloneValue(bar.counterPulses ?? []),
+      spaces: cloneValue(bar.spaces ?? bar.protectedSpaces ?? []),
     }));
   return {
     version: 1,
@@ -95,6 +98,7 @@ export function createDirectorDirective(song, selection = {}) {
     orchestration: cloneValue(orchestration),
     interlock: cloneValue(interlock),
     harmony: cloneValue(song?.harmony ?? []),
+    grooveConductor: cloneValue(song?.grooveConductor ?? null),
     jazzGrammar: cloneValue(jazzGrammar),
     ensembleContext: cloneValue(createEnsembleContext(song, normalized, sectionPlan, orchestration, interlock)),
     sourceSongId: song?.id ?? null,
@@ -153,6 +157,7 @@ function candidateInput(sourceSong, directive, input) {
     jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
     ensembleContext: directive?.ensembleContext ?? null,
+    grooveConductor: directive?.grooveConductor ?? null,
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
       : {}),
