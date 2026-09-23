@@ -4902,6 +4902,7 @@ function runDirectorEnsembleCoordination(
   harmony,
   generationInterlock,
   config,
+  grooveConductor,
   directorContext = null,
 ) {
   const tracks = Object.fromEntries(
@@ -9495,6 +9496,7 @@ function compose(config, options = {}) {
     harmony,
     generationInterlock,
     config,
+    grooveConductor,
     options.ensembleContext,
   );
 
