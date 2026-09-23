@@ -43,6 +43,7 @@ import {
   humanGroovePriorForGenre,
 } from "./core/human-groove-priors.js";
 import { densityActivityForSong } from "./core/density-activity.js";
+import { phraseResolutionArticulationSatisfied } from "./core/phrase-resolution-style.js";
 
 export const PPQ = 480;
 
@@ -10657,8 +10658,13 @@ function phraseResolutionScoreForSong(song, melodyNotes) {
     const pitchClass = mod(finalNote.pitch, 12);
     const chordTone = chord?.tones?.includes(pitchClass);
     const tonicLanding = pitchClass === tonic;
-    const held = finalNote.duration >= finite(song.meta?.beatsPerBar, 4) * 0.35;
-    return clamp(0.38 + Number(chordTone) * 0.32 + Number(tonicLanding) * 0.18 + Number(held) * 0.12, 0, 1);
+    const articulated = phraseResolutionArticulationSatisfied({
+      genre: song.genre ?? song.meta?.genre,
+      note: finalNote,
+      sectionEnd: end,
+      beatsPerBar: finite(song.meta?.beatsPerBar, 4),
+    });
+    return clamp(0.38 + Number(chordTone) * 0.32 + Number(tonicLanding) * 0.18 + Number(articulated) * 0.12, 0, 1);
   });
   return clamp(Math.round(average(endings, 0.68) * 100), 25, 100);
 }
