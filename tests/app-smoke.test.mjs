@@ -217,15 +217,32 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   const ids = [...htmlSource.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "HTML IDs must be unique");
   const referencedIds = [...appSource.matchAll(/\$\("#([A-Za-z][\w-]*)"\)/g)].map((match) => match[1]);
-  const runtimeMountedIds = new Set(["creativeRangeControl"]);
+  const createRuntimeMountedIds = new Set(["creativeRangeControl"]);
+  const appRuntimeMountedIds = new Set([
+    "debuggerButton",
+    "menuItemDebugger",
+    "closeDebugger",
+    "refreshDebugger",
+    "copyDebuggerReport",
+    "clearDebuggerHistory",
+  ]);
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
+    const createMounted = createRuntimeMountedIds.has(id)
+      && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
+    const appMounted = appRuntimeMountedIds.has(id)
+      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource);
     assert.ok(
-      runtimeMountedIds.has(id) && new RegExp(`id=["']${id}["']`).test(createPresentationSource),
-      `#${id} must exist in index.html or an explicitly inventoried pre-wiring Create mount`,
+      createMounted || appMounted,
+      `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
     );
   }
-  assert.deepEqual([...runtimeMountedIds], ["creativeRangeControl"], "runtime selector exceptions must remain narrow and explicit");
+  assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
+  assert.deepEqual(
+    [...appRuntimeMountedIds],
+    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory"],
+    "app runtime selector exceptions must remain narrow and explicit",
+  );
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
   for (const id of [
     "tripletControl", "tripletValue", "rollControl", "rollValue",
