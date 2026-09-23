@@ -8796,6 +8796,73 @@ function runVocalSpacePass(sourceTracks, structure, config) {
   };
 }
 
+function ensureFinalCounterpointCoverage(sourceTracks, structure, harmony, config, grooveConductor) {
+  if (!["hipHop", "rap", "trap", "pop"].includes(config.genre)) {
+    return { tracks: sourceTracks, added: 0 };
+  }
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const counterTrack = tracks.find((track) => track.id === "counterpoint");
+  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
+  if (!counterTrack || finite(counterTrack?.settings?.density, 1) <= 0.001) {
+    return { tracks, added: 0 };
+  }
+  const sourceNotes = [...(counterTrack.notes ?? [])].sort((left, right) => left.start - right.start);
+  const barBeats = beatsPerBar(config);
+  const vocalWindow = (beat) => {
+    const offset = mod(beat, barBeats);
+    return (
+      offset >= barBeats * 0.125 - 1e-6 && offset < barBeats * 0.375 - 1e-6
+      || offset >= barBeats * 0.5625 - 1e-6 && offset < barBeats * 0.8125 - 1e-6
+    );
+  };
+  const melodySoundsAt = (beat) => melody.some((note) => (
+    beat > note.start - 0.04 && beat < note.start + note.duration + 0.08
+  ));
+  let added = 0;
+  for (const section of structure) {
+    if (!["verse", "chorus", "bridge", "drop", "solo"].includes(section.name)) continue;
+    if ((counterTrack.notes ?? []).some((note) => (
+      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+    ))) continue;
+    const pulses = trackGroovePulses(
+      grooveConductor,
+      "counterpoint",
+      section.startBeat + 0.04,
+      section.endBeat - 0.06,
+      barBeats,
+    );
+    const beat = pulses.find((candidate) => (
+      !vocalWindow(candidate)
+      && !melodySoundsAt(candidate)
+    ));
+    if (!Number.isFinite(beat)) continue;
+    const chord = harmonyAt(harmony, beat);
+    const reference = sourceNotes
+      .slice()
+      .sort((left, right) => Math.abs(left.start - beat) - Math.abs(right.start - beat))[0];
+    let pitch = reference?.pitch ?? 67;
+    if (chord) pitch = nearestChordTone(pitch, chord);
+    pitch = nearestScalePitch(pitch, config);
+    counterTrack.notes.push({
+      pitch,
+      start: round(beat),
+      duration: round(Math.min(0.42, Math.max(0.12, section.endBeat - beat - 0.04))),
+      velocity: clamp(Math.round(finite(reference?.velocity, 78) * 0.8), 1, 127),
+      phraseAnchor: true,
+      counterResponseRole: "final-section-coverage-answer",
+      grooveSource: "counterpoint.final-coverage",
+      grammarRole: "answer",
+      preserveTiming: true,
+    });
+    added += 1;
+  }
+  counterTrack.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return { tracks, added };
+}
+
 function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint, config) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
@@ -10410,7 +10477,16 @@ function compose(config, options = {}) {
     config,
     grooveConductor,
   );
-  const melodicFlow = shapeRenderedMelodicFlow(creativePolish.tracks, structure);
+  const counterCoverage = (!targetTrack || targetTrack === "counterpoint")
+    ? ensureFinalCounterpointCoverage(
+      creativePolish.tracks,
+      structure,
+      harmony,
+      config,
+      grooveConductor,
+    )
+    : { tracks: creativePolish.tracks, added: 0 };
+  const melodicFlow = shapeRenderedMelodicFlow(counterCoverage.tracks, structure);
   const finalAssemblyRepair = runFinalAssemblyPass(
     melodicFlow.tracks,
     scaleSafety.tracks,
@@ -10598,6 +10674,7 @@ function compose(config, options = {}) {
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
+    counterpointCoverage: { phase: 51.5, added: counterCoverage.added },
     sectionContrast,
     drumFillVocabulary,
     rhythmTurnaroundConversation,
@@ -13157,9 +13234,19 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.harmony,
     song.songBlueprint,
     config,
+    song.grooveConductor,
   );
+  const repairedCounterCoverage = sourceCandidate.targetTrack && sourceCandidate.targetTrack !== "counterpoint"
+    ? { tracks: creativePolish.tracks, added: 0 }
+    : ensureFinalCounterpointCoverage(
+      creativePolish.tracks,
+      song.structure,
+      song.harmony,
+      config,
+      song.grooveConductor,
+    );
   const finalAssemblyRepair = runFinalAssemblyPass(
-    creativePolish.tracks,
+    repairedCounterCoverage.tracks,
     scaleSafety.tracks,
     song.structure,
     song.songBlueprint,
