@@ -57,9 +57,46 @@ function fixtureSong() {
       duration: 8,
       degree: index % 7,
     })),
-    songBlueprint: { sectionPlans: sections.map((section) => ({ sectionId: section.id, role: "fixture" })) },
+    songBlueprint: {
+      sectionPlans: sections.map((section, index) => ({ sectionId: section.id, role: "fixture", energy: 0.4 + index * 0.05 })),
+      tensionCurve: sections.map((section, index) => ({ sectionId: section.id, tension: 0.3 + index * 0.06 })),
+      orchestrationMatrix: sections.map((section) => ({ sectionId: section.id, featuredTrack: "melody" })),
+      memoryMap: sections.map((section) => ({ sectionId: section.id, originSectionId: section.id, relationship: "statement" })),
+      phraseMemory: { sections: sections.map((section) => ({ sectionId: section.id, sentenceRole: "statement" })) },
+      songDNA: { sections: sections.map((section) => ({ sectionId: section.id, developmentSeed: section.startBeat })) },
+      producerIntent: {
+        identity: { structuralArc: sections.map((section, index) => `${section.name}:axis-${index}`) },
+        scenes: sections.map((section, index) => ({
+          sectionId: section.id,
+          purpose: section.name,
+          developmentAxis: `axis-${index}`,
+          roles: { melody: "foreground" },
+        })),
+      },
+    },
     phraseMemory: { sections: sections.map((section) => ({ sectionId: section.id, relationship: "statement" })) },
     songDNA: { sections: sections.map((section) => ({ sectionId: section.id, phraseSeed: section.startBeat })) },
+    motifs: {
+      sectionAssignments: sections.map((section, index) => ({ sectionId: section.id, motifId: index % 2 ? "B" : "A" })),
+    },
+    grooveConductor: {
+      bars: sections.flatMap((section) => [0, 1].map((localBar) => ({
+        sectionId: section.id,
+        bar: section.startBar + localBar,
+        role: localBar === 0 ? "statement" : "answer",
+      }))),
+    },
+    generationInterlock: {
+      sectionContracts: sections.map((section) => ({
+        sectionId: section.id,
+        transitionOut: "stale",
+        bars: [0, 1].map((localBar) => ({
+          sectionId: section.id,
+          bar: section.startBar + localBar,
+          role: localBar === 0 ? "statement" : "answer",
+        })),
+      })),
+    },
   };
 }
 
@@ -198,9 +235,54 @@ test("arrangement evolution moves complete sections atomically without changing 
   assertRelocatedEvents(source, result.song, source.harmony, result.song.harmony);
 
   const order = result.song.structure.map(({ id }) => id);
-  assert.deepEqual(result.song.songBlueprint.sectionPlans.map(({ sectionId }) => sectionId), order);
+  const orderedBlueprintKeys = [
+    "sectionPlans",
+    "tensionCurve",
+    "orchestrationMatrix",
+    "memoryMap",
+  ];
+  for (const key of orderedBlueprintKeys) {
+    assert.deepEqual(
+      result.song.songBlueprint[key].map(({ sectionId }) => sectionId),
+      order,
+      `songBlueprint.${key} must follow the final section sequence`,
+    );
+  }
+  assert.deepEqual(result.song.songBlueprint.phraseMemory.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.songBlueprint.songDNA.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.songBlueprint.producerIntent.scenes.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(
+    result.song.songBlueprint.producerIntent.identity.structuralArc,
+    result.song.songBlueprint.producerIntent.scenes.map((scene) => `${scene.purpose}:${scene.developmentAxis}`),
+    "producer structural arc must be rebuilt in final sequence order",
+  );
   assert.deepEqual(result.song.phraseMemory.sections.map(({ sectionId }) => sectionId), order);
   assert.deepEqual(result.song.songDNA.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.motifs.sectionAssignments.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.generationInterlock.sectionContracts.map(({ sectionId }) => sectionId), order);
+
+  const sectionById = new Map(result.song.structure.map((section) => [section.id, section]));
+  for (const bar of result.song.grooveConductor.bars) {
+    const section = sectionById.get(bar.sectionId);
+    assert.ok(section, `missing section for groove bar ${bar.sectionId}`);
+    assert.ok(
+      bar.bar >= section.startBar && bar.bar < section.startBar + section.bars,
+      `groove bar ${bar.bar} must live inside relocated ${bar.sectionId}`,
+    );
+  }
+  for (const contract of result.song.generationInterlock.sectionContracts) {
+    const section = sectionById.get(contract.sectionId);
+    for (const bar of contract.bars) {
+      assert.ok(
+        bar.bar >= section.startBar && bar.bar < section.startBar + section.bars,
+        `interlock bar ${bar.bar} must live inside relocated ${contract.sectionId}`,
+      );
+    }
+    const transition = result.song.songBlueprint.transitions.find((entry) => entry.fromSectionId === contract.sectionId);
+    assert.equal(contract.transitionOut, transition?.type ?? null, "interlock transition must match the rebuilt final neighbor");
+  }
+  assert.equal(result.song.outputQualityEvolution.arrangement.sequenceAuthoritiesRealigned, true);
+  assert.ok(result.song.outputQualityEvolution.arrangement.relocatedBarEntries > 0);
 });
 
 test("candidate-first postprocess accepts only a scored arrangement win and refreshes authoritative metadata", () => {
