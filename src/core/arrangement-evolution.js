@@ -362,12 +362,12 @@ function reorderBlueprintAuthorities(blueprint, orderedIds) {
   return next;
 }
 
-function relocateSectionBars(entries, sourceById, destinationById) {
+function relocateSectionBars(entries, sourceById, destinationById, fallbackSectionId = null) {
   if (!Array.isArray(entries)) return entries;
   return entries
     .map((entry) => {
       const next = cloneValue(entry);
-      const sectionId = String(next?.sectionId ?? "");
+      const sectionId = String(next?.sectionId ?? fallbackSectionId ?? "");
       const source = sourceById.get(sectionId);
       const destination = destinationById.get(sectionId);
       const bar = Number(next?.bar);
@@ -417,7 +417,12 @@ function realignSequenceAuthorities(song, originalSections, reordered, orderedId
     const contracts = reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds)
       .map((contract) => {
         const barsBefore = contract?.bars ?? [];
-        const bars = relocateSectionBars(barsBefore, sourceById, destinationById);
+        const bars = relocateSectionBars(
+          barsBefore,
+          sourceById,
+          destinationById,
+          contract.sectionId,
+        );
         relocatedBarEntries += bars.filter((bar, index) => Number(bar?.bar) !== Number(barsBefore[index]?.bar)).length;
         return { ...contract, bars };
       });
