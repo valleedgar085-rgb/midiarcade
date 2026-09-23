@@ -1080,20 +1080,20 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
   ];
-  const outputQualityStageDiagnostics = {
-    ...(result.outputQualityStageDiagnostics ?? {}),
-    ...Object.fromEntries(stageEntries.filter(([, diagnostics]) => diagnostics != null)),
-  };
+  const stageDiagnostics = Object.fromEntries(stageEntries.filter(([, diagnostics]) => diagnostics != null));
+  if (typeof evaluators.onStageDiagnostics === "function") {
+    try { evaluators.onStageDiagnostics(stageDiagnostics); } catch { /* diagnostics must never change generation */ }
+  }
+
+  if (processed.song === result.song) return result;
+
   const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
   for (const [key, diagnostics] of stageEntries) {
     if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
   }
-
-  if (processed.song === result.song && !Object.keys(outputQualityStageDiagnostics).length) return result;
   return {
     ...result,
     song: processed.song,
     outputQualityDiagnostics,
-    outputQualityStageDiagnostics,
   };
 }
