@@ -878,7 +878,9 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
   const actualAfter = evaluateCandidate(candidate.song);
   const release = evaluateReleaseGate(candidate.song, actualAfter);
   const scoreDelta = finite(actualAfter?.score) - finite(before?.score);
-  const floorDelta = creativeFloor(actualAfter) - beforeFloor;
+  const actualFloorDelta = creativeFloor(actualAfter) - beforeFloor;
+  const criticFloorDelta = creativeFloor(criticAfter) - beforeFloor;
+  const floorDelta = criticFloorDelta;
   const dimensions = Object.keys(before?.subscores ?? {});
   const dimensionDeltas = protectedDeltas(before, criticAfter, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
@@ -903,6 +905,8 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
     release,
     scoreDelta,
     floorDelta,
+    actualFloorDelta,
+    criticFloorDelta,
     maxScoreCost,
     maxFloorCost,
     protectedDeltas: dimensionDeltas,
@@ -970,6 +974,8 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
       scoreDelta: round(assessment.scoreDelta),
       maxScoreCost: finite(assessment.maxScoreCost),
       floorDelta: round(assessment.floorDelta),
+      actualFloorDelta: round(assessment.actualFloorDelta),
+      criticFloorDelta: round(assessment.criticFloorDelta),
       maxFloorCost: finite(assessment.maxFloorCost),
     })),
     beforeScore: round(before?.score),
@@ -979,6 +985,8 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
     afterContinuityDeficit: round(selected?.afterContinuityDeficit, 4),
     continuityErrorDelta: round(selected?.continuityErrorDelta, 4),
     floorDelta: round(selected?.floorDelta),
+    actualFloorDelta: round(selected?.actualFloorDelta),
+    criticFloorDelta: round(selected?.criticFloorDelta),
     criticViewScore: round(selected?.criticAfter?.score),
     maxScoreCost: finite(selected?.maxScoreCost),
     maxFloorCost: finite(selected?.maxFloorCost),
