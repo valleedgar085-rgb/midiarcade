@@ -170,6 +170,44 @@ test("balanced continuity can spend at most two truthful score points to remove 
   assert.ok(result.diagnostics.continuityErrorDelta < 0);
 });
 
+test("continuity-aware floor ignores helper-note motif penalties while preserving actual score", () => {
+  const source = song();
+  const result = applyMelodyContinuityRefinement(
+    source,
+    { melodyContinuityRefinement: true },
+    (candidateSong) => {
+      const links = candidateSong.tracks
+        .find((track) => track.id === "melody").notes
+        .filter((note) => note.continuityRole === "phrase-link").length;
+      return {
+        score: links ? 82 : 84,
+        subscores: {
+          density: 72,
+          motif: 84,
+          repetition: links ? 60 : 82,
+          memory: 86,
+          registerHealth: 88,
+          groove: 87,
+          performance: 85,
+          separation: 89,
+          phraseResolution: 84,
+          genreAuthenticity: 86,
+        },
+        diagnostics: { scaleFit: 1 },
+      };
+    },
+    () => ({ passed: true, totalScore: 90 }),
+  );
+
+  assert.equal(result.diagnostics.accepted, true);
+  assert.equal(result.diagnostics.id, "balanced-links");
+  assert.equal(result.diagnostics.afterScore, 82);
+  assert.equal(result.diagnostics.criticViewScore, 84);
+  assert.equal(result.diagnostics.floorDelta, 0);
+  assert.equal(result.diagnostics.criticFloorDelta, 0);
+  assert.ok(result.diagnostics.actualFloorDelta < -10);
+});
+
 test("final continuity stage rejects a connector that only looks safe in the filtered critic view", () => {
   const source = song();
   const result = applyMelodyContinuityRefinement(
