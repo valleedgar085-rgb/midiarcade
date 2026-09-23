@@ -103,14 +103,14 @@ const GENRE_PRIOR_POLICY = Object.freeze({
   rock: Object.freeze({ prior: "rock", confidence: 0.82, cap: 0.14 }),
   rnbSoul: Object.freeze({ prior: "soul", confidence: 0.94, cap: 0.17 }),
   neoSoul: Object.freeze({ prior: "soul", confidence: 0.82, cap: 0.14 }),
-  funk: Object.freeze({ prior: "funk", confidence: 0.98, cap: 0.18 }),
+  // Sparse-role genres stay diagnostic-only until their density calibration is explicitly re-baselined.\n  funk: Object.freeze({ prior: "funk", confidence: 0.98, cap: 0 }),
   country: Object.freeze({ prior: "country", confidence: 0.52, cap: 0.08 }),
-  afrobeats: Object.freeze({ prior: "afrobeat", confidence: 0.86, cap: 0.16 }),
+  afrobeats: Object.freeze({ prior: "afrobeat", confidence: 0.86, cap: 0 }),
   reggaeton: Object.freeze({ prior: "latin", confidence: 0.3, cap: 0.045 }),
   house: Object.freeze({ prior: "dance", confidence: 0.52, cap: 0.05, protectFourFloor: true }),
   techno: Object.freeze({ prior: "dance", confidence: 0.46, cap: 0.04, protectFourFloor: true }),
   synthwave: Object.freeze({ prior: "dance", confidence: 0.32, cap: 0.035 }),
-  drumBass: Object.freeze({ prior: "dance", confidence: 0.22, cap: 0.025 }),
+  drumBass: Object.freeze({ prior: "dance", confidence: 0.22, cap: 0 }),
   jazz: Object.freeze({ prior: "jazz", confidence: 0.42, cap: 0.025, preserveGrammar: true }),
 });
 
