@@ -11,7 +11,7 @@ import {
   applyResultOutputQualityPostprocess,
   applySongOutputQualityPostprocess,
 } from "../src/core/output-quality-postprocess.js";
-import { createSongFingerprint, generateNew } from "../src/music-engine.js";
+import { createSongFingerprint, evaluateSongSequenceAuthority, generateNew } from "../src/music-engine.js";
 
 function fixtureSong() {
   const names = ["intro", "verse", "chorus", "bridge", "chorus", "outro"];
@@ -283,6 +283,13 @@ test("arrangement evolution moves complete sections atomically without changing 
   }
   assert.equal(result.song.outputQualityEvolution.arrangement.sequenceAuthoritiesRealigned, true);
   assert.ok(result.song.outputQualityEvolution.arrangement.relocatedBarEntries > 0);
+  assert.equal(evaluateSongSequenceAuthority(result.song).passed, true);
+
+  const corrupted = structuredClone(result.song);
+  corrupted.grooveConductor.bars[0].bar += 64;
+  const corruptedAuthority = evaluateSongSequenceAuthority(corrupted);
+  assert.equal(corruptedAuthority.passed, false);
+  assert.ok(corruptedAuthority.failures.includes("grooveBars"));
 });
 
 test("candidate-first postprocess accepts only a scored arrangement win and refreshes authoritative metadata", () => {
