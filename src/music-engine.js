@@ -10858,6 +10858,7 @@ export function evaluateSongCandidate(song) {
   const track = (id) => song.tracks.find((candidate) => candidate.id === id) ?? { notes: [] };
   const pitchedNotes = song.tracks.filter((candidate) => candidate.id !== "drums").flatMap((candidate) => candidate.notes ?? []);
   const melodyNotes = [...(track("melody").notes ?? [])].sort((a, b) => a.start - b.start);
+  const motifIdentityMelodyNotes = melodyNotes.filter((note) => note?.continuityRole !== "phrase-link");
   const counterNotes = [...(track("counterpoint").notes ?? [])].sort((a, b) => a.start - b.start);
   const chordNotes = [...(track("chords").notes ?? [])].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
   const bassNotes = [...(track("bass").notes ?? [])].sort((a, b) => a.start - b.start);
@@ -10894,11 +10895,12 @@ export function evaluateSongCandidate(song) {
   const bassLock = onsetMatchRatio(bassNotes, kicks, grooveOffsets, 0.075);
   const groove = clamp(Math.round(42 + downbeatCoverage * 16 + backbeatCoverage * 18 + bassLock * 24), 25, 100);
 
-  const melodicIntervals = melodyNotes.slice(1).map((note, index) => Math.abs(note.pitch - melodyNotes[index].pitch));
+  const melodicIntervals = motifIdentityMelodyNotes.slice(1)
+    .map((note, index) => Math.abs(note.pitch - motifIdentityMelodyNotes[index].pitch));
   const controlledMotion = melodicIntervals.length
     ? melodicIntervals.filter((interval) => interval <= 12).length / melodicIntervals.length
     : 0.65;
-  const repetitionRatio = phraseRepetition(song, melodyNotes);
+  const repetitionRatio = phraseRepetition(song, motifIdentityMelodyNotes);
   const repetitionTarget = average([
     finite(song.songBlueprint?.qualityTargets?.repetition, criticProfile.repetition),
     criticProfile.repetition,
