@@ -4118,8 +4118,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   const barBeats = beatsPerBar(config);
   const rhythmIdentity = style.rhythmIdentity
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
-  const genreGrammar = GENRE_RHYTHM_GRAMMARS[config.genre] ?? GENRE_RHYTHM_GRAMMARS.pop;
-  const responseDelay = genreGrammar.responseDelay;
   const humanGroovePrior = humanGroovePriorForGenre(config.genre);
   const humanGroovePriorInfluence = humanGrooveInfluence(config, humanGroovePrior);
   const grooveDNA = createGrooveDNA({
@@ -4160,7 +4158,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       prior: humanGroovePrior,
     };
     anchors = uniqueGrooveOffsets(humanGrooveAdjustment.anchors, barBeats);
-    const answers = uniqueGrooveOffsets(anchors.map((offset) => offset + responseDelay), barBeats)
+    const answers = uniqueGrooveOffsets(grooveDNALanes.leadPulses ?? [], barBeats)
       .filter((offset) => !anchors.includes(offset));
     const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
     const activeMotif = familyMember?.melody;
@@ -4191,7 +4189,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       sectionId: section.id,
       sectionFamilyId,
       motifId: assignment?.motifId ?? "A",
-      genrePhrase: genreGrammar.phrase,
+      genrePhrase: grooveDNA.grammarId,
       phrasePosition,
       role,
       anchors,
