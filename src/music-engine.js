@@ -4171,31 +4171,13 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         .filter((event) => Math.floor(event.offset / barBeats) === motifBar)
         .map((event) => mod(event.offset, barBeats))
       : [];
-    const gridStep = config.complexity > 0.62 ? 0.25 : 0.5;
-    // The conductor must never reserve silence on top of a motif attack.
-    // Every lane negotiates around the same rhythmic intent instead of
-    // independently erasing a phrase event later in generation.
-    const occupied = new Set([
-      ...anchors,
-      ...answers,
-      ...(config.professionalUpgrade ? motifPulses : []),
-    ].map((offset) => round(offset)));
-    const available = [];
-    for (let offset = gridStep; offset < barBeats - 0.01; offset += gridStep) {
-      if (!occupied.has(round(offset))) available.push(round(offset));
-    }
-    const spaces = grooveDNAAuthoritative
-      ? uniqueGrooveOffsets(
-        (grooveDNALanes?.protectedSpaces ?? [])
-          .filter((space) => !motifPulses.some((pulse) => Math.abs(pulse - space) < 0.01)),
-        barBeats,
-      )
-      : available.length
-        ? uniqueGrooveOffsets([
-          local.pick(available),
-          role === "turnaround" || route?.id === "harmony-first" ? available[available.length - 1] : -1,
-        ], barBeats)
-        : [];
+    // Groove DNA protected cells are the only rhythmic negative-space
+    // authority. Motif attacks remain protected from accidental conflicts.
+    const spaces = uniqueGrooveOffsets(
+      (grooveDNALanes.protectedSpaces ?? [])
+        .filter((space) => !motifPulses.some((pulse) => Math.abs(pulse - space) < 0.01)),
+      barBeats,
+    );
     const bassPulses = uniqueGrooveOffsets(grooveDNALanes.bassPulses ?? [], barBeats)
       .filter((offset) => !spaces.includes(offset));
     const chordPulses = uniqueGrooveOffsets(grooveDNALanes.chordPulses ?? [], barBeats)
