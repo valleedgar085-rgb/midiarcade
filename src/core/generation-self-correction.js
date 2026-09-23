@@ -18,6 +18,8 @@ function scoreSummary(result) {
   return Object.freeze({
     totalScore: finiteOrNull(details?.totalScore ?? song?.meta?.qualityScore ?? song?.meta?.score),
     creativeFloor: finiteOrNull(details?.balance?.creativeFloor),
+    criticalFloor: finiteOrNull(details?.balance?.criticalFloor),
+    lowestCriticalDimension: details?.balance?.lowestCriticalDimension ?? null,
     releasePassed: typeof releasePassed === "boolean" ? releasePassed : null,
   });
 }
