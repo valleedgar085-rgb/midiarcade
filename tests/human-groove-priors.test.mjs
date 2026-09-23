@@ -78,7 +78,7 @@ test("generated songs expose deterministic ensemble-level human groove diagnosti
   const first = generateNew(options);
   const second = generateNew(options);
   assert.deepEqual(first, second);
-  assert.equal(first.grooveConductor.version, 4);
+  assert.equal(first.grooveConductor.version, 5);
   assert.deepEqual(first.grooveConductor.humanGroovePrior.sourceStyles, ["hiphop"]);
   assert.ok(first.grooveConductor.humanGroovePrior.influence > 0);
   assert.ok(first.grooveConductor.humanGroovePrior.influence <= 0.18);
