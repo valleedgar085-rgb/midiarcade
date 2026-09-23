@@ -288,17 +288,79 @@ function uniqueAttackStarts(notes = []) {
   return [...new Set(notes.map((note) => round(noteStart(note), 4)))].sort((left, right) => left - right);
 }
 
+function bassRelationshipProfile(song) {
+  const genre = String(
+    song?.meta?.genre
+    ?? song?.settings?.genre
+    ?? song?.style?.genre
+    ?? "",
+  );
+  if (genre === "house") return { offsets: [0.5], tolerance: 0.12 };
+  if (["techno", "drumBass"].includes(genre)) return { offsets: [0, 0.5], tolerance: 0.14 };
+  if (genre === "neoSoul") return { offsets: [-0.25, 0, 0.25, 0.5, 0.75], tolerance: 0.18 };
+  if (["trap", "hipHop", "rap", "drill"].includes(genre)) {
+    return { offsets: [0, 0.25, 0.5], tolerance: genre === "trap" || genre === "drill" ? 0.14 : 0.16 };
+  }
+  return { offsets: [0, 0.25, 0.5], tolerance: 0.16 };
+}
+
 function kickBassLock(song, selection) {
   if (!targetTrackIds(song, selection).has("bass") && selection.target !== "section" && selection.target !== "song") {
-    return { compared: 0, lock: 1 };
+    return {
+      compared: 0,
+      lock: 1,
+      distribution: { exactLock: 0, shortReply: 0, offbeat: 0, independent: 0 },
+    };
   }
   const kicks = scopedNotes(song, "drums", selection)
     .filter((note) => [35, 36].includes(Math.round(finite(note?.pitch))))
     .map(noteStart);
   const bass = scopedNotes(song, "bass", selection).map(noteStart);
-  if (!bass.length || !kicks.length) return { compared: 0, lock: 1 };
-  const locked = bass.filter((start) => nearestDistance(start, kicks) <= 0.34 + EPSILON).length;
-  return { compared: bass.length, lock: locked / bass.length };
+  if (!bass.length || !kicks.length) {
+    return {
+      compared: 0,
+      lock: 1,
+      distribution: { exactLock: 0, shortReply: 0, offbeat: 0, independent: 0 },
+    };
+  }
+
+  const profile = bassRelationshipProfile(song);
+  const relationshipPulses = kicks.flatMap((kick) => profile.offsets.map((offset) => kick + offset));
+  let exactLock = 0;
+  let shortReply = 0;
+  let offbeat = 0;
+  let independent = 0;
+  let related = 0;
+
+  for (const start of bass) {
+    const exactDistance = nearestDistance(start, kicks);
+    if (exactDistance <= 0.08 + EPSILON) exactLock += 1;
+    else {
+      const forwardDistances = kicks
+        .map((kick) => start - kick)
+        .filter((distance) => distance >= -0.08 && distance <= 0.75 + EPSILON);
+      const nearestForward = forwardDistances.length
+        ? [...forwardDistances].sort((left, right) => Math.abs(left) - Math.abs(right))[0]
+        : null;
+      if (nearestForward != null && nearestForward >= 0.08 && nearestForward <= 0.34 + EPSILON) shortReply += 1;
+      else if (nearestForward != null && nearestForward >= 0.42 && nearestForward <= 0.58 + EPSILON) offbeat += 1;
+      else independent += 1;
+    }
+    if (nearestDistance(start, relationshipPulses) <= profile.tolerance + EPSILON) related += 1;
+  }
+
+  return {
+    compared: bass.length,
+    lock: related / bass.length,
+    distribution: {
+      exactLock,
+      shortReply,
+      offbeat,
+      independent,
+    },
+    relationshipOffsets: profile.offsets,
+    tolerance: profile.tolerance,
+  };
 }
 
 function conductorPulses(song, id, selection) {
