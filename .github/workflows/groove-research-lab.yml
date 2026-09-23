@@ -1,0 +1,55 @@
+name: Groove MIDI Research Lab
+
+on:
+  pull_request:
+    paths:
+      - "src/core/groove-fingerprint.js"
+      - "tests/groove-fingerprint.test.mjs"
+      - "scripts/groove-research-lab.mjs"
+      - ".github/workflows/groove-research-lab.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  groove-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install project dependencies
+        run: npm ci
+      - name: Install research-only MIDI parser
+        run: npm install --no-save --package-lock=false --ignore-scripts @tonejs/midi@2.0.28
+      - name: Download Magenta Groove MIDI Dataset
+        run: |
+          curl -L --fail --retry 3 \
+            -o /tmp/groove-v1.0.0-midionly.zip \
+            https://storage.googleapis.com/magentadata/datasets/groove/groove-v1.0.0-midionly.zip
+          echo "651cbc524ffb891be1a3e46d89dc82a1cecb09a57c748c7b45b844c4841dcc1e  /tmp/groove-v1.0.0-midionly.zip" | sha256sum -c -
+      - name: Extract dataset
+        run: |
+          mkdir -p /tmp/groove-midi
+          unzip -q /tmp/groove-v1.0.0-midionly.zip -d /tmp/groove-midi
+          find /tmp/groove-midi -name info.csv -print
+      - name: Build groove fingerprints
+        run: |
+          DATASET_ROOT="$(dirname "$(find /tmp/groove-midi -name info.csv | head -1)")"
+          test -n "$DATASET_ROOT"
+          node scripts/groove-research-lab.mjs \
+            --dataset "$DATASET_ROOT" \
+            --output /tmp/gmd-groove-fingerprints.json
+      - name: Upload derived groove fingerprints
+        uses: actions/upload-artifact@v4
+        with:
+          name: gmd-groove-fingerprints
+          path: /tmp/gmd-groove-fingerprints.json
+          if-no-files-found: error
+          retention-days: 30
