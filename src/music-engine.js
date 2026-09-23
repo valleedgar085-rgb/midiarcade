@@ -5549,6 +5549,20 @@ function runDirectorEnsembleCoordination(
   let harmonicPocketMoves = 0;
   let harmonicPocketSoftens = 0;
   let counterAnswersMoved = 0;
+  let supportSpaceYields = 0;
+  let restingRoleNotesRemoved = 0;
+  const roleFor = (section, trackId) => intentForSection(section)?.ensembleRoles?.[trackId] ?? "support";
+  const isProtectedTeamworkNote = (note) => Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.transitionRole
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.memoryRole
+    || note?.motifHandoffRole
+    || note?.finalAssemblyRole
+    || note?.ensembleCadenceRole
+  );
 
   // The rhythm section remains authoritative. Bass is already composed from
   // surviving kicks; this pass records the relationship before later repair
@@ -5686,6 +5700,41 @@ function runDirectorEnsembleCoordination(
     }
   }
 
+  // Enforce the same foreground/support hierarchy before later arrangement
+  // and repair passes. "rest" is genuine negative space; support/texture parts
+  // yield on authored space pulses unless they carry a protected musical role.
+  for (const trackId of ["chords", "counterpoint", "pad"]) {
+    const source = tracks[trackId] ?? [];
+    tracks[trackId] = source.filter((note) => {
+      const section = sectionForBeat(note.start);
+      const intent = intentForSection(section);
+      const role = roleFor(section, trackId);
+      if (role === "rest" && !isProtectedTeamworkNote(note)) {
+        restingRoleNotesRemoved += 1;
+        return false;
+      }
+      if (["foreground", "answer"].includes(role) || isProtectedTeamworkNote(note)) return true;
+      const barContract = barContractFor(section, note.start);
+      const barStart = Math.floor(note.start / barBeats) * barBeats;
+      const localBeat = round(note.start - barStart);
+      const onReservedSpace = (barContract?.spaces ?? []).some((space) => Math.abs(finite(space) - localBeat) <= 0.07);
+      const silenceBudget = clamp(finite(intent?.silenceBudget, 0.13), 0.05, 0.4);
+      if (!onReservedSpace || silenceBudget < 0.16) return true;
+      // Keep harmony continuity by soft-yielding chords/pads; counterpoint may
+      // actually rest because its job is to answer the lead rather than fill
+      // every hole.
+      if (trackId === "counterpoint") {
+        supportSpaceYields += 1;
+        return false;
+      }
+      note.velocity = clamp(note.velocity - Math.round(4 + silenceBudget * 14), 1, 127);
+      note.ensembleCoordinationRole = "negative-space-yield";
+      note.ensemblePartner = intent?.featuredTrack ?? "foreground";
+      supportSpaceYields += 1;
+      return true;
+    });
+  }
+
   for (const id of Object.keys(tracks)) {
     tracks[id].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   }
@@ -5703,6 +5752,8 @@ function runDirectorEnsembleCoordination(
       harmonicPocketMoves,
       harmonicPocketSoftens,
       counterAnswersMoved,
+      supportSpaceYields,
+      restingRoleNotesRemoved,
       sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
     },
   };
@@ -9216,6 +9267,9 @@ function createGenerationInterlockPlan(
   const assignments = new Map(
     (motifs?.sectionAssignments ?? []).map((assignment) => [assignment.sectionId, assignment]),
   );
+  const producerScenes = new Map(
+    (songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]),
+  );
   const sectionContracts = structure.map((section) => {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const phraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
@@ -9223,6 +9277,16 @@ function createGenerationInterlockPlan(
       event.start >= section.startBeat - 1e-6 && event.start < section.endBeat - 1e-6
     ));
     const harmonicGoal = sectionHarmony.at(-1);
+    const producerScene = producerScenes.get(section.id) ?? null;
+    const ensembleRoles = Object.fromEntries(TRACK_IDS.map((id) => [
+      id,
+      producerScene?.roles?.[id]
+        ?? (id === orchestration.get(section.id)?.featuredTrack ? "foreground"
+          : ["drums", "bass"].includes(id) ? "foundation"
+            : id === "counterpoint" ? "answer"
+              : id === "pad" ? "texture"
+                : "support"),
+    ]));
     const bars = (grooveConductor?.bars ?? [])
       .filter((bar) => bar.sectionId === section.id)
       .map((bar) => ({
@@ -9248,6 +9312,11 @@ function createGenerationInterlockPlan(
       harmonicGoalDegree: harmonicGoal?.degree ?? plan?.harmonicGoalDegree ?? 0,
       harmonicGoalPitchClasses: [...new Set(harmonicGoal?.tones ?? [config.keyPc])],
       featuredTrack: orchestration.get(section.id)?.featuredTrack ?? "melody",
+      answerTrack: producerScene?.answerTrack ?? null,
+      ensembleRoles,
+      silenceBudget: round(clamp(finite(producerScene?.silenceBudget, 0.13), 0.05, 0.4)),
+      densityCeiling: round(clamp(finite(producerScene?.densityCeiling, 0.82), 0.5, 0.98)),
+      scenePurpose: producerScene?.purpose ?? "develop",
       performanceFeel: performanceProfile?.feel?.id ?? "balanced",
       transitionOut: outgoing.get(section.id)?.type ?? null,
       phraseMemory: phraseMemory ? clone(phraseMemory) : null,
