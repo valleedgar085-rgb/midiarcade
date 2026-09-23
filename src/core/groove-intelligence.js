@@ -432,12 +432,16 @@ function applyTransforms(steps, transforms, {
   section,
   gridSteps,
   seed,
+  tripletAmount = 0,
 }) {
   let out = uniqueSorted(steps);
   let densityMultiplier = 1;
   for (const transform of transforms ?? []) {
     if (transform.lane !== lane) continue;
-    const chance = clamp(transform.chance ?? 1, 0, 1);
+    const requestedTripletChance = ["tripletTurn", "burstEvery"].includes(transform.type)
+      ? Math.max(finite(transform.chance, 1), clamp(tripletAmount, 0, 1))
+      : finite(transform.chance, 1);
+    const chance = clamp(requestedTripletChance, 0, 1);
     const enabled = randomUnit(`${seed}:transform:${transform.type}:${bar}`) <= chance;
     if (transform.type === "rotateEvery" && enabled && bar % Math.max(1, transform.every ?? 1) === Math.max(1, transform.every ?? 1) - 1) {
       out = rotateSteps(out, finite(transform.amount, 0), gridSteps);
@@ -457,8 +461,8 @@ function applyTransforms(steps, transforms, {
           .filter((step) => step >= 0 && step < gridSteps),
       ]);
     } else if (transform.type === "tripletTurn" && enabled && bar % Math.max(1, transform.every ?? 1) === Math.max(1, transform.every ?? 1) - 1) {
-      const origin = Math.max(0, gridSteps - 3);
-      out = uniqueSorted([...out, origin, origin + 2 / 3, origin + 4 / 3, origin + 2]);
+      const origin = Math.max(0, gridSteps - 4);
+      out = uniqueSorted([...out, origin, origin + 4 / 3, origin + 8 / 3]);
     } else if (transform.type === "euclid") {
       const rotation = Math.max(1, transform.rotateEvery ?? 1) > 1
         ? bar % Math.max(1, transform.rotateEvery)
@@ -566,6 +570,7 @@ export function createGrooveDNA(input = {}, {
   const beatsPerStep = beatsPerBar / gridSteps;
   const densityControl = clamp(input?.density ?? input?.complexity ?? 0.58, 0, 1);
   const variation = clamp(input?.variation ?? 0.48, 0, 1);
+  const tripletAmount = clamp(input?.tripletAmount ?? 0, 0, 1);
   const normalizedSections = normalizeStructure(structure ?? input?.structure, bars, beatsPerBar);
   const barPlans = [];
 
@@ -596,6 +601,7 @@ export function createGrooveDNA(input = {}, {
         section,
         gridSteps,
         seed: `${seed}:${genre}:${lane}`,
+        tripletAmount,
       });
       const factor = grammar.density[lane]
         * (0.72 + densityControl * 0.56)
