@@ -209,6 +209,10 @@ function summarizeGenre(genre, results) {
     phraseResolutionRefinementAttemptRate: averageOf(genreResults, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
     phraseResolutionRefinementAcceptanceRate: averageOf(genreResults, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
     averagePhraseResolutionRefinementDelta: averageOf(genreResults, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
+    repetitionRefinementAttemptRate: averageOf(genreResults, ({ repetitionRefinementAttempted }) => repetitionRefinementAttempted ? 1 : 0, 3),
+    repetitionRefinementAcceptanceRate: averageOf(genreResults, ({ repetitionRefinementAccepted }) => repetitionRefinementAccepted ? 1 : 0, 3),
+    averageRepetitionRefinementDelta: averageOf(genreResults, ({ repetitionRefinementDelta }) => repetitionRefinementDelta, 2),
+    averageRepetitionErrorDelta: averageOf(genreResults, ({ repetitionErrorDelta }) => repetitionErrorDelta, 4),
     registerHealthRefinementAttemptRate: averageOf(genreResults, ({ registerHealthRefinementAttempted }) => registerHealthRefinementAttempted ? 1 : 0, 3),
     registerHealthRefinementAcceptanceRate: averageOf(genreResults, ({ registerHealthRefinementAccepted }) => registerHealthRefinementAccepted ? 1 : 0, 3),
     averageRegisterHealthRefinementDelta: averageOf(genreResults, ({ registerHealthRefinementDelta }) => registerHealthRefinementDelta, 2),
@@ -273,6 +277,7 @@ export function runGenerationBenchmark({
       const returnDiagnostics = postprocessed.returnDiagnostics;
       const densityDiagnostics = postprocessed.densityDiagnostics;
       const phraseResolutionDiagnostics = postprocessed.phraseResolutionDiagnostics;
+      const repetitionDiagnostics = postprocessed.repetitionDiagnostics;
       const registerHealthDiagnostics = postprocessed.registerHealthDiagnostics;
       const grooveDiagnostics = postprocessed.grooveDiagnostics;
       const evaluation = evaluateSongCandidate(song);
@@ -342,6 +347,11 @@ export function runGenerationBenchmark({
         phraseResolutionRefinementAccepted: Boolean(phraseResolutionDiagnostics?.accepted),
         phraseResolutionRefinementId: phraseResolutionDiagnostics?.id ?? null,
         phraseResolutionRefinementDelta: finite(phraseResolutionDiagnostics?.phraseResolutionDelta, 0),
+        repetitionRefinementAttempted: Boolean(repetitionDiagnostics?.attempted),
+        repetitionRefinementAccepted: Boolean(repetitionDiagnostics?.accepted),
+        repetitionRefinementId: repetitionDiagnostics?.id ?? null,
+        repetitionRefinementDelta: finite(repetitionDiagnostics?.repetitionDelta, 0),
+        repetitionErrorDelta: finite(repetitionDiagnostics?.errorDelta, 0),
         registerHealthRefinementAttempted: Boolean(registerHealthDiagnostics?.attempted),
         registerHealthRefinementAccepted: Boolean(registerHealthDiagnostics?.accepted),
         registerHealthRefinementId: registerHealthDiagnostics?.id ?? null,
@@ -392,6 +402,24 @@ export function runGenerationBenchmark({
       || left.weakestDimension.score - right.weakestDimension.score
       || left.genre.localeCompare(right.genre)
     ));
+  const attentionMap = perGenre
+    .map((entry) => ({
+      genre: entry.genre,
+      averageOverallScore: entry.averageOverallScore,
+      minimumMusicalScore: entry.minimumMusicalScore,
+      averageCreativeFloor: entry.averageCreativeFloor,
+      weakestGroup: entry.weakestGroup,
+      weakestDimension: entry.weakestDimension,
+      weakestVarietyAxis: entry.variety.weakestAxis,
+      weakestVarietyRatio: entry.variety.weakestRatio,
+      floorBreachCount: entry.floorBreachCount,
+    }))
+    .sort((left, right) => (
+      left.weakestDimension.score - right.weakestDimension.score
+      || left.averageCreativeFloor - right.averageCreativeFloor
+      || left.averageOverallScore - right.averageOverallScore
+      || left.genre.localeCompare(right.genre)
+    ));
 
   const report = {
     phase: 50,
@@ -424,6 +452,10 @@ export function runGenerationBenchmark({
     phraseResolutionRefinementAttemptRate: averageOf(results, ({ phraseResolutionRefinementAttempted }) => phraseResolutionRefinementAttempted ? 1 : 0, 3),
     phraseResolutionRefinementAcceptanceRate: averageOf(results, ({ phraseResolutionRefinementAccepted }) => phraseResolutionRefinementAccepted ? 1 : 0, 3),
     averagePhraseResolutionRefinementDelta: averageOf(results, ({ phraseResolutionRefinementDelta }) => phraseResolutionRefinementDelta, 2),
+    repetitionRefinementAttemptRate: averageOf(results, ({ repetitionRefinementAttempted }) => repetitionRefinementAttempted ? 1 : 0, 3),
+    repetitionRefinementAcceptanceRate: averageOf(results, ({ repetitionRefinementAccepted }) => repetitionRefinementAccepted ? 1 : 0, 3),
+    averageRepetitionRefinementDelta: averageOf(results, ({ repetitionRefinementDelta }) => repetitionRefinementDelta, 2),
+    averageRepetitionErrorDelta: averageOf(results, ({ repetitionErrorDelta }) => repetitionErrorDelta, 4),
     registerHealthRefinementAttemptRate: averageOf(results, ({ registerHealthRefinementAttempted }) => registerHealthRefinementAttempted ? 1 : 0, 3),
     registerHealthRefinementAcceptanceRate: averageOf(results, ({ registerHealthRefinementAccepted }) => registerHealthRefinementAccepted ? 1 : 0, 3),
     averageRegisterHealthRefinementDelta: averageOf(results, ({ registerHealthRefinementDelta }) => registerHealthRefinementDelta, 2),
@@ -437,6 +469,7 @@ export function runGenerationBenchmark({
     dimensionAverages,
     perGenre,
     failureMap,
+    attentionMap,
     phase5Floors: PHASE5_DIMENSION_FLOORS,
     failures,
     results,
