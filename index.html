@@ -933,6 +933,30 @@
         </div>
         <p class="guide-privacy-link"><a href="./privacy-policy.html">Read the MIDI Arcade Privacy Policy</a></p>
       </dialog>
-    <script type="module" src="./src/app.js?v=20260727-3"></script>
+    <dialog class="shortcut-dialog debugger-dialog" id="debuggerDialog" aria-labelledby="debuggerDialogTitle">
+      <p class="eyebrow">GENERATION DEBUGGER</p>
+      <h2 id="debuggerDialogTitle">See what the generator just did</h2>
+      <p class="debugger-intro">Read-only diagnostics from the built-in generation flight recorder. This panel never changes notes, scores, quality thresholds, or the selected song.</p>
+      <div class="debugger-summary" aria-label="Latest generation summary">
+        <article><small>RUN STATUS</small><strong id="debuggerRunStatus">NO RUN YET</strong><span id="debuggerRunMeta">Generate a song, then refresh this panel.</span></article>
+        <article><small>SONG</small><strong id="debuggerSongSummary">No completed generation has been recorded.</strong><span id="debuggerScoreSummary">Score and seed will appear after generation.</span></article>
+        <article><small>RECORDER</small><strong id="debuggerHistoryCount">0 captured runs</strong><span id="debuggerWorkerState">Fallback / idle</span></article>
+      </div>
+      <section class="debugger-flight" aria-labelledby="debuggerFlightTitle">
+        <div class="debugger-section-heading">
+          <span><small>FLIGHT PATH</small><strong id="debuggerFlightTitle">Plan → compose → diagnose → repair → finalize</strong></span>
+        </div>
+        <p class="debugger-empty" id="debuggerEmpty">No generation run yet. Close this window, generate a new song, then open DEBUG again.</p>
+        <ol class="debugger-stage-list" id="debuggerStageList"></ol>
+      </section>
+      <details class="debugger-raw">
+        <summary>Raw diagnostic JSON</summary>
+        <pre id="debuggerRaw">{}</pre>
+      </details>
+      <div class="debugger-actions">
+      </div>
+    </dialog>
+
+    <script type="module" src="./src/app.js?v=20260923-debugger1"></script>
   </body>
 </html>

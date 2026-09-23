@@ -122,6 +122,56 @@ function ensembleDropoutSong() {
   };
 }
 
+function longEnsembleDropoutSong() {
+  const song = ensembleDropoutSong();
+  song.meta.bars = 36;
+  song.meta.totalBeats = 144;
+  song.structure = [
+    { id: "intro-1", name: "intro", startBeat: 0, endBeat: 8, bars: 2 },
+    { id: "verse-1", name: "verse", startBeat: 8, endBeat: 24, bars: 4 },
+    { id: "chorus-1", name: "chorus", startBeat: 24, endBeat: 40, bars: 4 },
+    { id: "bridge-1", name: "bridge", startBeat: 40, endBeat: 88, bars: 12 },
+    { id: "verse-2", name: "verse", startBeat: 88, endBeat: 136, bars: 12 },
+    { id: "outro-1", name: "outro", startBeat: 136, endBeat: 144, bars: 2 },
+  ];
+  song.harmony = Array.from({ length: 36 }, (_, bar) => ({
+    bar,
+    start: bar * 4,
+    duration: 4,
+    rootPc: [0, 5, 9, 7][bar % 4],
+    degree: [0, 3, 5, 4][bar % 4],
+  }));
+  song.grooveConductor.bars = Array.from({ length: 36 }, (_, bar) => ({
+    bar,
+    sectionId: bar < 2 ? "intro-1"
+      : bar < 6 ? "verse-1"
+        : bar < 10 ? "chorus-1"
+          : bar < 22 ? "bridge-1"
+            : bar < 34 ? "verse-2"
+              : "outro-1",
+    anchors: [0, 2.5],
+    answers: [0.75, 3.25],
+    chordPulses: [0, 2],
+    counterPulses: [0.75, 2.75],
+  }));
+  for (const sectionId of ["bridge-1", "verse-2"]) {
+    song.producerIntent.scenes.push({
+      sectionId,
+      roles: { drums: "foundation", chords: "support", counterpoint: "answer", pad: "support" },
+    });
+    song.orchestrationMatrix.push({
+      sectionId,
+      lanes: {
+        drums: { presence: 0.92 },
+        chords: { presence: 0.82 },
+        counterpoint: { presence: 0.4 },
+        pad: { presence: 0.74 },
+      },
+    });
+  }
+  return song;
+}
+
 function evaluationFor(candidateSong, { regress = false } = {}) {
   const links = candidateSong.tracks.reduce((sum, track) => (
     sum + (track.notes ?? []).filter((note) => String(note.continuityRole ?? "").includes("continuity-link")).length
@@ -167,7 +217,7 @@ test("ensemble continuity candidates are deterministic, bounded, and harmony/gro
 
   assert.deepEqual(source, before);
   assert.deepEqual(first, repeated);
-  assert.ok(first.length >= 1 && first.length <= 2);
+  assert.ok(first.length >= 1 && first.length <= 3);
   assert.ok(first.every((candidate) => candidate.changedNotes >= 1 && candidate.changedNotes <= 4));
   assert.ok(first.every((candidate) => candidate.continuityErrorDelta < 0));
 
@@ -190,6 +240,22 @@ test("ensemble continuity candidates are deterministic, bounded, and harmony/gro
       assert.equal(((note.pitch % 12) + 12) % 12, ((chord.rootPc % 12) + 12) % 12);
     }
   }
+});
+
+test("long songs with severe gaps expose a bounded deep ensemble candidate", () => {
+  const source = longEnsembleDropoutSong();
+  const before = analyzeEnsembleContinuity(source);
+  const candidates = createEnsembleContinuityCandidates(source);
+  const balanced = candidates.find((candidate) => candidate.id === "balanced-ensemble-links");
+  const deep = candidates.find((candidate) => candidate.id === "deep-ensemble-links");
+
+  assert.ok(before.deficit >= 6);
+  assert.ok(balanced);
+  assert.ok(deep);
+  assert.ok(deep.changedNotes > balanced.changedNotes);
+  assert.ok(deep.changedNotes <= 6);
+  assert.ok(deep.afterContinuityDeficit < balanced.afterContinuityDeficit);
+  assert.ok(deep.continuityErrorDelta < balanced.continuityErrorDelta);
 });
 
 test("final ensemble continuity stage accepts only a release-safe no-regression repair", () => {

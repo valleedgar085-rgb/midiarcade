@@ -1,10 +1,16 @@
 import { cloneValue } from "./clone-value.js";
 import { densityActivityForSong } from "./density-activity.js";
 const SUPPORT_TRACK_PRIORITY = ["chords", "counterpoint", "pad"];
-const SPLITS_PER_BAR = [0.25, 0.5, 1];
+const BASE_DENSITY_CANDIDATES = Object.freeze([
+  { id: "light-support", splitsPerBar: 0.25 },
+  { id: "balanced-support", splitsPerBar: 0.5 },
+  { id: "full-support", splitsPerBar: 1 },
+]);
+const LONG_SONG_DENSITY_BARS = 32;
 const DEEP_ARTICULATION_DEFICIT_PER_BAR = 6;
+const DEEP_LONG_SONG_DEFICIT_PER_BAR = 8;
 
-export const MAX_DENSITY_REFINEMENT_CANDIDATES = SPLITS_PER_BAR.length;
+export const MAX_DENSITY_REFINEMENT_CANDIDATES = 4;
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -119,10 +125,18 @@ export function createDensityRefinementCandidates(song, {
   const eligibleCount = eligibleSplitNotes(song).length;
   if (!deficitNotes || !eligibleCount) return [];
 
+  const deepLongSongEligible = song?.meta?.isFusion !== true
+    && bars >= LONG_SONG_DENSITY_BARS
+    && densityDeficitPerBar >= DEEP_LONG_SONG_DEFICIT_PER_BAR;
+  const candidateSpecs = [
+    ...BASE_DENSITY_CANDIDATES,
+    ...(deepLongSongEligible ? [{ id: "deep-support", splitsPerBar: 2 }] : []),
+  ];
+
   const seenBudgets = new Set();
-  return SPLITS_PER_BAR
+  return candidateSpecs
     .slice(0, Math.max(0, Math.min(MAX_DENSITY_REFINEMENT_CANDIDATES, Math.floor(maxCandidates))))
-    .map((splitsPerBar, candidateIndex) => {
+    .map(({ id, splitsPerBar }, candidateIndex) => {
       const deepArticulation = candidateIndex > 0 && (
         target >= 30
         || (song?.meta?.isFusion !== true && densityDeficitPerBar >= DEEP_ARTICULATION_DEFICIT_PER_BAR)
@@ -140,7 +154,7 @@ export function createDensityRefinementCandidates(song, {
       const afterNotesPerBar = notesPerBar(articulated.song);
       const afterDensityActivity = densityObserved(articulated.song);
       return {
-        id: ["light-support", "balanced-support", "full-support"][candidateIndex],
+        id,
         candidateIndex,
         song: articulated.song,
         changedNotes: articulated.changedNotes,

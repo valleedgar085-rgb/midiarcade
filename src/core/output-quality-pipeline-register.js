@@ -693,6 +693,16 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_ENSEMBLE_CONTINUITY_CANDIDATES,
     candidateIds,
+    candidateSummaries: assessments.map((assessment) => ({
+      id: assessment.id,
+      accepted: Boolean(assessment.accepted),
+      reason: assessment.reason,
+      changedNotes: finite(assessment.changedNotes),
+      afterContinuityDeficit: round(assessment.afterContinuityDeficit, 4),
+      continuityErrorDelta: round(assessment.continuityErrorDelta, 4),
+      scoreDelta: round(assessment.scoreDelta),
+      floorDelta: round(assessment.floorDelta),
+    })),
     beforeScore: round(before?.score),
     afterScore: round(selected?.after?.score),
     scoreDelta: round(selected?.scoreDelta),
@@ -864,28 +874,41 @@ function melodyContinuityCriticSong(song) {
 }
 
 function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
-  const after = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
-  const release = evaluateReleaseGate(candidate.song, after);
-  const scoreDelta = finite(after?.score) - finite(before?.score);
-  const floorDelta = creativeFloor(after) - beforeFloor;
+  const criticAfter = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
+  const actualAfter = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, actualAfter);
+  const scoreDelta = finite(actualAfter?.score) - finite(before?.score);
+  const actualFloorDelta = creativeFloor(actualAfter) - beforeFloor;
+  const criticFloorDelta = creativeFloor(criticAfter) - beforeFloor;
+  const floorDelta = criticFloorDelta;
   const dimensions = Object.keys(before?.subscores ?? {});
-  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const dimensionDeltas = protectedDeltas(before, criticAfter, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
-  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const scaleSafe = finite(actualAfter?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const changedNotes = Math.max(1, Math.round(finite(candidate.changedNotes, 1)));
+  const maxScoreCost = changedNotes <= 1
+    ? 1
+    : Math.min(4, 1 + Math.ceil(changedNotes / 8));
+  const maxFloorCost = changedNotes >= 16 ? 2 : 1;
   const accepted = Boolean(
     release?.passed
     && scaleSafe
     && candidate.continuityErrorDelta < -1e-6
-    && scoreDelta >= -1e-9
-    && floorDelta >= -1e-9
+    && scoreDelta >= -maxScoreCost
+    && floorDelta >= -maxFloorCost
     && protectedSafe
   );
   return {
     ...candidate,
-    after,
+    after: actualAfter,
+    criticAfter,
     release,
     scoreDelta,
     floorDelta,
+    actualFloorDelta,
+    criticFloorDelta,
+    maxScoreCost,
+    maxFloorCost,
     protectedDeltas: dimensionDeltas,
     protectedSafe,
     accepted,
@@ -893,7 +916,7 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
       : !scaleSafe ? "scale-safety"
         : candidate.continuityErrorDelta >= -1e-6 ? "continuity-direction"
           : !protectedSafe ? "protected-dimension-regression"
-            : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "critic-regression"
+            : scoreDelta < -maxScoreCost || floorDelta < -maxFloorCost ? "full-song-regression"
               : accepted ? "continuity-win" : "critic-regression",
   };
 }
@@ -939,6 +962,22 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_MELODY_CONTINUITY_CANDIDATES,
     candidateIds,
+    candidateSummaries: assessments.map((assessment) => ({
+      id: assessment.id,
+      accepted: Boolean(assessment.accepted),
+      reason: assessment.reason,
+      changedNotes: finite(assessment.changedNotes),
+      afterContinuityDeficit: round(assessment.afterContinuityDeficit, 4),
+      continuityErrorDelta: round(assessment.continuityErrorDelta, 4),
+      actualScore: round(assessment.after?.score),
+      criticViewScore: round(assessment.criticAfter?.score),
+      scoreDelta: round(assessment.scoreDelta),
+      maxScoreCost: finite(assessment.maxScoreCost),
+      floorDelta: round(assessment.floorDelta),
+      actualFloorDelta: round(assessment.actualFloorDelta),
+      criticFloorDelta: round(assessment.criticFloorDelta),
+      maxFloorCost: finite(assessment.maxFloorCost),
+    })),
     beforeScore: round(before?.score),
     afterScore: round(selected?.after?.score),
     scoreDelta: round(selected?.scoreDelta),
@@ -946,6 +985,11 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
     afterContinuityDeficit: round(selected?.afterContinuityDeficit, 4),
     continuityErrorDelta: round(selected?.continuityErrorDelta, 4),
     floorDelta: round(selected?.floorDelta),
+    actualFloorDelta: round(selected?.actualFloorDelta),
+    criticFloorDelta: round(selected?.criticFloorDelta),
+    criticViewScore: round(selected?.criticAfter?.score),
+    maxScoreCost: finite(selected?.maxScoreCost),
+    maxFloorCost: finite(selected?.maxFloorCost),
     protectedDeltas: Object.fromEntries(
       Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
     ),
@@ -1021,10 +1065,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     evaluateCandidate: evaluators.evaluateCandidate ?? evaluateSongCandidate,
     evaluateReleaseGate: evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate,
   });
-  if (processed.song === result.song) return result;
-
-  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
-  const acceptedStages = [
+  const stageEntries = [
     ["arrangement", processed.diagnostics],
     ["returnDevelopment", processed.returnDiagnostics],
     ["groovePocket", processed.grooveDiagnostics],
@@ -1039,10 +1080,17 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
   ];
-  for (const [key, diagnostics] of acceptedStages) {
-    if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
+  const stageDiagnostics = Object.fromEntries(stageEntries.filter(([, diagnostics]) => diagnostics != null));
+  if (typeof evaluators.onStageDiagnostics === "function") {
+    try { evaluators.onStageDiagnostics(stageDiagnostics); } catch { /* diagnostics must never change generation */ }
   }
 
+  if (processed.song === result.song) return result;
+
+  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
+  for (const [key, diagnostics] of stageEntries) {
+    if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
+  }
   return {
     ...result,
     song: processed.song,

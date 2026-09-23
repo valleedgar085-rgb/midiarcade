@@ -216,6 +216,8 @@ export function createGenerationExecutor({
         focusGroup: diagnosis.focusGroup,
         totalScore: diagnosis.totalScore,
         creativeFloor: diagnosis.creativeFloor,
+        criticalFloor: diagnosis.criticalFloor,
+        lowestCriticalDimension: diagnosis.lowestCriticalDimension,
       });
 
       let selectedResult = originalResult;
@@ -245,16 +247,22 @@ export function createGenerationExecutor({
         });
       }
 
-      selectedResult = applyResultOutputQualityPipeline(selectedResult, config);
+      let stageDiagnostics = {};
+      selectedResult = applyResultOutputQualityPipeline(selectedResult, config, {
+        onStageDiagnostics(diagnostics) {
+          stageDiagnostics = diagnostics ?? {};
+        },
+      });
+      const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
-        arrangementEvolution: selectedResult?.outputQualityDiagnostics?.arrangement ?? null,
-        returnDevelopment: selectedResult?.outputQualityDiagnostics?.returnDevelopment ?? null,
-        densityRefinement: selectedResult?.outputQualityDiagnostics?.densityRefinement ?? null,
-        phraseResolutionRefinement: selectedResult?.outputQualityDiagnostics?.phraseResolutionRefinement ?? null,
-        registerHealthRefinement: selectedResult?.outputQualityDiagnostics?.registerHealthRefinement ?? null,
-        melodyContinuityRefinement: selectedResult?.outputQualityDiagnostics?.melodyContinuityRefinement ?? null,
-        bassContinuityRefinement: selectedResult?.outputQualityDiagnostics?.bassContinuityRefinement ?? null,
-        ensembleContinuityRefinement: selectedResult?.outputQualityDiagnostics?.ensembleContinuityRefinement ?? null,
+        arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
+        returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
+        densityRefinement: stageDiagnostics.densityRefinement ?? acceptedDiagnostics.densityRefinement ?? null,
+        phraseResolutionRefinement: stageDiagnostics.phraseResolutionRefinement ?? acceptedDiagnostics.phraseResolutionRefinement ?? null,
+        registerHealthRefinement: stageDiagnostics.registerHealthRefinement ?? acceptedDiagnostics.registerHealthRefinement ?? null,
+        melodyContinuityRefinement: stageDiagnostics.melodyContinuityRefinement ?? acceptedDiagnostics.melodyContinuityRefinement ?? null,
+        bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
+        ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
       flightRecorder.complete(flightId, selectedResult?.song);
       return selectedResult;

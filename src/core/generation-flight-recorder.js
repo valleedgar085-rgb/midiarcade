@@ -6,13 +6,11 @@ function defaultClock() {
 }
 
 function cloneDetail(value) {
-  if (!value || typeof value !== "object") return {};
+  if (value == null) return value;
+  if (["string", "number", "boolean"].includes(typeof value)) return value;
+  if (typeof value !== "object") return String(value);
   if (Array.isArray(value)) return value.map((entry) => cloneDetail(entry));
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-    if (entry && typeof entry === "object") return [key, cloneDetail(entry)];
-    if (["string", "number", "boolean"].includes(typeof entry) || entry == null) return [key, entry];
-    return [key, String(entry)];
-  }));
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneDetail(entry)]));
 }
 
 function summarizeConfig(config = {}) {
@@ -37,7 +35,10 @@ function summarizeConfig(config = {}) {
 
 function summarizeSong(song) {
   const search = song?.meta?.scoreDetails?.candidateSearch;
-  const score = song?.meta?.score ?? song?.meta?.qualityScore ?? null;
+  const score = song?.meta?.scoreDetails?.totalScore
+    ?? song?.meta?.score
+    ?? song?.meta?.qualityScore
+    ?? null;
   return Object.freeze({
     id: song?.id ?? null,
     title: song?.title ?? null,

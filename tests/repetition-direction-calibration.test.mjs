@@ -19,6 +19,7 @@ function average(values, fallback = 0) {
 
 function phraseRepetitionRatio(song) {
   const melodyNotes = [...(song.tracks?.find((track) => track.id === "melody")?.notes ?? [])]
+    .filter((note) => note?.continuityRole !== "phrase-link")
     .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   const length = finite(song.motifs?.melody?.lengthBeats, 0);
   if (length <= 0 || melodyNotes.length < 4) return 0.55;

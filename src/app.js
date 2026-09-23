@@ -3741,6 +3741,178 @@ const generationExecutor = createGenerationExecutor({
   fallback: createAppGenerationFallback({ generationRunner }),
 });
 
+function generationDebuggerDetailText(detail = {}) {
+  const entries = Object.entries(detail ?? {});
+  if (!entries.length) return "No extra detail recorded.";
+  return entries.slice(0, 6).map(([key, value]) => {
+    const textValue = value && typeof value === "object" ? JSON.stringify(value) : String(value);
+    return key + ": " + textValue;
+  }).join(" · ");
+}
+
+function ensureGenerationDebuggerControls() {
+  if (!$("#debuggerButton")) {
+    const button = document.createElement("button");
+    button.className = "icon-button debugger-button";
+    button.id = "debuggerButton";
+    button.type = "button";
+    button.setAttribute("aria-label", "Generation debugger");
+    button.title = "Generation debugger";
+    button.innerHTML = "<span>&lt;/&gt;</span><b>DEBUG</b>";
+    $("#helpButton")?.before(button);
+  }
+
+  if (!$("#menuItemDebugger")) {
+    const item = document.createElement("button");
+    item.className = "menu-item";
+    item.id = "menuItemDebugger";
+    item.type = "button";
+    item.innerHTML = '<span class="menu-icon">&lt;/&gt;</span><b>Generation Debugger</b><kbd>D</kbd>';
+    $("#menuItemPrivacy")?.before(item);
+  }
+
+  const dialog = $("#debuggerDialog");
+  if (!dialog) return;
+
+  if (!$("#closeDebugger")) {
+    const close = document.createElement("button");
+    close.className = "dialog-close";
+    close.id = "closeDebugger";
+    close.type = "button";
+    close.setAttribute("aria-label", "Close debugger");
+    close.textContent = "x";
+    dialog.prepend(close);
+  }
+
+  if (!$("#refreshDebugger")) {
+    const refresh = document.createElement("button");
+    refresh.className = "small-button";
+    refresh.id = "refreshDebugger";
+    refresh.type = "button";
+    refresh.textContent = "Refresh";
+    $(".debugger-section-heading", dialog)?.append(refresh);
+  }
+
+  const actions = $(".debugger-actions", dialog);
+  if (actions && !$("#copyDebuggerReport")) {
+    const copy = document.createElement("button");
+    copy.className = "small-button";
+    copy.id = "copyDebuggerReport";
+    copy.type = "button";
+    copy.textContent = "Copy report";
+    actions.append(copy);
+  }
+  if (actions && !$("#clearDebuggerHistory")) {
+    const clear = document.createElement("button");
+    clear.className = "small-button";
+    clear.id = "clearDebuggerHistory";
+    clear.type = "button";
+    clear.textContent = "Clear history";
+    actions.append(clear);
+  }
+}
+
+function renderGenerationDebugger() {
+  const runs = generationExecutor.diagnosticsSnapshot();
+  const latest = runs.at(-1) ?? null;
+  const stages = latest?.stages ?? [];
+  const summary = latest?.song ?? {};
+
+  const setText = (selector, value) => {
+    const element = $(selector);
+    if (element) element.textContent = value;
+  };
+
+  setText("#debuggerRunStatus", latest ? String(latest.status ?? "unknown").toUpperCase() : "NO RUN YET");
+  setText("#debuggerRunMeta", latest
+    ? String(latest.kind ?? "generation") + " · " + Math.round(Number(latest.durationMs) || 0) + " ms"
+    : "Generate a song, then refresh this panel.");
+  setText("#debuggerSongSummary", latest
+    ? (summary.title || "Untitled") + " · " + (latest.config?.genre || "unknown genre") + " · " + (latest.config?.bars ?? "?") + " bars"
+    : "No completed generation has been recorded.");
+  setText("#debuggerScoreSummary", latest
+    ? "Producer score " + (summary.score ?? "—") + " · seed " + (latest.config?.seed ?? summary.seed ?? "—")
+    : "Score and seed will appear after generation.");
+  setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
+  setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
+
+  const empty = $("#debuggerEmpty");
+  if (empty) empty.hidden = Boolean(latest);
+
+  const list = $("#debuggerStageList");
+  if (list) {
+    list.replaceChildren();
+    for (const [index, stage] of stages.entries()) {
+      const item = document.createElement("li");
+      item.className = "debugger-stage";
+      const number = document.createElement("b");
+      number.textContent = String(index + 1).padStart(2, "0");
+      const copy = document.createElement("span");
+      const name = document.createElement("strong");
+      name.textContent = String(stage.stage ?? "stage").toUpperCase();
+      const detail = document.createElement("small");
+      detail.textContent = generationDebuggerDetailText(stage.detail);
+      copy.append(name, detail);
+      item.append(number, copy);
+      list.append(item);
+    }
+  }
+
+  const raw = $("#debuggerRaw");
+  if (raw) raw.textContent = JSON.stringify({
+    capturedRuns: runs.length,
+    activeRequests: generationExecutor.activeRequests,
+    usingWorker: generationExecutor.usingWorker,
+    latest,
+  }, null, 2);
+}
+
+function openGenerationDebugger() {
+  renderGenerationDebugger();
+  const dialog = $("#debuggerDialog");
+  if (dialog && !dialog.open) dialog.showModal();
+}
+
+function clearGenerationDebugger() {
+  generationExecutor.clearDiagnostics();
+  renderGenerationDebugger();
+  showToast("Generation debugger history cleared.");
+}
+
+async function copyGenerationDebuggerReport() {
+  const runs = generationExecutor.diagnosticsSnapshot();
+  if (!runs.length) {
+    showToast("Generate a song first so the debugger has a run to copy.");
+    return;
+  }
+  const payload = JSON.stringify({
+    app: "MIDI Arcade",
+    version: "1.2.2",
+    capturedAt: new Date().toISOString(),
+    workerActive: generationExecutor.usingWorker,
+    runs,
+  }, null, 2);
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(payload);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = payload;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+    showToast("Debugger report copied.");
+  } catch (error) {
+    console.warn("Could not copy debugger report", error);
+    showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
+  }
+}
+
 function chooseNewGenrePrograms(seed) {
   const profile = genreProfile();
   for (const id of TRACK_ORDER) {
@@ -3791,12 +3963,13 @@ async function runGeneration(kind, options = {}) {
 
     const seed = createSeed();
     if (kind === "new") chooseNewGenrePrograms(seed);
-    const sourceSong = options.sourceSong ?? state.song;
+    const referenceSong = options.sourceSong ?? state.song;
+    const sourceSong = kind === "new" ? null : referenceSong;
     const config = {
       ...buildConfig(seed),
-      recentSongs: recentSongsForGeneration(sourceSong),
-      ...(kind === "new" && sourceSong?.oneShotKit?.id
-        ? { excludeOneShotKitIds: [sourceSong.oneShotKit.id] }
+      recentSongs: recentSongsForGeneration(referenceSong),
+      ...(kind === "new" && referenceSong?.oneShotKit?.id
+        ? { excludeOneShotKitIds: [referenceSong.oneShotKit.id] }
         : {}),
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
@@ -6440,6 +6613,18 @@ function toggleFullscreen() {
     if (event.target === dialog) dialog.close();
   });
 
+  ensureGenerationDebuggerControls();
+  const debuggerDialog = $("#debuggerDialog");
+  $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
+  $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
+  $("#closeDebugger")?.addEventListener("click", () => debuggerDialog?.close());
+  $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
+  $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
+  $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
+  debuggerDialog?.addEventListener("click", (event) => {
+    if (event.target === debuggerDialog) debuggerDialog.close();
+  });
+
   document.addEventListener("keydown", (event) => {
     const target = event.target;
     const historyShortcut = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z";
@@ -6452,7 +6637,7 @@ function toggleFullscreen() {
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || dialog.open) return;
+    if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement || $("dialog[open]")) return;
     const key = event.key.toLowerCase();
     if (event.code === "Space") { event.preventDefault(); player.toggle(); }
     if (key === "n") runGeneration("new");
@@ -6460,6 +6645,7 @@ function toggleFullscreen() {
     if (key === "s") runGeneration("songVariations");
     if (key === "e") exportSong();
     if (key === "f") toggleFullscreen();
+    if (key === "d") openGenerationDebugger();
   });
   document.addEventListener("change", scheduleSessionSave);
   document.addEventListener("visibilitychange", () => {
