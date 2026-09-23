@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
 import { analyzeMelodyContinuity } from "../src/core/melody-continuity-refinement.js";
-import { applyResultOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
+import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
 
 const GENRES = ["trap", "hipHop", "pop", "neoSoul"];
 const BAR_COUNTS = [16, 24, 32, 48, 64];
@@ -35,10 +35,10 @@ test("generated active verse and chorus melodies have no actionable interior sil
       };
       const composed = engine.generateNew(options);
       const repeatedComposed = engine.generateNew(options);
-      const result = applyResultOutputQualityPipeline({ song: composed }, {
+      const result = applySongOutputQualityPipeline(composed, {
         melodyContinuityRefinement: true,
       });
-      const repeatedResult = applyResultOutputQualityPipeline({ song: repeatedComposed }, {
+      const repeatedResult = applySongOutputQualityPipeline(repeatedComposed, {
         melodyContinuityRefinement: true,
       });
       const song = result.song;
@@ -55,7 +55,24 @@ test("generated active verse and chorus melodies have no actionable interior sil
       }
       const actionable = activeSections.filter((section) => section.actionable);
       if (actionable.length) {
-        failures.push(`${genre}/${bars}: actionable gaps in ${actionable.map((section) => section.id).join(", ")}`);
+        const diagnostics = result.melodyContinuityDiagnostics ?? {};
+        const detail = JSON.stringify({
+          reason: diagnostics.reason,
+          id: diagnostics.id,
+          changedNotes: diagnostics.changedNotes,
+          beforeScore: diagnostics.beforeScore,
+          afterScore: diagnostics.afterScore,
+          criticViewScore: diagnostics.criticViewScore,
+          scoreDelta: diagnostics.scoreDelta,
+          maxScoreCost: diagnostics.maxScoreCost,
+          floorDelta: diagnostics.floorDelta,
+          maxFloorCost: diagnostics.maxFloorCost,
+          beforeContinuityDeficit: diagnostics.beforeContinuityDeficit,
+          afterContinuityDeficit: diagnostics.afterContinuityDeficit,
+          continuityErrorDelta: diagnostics.continuityErrorDelta,
+          protectedDeltas: diagnostics.protectedDeltas,
+        });
+        failures.push(`${genre}/${bars}: actionable gaps in ${actionable.map((section) => section.id).join(", ")}; melody=${detail}`);
       }
     }
   }
