@@ -4187,6 +4187,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     beatsPerBar: barBeats,
     complexity: config.complexity,
     variation: config.variation,
+    tripletAmount: config.tripletAmount,
   }, { structure });
   const bars = [];
   for (let bar = 0; bar < config.bars; bar += 1) {
@@ -4785,10 +4786,20 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         const open = ["house", "techno"].includes(config.genre)
           ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
           : (motionAccent || offset > barBeats - 0.75) && cellRng.bool(0.1 + settings.variation * 0.2);
-        const preserveSubdivision = Boolean(
+        const offSixteenthGrid = Boolean(
           grooveHatOffsets
           && Math.abs(offset * 4 - Math.round(offset * 4)) > 0.01
         );
+        const exactSixthTriplet = offSixteenthGrid
+          && Math.abs(offset * 6 - Math.round(offset * 6)) < 0.002;
+        const exactEighthTriplet = offSixteenthGrid
+          && Math.abs(offset * 3 - Math.round(offset * 3)) < 0.002;
+        const preserveSubdivision = offSixteenthGrid;
+        const grooveFeature = exactSixthTriplet
+          ? "triplet-sixteenth"
+          : exactEighthTriplet
+            ? "triplet-eighth"
+            : open ? "groove-dna-open-hat" : "groove-dna-hat";
         hit(
           open ? 46 : 42,
           start + offset,
@@ -4796,9 +4807,9 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           open ? 0.22 : 0.055,
           grooveHatOffsets
             ? {
-              rhythmicFeature: open ? "groove-dna-open-hat" : "groove-dna-hat",
+              rhythmicFeature: grooveFeature,
               grooveSource: `${groovePlan.grooveDNA?.grammarId ?? "groove-dna"}.hat`,
-              grammarRole: "timekeeper",
+              grammarRole: exactSixthTriplet || exactEighthTriplet ? "triplet-subdivision" : "timekeeper",
               ...(preserveSubdivision ? { preserveSubdivision: true } : {}),
             }
             : open ? { rhythmicFeature: "open-hat-accent" } : null,
