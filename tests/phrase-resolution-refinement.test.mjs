@@ -247,3 +247,52 @@ test("fresh generation opts into cadence refinement while explicit opt-out remai
   disabled.dispose();
   assert.equal(captures.at(-1).config.phraseResolutionRefinement, false);
 });
+
+
+function fourSectionPhraseSong(genre) {
+  const song = sourceSong();
+  song.genre = genre;
+  song.meta.genre = genre;
+  song.bars = 8;
+  song.meta.bars = 8;
+  song.meta.totalBeats = 32;
+  song.structure = [
+    { id: "a", name: "verse", startBeat: 0, endBeat: 8 },
+    { id: "b", name: "chorus", startBeat: 8, endBeat: 16 },
+    { id: "c", name: "bridge", startBeat: 16, endBeat: 24 },
+    { id: "d", name: "final", startBeat: 24, endBeat: 32 },
+  ];
+  song.harmony = [{ start: 0, duration: 32, root: 0, tones: [0, 4, 7] }];
+  track(song, "pad").notes[0].duration = 32;
+  track(song, "melody").notes.push(
+    { id: "m6", start: 25, pitch: 69, duration: 0.5, velocity: 94 },
+    { id: "m7", start: 31, pitch: 62, duration: 0.25, velocity: 98 },
+  );
+  return song;
+}
+
+test("Funk and Afrobeats may evaluate one extra bounded section-cadence candidate", () => {
+  for (const genre of ["funk", "afrobeats"]) {
+    const song = fourSectionPhraseSong(genre);
+    const candidates = createPhraseResolutionCandidates(song, { maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES });
+    assert.ok(candidates.length > 0 && candidates.length <= 4);
+    assert.ok(candidates.some((candidate) => candidate.id === "section-cadence-sweep"));
+    for (const candidate of candidates) {
+      assert.ok(candidate.changedNotes <= 4);
+      assert.ok(candidate.localScoreDelta > 0);
+      assert.deepEqual(noteShape(candidate.song, "drums"), noteShape(song, "drums"));
+      assert.deepEqual(noteShape(candidate.song, "bass"), noteShape(song, "bass"));
+      assert.deepEqual(
+        track(candidate.song, "melody").notes.map((note) => note.start),
+        track(song, "melody").notes.map((note) => note.start),
+      );
+    }
+  }
+});
+
+test("standard genres keep the original three-candidate phrase-resolution ceiling", () => {
+  const trap = fourSectionPhraseSong("trap");
+  const candidates = createPhraseResolutionCandidates(trap, { maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES });
+  assert.ok(candidates.length <= 3);
+  assert.ok(candidates.every((candidate) => candidate.id !== "section-cadence-sweep"));
+});
