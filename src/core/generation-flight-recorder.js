@@ -49,9 +49,15 @@ function summarizeSong(song) {
       thinkingDepth: search.thinkingDepth,
       targetReached: search.targetReached,
       candidatesEvaluated: search.candidatesEvaluated ?? search.totalCandidates,
+      // Keep the original recorder keys as compatibility aliases while exposing
+      // the new authoritative search/provenance fields.
+      totalCandidates: search.totalCandidates ?? search.candidatesEvaluated,
       baseCandidateCount: search.baseCandidateCount,
       maxCandidateCount: search.maxCandidateCount,
       expandedBy: search.expandedBy,
+      weakestDimension: search.weakestDimension ?? search.focusDimension,
+      repairAttempts: search.repairAttempts,
+      repairAccepted: search.repairAccepted,
       focusGroup: search.focusGroup,
       focusDimension: search.focusDimension ?? search.weakestDimension,
       focusRoute: search.focusRoute,
