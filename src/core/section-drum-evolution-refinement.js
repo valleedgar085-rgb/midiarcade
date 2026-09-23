@@ -73,12 +73,20 @@ function inWindow(note, window) {
   return start >= window.start - 1e-6 && start < window.end - 1e-6;
 }
 
+function protectedGrooveSpace(song, start) {
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const bar = Math.max(0, Math.floor(finite(start) / beatsPerBar));
+  const local = ((finite(start) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+  const plan = song?.grooveConductor?.bars?.[bar];
+  return (plan?.spaces ?? []).some((space) => Math.abs(finite(space) - local) < 0.01);
+}
+
 function noteAt(notes, pitch, start, tolerance = 1e-5) {
   return notes.some((note) => Number(note?.pitch) === pitch && Math.abs(finite(note?.start) - start) <= tolerance);
 }
 
-function addHit(notes, pitch, start, velocity, duration, metadata) {
-  if (!(start >= 0) || noteAt(notes, pitch, start)) return false;
+function addHit(notes, pitch, start, velocity, duration, metadata, song = null) {
+  if (!(start >= 0) || noteAt(notes, pitch, start) || protectedGrooveSpace(song, start)) return false;
   notes.push({
     pitch,
     start: round(start),
@@ -141,7 +149,7 @@ function softenOpeningHat(notes, window, section, seed, occurrence, evolution) {
   };
 }
 
-function addGhostResponse(notes, window, section, seed, occurrence, evolution) {
+function addGhostResponse(notes, window, section, seed, occurrence, evolution, song = null) {
   const snares = snareNotes(notes, window);
   if (!snares.length) return null;
   const referenceIndex = hash32(`${seed}|ghost-ref|${section.id}|${occurrence}`) % snares.length;
@@ -158,12 +166,12 @@ function addGhostResponse(notes, window, section, seed, occurrence, evolution) {
       phraseRole: "response",
       sectionId: section.id ?? null,
       sectionName: sectionName(section),
-    })) return { type: "ghost-snare", start };
+    }, song)) return { type: "ghost-snare", start };
   }
   return null;
 }
 
-function addKickResponse(notes, window, section, seed, occurrence, energy, evolution) {
+function addKickResponse(notes, window, section, seed, occurrence, energy, evolution, song = null) {
   const snares = snareNotes(notes, window);
   if (!snares.length) return null;
   const reference = snares[hash32(`${seed}|kick-ref|${section.id}|${occurrence}`) % snares.length];
@@ -178,12 +186,12 @@ function addKickResponse(notes, window, section, seed, occurrence, energy, evolu
       phraseRole: "response",
       sectionId: section.id ?? null,
       sectionName: sectionName(section),
-    })) return { type: "kick-response", start };
+    }, song)) return { type: "kick-response", start };
   }
   return null;
 }
 
-function addTransitionPickup(notes, window, section, energy, evolution) {
+function addTransitionPickup(notes, window, section, energy, evolution, song = null) {
   const start = round(window.end - 0.5);
   if (start <= window.start + 0.25 || noteAt(notes, 38, start)) return null;
   const velocity = 52 + energy * 18 + evolution * 8;
@@ -193,7 +201,7 @@ function addTransitionPickup(notes, window, section, energy, evolution) {
     phraseRole: "pickup",
     sectionId: section.id ?? null,
     sectionName: sectionName(section),
-  })) return null;
+  }, song)) return null;
   return { type: "transition-pickup", start };
 }
 
@@ -246,23 +254,23 @@ function buildCandidate(song, config, genre) {
     }
 
     if (BUILD_SECTIONS.has(name) && fills > 0.001) {
-      const pickup = addTransitionPickup(notes, window, section, energy, evolution);
+      const pickup = addTransitionPickup(notes, window, section, energy, evolution, candidate);
       if (pickup) edits.push({ ...pickup, sectionId: section.id ?? null, sectionName: name, occurrence });
       continue;
     }
 
     if (PAYOFF_SECTIONS.has(name)) {
-      const response = addKickResponse(notes, window, section, seed, occurrence, energy, evolution);
+      const response = addKickResponse(notes, window, section, seed, occurrence, energy, evolution, candidate);
       if (response) edits.push({ ...response, sectionId: section.id ?? null, sectionName: name, occurrence });
       if (occurrence > 1 && edits.length < maxEdits) {
-        const ghost = addGhostResponse(notes, window, section, seed, occurrence, evolution);
+        const ghost = addGhostResponse(notes, window, section, seed, occurrence, evolution, candidate);
         if (ghost) edits.push({ ...ghost, sectionId: section.id ?? null, sectionName: name, occurrence });
       }
       continue;
     }
 
     if (VERSE_SECTIONS.has(name) && occurrence > 1) {
-      const ghost = addGhostResponse(notes, window, section, seed, occurrence, evolution);
+      const ghost = addGhostResponse(notes, window, section, seed, occurrence, evolution, candidate);
       if (ghost) edits.push({ ...ghost, sectionId: section.id ?? null, sectionName: name, occurrence });
     }
   }
