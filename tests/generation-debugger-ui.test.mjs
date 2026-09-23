@@ -7,9 +7,12 @@ const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
 test("generation debugger exposes the existing flight recorder without changing engine authority", () => {
-  assert.match(html, /id="debuggerButton"/);
+  assert.doesNotMatch(html, /id="debuggerButton"/, "debug controls stay out of the static button budget");
   assert.match(html, /id="debuggerDialog"/);
-  assert.match(html, /id="copyDebuggerReport"/);
+  assert.doesNotMatch(html, /id="copyDebuggerReport"/, "debug actions are injected at runtime");
+  assert.match(app, /function ensureGenerationDebuggerControls\(\)/);
+  assert.match(app, /button\.id = "debuggerButton"/);
+  assert.match(app, /copy\.id = "copyDebuggerReport"/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
   assert.match(app, /generationExecutor\.clearDiagnostics\(\)/);
   assert.match(app, /function openGenerationDebugger\(\)/);
