@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createArrangementCandidates,
+  genreSequenceFitScore,
   MAX_ARRANGEMENT_CANDIDATES,
 } from "../src/core/arrangement-candidates.js";
 import { applySongOutputQualityPostprocess } from "../src/core/output-quality-postprocess.js";
@@ -60,6 +61,26 @@ function evaluation(score, arrangementScore) {
   };
 }
 
+test("genre sequence scoring prefers musically ordered Pop, Techno, and Rock payoffs", () => {
+  assert.ok(
+    genreSequenceFitScore(["intro", "verse", "prechorus", "chorus", "bridge", "prechorus", "chorus", "outro"], "pop")
+      > genreSequenceFitScore(["intro", "verse", "chorus", "prechorus", "bridge", "chorus", "verse", "outro"], "pop"),
+    "Pop should prefer a setup immediately before the final chorus",
+  );
+
+  assert.ok(
+    genreSequenceFitScore(["intro", "drop", "breakdown", "build", "drop", "outro"], "techno")
+      > genreSequenceFitScore(["intro", "build", "drop", "breakdown", "drop", "outro"], "techno"),
+    "Techno should prefer reset → rebuild → final drop",
+  );
+
+  assert.ok(
+    genreSequenceFitScore(["intro", "verse", "chorus", "solo", "bridge", "chorus", "outro"], "rock")
+      > genreSequenceFitScore(["intro", "verse", "chorus", "chorus", "solo", "outro"], "rock"),
+    "Rock should place live-band contrast before the final payoff",
+  );
+});
+
 test("Phase 6B arrangement audition is deterministic, unique, immutable, and hard-capped at three candidates", () => {
   const source = generateNew({
     genre: "pop",
@@ -88,6 +109,16 @@ test("Phase 6B arrangement audition is deterministic, unique, immutable, and har
     assert.equal(song.bars, source.bars);
     assert.deepEqual([...song.structure.map(({ id }) => id)].sort(), sourceIds);
     assert.ok(candidateIndex >= 0 && candidateIndex < MAX_ARRANGEMENT_CANDIDATES);
+    const order = song.structure.map(({ id }) => id);
+    assert.deepEqual(song.songBlueprint.sectionPlans.map(({ sectionId }) => sectionId), order);
+    assert.deepEqual(song.songBlueprint.producerIntent.scenes.map(({ sectionId }) => sectionId), order);
+    assert.deepEqual(song.generationInterlock.sectionContracts.map(({ sectionId }) => sectionId), order);
+    const sectionById = new Map(song.structure.map((section) => [section.id, section]));
+    for (const bar of song.grooveConductor.bars) {
+      const section = sectionById.get(bar.sectionId);
+      assert.ok(section);
+      assert.ok(bar.bar >= section.startBar && bar.bar < section.startBar + section.bars);
+    }
   }
 });
 
