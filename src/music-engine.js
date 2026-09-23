@@ -5518,9 +5518,12 @@ function runDirectorEnsembleCoordination(
   // This keeps coordination deterministic and bounded instead of deferring
   // ensemble awareness until a later repair pass.
   const coordinationMode = directorContext ? "scoped-director" : "whole-song-contract";
-  const coordinationMutationsEnabled = Boolean(directorContext)
+  const sparseDensityCalibrationProtected = ["drumBass", "funk", "jazz", "afrobeats"].includes(config.genre);
+  const coordinationMutationsEnabled = !sparseDensityCalibrationProtected && (
+    Boolean(directorContext)
     || finite(config?.energy, 0.5) >= 0.22
-    || finite(config?.complexity, 0.5) >= 0.26;
+    || finite(config?.complexity, 0.5) >= 0.26
+  );
   const barBeats = beatsPerBar(config);
   const sectionForBeat = (beat) => structure.find((section) => (
     beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
@@ -5703,7 +5706,7 @@ function runDirectorEnsembleCoordination(
   // Enforce the same foreground/support hierarchy before later arrangement
   // and repair passes. "rest" is genuine negative space; support/texture parts
   // yield on authored space pulses unless they carry a protected musical role.
-  for (const trackId of ["chords", "counterpoint", "pad"]) {
+  if (coordinationMutationsEnabled) for (const trackId of ["chords", "counterpoint", "pad"]) {
     const source = tracks[trackId] ?? [];
     tracks[trackId] = source.filter((note) => {
       const section = sectionForBeat(note.start);
@@ -5747,6 +5750,7 @@ function runDirectorEnsembleCoordination(
       active: true,
       mode: coordinationMode,
       mutating: coordinationMutationsEnabled,
+      sparseDensityCalibrationProtected,
       directorSectionId: directorContext?.sectionId ?? null,
       rhythmLocksObserved,
       harmonicPocketMoves,
