@@ -42,6 +42,8 @@ console.table(report.perGenre.map((genre) => ({
   densityGain: genre.averageDensityRefinementDelta,
   phraseRefine: `${Math.round(genre.phraseResolutionRefinementAcceptanceRate * 100)}%/${Math.round(genre.phraseResolutionRefinementAttemptRate * 100)}%`,
   phraseGain: genre.averagePhraseResolutionRefinementDelta,
+  repetitionRefine: `${Math.round(genre.repetitionRefinementAcceptanceRate * 100)}%/${Math.round(genre.repetitionRefinementAttemptRate * 100)}%`,
+  repetitionGain: genre.averageRepetitionRefinementDelta,
   registerRefine: `${Math.round(genre.registerHealthRefinementAcceptanceRate * 100)}%/${Math.round(genre.registerHealthRefinementAttemptRate * 100)}%`,
   registerGain: genre.averageRegisterHealthRefinementDelta,
   release: `${Math.round(genre.releasePassRate * 100)}%`,
@@ -78,6 +80,12 @@ console.log(
   + ` · average critic gain ${report.averagePhraseResolutionRefinementDelta}`,
 );
 console.log(
+  `Repetition refinement: ${Math.round(report.repetitionRefinementAcceptanceRate * 100)}% accepted`
+  + ` of ${Math.round(report.repetitionRefinementAttemptRate * 100)}% attempted candidates`
+  + ` · average critic gain ${report.averageRepetitionRefinementDelta}`
+  + ` · average signed error delta ${report.averageRepetitionErrorDelta}`,
+);
+console.log(
   `Register health refinement: ${Math.round(report.registerHealthRefinementAcceptanceRate * 100)}% accepted`
   + ` of ${Math.round(report.registerHealthRefinementAttemptRate * 100)}% attempted candidates`
   + ` · average critic gain ${report.averageRegisterHealthRefinementDelta}`,
@@ -100,6 +108,19 @@ console.log(
   + ` · subsystem: ${report.weakestGroup.id} (${report.weakestGroup.score})`
   + ` · dimension: ${report.weakestDimension.id} (${report.weakestDimension.score})`,
 );
+if (report.attentionMap?.length) {
+  console.log("\nPhase 5 attention map (lowest critic dimensions first):");
+  console.table(report.attentionMap.slice(0, 10).map((entry) => ({
+    genre: entry.genre,
+    overall: entry.averageOverallScore,
+    minimum: entry.minimumMusicalScore,
+    creativeFloor: entry.averageCreativeFloor,
+    weakestSubsystem: `${entry.weakestGroup.id} ${entry.weakestGroup.score}`,
+    weakestDimension: `${entry.weakestDimension.id} ${entry.weakestDimension.score}`,
+    weakestVariety: `${entry.weakestVarietyAxis} ${Math.round(entry.weakestVarietyRatio * 100)}%`,
+  })));
+}
+
 if (report.failureMap.length) {
   console.log("\nPhase 5 genre failure map:");
   console.table(report.failureMap.map((entry) => ({
