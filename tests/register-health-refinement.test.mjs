@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createGenerationExecutor } from "../src/core/generation-executor.js";
-import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
+import {
+  applyResultOutputQualityPipeline,
+  applySongOutputQualityPipeline,
+} from "../src/core/output-quality-pipeline-register.js";
 import {
   createRegisterHealthCandidates,
   MAX_REGISTER_HEALTH_CANDIDATES,
@@ -191,6 +194,34 @@ test("register pipeline fails closed when the full critic cannot verify the loca
   assert.strictEqual(processed.song, source);
   assert.equal(processed.registerHealthDiagnostics.accepted, false);
   assert.equal(processed.registerHealthDiagnostics.reason, "critic-regression");
+});
+
+test("result wrapper preserves rejected register diagnostics for the debugger", () => {
+  const source = sourceSong();
+  const result = applyResultOutputQualityPipeline({ status: "committed", song: source }, {
+    arrangementEvolution: false,
+    returnDevelopment: false,
+    densityRefinement: false,
+    phraseResolutionRefinement: false,
+    repetitionRefinement: false,
+    groovePocketRefinement: false,
+    registerHealthRefinement: true,
+    melodyContinuityRefinement: false,
+    bassContinuityRefinement: false,
+    ensembleContinuityRefinement: false,
+    genreIdentityRefinement: false,
+    transitionFxRefinement: false,
+  }, {
+    evaluateCandidate(song) {
+      return evaluator(song, 78);
+    },
+    evaluateReleaseGate: releaseGate,
+  });
+
+  assert.strictEqual(result.song, source);
+  assert.equal(result.outputQualityDiagnostics?.registerHealthRefinement, undefined);
+  assert.equal(result.outputQualityStageDiagnostics.registerHealthRefinement.accepted, false);
+  assert.equal(result.outputQualityStageDiagnostics.registerHealthRefinement.reason, "critic-regression");
 });
 
 test("fresh generation opts into register refinement while explicit opt-out remains authoritative", async () => {
