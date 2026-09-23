@@ -1,0 +1,52 @@
+name: Phase 5 Genre Quality Gauntlet
+
+on:
+  pull_request:
+    paths:
+      - "src/music-engine.js"
+      - "src/generation-benchmark.js"
+      - "src/core/**"
+      - "scripts/benchmark-generation.mjs"
+      - "tests/generation-benchmark.test.mjs"
+      - "tests/song-quality-gauntlet.test.mjs"
+      - ".github/workflows/phase5-quality-gauntlet.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  genre-quality-gauntlet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run 4-seed all-genre quality gauntlet
+        id: gauntlet
+        continue-on-error: true
+        run: |
+          node scripts/benchmark-generation.mjs \
+            --seeds 4 \
+            --bars 16 \
+            --json /tmp/phase5-quality-gauntlet.json
+      - name: Upload Phase 5 failure map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-quality-gauntlet
+          path: /tmp/phase5-quality-gauntlet.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Enforce technical baseline
+        if: steps.gauntlet.outcome == 'failure'
+        run: |
+          echo "Phase 5 detected a technical/safety baseline failure. See the uploaded failure map."
+          exit 1
