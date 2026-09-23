@@ -2257,7 +2257,7 @@ test("ensemble groove conductor gives every bar shared rhythmic anchors and brea
   };
   const song = engine.generateNew(config);
   assert.deepEqual(song, engine.generateNew(config));
-  assert.equal(song.grooveConductor.version, 3);
+  assert.equal(song.grooveConductor.version, 4);
   assert.ok([3, 4].includes(song.grooveConductor.phraseBars));
   assert.equal(song.grooveConductor.bars.length, song.bars);
   assert.ok(song.grooveConductor.subdivision === 0.25 || song.grooveConductor.subdivision === 0.5);

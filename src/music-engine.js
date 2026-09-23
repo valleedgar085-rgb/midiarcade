@@ -37,6 +37,11 @@ import { refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
+import {
+  applyHumanGrooveAnchorPrior,
+  humanGrooveInfluence,
+  humanGroovePriorForGenre,
+} from "./core/human-groove-priors.js";
 
 export const PPQ = 480;
 
@@ -4161,6 +4166,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
   const genreGrammar = GENRE_RHYTHM_GRAMMARS[config.genre] ?? GENRE_RHYTHM_GRAMMARS.pop;
   const responseDelay = genreGrammar.responseDelay;
+  const humanGroovePrior = humanGroovePriorForGenre(config.genre);
+  const humanGroovePriorInfluence = humanGrooveInfluence(config, humanGroovePrior);
   const bars = [];
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
@@ -4213,7 +4220,19 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         : barBeats - local.pick([0.25, 0.5, 0.75]);
       if (!anchors.some((anchor) => Math.abs(anchor - pickup) < 0.01)) anchors.push(pickup);
     }
-    anchors = uniqueGrooveOffsets([0, ...anchors], barBeats);
+    // Human performance research is a bounded ensemble-level prior, never a
+    // copied pattern. It may add/remove at most one secondary kick anchor.
+    // Every downstream lane then negotiates from the same adjusted conductor.
+    const humanGrooveAdjustment = applyHumanGrooveAnchorPrior(anchors, {
+      config,
+      barBeats,
+      role,
+      snareOffsets: genreSnareOffsets(config, style, barBeats),
+      rng: local.fork("human-groove-prior"),
+      prior: humanGroovePrior,
+      fourFloor,
+    });
+    anchors = uniqueGrooveOffsets([0, ...humanGrooveAdjustment.anchors], barBeats);
     const answers = uniqueGrooveOffsets(anchors.map((offset) => offset + responseDelay), barBeats)
       .filter((offset) => !anchors.includes(offset));
     const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
@@ -4303,6 +4322,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       phrasePosition,
       role,
       anchors,
+      humanGrooveAdjustment: humanGrooveAdjustment.adjustment,
+      humanGrooveInfluence: humanGrooveAdjustment.influence,
       answers,
       spaces,
       bassPulses,
@@ -4312,10 +4333,20 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     });
   }
   return {
-    version: 3,
+    version: 4,
     routeId: route?.id ?? "harmony-first",
     phraseBars: clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
     subdivision: config.complexity > 0.62 ? 0.25 : 0.5,
+    humanGroovePrior: humanGroovePrior ? {
+      sourceStyles: [...humanGroovePrior.sourceStyles],
+      performances: humanGroovePrior.performances,
+      sampleBars: humanGroovePrior.sampleBars,
+      confidence: humanGroovePrior.confidence,
+      influence: humanGroovePriorInfluence,
+      influenceCap: humanGroovePrior.influenceCap,
+      protectFourFloor: humanGroovePrior.protectFourFloor,
+      preserveGrammar: humanGroovePrior.preserveGrammar,
+    } : null,
     bars,
   };
 }
