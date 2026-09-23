@@ -42,6 +42,7 @@ import {
   humanGrooveInfluence,
   humanGroovePriorForGenre,
 } from "./core/human-groove-priors.js";
+import { densityActivityForSong } from "./core/density-activity.js";
 
 export const PPQ = 480;
 
@@ -10900,9 +10901,11 @@ export function evaluateSongCandidate(song) {
   const motif = clamp(Math.round(controlledMotion * 56 + repetition * 0.44), 25, 100);
 
   const storyArc = blueprintArcScore(song);
-  const notesPerBar = pitchedNotes.length / bars;
+  const densityActivity = densityActivityForSong(song);
+  const notesPerBar = densityActivity.pitchedNotesPerBar;
+  const densityObserved = densityActivity.observed;
   const densityTarget = criticProfile.density;
-  const density = clamp(Math.round(100 - Math.abs(notesPerBar - densityTarget) / Math.max(10, densityTarget) * 42), 35, 100);
+  const density = clamp(Math.round(100 - Math.abs(densityObserved - densityTarget) / Math.max(10, densityTarget) * 42), 35, 100);
 
   const chordGroups = new Map();
   for (const note of chordNotes) {
@@ -11031,6 +11034,11 @@ export function evaluateSongCandidate(song) {
       stageInterlock: round(stageInterlock / 100),
       genreProfile: song.genre,
       densityTarget,
+      densityObserved: round(densityObserved),
+      pitchedNotesPerBar: round(notesPerBar),
+      drumOnsetsPerBar: round(densityActivity.drumOnsetsPerBar),
+      densityMetric: densityActivity.metric,
+      densityDrumWeight: densityActivity.drumWeight,
       repetitionTarget: round(repetitionTarget),
       syncopationTarget: criticProfile.syncopation,
       measuredSyncopation: round(measuredSyncopation),
