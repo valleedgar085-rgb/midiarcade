@@ -83,6 +83,6 @@ test("generated songs expose deterministic ensemble-level human groove diagnosti
   assert.ok(first.grooveConductor.humanGroovePrior.influence > 0);
   assert.ok(first.grooveConductor.humanGroovePrior.influence <= 0.18);
   for (const bar of first.grooveConductor.bars) {
-    assert.ok(["none", "add-secondary-anchor", "remove-secondary-anchor"].includes(bar.humanGrooveAdjustment));
+    assert.ok(["none", "add-secondary-anchor", "remove-secondary-anchor", "groove-dna-authority"].includes(bar.humanGrooveAdjustment));
   }
 });
