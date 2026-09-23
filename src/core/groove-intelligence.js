@@ -451,8 +451,46 @@ function sectionForBar(structure, bar) {
     ?? structure.at(-1);
 }
 
+function directorSectionForId(directorSections, sectionId) {
+  return (directorSections ?? []).find((section) => String(section?.sectionId) === String(sectionId)) ?? null;
+}
+
+function directorDensityMultiplier(directorSection) {
+  const target = finite(directorSection?.density?.target, NaN);
+  if (!Number.isFinite(target)) return 1;
+  return clamp(0.72 + target * 0.56, 0.72, 1.28);
+}
+
+function directorLaneDensityMultiplier(directorSection, lane) {
+  const drums = directorSection?.instruments?.drums ?? {};
+  const bass = directorSection?.instruments?.bass ?? {};
+  if (lane === "hat" && drums.hatBehavior === "accelerate") return 1.28;
+  if (lane === "hat" && drums.hatBehavior === "sparse") return 0.72;
+  if (lane === "kick" && drums.role === "strongest-pattern") return 1.12;
+  if (lane === "kick" && bass.role === "simplified") return 0.9;
+  return 1;
+}
+
+function trimForDirectorVacuum(steps, directorSection, section, bar, beatsPerBar, beatsPerStep) {
+  const vacuumBeats = Math.max(0, finite(directorSection?.transitionOut?.vacuumBeats, 0));
+  const lastBar = bar === section.startBar + section.bars - 1;
+  if (!lastBar || vacuumBeats <= 0) return uniqueSorted(steps);
+  const cutoffBeat = Math.max(0, beatsPerBar - vacuumBeats);
+  const cutoffStep = cutoffBeat / beatsPerStep;
+  return uniqueSorted(steps.filter((step) => step < cutoffStep - 1e-6));
+}
+
+function applyDirectorRelationship(steps, role, directorSection) {
+  const bass = directorSection?.instruments?.bass ?? {};
+  if (role === "bass" && bass.role === "simplified") {
+    return uniqueSorted(steps.filter((_, index) => index % 2 === 0));
+  }
+  return uniqueSorted(steps);
+}
+
 export function createGrooveDNA(input = {}, {
   structure = null,
+  directorSections = null,
 } = {}) {
   const seed = String(input?.seed ?? "midi-arcade");
   const genre = genreId(input?.genre);
@@ -468,6 +506,7 @@ export function createGrooveDNA(input = {}, {
 
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
+    const directorSection = directorSectionForId(directorSections, section?.id);
     const lanePlans = {};
     for (const lane of ["kick", "snare", "hat", "percussion"]) {
       const baseSteps = scaleSteps(grammar.base[lane], gridSteps);
@@ -488,6 +527,8 @@ export function createGrooveDNA(input = {}, {
       const factor = grammar.density[lane]
         * (0.72 + densityControl * 0.56)
         * sectionDensityMultiplier(genre, section)
+        * directorDensityMultiplier(directorSection)
+        * directorLaneDensityMultiplier(directorSection, lane)
         * transformed.densityMultiplier;
       const densitySteps = applyDensity(
         transformed.steps,
@@ -497,9 +538,24 @@ export function createGrooveDNA(input = {}, {
         `${seed}:${genre}:${bar}:${lane}:density`,
       );
       const variationAmount = Math.round(variation * (lane === "hat" ? 2 : 1));
-      const variedSteps = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
+      let variedSteps = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
         ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
         : densitySteps;
+      if (lane === "hat" && directorSection?.instruments?.drums?.hatBehavior === "accelerate") {
+        const finalSectionBar = bar === section.startBar + section.bars - 1;
+        const extra = finalSectionBar
+          ? Array.from({ length: gridSteps }, (_, step) => step).filter((step) => step >= Math.floor(gridSteps / 2))
+          : Array.from({ length: gridSteps }, (_, step) => step).filter((step) => step % 2 === 0);
+        variedSteps = uniqueSorted([...variedSteps, ...extra]);
+      }
+      variedSteps = trimForDirectorVacuum(
+        variedSteps,
+        directorSection,
+        section,
+        bar,
+        beatsPerBar,
+        beatsPerStep,
+      );
       lanePlans[lane] = Object.freeze({
         baseSteps: Object.freeze(baseSteps),
         probabilitySteps: Object.freeze(probabilitySteps),
@@ -516,12 +572,23 @@ export function createGrooveDNA(input = {}, {
 
     const relationships = {};
     for (const [role, relationship] of Object.entries(grammar.relationships)) {
-      const steps = relationshipSteps(
-        lanePlans,
-        relationship,
-        beatsPerStep,
-        gridSteps,
-        `${seed}:${genre}:${bar}:${role}`,
+      const steps = applyDirectorRelationship(
+        trimForDirectorVacuum(
+          relationshipSteps(
+            lanePlans,
+            relationship,
+            beatsPerStep,
+            gridSteps,
+            `${seed}:${genre}:${bar}:${role}`,
+          ),
+          directorSection,
+          section,
+          bar,
+          beatsPerBar,
+          beatsPerStep,
+        ),
+        role,
+        directorSection,
       );
       relationships[role] = Object.freeze({
         ...relationship,
@@ -539,6 +606,9 @@ export function createGrooveDNA(input = {}, {
       bar,
       sectionId: section.id,
       sectionRole: sectionRole(section),
+      directorPurpose: directorSection?.purpose ?? null,
+      directorDensity: directorSection?.density?.state ?? null,
+      vacuumBeats: Math.max(0, finite(directorSection?.transitionOut?.vacuumBeats, 0)),
       kick: lanePlans.kick,
       snare: lanePlans.snare,
       hat: lanePlans.hat,
@@ -580,6 +650,12 @@ export function createGrooveDNA(input = {}, {
     relationships: grammar.relationships,
     humanization: grammar.humanization,
     sections: Object.freeze(normalizedSections),
+    directorSections: Object.freeze((directorSections ?? []).map((section) => ({
+      sectionId: section.sectionId,
+      purpose: section.purpose,
+      density: section.density,
+      transitionOut: section.transitionOut,
+    }))),
     bars: Object.freeze(barPlans),
   });
 }
