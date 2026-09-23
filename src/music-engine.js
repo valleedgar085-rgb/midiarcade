@@ -8832,9 +8832,14 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
     let coordinated = false;
     for (const id of ["bass", "melody"]) {
       const track = trackById.get(id);
+      const cadenceStart = Math.max(section.startBeat, goal.start);
       const candidates = track?.notes.filter((note) => (
-        note.start >= Math.max(section.startBeat, goal.start) - 1e-6
+        note.start >= section.startBeat - 1e-6
         && note.start < section.endBeat - 1e-6
+        && (
+          note.start >= cadenceStart - 1e-6
+          || note.start + Math.max(0.02, finite(note.duration, 0.25)) >= cadenceStart - 0.06
+        )
         && (!note.connectionId || note.connectionId === `interlock:${section.id}`)
       )) ?? [];
       const note = candidates.at(-1);
