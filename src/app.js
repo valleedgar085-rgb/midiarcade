@@ -3963,12 +3963,13 @@ async function runGeneration(kind, options = {}) {
 
     const seed = createSeed();
     if (kind === "new") chooseNewGenrePrograms(seed);
-    const sourceSong = options.sourceSong ?? state.song;
+    const referenceSong = options.sourceSong ?? state.song;
+    const sourceSong = kind === "new" ? null : referenceSong;
     const config = {
       ...buildConfig(seed),
-      recentSongs: recentSongsForGeneration(sourceSong),
-      ...(kind === "new" && sourceSong?.oneShotKit?.id
-        ? { excludeOneShotKitIds: [sourceSong.oneShotKit.id] }
+      recentSongs: recentSongsForGeneration(referenceSong),
+      ...(kind === "new" && referenceSong?.oneShotKit?.id
+        ? { excludeOneShotKitIds: [referenceSong.oneShotKit.id] }
         : {}),
     };
     const work = generationExecutor.run(kind, { sourceSong, config });
