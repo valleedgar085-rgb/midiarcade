@@ -1,6 +1,11 @@
 import { cloneValue } from "./clone-value.js";
-export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
-export const MAX_PHRASE_RESOLUTION_EDITS = 3;
+export const MAX_PHRASE_RESOLUTION_CANDIDATES = 4;
+export const MAX_PHRASE_RESOLUTION_EDITS = 4;
+
+function phraseResolutionFamily(song) {
+  const genre = String(song?.genre ?? song?.meta?.genre ?? "");
+  return ["funk", "afrobeats"].includes(genre) ? "extended" : "standard";
+}
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -196,15 +201,20 @@ export function createPhraseResolutionCandidates(song, {
   maxCandidates = MAX_PHRASE_RESOLUTION_CANDIDATES,
 } = {}) {
   const beforeScore = meanLandingScore(song);
+  const family = phraseResolutionFamily(song);
   const recipes = [
     { id: "chord-cadence", limit: 1, hold: false, payoff: false },
     { id: "held-cadence", limit: 2, hold: true, payoff: false },
     { id: "payoff-cadence", limit: 3, hold: true, payoff: true },
+    ...(family === "extended"
+      ? [{ id: "section-cadence-sweep", limit: 4, hold: true, payoff: true }]
+      : []),
   ];
   const seen = new Set();
+  const familyLimit = family === "extended" ? MAX_PHRASE_RESOLUTION_CANDIDATES : 3;
 
   return recipes
-    .slice(0, Math.max(0, Math.min(MAX_PHRASE_RESOLUTION_CANDIDATES, Math.floor(maxCandidates))))
+    .slice(0, Math.max(0, Math.min(familyLimit, Math.floor(maxCandidates))))
     .map((recipe, candidateIndex) => {
       const refined = refineLandingCandidate(song, recipe.limit, recipe);
       const afterScore = meanLandingScore(refined.song);
