@@ -196,9 +196,11 @@ test("register pipeline fails closed when the full critic cannot verify the loca
   assert.equal(processed.registerHealthDiagnostics.reason, "critic-regression");
 });
 
-test("result wrapper preserves rejected register diagnostics for the debugger", () => {
+test("result wrapper reports rejected register diagnostics without changing result identity", () => {
   const source = sourceSong();
-  const result = applyResultOutputQualityPipeline({ status: "committed", song: source }, {
+  const engineResult = { status: "committed", song: source };
+  let stageDiagnostics = null;
+  const result = applyResultOutputQualityPipeline(engineResult, {
     arrangementEvolution: false,
     returnDevelopment: false,
     densityRefinement: false,
@@ -216,12 +218,15 @@ test("result wrapper preserves rejected register diagnostics for the debugger", 
       return evaluator(song, 78);
     },
     evaluateReleaseGate: releaseGate,
+    onStageDiagnostics(diagnostics) {
+      stageDiagnostics = diagnostics;
+    },
   });
 
+  assert.strictEqual(result, engineResult);
   assert.strictEqual(result.song, source);
-  assert.equal(result.outputQualityDiagnostics?.registerHealthRefinement, undefined);
-  assert.equal(result.outputQualityStageDiagnostics.registerHealthRefinement.accepted, false);
-  assert.equal(result.outputQualityStageDiagnostics.registerHealthRefinement.reason, "critic-regression");
+  assert.equal(stageDiagnostics.registerHealthRefinement.accepted, false);
+  assert.equal(stageDiagnostics.registerHealthRefinement.reason, "critic-regression");
 });
 
 test("fresh generation opts into register refinement while explicit opt-out remains authoritative", async () => {
