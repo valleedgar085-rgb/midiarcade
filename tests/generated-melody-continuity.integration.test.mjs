@@ -71,6 +71,7 @@ test("generated active verse and chorus melodies have no actionable interior sil
           afterContinuityDeficit: diagnostics.afterContinuityDeficit,
           continuityErrorDelta: diagnostics.continuityErrorDelta,
           protectedDeltas: diagnostics.protectedDeltas,
+          candidateSummaries: diagnostics.candidateSummaries,
         });
         failures.push(`${genre}/${bars}: actionable gaps in ${actionable.map((section) => section.id).join(", ")}; melody=${detail}`);
       }
