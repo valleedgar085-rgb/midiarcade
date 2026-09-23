@@ -74,8 +74,15 @@ function fixtureSong() {
         })),
       },
     },
+    producerIntent: {
+      identity: { structuralArc: sections.map((section) => `${section.name}:legacy`) },
+      scenes: sections.map((section) => ({ sectionId: section.id, purpose: section.name, developmentAxis: "legacy" })),
+    },
+    orchestrationMatrix: sections.map((section) => ({ sectionId: section.id, featuredTrack: "counterpoint" })),
+    memoryMap: sections.map((section) => ({ sectionId: section.id, originSectionId: section.id, relationship: "legacy" })),
     phraseMemory: { sections: sections.map((section) => ({ sectionId: section.id, relationship: "statement" })) },
     songDNA: { sections: sections.map((section) => ({ sectionId: section.id, phraseSeed: section.startBeat })) },
+    spectrumPlan: { sections: sections.map((section) => ({ sectionId: section.id, role: "legacy" })) },
     motifs: {
       sectionAssignments: sections.map((section, index) => ({ sectionId: section.id, motifId: index % 2 ? "B" : "A" })),
     },
@@ -258,6 +265,15 @@ test("arrangement evolution moves complete sections atomically without changing 
   );
   assert.deepEqual(result.song.phraseMemory.sections.map(({ sectionId }) => sectionId), order);
   assert.deepEqual(result.song.songDNA.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.producerIntent.scenes.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.orchestrationMatrix.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.memoryMap.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.spectrumPlan.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.producerIntent, result.song.songBlueprint.producerIntent);
+  assert.deepEqual(result.song.orchestrationMatrix, result.song.songBlueprint.orchestrationMatrix);
+  assert.deepEqual(result.song.memoryMap, result.song.songBlueprint.memoryMap);
+  assert.deepEqual(result.song.phraseMemory, result.song.songBlueprint.phraseMemory);
+  assert.deepEqual(result.song.songDNA, result.song.songBlueprint.songDNA);
   assert.deepEqual(result.song.motifs.sectionAssignments.map(({ sectionId }) => sectionId), order);
   assert.deepEqual(result.song.generationInterlock.sectionContracts.map(({ sectionId }) => sectionId), order);
 
