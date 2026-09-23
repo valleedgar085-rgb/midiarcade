@@ -309,23 +309,35 @@ function kickBassLock(song, selection) {
     return {
       compared: 0,
       lock: 1,
+      authority: "not-in-scope",
       distribution: { exactLock: 0, shortReply: 0, offbeat: 0, independent: 0 },
+      relationshipOffsets: [],
+      tolerance: 0,
     };
   }
+
   const kicks = scopedNotes(song, "drums", selection)
     .filter((note) => [35, 36].includes(Math.round(finite(note?.pitch))))
     .map(noteStart);
   const bass = scopedNotes(song, "bass", selection).map(noteStart);
-  if (!bass.length || !kicks.length) {
+  if (!bass.length) {
     return {
       compared: 0,
       lock: 1,
+      authority: "empty-bass",
       distribution: { exactLock: 0, shortReply: 0, offbeat: 0, independent: 0 },
+      relationshipOffsets: [],
+      tolerance: 0,
     };
   }
 
   const profile = bassRelationshipProfile(song);
-  const relationshipPulses = kicks.flatMap((kick) => profile.offsets.map((offset) => kick + offset));
+  const authoredBassPulses = conductorPulses(song, "bass", selection);
+  const kickDerivedPulses = kicks.flatMap((kick) => profile.offsets.map((offset) => kick + offset));
+  const relationshipPulses = authoredBassPulses.length ? authoredBassPulses : kickDerivedPulses;
+  const authority = authoredBassPulses.length ? "groove-dna" : "kick-fallback";
+  const tolerance = authoredBassPulses.length ? 0.14 : profile.tolerance;
+
   let exactLock = 0;
   let shortReply = 0;
   let offbeat = 0;
@@ -346,12 +358,13 @@ function kickBassLock(song, selection) {
       else if (nearestForward != null && nearestForward >= 0.42 && nearestForward <= 0.58 + EPSILON) offbeat += 1;
       else independent += 1;
     }
-    if (nearestDistance(start, relationshipPulses) <= profile.tolerance + EPSILON) related += 1;
+    if (nearestDistance(start, relationshipPulses) <= tolerance + EPSILON) related += 1;
   }
 
   return {
     compared: bass.length,
-    lock: related / bass.length,
+    lock: relationshipPulses.length ? related / bass.length : 1,
+    authority,
     distribution: {
       exactLock,
       shortReply,
@@ -359,7 +372,7 @@ function kickBassLock(song, selection) {
       independent,
     },
     relationshipOffsets: profile.offsets,
-    tolerance: profile.tolerance,
+    tolerance,
   };
 }
 
@@ -567,6 +580,7 @@ export function analyzeCompositionCandidate(song, selection = {}, directive = {}
       kickBass: Object.freeze({
         compared: groove.kickBass.compared,
         lock: round(groove.kickBass.lock),
+        authority: groove.kickBass.authority ?? "unknown",
         distribution: Object.freeze({ ...groove.kickBass.distribution }),
         relationshipOffsets: Object.freeze([...(groove.kickBass.relationshipOffsets ?? [])]),
         tolerance: round(groove.kickBass.tolerance),
