@@ -10083,14 +10083,32 @@ function compose(config, options = {}) {
     motifs.hookDistinctiveness = finalHookRefinement.report;
     motifs.creativeGenomeMutation = creativeGenomeMutation.report;
   }
-  const grooveConductor = createGrooveConductor(
-    config,
-    structure,
-    style,
-    motifs,
-    rootRng.fork("groove-conductor"),
-    route,
-  );
+  const suppliedGrooveConductor = options.grooveConductor ?? null;
+  if (suppliedGrooveConductor != null) {
+    if (!Array.isArray(suppliedGrooveConductor?.bars)) {
+      throw new TypeError("Scoped composition requires a valid source Groove Conductor");
+    }
+    const expectedBars = Math.max(
+      1,
+      ...structure.map((section) => Math.max(
+        1,
+        Math.round(finite(section?.endBar, finite(section?.startBar, 0) + finite(section?.bars, 1))),
+      )),
+    );
+    if (suppliedGrooveConductor.bars.length < expectedBars) {
+      throw new RangeError("Scoped composition source Groove Conductor does not cover the selected song structure");
+    }
+  }
+  const grooveConductor = suppliedGrooveConductor != null
+    ? clone(suppliedGrooveConductor)
+    : createGrooveConductor(
+      config,
+      structure,
+      style,
+      motifs,
+      rootRng.fork("groove-conductor"),
+      route,
+    );
   // The ensemble contract is planned before any instrument writes notes.
   // Track generators and every later repair now share one authoritative
   // section/phrase/groove picture instead of discovering it after the fact.
@@ -10142,7 +10160,7 @@ function compose(config, options = {}) {
     config.tracks.bass,
     rootRng.fork("bass-compose"),
     drumContext,
-    targetTrack === "bass" && retainedDrums ? null : grooveConductor,
+    grooveConductor,
     songBlueprint,
   );
   raw.chords = generateChords(
@@ -14452,6 +14470,7 @@ export function generateSimilar(current, input = {}) {
       targetTrack,
       contextTracks: targetContextTracks,
       ensembleContext: input.ensembleContext ?? input.directorDirective?.ensembleContext ?? null,
+      grooveConductor: input.grooveConductor ?? input.directorDirective?.grooveConductor ?? null,
     });
 
     const identitySong = normalizedSongForIdentity(candidateSong);
