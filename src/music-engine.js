@@ -48,6 +48,11 @@ import {
   createGrooveDNA,
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
+import {
+  absoluteGroovePulses,
+  grooveBarPlan,
+  nearestGroovePulse,
+} from "./core/groove-contract.js";
 
 export const PPQ = 480;
 
@@ -4163,7 +4168,7 @@ function uniqueGrooveOffsets(values, barBeats) {
 }
 
 function grooveBar(conductor, bar) {
-  return conductor?.bars?.[bar] ?? null;
+  return grooveBarPlan(conductor, bar);
 }
 
 function createGrooveConductor(config, structure, style, motifs, rng, route = null) {
@@ -5288,16 +5293,13 @@ function rootMidi(chord, octave) {
 
 function groovePulsesForWindow(conductor, lane, start, duration, barBeats) {
   const end = start + duration - 0.05;
-  const firstBar = Math.max(0, Math.floor(start / barBeats));
-  const lastBar = Math.max(firstBar, Math.floor(Math.max(start, end - 0.001) / barBeats));
-  const pulses = [];
-  for (let bar = firstBar; bar <= lastBar; bar += 1) {
-    const plan = grooveBar(conductor, bar);
-    for (const offset of plan?.[lane] ?? []) {
-      const absolute = bar * barBeats + offset;
-      if (absolute >= start - 0.001 && absolute < end) pulses.push(round(absolute - start));
-    }
-  }
+  const pulses = absoluteGroovePulses(
+    conductor,
+    lane,
+    start - 0.001,
+    end,
+    barBeats,
+  ).map((absolute) => round(absolute - start));
   return uniqueGrooveOffsets(pulses, duration);
 }
 
@@ -6438,17 +6440,18 @@ function grooveInfluenceForBeat(conductor, beat, lane, barBeats) {
 }
 
 function magnetizeBeatToGroove(conductor, beat, lane, barBeats, maximumDistance) {
-  const bar = Math.max(0, Math.floor(beat / barBeats));
-  const plan = grooveBar(conductor, bar);
-  const candidates = plan?.[lane] ?? [];
-  if (!candidates.length) return { beat, snapped: false };
-  const barStart = bar * barBeats;
-  const closest = candidates
-    .map((offset) => barStart + offset)
-    .sort((left, right) => Math.abs(left - beat) - Math.abs(right - beat))[0];
-  return Math.abs(closest - beat) <= maximumDistance
-    ? { beat: round(closest), snapped: Math.abs(closest - beat) > 0.001 }
-    : { beat, snapped: false };
+  const closest = nearestGroovePulse(
+    conductor,
+    lane,
+    beat,
+    barBeats,
+    maximumDistance,
+  );
+  if (!Number.isFinite(closest)) return { beat, snapped: false };
+  return {
+    beat: round(closest),
+    snapped: Math.abs(closest - beat) > 0.001,
+  };
 }
 
 function generateLead(
