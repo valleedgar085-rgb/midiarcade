@@ -44,8 +44,9 @@ test("PreviewPlayer can audition an explicit song while normal playback remains 
   assert.match(playerClass, /this\.playbackSong = null/);
 });
 
-test("generation and export continue sourcing the committed state.song", () => {
-  assert.match(appSource, /const sourceSong = options\.sourceSong \?\? state\.song/);
+test("generation and export preserve committed authority while New stays source-free", () => {
+  assert.match(appSource, /const referenceSong = options\.sourceSong \?\? state\.song/);
+  assert.match(appSource, /const sourceSong = kind === "new" \? null : referenceSong/);
   assert.match(appSource, /export function buildExportSongSnapshot\(song = state\.song/);
   assert.match(appSource, /createPersistedSessionSnapshot\(shapeDirectorPersistenceState\(\)/);
 });
