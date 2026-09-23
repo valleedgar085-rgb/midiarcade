@@ -4600,6 +4600,26 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       }
     }
 
+    for (let percussionIndex = 0; percussionIndex < (groovePlan?.percussionPulses ?? []).length; percussionIndex += 1) {
+      const offset = groovePlan.percussionPulses[percussionIndex];
+      const percussionRng = grammarRng.fork(`groove-dna-percussion-${percussionIndex}`);
+      const pitches = config.genre === "rock"
+        ? [54, 56]
+        : config.genre === "house"
+          ? [70, 75, 56]
+          : config.genre === "jazz"
+            ? [51, 59, 56]
+            : [70, 75, 56, 54];
+      const pitch = pitches[percussionRng.int(0, pitches.length - 1)];
+      hit(
+        pitch,
+        start + offset,
+        eventVelocity(config, settings, intensity, percussionRng, 0.5),
+        0.07,
+        { rhythmicFeature: "groove-dna-percussion", grooveGrammar: groovePlan.grooveDNA?.grammarId ?? null },
+      );
+    }
+
     const sectionEnd = bar === section.startBar + section.bars - 1;
     const transition = sectionEnd ? transitionFromSection(songBlueprint, section) : null;
     const incomingTransition = bar === section.startBar ? transitionIntoSection(songBlueprint, section) : null;
