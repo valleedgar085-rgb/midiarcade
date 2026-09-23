@@ -48,6 +48,7 @@ import {
   createGrooveDNA,
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
+import { createSongDirectorContract } from "./core/song-director.js";
 
 export const PPQ = 480;
 
@@ -2220,6 +2221,13 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     peakSection?.id,
     songDNA,
   );
+  const director = createSongDirectorContract({
+    config,
+    structure,
+    sectionPlans,
+    transitions,
+    orchestrationMatrix,
+  });
   const memoryMap = createMemoryMap(structure, sectionPlans, hookSection?.id, source, config, songDNA);
   const phraseMemory = createPhraseMemoryContract({
     structure,
@@ -2228,7 +2236,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     songDNA,
   });
   return {
-    version: 6,
+    version: 7,
     narrative: { id: narrative.id, label: narrative.label },
     songDNA,
     hookSectionId: hookSection?.id ?? null,
@@ -2258,6 +2266,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     transitions,
     orchestrationMatrix,
     producerIntent,
+    director,
     memoryMap,
     phraseMemory,
   };
@@ -4166,7 +4175,7 @@ function grooveBar(conductor, bar) {
   return conductor?.bars?.[bar] ?? null;
 }
 
-function createGrooveConductor(config, structure, style, motifs, rng, route = null) {
+function createGrooveConductor(config, structure, style, motifs, rng, route = null, songBlueprint = null) {
   const barBeats = beatsPerBar(config);
   const rhythmIdentity = style.rhythmIdentity
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
@@ -4181,7 +4190,10 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     beatsPerBar: barBeats,
     complexity: config.complexity,
     variation: config.variation,
-  }, { structure });
+  }, {
+    structure,
+    directorSections: songBlueprint?.director?.sections ?? null,
+  });
   const bars = [];
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
@@ -7417,7 +7429,29 @@ function applyCoordinatedTransitions(rawTracks, structure, songBlueprint) {
     const lastSection = structure[structure.length - 1];
     if (to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
     const boundary = from.endBeat;
-    const pickupStart = Math.max(from.startBeat, boundary - finite(transition.pickupBeats, 0.5));
+    const directorSection = songBlueprint?.director?.sections?.find(
+      (section) => String(section?.sectionId) === String(from.id),
+    ) ?? null;
+    const directorVacuumBeats = Math.max(0, finite(directorSection?.transitionOut?.vacuumBeats, 0));
+    const pickupStart = Math.max(
+      from.startBeat,
+      boundary - Math.max(finite(transition.pickupBeats, 0.5), directorVacuumBeats),
+    );
+
+    if (directorVacuumBeats > 0) {
+      const vacuumStart = Math.max(from.startBeat, boundary - directorVacuumBeats);
+      for (const id of Object.keys(result)) {
+        result[id] = result[id]
+          .filter((note) => note.start < vacuumStart - 1e-6 || note.start >= boundary - 1e-6)
+          .map((note) => note.start < vacuumStart && note.start + note.duration > vacuumStart
+            ? {
+              ...note,
+              duration: Math.max(0.02, vacuumStart - note.start),
+              transitionFeature: "director-vacuum",
+            }
+            : note);
+      }
+    }
 
     if (transition.type === "drop-out") {
       for (const id of Object.keys(result)) {
@@ -9994,6 +10028,7 @@ function compose(config, options = {}) {
     motifs,
     rootRng.fork("groove-conductor"),
     route,
+    songBlueprint,
   );
   // The ensemble contract is planned before any instrument writes notes.
   // Track generators and every later repair now share one authoritative
