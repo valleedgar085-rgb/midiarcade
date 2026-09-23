@@ -13427,6 +13427,10 @@ function rankCandidates(candidates) {
     .sort((left, right) => {
       const leftOutcome = evaluateCandidateOutcome(left);
       const rightOutcome = evaluateCandidateOutcome(right);
+      const leftBalance = evaluateCandidateBalance(left.evaluation);
+      const rightBalance = evaluateCandidateBalance(right.evaluation);
+      const leftCalibratedCreativeFloor = leftBalance.creativeFloor >= 75;
+      const rightCalibratedCreativeFloor = rightBalance.creativeFloor >= 75;
       return Number(rightOutcome.adaptiveTarget) - Number(leftOutcome.adaptiveTarget)
         || Number(rightOutcome.releasePassed) - Number(leftOutcome.releasePassed)
         || Number(rightOutcome.qualityPassed) - Number(leftOutcome.qualityPassed)
@@ -13434,6 +13438,10 @@ function rankCandidates(candidates) {
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
+        // Once the hard gates agree, preserve the calibrated creative floor
+        // instead of trading musical coherence for a tiny aggregate-score gain.
+        || Number(rightCalibratedCreativeFloor) - Number(leftCalibratedCreativeFloor)
+        || rightBalance.creativeFloor - leftBalance.creativeFloor
         || finite(right.selectionScore, right.evaluation.score) - finite(left.selectionScore, left.evaluation.score)
         || right.evaluation.score - left.evaluation.score
         || (Boolean(right.repair) - Boolean(left.repair))
