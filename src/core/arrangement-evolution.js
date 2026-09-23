@@ -456,34 +456,33 @@ function allTrackNotes(song) {
   ));
 }
 
-function transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy) {
+function transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes) {
   const delta = toEnergy - fromEnergy;
   if (delta >= 0.14) return "lift";
   if (delta > -0.22) return "push";
 
   const boundary = finite(from.endBeat, 0);
   const pickup = 0.5;
-  const notes = allTrackNotes(song);
-  const before = notes.filter(({ note }) => {
+  let before = 0;
+  let gap = 0;
+  for (const { note } of notes) {
     const start = eventStart(note);
-    return start >= boundary - pickup * 2 && start < boundary - pickup;
-  }).length;
-  const gap = notes.filter(({ note }) => {
-    const start = eventStart(note);
-    return start >= boundary - pickup && start < boundary;
-  }).length;
+    if (start >= boundary - pickup * 2 && start < boundary - pickup) before += 1;
+    else if (start >= boundary - pickup && start < boundary) gap += 1;
+  }
   return before > 0 && gap <= Math.max(1, Math.floor(before * 0.45)) ? "drop-out" : "push";
 }
 
 function buildTransitionContext(song) {
   const sections = song.structure ?? [];
   const transitions = [];
+  const notes = allTrackNotes(song);
   for (let index = 0; index < sections.length - 1; index += 1) {
     const from = sections[index];
     const to = sections[index + 1];
     const fromEnergy = sectionEnergy(song, from);
     const toEnergy = sectionEnergy(song, to);
-    const type = transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy);
+    const type = transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes);
     const delta = toEnergy - fromEnergy;
     const pickupBeats = type === "lift" ? 1 : type === "push" ? 0.75 : 0.5;
     const connectionId = `connection:${from.id}->${to.id}`;
