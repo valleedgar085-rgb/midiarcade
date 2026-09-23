@@ -52,6 +52,7 @@ import {
   absoluteGroovePulses,
   grooveBarPlan,
   nearestGroovePulse,
+  trackGroovePulses,
 } from "./core/groove-contract.js";
 
 export const PPQ = 480;
@@ -6671,7 +6672,7 @@ export function chooseCounterpointGapTarget(targets = [], {
   return forward.find((target) => Math.abs(target.beat - start) <= maxDistance) ?? nearest;
 }
 
-function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, harmony) {
+function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, harmony, grooveConductor = null) {
   if (!counterNotes.length || !melodyNotes.length) return counterNotes;
   const totalBeats = config.bars * beatsPerBar(config);
   const melody = [...melodyNotes].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
@@ -6774,13 +6775,26 @@ function interlaceCounterpoint(counterNotes, melodyNotes, config, structure, har
   for (const [sectionIndex, section] of structure.entries()) {
     if (["intro", "outro", "breakdown"].includes(section.name)) continue;
     if (result.some((note) => note.start >= section.startBeat && note.start < section.endBeat)) continue;
-    const available = targets
+    const grooveTargets = trackGroovePulses(
+      grooveConductor,
+      "counterpoint",
+      section.startBeat + 0.04,
+      section.endBeat - 0.06,
+      beatsPerBar(config),
+    )
+      .filter((beat) => !used.has(beat) && !attackCollision(beat) && !melodySoundsAt(beat))
+      .map((beat) => ({ beat, sectionId: section.id, gapEnd: Math.min(section.endBeat, beat + 0.5) }));
+    const genericTargets = targets
       .filter((target) => (
         target.sectionId === section.id
         && !used.has(target.beat)
         && !attackCollision(target.beat)
         && !melodySoundsAt(target.beat)
       ));
+    const available = [
+      ...grooveTargets,
+      ...genericTargets.filter((target) => !grooveTargets.some((grooveTarget) => Math.abs(grooveTarget.beat - target.beat) < 1e-6)),
+    ];
     const target = chooseCounterpointGapTarget(available, {
       genre: config.genre,
       bars: config.bars,
@@ -10213,6 +10227,7 @@ function compose(config, options = {}) {
     config,
     structure,
     harmony,
+    grooveConductor,
   );
   const melodicDialogue = shapeMelodicDialogue(
     raw.melody,
@@ -11558,17 +11573,22 @@ function normalizeRecentSongs(value) {
   return result;
 }
 
-export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
-  const recent = normalizeRecentSongs(recentSongs);
+function canonicalNoveltyFingerprint(song) {
+  const identitySong = normalizedSongForIdentity(song);
   const normalizedRegister = applyDawRegisterPolicy(
-    song?.tracks ?? [],
-    song?.structure ?? song?.sections ?? [],
-    { genre: song?.genre ?? song?.meta?.genre ?? "" },
+    identitySong?.tracks ?? [],
+    identitySong?.structure ?? identitySong?.sections ?? [],
+    { genre: identitySong?.genre ?? identitySong?.meta?.genre ?? "" },
   );
-  const fingerprint = createSongFingerprint({
-    ...song,
+  return createSongFingerprint({
+    ...identitySong,
     tracks: normalizedRegister.tracks,
   });
+}
+
+export function evaluateSongNovelty(song, recentSongs = [], generation = song?.generation ?? "new") {
+  const recent = normalizeRecentSongs(recentSongs);
+  const fingerprint = canonicalNoveltyFingerprint(song);
   if (!recent.length) {
     return {
       version: 1,
@@ -11584,7 +11604,7 @@ export function evaluateSongNovelty(song, recentSongs = [], generation = song?.g
     };
   }
   const comparisons = recent.map((candidate) => {
-    const candidateFingerprint = candidate.meta?.ideaFingerprint ?? createSongFingerprint(candidate);
+    const candidateFingerprint = canonicalNoveltyFingerprint(candidate);
     const exactMatch = JSON.stringify(fingerprint) === JSON.stringify(candidateFingerprint);
     return {
       songId: candidate.id ?? null,
