@@ -102,7 +102,22 @@ function sectionContinuity(song, track, bounds) {
   const notes = notesInSection(track, bounds);
   const targets = continuityTargets(bounds.name);
   const attacksPerBar = notes.length / Math.max(1, bounds.bars);
-  const windows = silenceWindows(notes, bounds);
+  const rawWindows = silenceWindows(notes, bounds);
+  const structuralGroove = Boolean(
+    song?.grooveConductor?.grooveDNA?.grammarId
+    && song.grooveConductor.grooveDNA.grammarId !== "general-balanced-groove"
+  );
+  const windows = structuralGroove
+    ? rawWindows.filter((window) => (
+      trackGroovePulses(
+        song?.grooveConductor,
+        "melody",
+        window.start,
+        window.end - 0.12,
+        bounds.beatsPerBar,
+      ).length > 0
+    ))
+    : rawWindows;
   const maxSilenceBeats = windows[0]?.gap ?? 0;
   const attackDeficit = Math.max(0, targets.attacksPerBar - attacksPerBar);
   const silenceDeficit = Math.max(0, maxSilenceBeats - targets.maxSilenceBeats) / Math.max(1, bounds.beatsPerBar);
