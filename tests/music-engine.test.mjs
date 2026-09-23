@@ -3332,7 +3332,8 @@ test("Track B candidate diagnostics expose one coherent outcome for every auditi
     assert.equal(typeof candidate.outcomePassed, "boolean");
     assert.equal(typeof candidate.registerOutcomePassed, "boolean");
     assert.equal(typeof candidate.adaptiveTarget, "boolean");
-    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|balance-below-gate|diversity-below-gate|section-outcome-below-gate|register-outcome-below-gate/);
+    assert.equal(typeof candidate.professionalPassed, "boolean");
+    assert.match(candidate.outcomeStatus, /release-ready|repair-rejected|release-blocked|quality-below-gate|professional-gate-below-floor|balance-below-gate|diversity-below-gate|section-outcome-below-gate|register-outcome-below-gate/);
     assert.ok(Array.isArray(candidate.nearCloneDimensions));
   }
 });
