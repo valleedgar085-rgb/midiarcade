@@ -6,6 +6,7 @@ import {
   createMelodyContinuityCandidates,
 } from "../src/core/melody-continuity-refinement.js";
 import { applyMelodyContinuityRefinement } from "../src/core/output-quality-pipeline-register.js";
+import { evaluateSongCandidate } from "../src/music-engine.js";
 
 function song() {
   return {
@@ -65,6 +66,20 @@ test("continuity candidates add only bounded deterministic melody connectors", (
     assert.equal(candidateCount, originalCount + candidate.changedNotes);
     assert.ok(candidate.song.tracks.find((track) => track.id === "melody").notes.some((note) => note.continuityRole === "phrase-link"));
   }
+});
+
+test("phrase-link helpers do not rewrite motif or repetition identity in Critic 6.0", () => {
+  const source = song();
+  const balanced = createMelodyContinuityCandidates(source)
+    .find((candidate) => candidate.id === "balanced-links");
+  assert.ok(balanced);
+
+  const before = evaluateSongCandidate(source);
+  const after = evaluateSongCandidate(balanced.song);
+
+  assert.equal(after.subscores.repetition, before.subscores.repetition);
+  assert.equal(after.subscores.motif, before.subscores.motif);
+  assert.ok(after.subscores.density >= before.subscores.density);
 });
 
 test("continuity does not invent melody activity for intentionally silent sections", () => {
