@@ -84,7 +84,7 @@ function familyFitScore(names, family) {
   return Math.round(score * 1000) / 1000;
 }
 
-function genreSequenceFitScore(names, genre) {
+export function genreSequenceFitScore(names, genre) {
   const finalChorus = names.lastIndexOf("chorus");
   const finalDrop = names.lastIndexOf("drop");
   const finalPayoff = Math.max(finalChorus, finalDrop, names.lastIndexOf("theme"));
