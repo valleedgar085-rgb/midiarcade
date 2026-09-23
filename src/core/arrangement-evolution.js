@@ -97,6 +97,72 @@ function electronicLayout(family, bars) {
     : [weight("intro", 0.7), weight("build", 0.8), weight("drop", 1.8), weight("breakdown", 1.1), weight("build", 0.7), weight("drop", 2.2), weight("outro", 0.5)];
 }
 
+function technoLayout(family, bars) {
+  const compact = bars <= 15;
+  if (family === "slow-bloom") {
+    return compact
+      ? [weight("intro", 1), weight("build", 1.2), weight("breakdown", 0.7), weight("build", 0.9), weight("drop", 2.2)]
+      : [weight("intro", 0.8), weight("build", 1.1), weight("drop", 1.5), weight("breakdown", 1), weight("build", 1), weight("drop", 2.3), weight("outro", 0.5)];
+  }
+  if (family === "hypnotic-wave") {
+    return compact
+      ? [weight("intro", 0.6), weight("build", 0.9), weight("drop", 1.6), weight("breakdown", 0.8), weight("build", 0.8), weight("drop", 1.9)]
+      : [weight("intro", 0.6), weight("build", 0.9), weight("drop", 1.6), weight("breakdown", 1), weight("build", 0.85), weight("drop", 2), weight("outro", 0.5)];
+  }
+  if (family === "early-impact") {
+    return compact
+      ? [weight("intro", 0.55), weight("build", 0.7), weight("drop", 1.5), weight("breakdown", 0.9), weight("build", 0.75), weight("drop", 1.9)]
+      : [weight("intro", 0.55), weight("build", 0.75), weight("drop", 1.55), weight("breakdown", 1.05), weight("build", 0.8), weight("drop", 2.05), weight("outro", 0.5)];
+  }
+  return compact
+    ? [weight("intro", 0.65), weight("build", 0.85), weight("drop", 1.55), weight("breakdown", 0.9), weight("build", 0.8), weight("drop", 1.95)]
+    : [weight("intro", 0.65), weight("build", 0.9), weight("drop", 1.6), weight("breakdown", 1.05), weight("build", 0.85), weight("drop", 2.1), weight("outro", 0.5)];
+}
+
+function popLayout(family, bars) {
+  const compact = bars <= 15;
+  if (family === "hook-first") {
+    return compact
+      ? [weight("intro", 0.55), weight("chorus", 1.3), weight("verse", 1.7), weight("prechorus", 0.65), weight("chorus", 1.8)]
+      : [weight("intro", 0.55), weight("chorus", 1.25), weight("verse", 1.65), weight("prechorus", 0.65), weight("chorus", 1.55), weight("bridge", 0.9), weight("prechorus", 0.55), weight("chorus", 1.95), weight("outro", 0.5)];
+  }
+  if (family === "slow-bloom") {
+    return compact
+      ? [weight("intro", 0.7), weight("verse", 1.8), weight("prechorus", 0.8), weight("chorus", 2.1)]
+      : [weight("intro", 0.7), weight("verse", 1.8), weight("verse", 1.35), weight("prechorus", 0.75), weight("chorus", 1.7), weight("bridge", 0.9), weight("prechorus", 0.55), weight("chorus", 2.05), weight("outro", 0.5)];
+  }
+  if (family === "bridge-payoff") {
+    return compact
+      ? [weight("intro", 0.55), weight("verse", 1.65), weight("prechorus", 0.65), weight("chorus", 1.5), weight("bridge", 0.75), weight("chorus", 1.85)]
+      : [weight("intro", 0.55), weight("verse", 1.7), weight("prechorus", 0.65), weight("chorus", 1.5), weight("verse", 1.3), weight("bridge", 0.9), weight("prechorus", 0.55), weight("chorus", 1.95), weight("outro", 0.5)];
+  }
+  return compact
+    ? [weight("intro", 0.55), weight("verse", 1.8), weight("prechorus", 0.7), weight("chorus", 1.7), weight("outro", 0.45)]
+    : [weight("intro", 0.55), weight("verse", 1.8), weight("prechorus", 0.7), weight("chorus", 1.55), weight("verse", 1.35), weight("prechorus", 0.6), weight("chorus", 1.75), weight("bridge", 0.85), weight("chorus", 1.95), weight("outro", 0.45)];
+}
+
+function rockLayout(family, bars) {
+  const compact = bars <= 15;
+  if (family === "hook-first") {
+    return compact
+      ? [weight("intro", 0.6), weight("chorus", 1.35), weight("verse", 1.65), weight("bridge", 0.8), weight("chorus", 1.85)]
+      : [weight("intro", 0.6), weight("chorus", 1.3), weight("verse", 1.65), weight("chorus", 1.45), weight("bridge", 0.85), weight("solo", 0.9), weight("chorus", 1.95), weight("outro", 0.55)];
+  }
+  if (family === "slow-bloom") {
+    return compact
+      ? [weight("intro", 0.7), weight("verse", 1.8), weight("bridge", 0.85), weight("solo", 0.8), weight("chorus", 2)]
+      : [weight("intro", 0.7), weight("verse", 1.85), weight("verse", 1.4), weight("bridge", 0.9), weight("solo", 1), weight("chorus", 2.1), weight("outro", 0.55)];
+  }
+  if (family === "bridge-payoff") {
+    return compact
+      ? [weight("intro", 0.6), weight("verse", 1.7), weight("chorus", 1.45), weight("bridge", 0.9), weight("chorus", 1.9)]
+      : [weight("intro", 0.6), weight("verse", 1.75), weight("chorus", 1.45), weight("verse", 1.35), weight("bridge", 0.95), weight("solo", 0.85), weight("chorus", 2), weight("outro", 0.55)];
+  }
+  return compact
+    ? [weight("intro", 0.6), weight("verse", 1.8), weight("chorus", 1.5), weight("solo", 0.8), weight("chorus", 1.9)]
+    : [weight("intro", 0.6), weight("verse", 1.8), weight("chorus", 1.5), weight("verse", 1.35), weight("solo", 0.9), weight("bridge", 0.8), weight("chorus", 2), weight("outro", 0.55)];
+}
+
 function loopLayout(family, bars) {
   const compact = bars <= 15;
   if (family === "slow-bloom") {
@@ -141,6 +207,9 @@ export function evolveArrangementLayout(baseLayout = [], config = {}) {
   const evolution = createArrangementEvolution(config);
   if (!evolution.enabled || source.length < 2) return source;
 
+  if (evolution.genre === "techno") return technoLayout(evolution.family, evolution.bars);
+  if (["pop", "popRadio", "synthPopRadio"].includes(evolution.genre)) return popLayout(evolution.family, evolution.bars);
+  if (evolution.genre === "rock") return rockLayout(evolution.family, evolution.bars);
   if (ELECTRONIC_GENRES.has(evolution.genre)) return electronicLayout(evolution.family, evolution.bars);
   if (LOOP_GENRES.has(evolution.genre)) return loopLayout(evolution.family, evolution.bars);
   return songLayout(evolution.family, evolution.bars);
