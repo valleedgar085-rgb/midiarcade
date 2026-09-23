@@ -301,3 +301,20 @@ test("ensemble continuity fails closed when release rejects the repair", () => {
   assert.equal(result.diagnostics.reason, "release-gate");
   assert.equal(result.song, source);
 });
+
+test("pad continuity uses canonical pad to chordPulses mapping", () => {
+  const source = ensembleDropoutSong();
+  source.grooveConductor.bars = source.grooveConductor.bars.map((bar) => ({
+    ...bar,
+    chordPulses: [0.5],
+  }));
+  const balanced = createEnsembleContinuityCandidates(source)
+    .find((candidate) => candidate.id === "balanced-ensemble-links");
+  assert.ok(balanced);
+  const padLink = balanced.song.tracks
+    .find((track) => track.id === "pad").notes
+    .find((note) => String(note.continuityRole ?? "").includes("continuity-link"));
+  assert.ok(padLink);
+  const offset = ((padLink.start % 4) + 4) % 4;
+  assert.ok(Math.abs(offset - 0.5) < 1e-6, `expected pad chordPulse, got ${padLink.start}`);
+});
