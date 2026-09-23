@@ -1,7 +1,10 @@
 import { cloneValue } from "./clone-value.js";
 
-export const MAX_ENSEMBLE_CONTINUITY_CANDIDATES = 2;
+export const MAX_ENSEMBLE_CONTINUITY_CANDIDATES = 3;
 export const ENSEMBLE_CONTINUITY_TRACKS = Object.freeze(["drums", "chords", "counterpoint", "pad"]);
+const LONG_SONG_ENSEMBLE_BARS = 32;
+const SEVERE_ENSEMBLE_DEFICIT = 6;
+const MAX_DEEP_ENSEMBLE_LINKS = 6;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
@@ -369,7 +372,7 @@ function addRepairs(song, requests) {
   return candidate;
 }
 
-function candidateRequestSets(song) {
+function candidateRequestSets(song, analysis = analyzeEnsembleContinuity(song)) {
   const all = opportunities(song);
   if (!all.length) return [];
   const weakest = all[0];
@@ -381,9 +384,15 @@ function candidateRequestSets(song) {
     byTrack.push(metric);
     if (byTrack.length >= ENSEMBLE_CONTINUITY_TRACKS.length) break;
   }
+  const bars = Math.max(1, finite(song?.meta?.bars, song?.bars ?? 1));
+  const deepRequests = all.slice(0, MAX_DEEP_ENSEMBLE_LINKS);
+  const deepEligible = bars >= LONG_SONG_ENSEMBLE_BARS
+    && analysis.deficit >= SEVERE_ENSEMBLE_DEFICIT
+    && deepRequests.length > byTrack.length;
   return [
     { id: "focused-ensemble-link", requests: [weakest] },
     ...(byTrack.length > 1 ? [{ id: "balanced-ensemble-links", requests: byTrack }] : []),
+    ...(deepEligible ? [{ id: "deep-ensemble-links", requests: deepRequests }] : []),
   ];
 }
 
@@ -393,7 +402,7 @@ export function createEnsembleContinuityCandidates(song, {
   const before = analyzeEnsembleContinuity(song);
   if (before.deficit <= 0) return [];
   const seen = new Set();
-  return candidateRequestSets(song)
+  return candidateRequestSets(song, before)
     .slice(0, Math.max(0, Math.min(MAX_ENSEMBLE_CONTINUITY_CANDIDATES, Math.floor(maxCandidates))))
     .map((entry, candidateIndex) => {
       const candidateSong = addRepairs(song, entry.requests);
