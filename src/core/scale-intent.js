@@ -84,13 +84,15 @@ export function resolveAutoScale({
   // one flexible mode (especially Mixolydian) cannot dominate every seed.
   if (ranked[1].distance - ranked[0].distance >= 0.22) return ranked[0].scale;
 
-  const weighted = scored.map(({ scale, distance }) => {
-    const fit = clamp(1 - distance, 0, 1);
-    return {
-      scale,
-      weight: 0.35 + fit * fit * 0.65,
-    };
-  });
+  const weighted = scored
+    .map(({ scale, distance }) => {
+      const fit = clamp(1 - distance, 0, 1);
+      return {
+        scale,
+        weight: 0.35 + fit * fit * 0.65,
+      };
+    })
+    .sort((left, right) => left.scale.localeCompare(right.scale));
   const totalWeight = weighted.reduce((sum, entry) => sum + entry.weight, 0);
   const roll = (hashSeed(`${seed}::auto-scale-rotation`) / 4294967296) * totalWeight;
   let cursor = 0;
