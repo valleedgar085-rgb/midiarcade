@@ -4087,7 +4087,7 @@ function applyGradualEvolution(notes, trackId, config, structure, rng) {
     const linear = clamp((note.start - segment.start) / Math.max(0.001, segment.end - segment.start), 0, 1);
     const smooth = linear * linear * (3 - 2 * linear);
     const factor = segment.from + (segment.to - segment.from) * smooth;
-    const exactSubdivision = typeof note.rhythmicFeature === "string";
+    const exactSubdivision = note.preserveSubdivision === true || note.preserveTiming === true;
     const durationFactor = exactSubdivision || trackId === "drums" ? 1 : 0.985 + factor * 0.02;
     return {
       ...note,
@@ -4242,15 +4242,23 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     // Human performance research is a bounded ensemble-level prior, never a
     // copied pattern. It may add/remove at most one secondary kick anchor.
     // Every downstream lane then negotiates from the same adjusted conductor.
-    const humanGrooveAdjustment = applyHumanGrooveAnchorPrior(anchors, {
-      config,
-      barBeats,
-      role,
-      snareOffsets: genreSnareOffsets(config, style, barBeats),
-      rng: local.fork("human-groove-prior"),
-      prior: humanGroovePrior,
-      fourFloor,
-    });
+    const humanGrooveAdjustment = grooveDNAAuthoritative
+      ? {
+        anchors: Object.freeze([...anchors]),
+        changed: false,
+        adjustment: "groove-dna-authority",
+        influence: 0,
+        prior: humanGroovePrior,
+      }
+      : applyHumanGrooveAnchorPrior(anchors, {
+        config,
+        barBeats,
+        role,
+        snareOffsets: genreSnareOffsets(config, style, barBeats),
+        rng: local.fork("human-groove-prior"),
+        prior: humanGroovePrior,
+        fourFloor,
+      });
     anchors = uniqueGrooveOffsets([0, ...humanGrooveAdjustment.anchors], barBeats);
     const answers = uniqueGrooveOffsets(anchors.map((offset) => offset + responseDelay), barBeats)
       .filter((offset) => !anchors.includes(offset));
@@ -4276,12 +4284,18 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     for (let offset = gridStep; offset < barBeats - 0.01; offset += gridStep) {
       if (!occupied.has(round(offset))) available.push(round(offset));
     }
-    const spaces = available.length
-      ? uniqueGrooveOffsets([
-        local.pick(available),
-        role === "turnaround" || route?.id === "harmony-first" ? available[available.length - 1] : -1,
-      ], barBeats)
-      : [];
+    const spaces = grooveDNAAuthoritative
+      ? uniqueGrooveOffsets(
+        (grooveDNALanes?.protectedSpaces ?? [])
+          .filter((space) => !motifPulses.some((pulse) => Math.abs(pulse - space) < 0.01)),
+        barBeats,
+      )
+      : available.length
+        ? uniqueGrooveOffsets([
+          local.pick(available),
+          role === "turnaround" || route?.id === "harmony-first" ? available[available.length - 1] : -1,
+        ], barBeats)
+        : [];
     const bassResponsePulses = ["answer", "development", "turnaround"].includes(role)
       ? answers.slice(0, role === "turnaround" ? 2 : 1)
       : [];
@@ -4557,6 +4571,8 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           groovePlan ? {
             grooveRole: groovePlan.role,
             genrePhrase: groovePlan.genrePhrase,
+            grooveSource: groovePlan.grooveDNA ? `${groovePlan.grooveDNA.grammarId}.kick` : "legacy.kick",
+            grammarRole: index === 0 ? "anchor" : "optional",
             ...(fourFloorGhost ? { rhythmicFeature: "ghost-kick" } : {}),
           } : null,
         );
@@ -4569,7 +4585,16 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         : genreSnareOffsets(config, style, barBeats)
     )) {
       const cellRng = grammarRng.fork(`snare-${round(offset, 3)}`);
-      hit(38, start + offset, snareVelocity + cellRng.int(-3, 3));
+      hit(
+        38,
+        start + offset,
+        snareVelocity + cellRng.int(-3, 3),
+        0.08,
+        groovePlan?.grooveDNA ? {
+          grooveSource: `${groovePlan.grooveDNA.grammarId}.snare`,
+          grammarRole: "backbeat-or-comp",
+        } : null,
+      );
       const layeredBackbeat = ["house", "techno"].includes(config.genre)
         || (
           ["pop", "rock", "country", "rnbSoul", "funk"].includes(config.genre)
@@ -4616,7 +4641,12 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         start + offset,
         eventVelocity(config, settings, intensity, percussionRng, 0.5),
         0.07,
-        { rhythmicFeature: "groove-dna-percussion", grooveGrammar: groovePlan.grooveDNA?.grammarId ?? null },
+        {
+          rhythmicFeature: "groove-dna-percussion",
+          grooveGrammar: groovePlan.grooveDNA?.grammarId ?? null,
+          grooveSource: `${groovePlan.grooveDNA?.grammarId ?? "groove-dna"}.percussion`,
+          grammarRole: "auxiliary",
+        },
       );
     }
 
@@ -4648,7 +4678,16 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     const phase3Add = (pitches, offsets, scale = 0.62, duration = 0.07) => {
       if (config.genre === "jazz") return false;
       const pitch = pitches[phase3Variant % pitches.length];
-      const offset = Math.min(Math.max(0, offsets[phase3Variant % offsets.length]), Math.max(0, barBeats - 0.0625));
+      const requestedOffset = Math.min(Math.max(0, offsets[phase3Variant % offsets.length]), Math.max(0, barBeats - 0.0625));
+      const grammarCandidates = groovePlan?.grooveDNA
+        ? uniqueGrooveOffsets([
+          ...(groovePlan?.percussionPulses ?? []),
+          ...(groovePlan?.hatPulses ?? []),
+        ], barBeats).filter((candidate) => !(groovePlan?.spaces ?? []).includes(candidate))
+        : [];
+      const offset = grammarCandidates.length
+        ? grammarCandidates[phase3Variant % grammarCandidates.length]
+        : requestedOffset;
       return hit(
         pitch,
         start + offset,
@@ -4725,13 +4764,22 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         const open = ["house", "techno"].includes(config.genre)
           ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
           : (motionAccent || offset > barBeats - 0.75) && cellRng.bool(0.1 + settings.variation * 0.2);
+        const preserveSubdivision = Boolean(
+          grooveHatOffsets
+          && Math.abs(offset * 4 - Math.round(offset * 4)) > 0.01
+        );
         hit(
           open ? 46 : 42,
           start + offset,
           eventVelocity(config, settings, intensity, cellRng, (isBeat ? 0.68 : 0.54) + (motionAccent ? 0.1 : 0)),
           open ? 0.22 : 0.055,
           grooveHatOffsets
-            ? { rhythmicFeature: open ? "groove-dna-open-hat" : "groove-dna-hat" }
+            ? {
+              rhythmicFeature: open ? "groove-dna-open-hat" : "groove-dna-hat",
+              grooveSource: `${groovePlan.grooveDNA?.grammarId ?? "groove-dna"}.hat`,
+              grammarRole: "timekeeper",
+              ...(preserveSubdivision ? { preserveSubdivision: true } : {}),
+            }
             : open ? { rhythmicFeature: "open-hat-accent" } : null,
         );
       }
@@ -5035,6 +5083,7 @@ function developDuplicateDrumBars(source, config, structure, settings, rng, groo
     } else {
       const candidates = [0.75, 1.75, 2.75, barBeats - 0.25]
         .filter((offset) => offset > 0 && offset < barBeats - 0.05)
+        .filter((offset) => !(plan?.spaces ?? []).some((space) => Math.abs(space - offset) < 0.01))
         .filter((offset) => !result.some((note) => (
           note.pitch === 37 && Math.abs(note.start - (start + offset)) < 1e-6
         )));
@@ -7493,7 +7542,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
   const felt = [];
   const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
   for (const note of rawNotes) {
-    const exactSubdivision = typeof note.rhythmicFeature === "string" || note.preserveTiming === true;
+    const exactSubdivision = note.preserveSubdivision === true || note.preserveTiming === true;
     const eighthPosition = mod(note.start, 1);
     const isOffEighth = Math.abs(eighthPosition - 0.5) < 0.035;
     const swingDelay = !exactSubdivision && isOffEighth ? config.swing * settings.feel * (1 / 6) : 0;
@@ -7540,6 +7589,11 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       duration: round(duration),
       velocity,
       ...(note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : {}),
+      ...(note.grooveSource ? { grooveSource: note.grooveSource } : {}),
+      ...(note.grammarRole ? { grammarRole: note.grammarRole } : {}),
+      ...(note.transformId ? { transformId: note.transformId } : {}),
+      ...(note.preserveSubdivision ? { preserveSubdivision: true } : {}),
+      ...(note.preserveTiming ? { preserveTiming: true } : {}),
       ...(Number.isFinite(note.subdivision) ? { subdivision: note.subdivision } : {}),
       ...(note.transitionFeature ? { transitionFeature: note.transitionFeature } : {}),
       ...(note.drumFillId ? { drumFillId: note.drumFillId } : {}),
@@ -9658,8 +9712,23 @@ function notesInWindow(track, startBeat, endBeat) {
 function genreBassResponseOffsets(genre) {
   if (genre === "house") return [0.5];
   if (["techno", "drumBass"].includes(genre)) return [0, 0.5];
-  if (["trap", "hipHop", "rap", "drill"].includes(genre)) return [0, 0.25];
+  if (genre === "neoSoul") return [-0.25, 0, 0.25, 0.5, 0.75];
+  if (["trap", "hipHop", "rap", "drill"].includes(genre)) return [0, 0.25, 0.5];
   return [0, 0.25, 0.5, 0.75];
+}
+
+function finalBassRelationshipProfile(genre) {
+  const profiles = {
+    house: { minimumFit: 0.78, tolerance: 0.1, maxRepairRatio: 0.48, maxMove: 0.42 },
+    techno: { minimumFit: 0.68, tolerance: 0.12, maxRepairRatio: 0.42, maxMove: 0.45 },
+    drumBass: { minimumFit: 0.62, tolerance: 0.14, maxRepairRatio: 0.38, maxMove: 0.48 },
+    trap: { minimumFit: 0.62, tolerance: 0.14, maxRepairRatio: 0.34, maxMove: 0.48 },
+    hipHop: { minimumFit: 0.5, tolerance: 0.16, maxRepairRatio: 0.28, maxMove: 0.55 },
+    rap: { minimumFit: 0.5, tolerance: 0.16, maxRepairRatio: 0.28, maxMove: 0.55 },
+    drill: { minimumFit: 0.58, tolerance: 0.14, maxRepairRatio: 0.32, maxMove: 0.48 },
+    neoSoul: { minimumFit: 0.38, tolerance: 0.18, maxRepairRatio: 0.2, maxMove: 0.62 },
+  };
+  return profiles[genre] ?? null;
 }
 
 function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
@@ -9670,46 +9739,53 @@ function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
   const drums = tracks.find((track) => track.id === "drums")?.notes ?? [];
   const bass = tracks.find((track) => track.id === "bass");
   const kicks = drums.filter((note) => note.pitch === 36).map((note) => note.start);
-  if (!bass?.notes.length || !kicks.length) return { tracks, repairs: 0 };
-  const contextualGenres = new Set(["house", "techno", "trap", "hipHop", "rap", "drill", "drumBass", "neoSoul"]);
-  if (!contextualGenres.has(genre)) return { tracks, repairs: 0 };
-  const candidates = kicks.flatMap((kick) => genreBassResponseOffsets(genre).map((delay) => round(kick + delay)))
-    .filter((start) => start >= 0 && start < totalBeats - 0.019);
-  let repairs = 0;
-  for (const note of bass.notes) {
-    if (candidates.some((start) => Math.abs(start - note.start) < 1e-6)) continue;
-    // Cadence and transition contracts deliberately own their exact boundary
-    // timing. They take precedence over ordinary rhythm-section correction.
-    if (note.ensembleCadenceRole || note.transitionHandoffRole) {
-      const delay = genre === "house" ? 0.5 : 0;
-      const kickStart = round(note.start - delay);
-      if (kickStart >= 0 && !drums.some((drum) => drum.pitch === 36 && Math.abs(drum.start - kickStart) < 1e-6)) {
-        drums.push({
-          pitch: 36,
-          start: kickStart,
-          duration: 0.08,
-          velocity: clamp(note.velocity + 4, 48, 112),
-          rhythmLockRepair: "protected-bass-foundation",
-          preserveTiming: true,
-          finalMasterRole: "section-body",
-        });
-        candidates.push(round(kickStart + delay));
-        repairs += 1;
-      }
-      continue;
-    }
-    const nearest = [...candidates].sort((left, right) => (
-      Math.abs(left - note.start) - Math.abs(right - note.start) || left - right
-    ))[0];
-    if (!Number.isFinite(nearest)) continue;
-    note.start = nearest;
-    note.duration = round(Math.min(note.duration, Math.max(0.02, totalBeats - nearest)));
-    note.rhythmLockRepair = "surviving-kick";
-    note.preserveTiming = true;
-    repairs += 1;
+  const profile = finalBassRelationshipProfile(genre);
+  if (!bass?.notes.length || !kicks.length || !profile) {
+    return { tracks, repairs: 0, relationshipFit: 1 };
   }
+
+  const candidates = [...new Set(kicks.flatMap((kick) => (
+    genreBassResponseOffsets(genre).map((delay) => round(kick + delay))
+  )).filter((start) => start >= 0 && start < totalBeats - 0.019))].sort((a, b) => a - b);
+
+  const distanceToCandidate = (note) => candidates.length
+    ? Math.min(...candidates.map((start) => Math.abs(start - note.start)))
+    : Infinity;
+  const matched = (note) => distanceToCandidate(note) <= profile.tolerance + 1e-9;
+
+  let matchedCount = bass.notes.filter(matched).length;
+  const targetMatched = Math.ceil(profile.minimumFit * bass.notes.length);
+  const repairBudget = Math.min(
+    Math.max(0, targetMatched - matchedCount),
+    Math.ceil(profile.maxRepairRatio * bass.notes.length),
+  );
+  const repairable = bass.notes
+    .filter((note) => (
+      !matched(note)
+      && !note.ensembleCadenceRole
+      && !note.transitionHandoffRole
+      && !note.motifHandoffRole
+    ))
+    .map((note) => ({
+      note,
+      nearest: candidates
+        .map((start) => ({ start, distance: Math.abs(start - note.start) }))
+        .sort((left, right) => left.distance - right.distance || left.start - right.start)[0],
+    }))
+    .filter((entry) => Number.isFinite(entry.nearest?.start) && entry.nearest.distance <= profile.maxMove)
+    .sort((left, right) => left.nearest.distance - right.nearest.distance || left.note.start - right.note.start);
+
+  let repairs = 0;
+  for (const { note, nearest } of repairable.slice(0, repairBudget)) {
+    note.start = nearest.start;
+    note.duration = round(Math.min(note.duration, Math.max(0.02, totalBeats - nearest.start)));
+    note.rhythmLockRepair = "relationship-minimum";
+    note.grooveSource = `${genre}.bass-relationship-repair`;
+    repairs += 1;
+    matchedCount += 1;
+  }
+
   bass.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-  drums.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   bass.notes = bass.notes.filter((note, index, notes) => !notes.slice(0, index).some((previous) => (
     previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 1e-6
   )));
@@ -9721,7 +9797,13 @@ function lockFinalBassToSurvivingKicks(sourceTracks, genre, totalBeats) {
     }
     previousByPitch.set(note.pitch, note);
   }
-  return { tracks, repairs };
+
+  return {
+    tracks,
+    repairs,
+    relationshipFit: round(matchedCount / Math.max(1, bass.notes.length)),
+    relationshipTarget: profile.minimumFit,
+  };
 }
 
 /** Critic 7.0 exposes weak short phrases hidden by a strong song average. */
