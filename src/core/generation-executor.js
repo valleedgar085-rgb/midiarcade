@@ -247,8 +247,12 @@ export function createGenerationExecutor({
         });
       }
 
-      selectedResult = applyResultOutputQualityPipeline(selectedResult, config);
-      const stageDiagnostics = selectedResult?.outputQualityStageDiagnostics ?? {};
+      let stageDiagnostics = {};
+      selectedResult = applyResultOutputQualityPipeline(selectedResult, config, {
+        onStageDiagnostics(diagnostics) {
+          stageDiagnostics = diagnostics ?? {};
+        },
+      });
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
