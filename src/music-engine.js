@@ -38,7 +38,6 @@ import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
-  applyHumanGrooveAnchorPrior,
   humanGrooveInfluence,
   humanGroovePriorForGenre,
 } from "./core/human-groove-priors.js";
@@ -4104,75 +4103,6 @@ function applyGradualEvolution(notes, trackId, config, structure, rng) {
   });
 }
 
-function genreKickOffsets(config, style, barBeats, bar = 0) {
-  if (barBeats < 3.75) return [0, barBeats / 2];
-  if (style.drumGroove === "fourFloor" || ["house", "techno"].includes(config.genre)) return [0, 1, 2, 3];
-  const templateSteps = Array.isArray(style?.rhythmIdentity?.flowSteps)
-    ? style.rhythmIdentity.flowSteps
-    : null;
-  if (config.professionalUpgrade && templateSteps?.length) {
-    const mutation = finite(config.variation, 0.48) + finite(config.surprise, 0.28) * 0.35;
-    const stepBeats = barBeats / 16;
-    const base = [...new Set(templateSteps.map((step) => clamp(Math.round(finite(step, 0)), 0, 15)))];
-    const patternHash = hashSeed(`${config.seed}:${config.genre}:${style.rhythmIdentity?.flowTemplateId ?? "grid"}:${bar}`);
-    const rotated = base.map((step) => mod(step + (patternHash % 3), 16));
-    if (mutation >= 0.36 && rotated.length < 7 && patternHash % 5 === 0) {
-      rotated.push(mod(rotated[rotated.length - 1] + 2, 16));
-    }
-    if (mutation >= 0.6 && rotated.length > 4 && (patternHash >>> 3) % 4 === 0) {
-      rotated.splice(1 + ((patternHash >>> 5) % (rotated.length - 1)), 1);
-    }
-    return uniqueGrooveOffsets(
-      rotated.map((step) => round(step * stepBeats)),
-      barBeats,
-    );
-  }
-  const patterns = {
-    neoSoul: [[0, 0.75, 2.5, 3.25], [0, 1.5, 2.75], [0, 0.5, 2.25, 3.5], [0, 1.25, 2.5, 3.75]],
-    hipHop: [[0, 0.75, 2, 2.75, 3.5], [0, 1.5, 2.5, 3.25], [0, 0.5, 2.25, 3], [0, 1.75, 2.75, 3.5]],
-    rap: [[0, 1.5, 2.25, 3.25], [0, 0.75, 2.5, 3.5], [0, 1.75, 2.75], [0, 0.5, 2, 3.25]],
-    trap: [[0, 0.75, 1.75, 2.5, 3.25, 3.75], [0, 1.5, 2.75, 3.5], [0, 0.5, 1.75, 2.25, 3.5], [0, 1.25, 2.5, 3.25, 3.75]],
-    drumBass: [[0, 2, 2.75], [0, 1.75, 2.5, 3.5], [0, 1.5, 2.25, 3.25], [0, 0.75, 2, 3.5]],
-    synthwave: [[0, 1, 2, 3], [0, 1.5, 2, 3.5], [0, 0.75, 2, 2.75], [0, 1, 2.5, 3.25]],
-    pop: [[0, 2, 2.75], [0, 1.5, 2.5], [0, 0.75, 2, 3.25], [0, 1.25, 2.75, 3.5]],
-    loFiHipHop: [[0, 1.5, 2.75], [0, 0.75, 2.5, 3.25], [0, 1.75, 3], [0, 1.25, 2.25, 3.5]],
-    rnbSoul: [[0, 1.5, 2.75, 3.5], [0, 0.75, 2.5], [0, 1.25, 2.25, 3.25], [0, 0.5, 2.75, 3.75]],
-    drill: [[0, 1.5, 2.75, 3.5], [0, 0.75, 2.5, 3.25], [0, 1.75, 2.25, 3.75], [0, 0.5, 2.75, 3.5]],
-    reggaeton: [[0, 1.5, 2.5, 3.25], [0, 0.75, 2, 3.5], [0, 1.25, 2.75, 3.5], [0, 0.5, 2.25, 3.25]],
-    afrobeats: [[0, 0.75, 2, 2.75], [0, 1.5, 2.5, 3.5], [0, 0.5, 1.75, 3], [0, 1.25, 2.25, 3.75]],
-    jazz: [[0, 1.5, 2.75], [0, 0.75, 2.25, 3.5], [0, 1.25, 2.5], [0, 0.5, 2, 3.25]],
-    ambient: [[0, 2.5], [0, 1.5, 3], [0, 2], [0, 1.25, 3.25]],
-    funk: [[0, 0.75, 2.25, 3.5], [0, 1.5, 2.5, 3.25], [0, 0.5, 2, 2.75], [0, 1.25, 2.25, 3.75]],
-    country: [[0, 2.5], [0, 1.5, 2.75], [0, 2, 3.5], [0, 1.75, 2.5], [0, 0.75, 2.75], [0, 2.25, 3.25]],
-    rock: [[0, 2, 2.75], [0, 1.5, 2, 3.5], [0, 0.75, 2.5], [0, 2, 3.25], [0, 1.25, 2.75, 3.5], [0, 1.75, 2.5]],
-  };
-  const family = patterns[config.genre] ?? patterns.pop;
-  const rotation = Math.max(0, Math.round(finite(style.rhythmIdentity?.kickRotation, 0)));
-  const developed = [...family[(bar + rotation) % family.length]];
-  const patternHash = hashSeed(`${config.seed}:${config.genre}:kick-development:${bar}:${rotation}`);
-  const mutation = finite(config.variation, 0.48) + finite(config.surprise, 0.28) * 0.35;
-  const candidates = [0.5, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.5, 3.75]
-    .filter((offset) => offset < barBeats - 0.01 && !developed.includes(offset));
-  if (candidates.length && mutation >= 0.34 && patternHash % 100 < mutation * 72) {
-    developed.push(candidates[(patternHash >>> 4) % candidates.length]);
-  }
-  if (developed.length > 3 && mutation >= 0.58 && (patternHash >>> 9) % 5 === 0) {
-    developed.splice(1 + ((patternHash >>> 12) % (developed.length - 1)), 1);
-  }
-  return uniqueGrooveOffsets(developed, barBeats);
-}
-
-function uniqueGrooveOffsets(values, barBeats) {
-  return [...new Set(values
-    .map((value) => round(value))
-    .filter((value) => value >= 0 && value < barBeats - 0.01))]
-    .sort((a, b) => a - b);
-}
-
-function grooveBar(conductor, bar) {
-  return grooveBarPlan(conductor, bar);
-}
-
 function createGrooveConductor(config, structure, style, motifs, rng, route = null) {
   const barBeats = beatsPerBar(config);
   const rhythmIdentity = style.rhythmIdentity
@@ -4206,69 +4136,19 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           : "development";
     const local = rng.fork(`groove-family-${sectionFamilyId}-${phrasePosition}`);
     const sectionRotation = hashSeed(`${config.seed}:${config.genre}:${sectionFamilyId}:groove`) % 4;
-    const grooveDNAEnabled = grooveDNA.genre !== "general";
-    const grooveDNALanes = grooveDNAEnabled ? grooveDNAConductorLanes(grooveDNA, bar) : null;
-    const grooveDNAAuthoritative = Boolean(grooveDNALanes?.anchors?.length);
-    let anchors = grooveDNAAuthoritative
-      ? [...grooveDNALanes.anchors]
-      : genreKickOffsets(config, style, barBeats, phrasePosition + sectionRotation);
-    const fourFloor = style.drumGroove === "fourFloor" || ["house", "techno"].includes(config.genre);
-    if (!grooveDNAAuthoritative && route?.id === "groove-first") {
-      const candidates = [0.5, 0.75, 1.5, 2.25, 2.75, 3.5]
-        .filter((offset) => offset < barBeats - 0.05 && !anchors.some((anchor) => Math.abs(anchor - offset) < 0.01));
-      if (candidates.length) anchors.push(local.pick(candidates));
+    const grooveDNALanes = grooveDNAConductorLanes(grooveDNA, bar);
+    if (!grooveDNALanes) {
+      throw new Error(`Groove DNA did not compile bar ${bar}`);
     }
-    if (!grooveDNAAuthoritative && role === "answer" && anchors.length > 2 && local.bool(0.42 + config.variation * 0.28)) {
-      if (fourFloor) {
-        const pickups = [1.75, 2.75, 3.75].filter((offset) => offset < barBeats - 0.05);
-        if (pickups.length) anchors.push(local.pick(pickups));
-      } else {
-        const movable = local.int(1, anchors.length - 1);
-        anchors[movable] = clamp(anchors[movable] + local.pick([-0.25, 0.25]), 0.25, barBeats - 0.25);
-      }
-    }
-    if (
-      !grooveDNAAuthoritative
-      && role === "answer"
-      && genreGrammar.answerKick < barBeats - 0.01
-      && !anchors.some((anchor) => Math.abs(anchor - genreGrammar.answerKick) < 0.01)
-      && local.bool(0.42 + config.variation * 0.36)
-    ) {
-      anchors.push(genreGrammar.answerKick);
-    }
-    if (!grooveDNAAuthoritative && role === "development") {
-      const candidates = [0.5, 0.75, 1.25, 2.25, 2.75, 3.5]
-        .filter((offset) => offset < barBeats - 0.05 && !anchors.some((anchor) => Math.abs(anchor - offset) < 0.01));
-      if (candidates.length && local.bool(0.48 + config.syncopation * 0.34)) anchors.push(local.pick(candidates));
-      if (!fourFloor && anchors.length > 4 && local.bool(0.34)) anchors.splice(local.int(1, anchors.length - 2), 1);
-    }
-    if (!grooveDNAAuthoritative && role === "turnaround" && local.bool(0.54 + config.evolution * 0.24)) {
-      const pickup = genreGrammar.turnaround < barBeats
-        ? genreGrammar.turnaround
-        : barBeats - local.pick([0.25, 0.5, 0.75]);
-      if (!anchors.some((anchor) => Math.abs(anchor - pickup) < 0.01)) anchors.push(pickup);
-    }
-    // Human performance research is a bounded ensemble-level prior, never a
-    // copied pattern. It may add/remove at most one secondary kick anchor.
-    // Every downstream lane then negotiates from the same adjusted conductor.
-    const humanGrooveAdjustment = grooveDNAAuthoritative
-      ? {
-        anchors: Object.freeze([...anchors]),
-        changed: false,
-        adjustment: "groove-dna-authority",
-        influence: 0,
-        prior: humanGroovePrior,
-      }
-      : applyHumanGrooveAnchorPrior(anchors, {
-        config,
-        barBeats,
-        role,
-        snareOffsets: genreSnareOffsets(config, style, barBeats),
-        rng: local.fork("human-groove-prior"),
-        prior: humanGroovePrior,
-        fourFloor,
-      });
-    anchors = uniqueGrooveOffsets([0, ...humanGrooveAdjustment.anchors], barBeats);
+    let anchors = uniqueGrooveOffsets(grooveDNALanes.anchors, barBeats);
+    const humanGrooveAdjustment = {
+      anchors: Object.freeze([...anchors]),
+      changed: false,
+      adjustment: "groove-dna-authority",
+      influence: 0,
+      prior: humanGroovePrior,
+    };
+    anchors = uniqueGrooveOffsets(humanGrooveAdjustment.anchors, barBeats);
     const answers = uniqueGrooveOffsets(anchors.map((offset) => offset + responseDelay), barBeats)
       .filter((offset) => !anchors.includes(offset));
     const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
@@ -4305,64 +4185,14 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
           role === "turnaround" || route?.id === "harmony-first" ? available[available.length - 1] : -1,
         ], barBeats)
         : [];
-    const bassResponsePulses = ["answer", "development", "turnaround"].includes(role)
-      ? answers.slice(0, role === "turnaround" ? 2 : 1)
-      : [];
-    const bassGhostPulses = role === "development" && config.syncopation > 0.48
-      ? answers.slice(-1)
-      : [];
-    const bassPulses = grooveDNALanes?.bassPulses?.length
-      ? uniqueGrooveOffsets(grooveDNALanes.bassPulses, barBeats).filter((offset) => !spaces.includes(offset))
-      : uniqueGrooveOffsets(
-      config.genre === "house" || config.genre === "neoSoul"
-        ? answers
-        : config.genre === "techno" && bar % 2 === 1
-          ? [...answers, anchors[0]]
-          : [
-            ...anchors.filter((_, index) => index === 0 || index % 2 === 1),
-            ...bassResponsePulses,
-            ...bassGhostPulses,
-            ...(role === "answer" || role === "turnaround" ? [genreGrammar.bassAnswer] : []),
-          ],
-      barBeats,
-    ).filter((offset) => !spaces.includes(offset));
-    const rockDrivePulses = role === "statement"
-      ? [0, 1, 2, 3]
-      : role === "answer"
-        ? [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5]
-        : role === "development"
-          ? [0, 0.5, 1.5, 2, 2.5, 3.5]
-          : [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5];
-    const chordPulses = grooveDNALanes?.chordPulses?.length
-      ? uniqueGrooveOffsets(grooveDNALanes.chordPulses, barBeats).filter((offset) => !spaces.includes(offset))
-      : uniqueGrooveOffsets(
-      config.genre === "rock"
-        ? rockDrivePulses
-        : route?.id === "harmony-first"
-          ? [...anchors.filter((_, index) => index % 2 === 0), answers[0]]
-          : style.chordMotion === "offbeat"
-          ? answers
-          : style.chordMotion === "sustained"
-            ? [0]
-            : [...answers.filter((_, index) => index % 2 === 0), anchors[0]],
-      barBeats,
-    ).filter((offset) => !spaces.includes(offset));
-    const leadPulses = grooveDNALanes?.leadPulses?.length
-      ? uniqueGrooveOffsets(grooveDNALanes.leadPulses, barBeats).filter((offset) => !spaces.includes(offset))
-      : uniqueGrooveOffsets(
-      [
-        ...answers,
-        ...anchors.filter((_, index) => index % 2 === 0),
-        ...motifPulses,
-      ],
-      barBeats,
-    ).filter((offset) => !spaces.includes(offset));
-    const counterPulses = grooveDNALanes?.counterPulses?.length
-      ? uniqueGrooveOffsets(grooveDNALanes.counterPulses, barBeats).filter((offset) => !spaces.includes(offset))
-      : uniqueGrooveOffsets(
-      [...anchors.filter((_, index) => index % 2 === 1), ...answers.filter((_, index) => index % 2 === 0)],
-      barBeats,
-    ).filter((offset) => !spaces.includes(offset));
+    const bassPulses = uniqueGrooveOffsets(grooveDNALanes.bassPulses ?? [], barBeats)
+      .filter((offset) => !spaces.includes(offset));
+    const chordPulses = uniqueGrooveOffsets(grooveDNALanes.chordPulses ?? [], barBeats)
+      .filter((offset) => !spaces.includes(offset));
+    const leadPulses = uniqueGrooveOffsets(grooveDNALanes.leadPulses ?? [], barBeats)
+      .filter((offset) => !spaces.includes(offset));
+    const counterPulses = uniqueGrooveOffsets(grooveDNALanes.counterPulses ?? [], barBeats)
+      .filter((offset) => !spaces.includes(offset));
     bars.push({
       bar,
       sectionId: section.id,
@@ -4376,9 +4206,9 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       humanGrooveInfluence: humanGrooveAdjustment.influence,
       answers,
       spaces,
-      snarePulses: grooveDNALanes?.snarePulses ?? [],
-      hatPulses: grooveDNALanes?.hatPulses ?? [],
-      percussionPulses: grooveDNALanes?.percussionPulses ?? [],
+      snarePulses: grooveDNALanes.snarePulses ?? [],
+      hatPulses: grooveDNALanes.hatPulses ?? [],
+      percussionPulses: grooveDNALanes.percussionPulses ?? [],
       grooveDNA: {
         id: grooveDNA.id,
         grammarId: grooveDNA.grammarId,
@@ -4414,13 +4244,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     } : null,
     bars,
   };
-}
-
-function genreSnareOffsets(config, style, barBeats) {
-  if (barBeats < 3.75) return [barBeats / 2];
-  if (["house", "techno"].includes(config.genre)) return [1, 3];
-  if (config.genre === "trap" || style.drumGroove === "halfTime") return [2];
-  return [1, 3];
 }
 
 const DRUM_FILL_VOCABULARIES = deepFreeze({
