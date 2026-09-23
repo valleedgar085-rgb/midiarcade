@@ -98,7 +98,6 @@ function fixtureSong() {
         sectionId: section.id,
         transitionOut: "stale",
         bars: [0, 1].map((localBar) => ({
-          sectionId: section.id,
           bar: section.startBar + localBar,
           role: localBar === 0 ? "statement" : "answer",
         })),
