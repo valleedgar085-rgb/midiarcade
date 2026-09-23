@@ -148,7 +148,8 @@ test("application commit and generation wiring keep current state.song authorita
     /state\.song\s*=\s*transaction\.compositionCandidate[\s\S]*?acceptCompositionCandidate\(transaction\)[\s\S]*?:\s*deepClone\(transaction\.after\)/,
     "accepted local Shape and validated Blueprint candidates must both become canonical state.song",
   );
-  assert.match(appSource, /const sourceSong\s*=\s*options\.sourceSong\s*\?\?\s*state\.song/);
+  assert.match(appSource, /const referenceSong\s*=\s*options\.sourceSong\s*\?\?\s*state\.song/);
+  assert.match(appSource, /const sourceSong\s*=\s*kind === "new" \? null : referenceSong/);
   assert.match(appSource, /generationExecutor\.run\(kind,\s*\{\s*sourceSong,\s*config\s*\}\)/);
   assert.match(appSource, /generateSongVariations\(sourceSong,\s*config\)/);
 });
