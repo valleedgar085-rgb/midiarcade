@@ -567,6 +567,9 @@ export function analyzeCompositionCandidate(song, selection = {}, directive = {}
       kickBass: Object.freeze({
         compared: groove.kickBass.compared,
         lock: round(groove.kickBass.lock),
+        distribution: Object.freeze({ ...groove.kickBass.distribution }),
+        relationshipOffsets: Object.freeze([...(groove.kickBass.relationshipOffsets ?? [])]),
+        tolerance: round(groove.kickBass.tolerance),
       }),
       conductor: Object.freeze({
         compared: groove.conductor.compared,
