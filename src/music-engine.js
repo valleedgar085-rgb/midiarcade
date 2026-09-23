@@ -5942,6 +5942,92 @@ function rockPowerChordVoicing(chord, octave, previous = null) {
   return candidates[0] ?? [root, root + fifthInterval, root + 12];
 }
 
+function closestPitchClassNear(target, pitchClass, min = 45, max = 76) {
+  const candidates = [];
+  for (let pitch = min; pitch <= max; pitch += 1) {
+    if (mod(pitch, 12) === mod(pitchClass, 12)) candidates.push(pitch);
+  }
+  candidates.sort((left, right) => Math.abs(left - target) - Math.abs(right - target) || left - right);
+  return candidates[0] ?? clamp(Math.round(target), min, max);
+}
+
+function repairFinalRockPowerChordAttacks(sourceTracks, harmony, config) {
+  if (config?.genre !== "rock") return { tracks: sourceTracks, repairs: 0 };
+  let repairs = 0;
+  const tracks = sourceTracks.map((track) => {
+    if (track.id !== "chords") return track;
+    const notes = Array.isArray(track.notes) ? track.notes : [];
+    const groups = new Map();
+    const untouched = [];
+    for (const note of notes) {
+      if (note.genrePhrase !== "power-chord-drive" || !note.rockChordAttackId) {
+        untouched.push(note);
+        continue;
+      }
+      const key = String(note.rockChordAttackId);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(note);
+    }
+    if (!groups.size) return track;
+
+    const rebuilt = [];
+    for (const group of groups.values()) {
+      const ordered = [...group].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const reference = ordered.find((note) => note.rockChordRole === "root") ?? ordered[0];
+      const beat = ordered.reduce((sum, note) => sum + finite(note.start, 0), 0) / ordered.length;
+      const chord = harmonyAt(harmony, beat);
+      if (!chord) {
+        rebuilt.push(...ordered);
+        continue;
+      }
+
+      const rootPc = mod(chord.rootPc, 12);
+      const intervals = [...new Set((chord.tones ?? []).map((tone) => mod(tone - rootPc, 12)))];
+      const fifthInterval = intervals
+        .filter((interval) => interval !== 0)
+        .sort((left, right) => Math.abs(left - 7) - Math.abs(right - 7) || left - right)[0] ?? 7;
+      const center = ordered.reduce((sum, note) => sum + finite(note.pitch, 60), 0) / ordered.length;
+      const rootPitch = closestPitchClassNear(center - 6, rootPc, 45, 76);
+      const pitches = [rootPitch, rootPitch + fifthInterval, rootPitch + 12];
+      if (pitches.some((pitch) => pitch < 45 || pitch > 88)) {
+        rebuilt.push(...ordered);
+        continue;
+      }
+
+      const start = round(reference.start, 4);
+      const duration = Math.max(...ordered.map((note) => finite(note.duration, 0.25)));
+      const velocity = Math.round(ordered.reduce((sum, note) => sum + finite(note.velocity, 90), 0) / ordered.length);
+      const base = { ...reference };
+      delete base.pitch;
+      delete base.start;
+      delete base.duration;
+      delete base.velocity;
+      delete base.rockChordRole;
+
+      ["root", "fifth", "octave"].forEach((role, index) => {
+        rebuilt.push({
+          ...base,
+          pitch: pitches[index],
+          start,
+          duration,
+          velocity: clamp(velocity - (role === "fifth" ? 2 : role === "octave" ? 4 : 0), 1, 127),
+          genrePhrase: "power-chord-drive",
+          rockChordRole: role,
+          rockChordAttackId: reference.rockChordAttackId,
+        });
+      });
+      const originalRoles = new Set(ordered.map((note) => note.rockChordRole));
+      if (ordered.length !== 3 || originalRoles.size !== 3) repairs += 1;
+    }
+
+    return {
+      ...track,
+      notes: [...untouched, ...rebuilt].sort((left, right) => left.start - right.start || left.pitch - right.pitch),
+    };
+  });
+  return { tracks, repairs };
+}
+
 function chordVoicing(chord, octave, previous, spread, rng, config = null) {
   if (config?.genre === "rock") return rockPowerChordVoicing(chord, octave, previous);
   const root = rootMidi(chord, octave);
@@ -6042,6 +6128,7 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
           ? {
             genrePhrase: "power-chord-drive",
             rockChordRole: ["root", "fifth", "octave"][voiceIndex] ?? "support",
+            rockChordAttackId: `rock-power:${round(chord.start + offsets[index], 4)}:${mod(chord.rootPc, 12)}`,
           }
           : undefined;
         addNote(
@@ -7335,6 +7422,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.genrePhraseGrammar ? { genrePhraseGrammar: note.genrePhraseGrammar } : {}),
       ...(note.genrePhrase ? { genrePhrase: note.genrePhrase } : {}),
       ...(note.rockChordRole ? { rockChordRole: note.rockChordRole } : {}),
+      ...(note.rockChordAttackId ? { rockChordAttackId: note.rockChordAttackId } : {}),
       ...(note.melodyRole ? { melodyRole: note.melodyRole } : {}),
       ...(note.counterMelodyRole ? { counterMelodyRole: note.counterMelodyRole } : {}),
       ...(note.melodicRelationship ? { melodicRelationship: note.melodicRelationship } : {}),
@@ -10060,8 +10148,13 @@ function compose(config, options = {}) {
     structure,
     songBlueprint,
   );
-  const tonalIntegrity = refineTonalIntegrity(
+  const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
     finalGrooveAssembly.tracks,
+    harmony,
+    config,
+  );
+  const tonalIntegrity = refineTonalIntegrity(
+    rockPowerChordRepair.tracks,
     harmony,
     {
       keyPc: config.keyPc,
@@ -10070,6 +10163,7 @@ function compose(config, options = {}) {
     },
     structure,
   );
+  produced.report.repairs.rockPowerChordAttacks = rockPowerChordRepair.repairs;
   produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
   produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
