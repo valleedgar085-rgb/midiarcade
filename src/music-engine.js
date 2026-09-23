@@ -5081,8 +5081,7 @@ function runDirectorEnsembleCoordination(
     const barContract = barContractFor(section, note.start);
     const barStart = Math.floor(note.start / barBeats) * barBeats;
     const authored = (barContract?.counterPulses ?? []).map((offset) => round(barStart + finite(offset)));
-    const fallback = [note.start + 0.25, note.start + 0.5, note.start - 0.25].map((beat) => round(beat));
-    const candidates = [...authored, ...fallback]
+    const candidates = authored
       .filter((beat, index, values) => (
         values.indexOf(beat) === index
         && beat >= section.startBeat - 1e-6
