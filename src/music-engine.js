@@ -4276,53 +4276,6 @@ function drumFillVocabularyForGenre(genre) {
   return DRUM_FILL_VOCABULARIES.pocket;
 }
 
-const PHASE3_DRUM_FILL_VOCABULARIES = deepFreeze({
-  electronic: [
-    { id: "electronic-p3-open-hat-turn", pitches: [42, 46, 42, 51], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "electronic-p3-tom-push", pitches: [45, 47, 50, 46], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "electronic-p3-clap-lift", pitches: [39, 42, 46, 49], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "electronic-p3-hat-stutter", pitches: [42, 42, 46, 42], positions: [0, 0.1875, 0.5, 0.875] },
-  ],
-  bassMusic: [
-    { id: "bassmusic-p3-hat-triplet", pitches: [42, 42, 46, 38], positions: [0, 1 / 6, 1 / 3, 0.75] },
-    { id: "bassmusic-p3-snare-drag", pitches: [38, 37, 38, 42], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "bassmusic-p3-tom-response", pitches: [45, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "bassmusic-p3-break-turn", pitches: [42, 38, 42, 46], positions: [0, 0.3125, 0.625, 0.875] },
-  ],
-  acoustic: [
-    { id: "acoustic-p3-tom-round", pitches: [45, 47, 50, 38], positions: [0, 0.25, 0.5, 0.875] },
-    { id: "acoustic-p3-hat-snare-lift", pitches: [42, 46, 38, 49], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "acoustic-p3-side-stick-turn", pitches: [37, 42, 38, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "acoustic-p3-tom-answer", pitches: [47, 45, 42, 38], positions: [0, 0.375, 0.75, 0.875] },
-  ],
-  pocket: [
-    { id: "pocket-p3-ghost-lift", pitches: [37, 42, 38, 46], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "pocket-p3-shaker-answer", pitches: [70, 42, 37, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "pocket-p3-rim-clave", pitches: [37, 75, 42, 38], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "pocket-p3-hat-pocket", pitches: [42, 37, 46, 42], positions: [0, 0.3125, 0.625, 0.875] },
-  ],
-  afroLatin: [
-    { id: "pocket-p3-afro-clave-shaker", pitches: [75, 70, 75, 46], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "pocket-p3-afro-rim-percussion", pitches: [37, 70, 39, 75], positions: [0, 0.375, 0.625, 0.875] },
-    { id: "pocket-p3-afro-conga-answer", pitches: [64, 70, 63, 75], positions: [0, 0.25, 0.625, 0.875] },
-    { id: "pocket-p3-afro-shaker-turn", pitches: [70, 75, 70, 46], positions: [0, 0.3125, 0.625, 0.875] },
-  ],
-});
-
-function phase3DrumFamilyForGenre(genre) {
-  if (["house", "techno", "synthwave", "synthPopRadio"].includes(genre)) return "electronic";
-  if (["trap", "drill", "drumBass"].includes(genre)) return "bassMusic";
-  if (["reggaeton", "afrobeats"].includes(genre)) return "afroLatin";
-  if (["rock", "country", "pop", "popRadio"].includes(genre)) return "acoustic";
-  return "pocket";
-}
-
-function phase3DrumFillVocabularyForGenre(genre) {
-  // Preserve the established jazz repair calibration seed and its Phase 40 contract.
-  if (genre === "jazz") return [];
-  return PHASE3_DRUM_FILL_VOCABULARIES[phase3DrumFamilyForGenre(genre)];
-}
-
 function generateDrums(config, structure, _harmony, style, settings, rng, songBlueprint = null, grooveConductor = null) {
   const notes = [];
   if (settings.density <= 0.001) return notes;
@@ -4572,7 +4525,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       (["launch", "build", "turnaround"].includes(transition?.type) && transition.strength >= 0.56)
       || transitionRng.bool(config.drumFills * profile.arrangement.fillFrequency * (0.5 + settings.variation * 0.5))
     )) {
-      const vocabulary = [...drumFillVocabularyForGenre(config.genre), ...phase3DrumFillVocabularyForGenre(config.genre)];
+      const vocabulary = drumFillVocabularyForGenre(config.genre);
       const freshVocabulary = vocabulary.filter((pattern) => pattern.id !== lastFillId);
       const fill = transitionRng.pick(freshVocabulary.length ? freshVocabulary : vocabulary);
       const fillStart = Math.max(0, barBeats - 1);
@@ -4705,61 +4658,25 @@ function groovePulsesForWindow(conductor, lane, start, duration, barBeats) {
 }
 
 function bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor = null) {
-  const kickOnsets = Array.isArray(drumContext?.kickOnsets) ? drumContext.kickOnsets : [];
-  // A completely drumless arrangement still needs an independent bass line.
-  // Once real kicks exist, however, empty harmony windows become intentional
-  // low-end space rather than an excuse to fall back to an imaginary pattern.
-  if (!kickOnsets.length) return null;
-  const eventStart = chord.start;
-  const eventEnd = chord.start + chord.duration - 0.05;
   const conducted = groovePulsesForWindow(
     grooveConductor,
     "bassPulses",
     chord.start,
     chord.duration,
     beatsPerBar(config),
-  ).filter((offset) => {
-    const absolute = chord.start + offset;
-    if (config.genre === "house") return kickOnsets.some((kick) => Math.abs(kick + 0.5 - absolute) < 0.01);
-    if (config.genre === "neoSoul") return kickOnsets.some((kick) => [0.25, 0.5, 0.75].some((delay) => Math.abs(kick + delay - absolute) < 0.01));
-    return kickOnsets.some((kick) => Math.abs(kick - absolute) < 0.01 || Math.abs(kick + 0.5 - absolute) < 0.01);
-  });
-  if (conducted.length) return conducted;
-  const lookBehind = config.genre === "neoSoul" ? 0.76 : 0.01;
-  const relevant = kickOnsets.filter((start) => start >= eventStart - lookBehind && start < eventEnd);
-  const current = relevant.filter((start) => start >= eventStart - 0.001);
-  if (!relevant.length) return [];
-  const absolute = [];
-  const add = (start) => {
-    if (start < eventStart - 0.001 || start >= eventEnd) return;
-    if (config.genre === "house" && kickOnsets.some((kick) => Math.abs(kick - start) < 1e-6)) return;
-    if (!absolute.some((existing) => Math.abs(existing - start) < 1e-6)) absolute.push(start);
-  };
+  );
+  if (grooveConductor) return conducted;
 
-  if (config.genre === "house") {
-    for (const kick of relevant) add(kick + 0.5);
-  } else if (config.genre === "techno") {
-    const locked = chord.bar % 2 === 0;
-    for (const kick of current) add(kick + (locked ? 0 : 0.5));
-  } else if (["trap", "hipHop", "rap"].includes(config.genre)) {
-    const lockChance = config.genre === "trap" ? 0.64 : 0.52;
-    current.forEach((kick, index) => {
-      if (index === 0 || rng.bool(lockChance + settings.density * 0.18)) add(kick);
-    });
-    if (config.syncopation > 0.62 && current.length && rng.bool(settings.variation * 0.42)) add(current[current.length - 1] + 0.25);
-  } else if (config.genre === "drumBass") {
-    current.forEach((kick, index) => {
-      if (index === 0 || rng.bool(0.58 + settings.density * 0.25)) add(kick);
-    });
-    if (chord.bar % 2 === 1 && current.length) add(current[0] + 0.5);
-  } else if (config.genre === "neoSoul") {
-    const delays = [0.5, 0.75, 0.25];
-    relevant.forEach((kick, index) => add(kick + delays[(chord.bar + index) % delays.length]));
-  }
-
-  if (!absolute.length && current.length && config.genre !== "house") add(current[0]);
-  if (!absolute.length) return [];
-  return absolute.sort((a, b) => a - b).map((start) => round(Math.max(0, start - eventStart)));
+  // Compatibility-only fallback for callers that explicitly omit a conductor.
+  const kickOnsets = Array.isArray(drumContext?.kickOnsets) ? drumContext.kickOnsets : [];
+  if (!kickOnsets.length) return null;
+  const eventStart = chord.start;
+  const eventEnd = chord.start + chord.duration - 0.05;
+  const current = kickOnsets.filter((start) => start >= eventStart - 0.001 && start < eventEnd);
+  if (!current.length) return [];
+  return current
+    .map((start) => round(Math.max(0, start - eventStart)))
+    .filter((offset) => offset < chord.duration - 0.05);
 }
 
 function generateBass(
@@ -4792,21 +4709,8 @@ function generateBass(
     );
     let offsets = bassOffsetsFromDrums(config, chord, style, settings, drumContext, rng, grooveConductor);
     if (Array.isArray(offsets)) {
-      // An empty contextual result is deliberate space; non-empty offsets came
-      // from kicks that actually survived drum generation.
+      // Groove DNA may intentionally author silence in this harmony window.
       if (!offsets.length) continue;
-    } else if (["house", "techno"].includes(config.genre)) {
-      const barStart = chord.bar * barBeats;
-      offsets = [0.5, 1.5, 2.5, 3.5]
-        .map((offset) => barStart + offset - chord.start)
-        .filter((offset) => offset >= -0.001 && offset < chord.duration - 0.05);
-      if (!offsets.length) offsets = [0];
-    } else if (["neoSoul", "hipHop", "rap", "trap", "drumBass"].includes(config.genre)) {
-      const barStart = chord.bar * barBeats;
-      offsets = genreKickOffsets(config, style, barBeats, chord.bar)
-        .map((offset) => barStart + offset - chord.start)
-        .filter((offset) => offset >= -0.001 && offset < chord.duration - 0.05);
-      if (!offsets.length) offsets = [0];
     } else if (style.bassGroove === "pulse") {
       const step = config.energy > 0.68 && settings.density > 0.55 ? 0.5 : 1;
       offsets = [];
