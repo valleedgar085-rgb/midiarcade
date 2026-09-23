@@ -39,6 +39,8 @@ export function repetitionRefinementFamily(song) {
   if (primary === "trap") return "trap";
   if (primary === "pop") return "pop";
   if (primary === "neoSoul") return "neo-soul";
+  if (primary === "drumBass") return "drum-bass";
+  if (primary === "afrobeats") return "afrobeats";
   return null;
 }
 
