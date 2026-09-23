@@ -11485,6 +11485,20 @@ const CREATIVE_FLOOR_DIMENSIONS = Object.freeze([
   "drumVariety",
   "genreAuthenticity",
 ]);
+const PROFESSIONAL_CRITICAL_MINIMUMS = Object.freeze({
+  harmonic: 80,
+  groove: 78,
+  density: 88,
+  registerHealth: 84,
+  separation: 76,
+  phraseResolution: 72,
+  storyArc: 72,
+  transitions: 72,
+  orchestration: 70,
+  stageInterlock: 72,
+  genreAuthenticity: 68,
+});
+const PROFESSIONAL_DENSITY_COVERAGE_MINIMUM = 0.72;
 const TARGETED_REPAIR_GROUPS = deepFreeze([
   {
     id: "harmony",
@@ -11552,6 +11566,36 @@ export function evaluateCandidateBalance(evaluation = {}) {
   };
 }
 
+export function evaluateProfessionalQualityGate(evaluation = {}) {
+  const subscores = evaluation?.subscores ?? {};
+  const diagnostics = evaluation?.diagnostics ?? {};
+  const failures = [];
+  const scores = {};
+  for (const [dimension, floor] of Object.entries(PROFESSIONAL_CRITICAL_MINIMUMS)) {
+    const value = clamp(finite(subscores[dimension], 0), 0, 100);
+    scores[dimension] = value;
+    if (value < floor) failures.push(`${dimension}:${round(value)}<${floor}`);
+  }
+  const densityTarget = Math.max(0, finite(diagnostics.densityTarget, 0));
+  const densityObserved = Math.max(0, finite(diagnostics.densityObserved, 0));
+  const densityCoverage = densityTarget > 0 ? densityObserved / densityTarget : 1;
+  if (densityTarget > 0 && densityCoverage < PROFESSIONAL_DENSITY_COVERAGE_MINIMUM) {
+    failures.push(`densityCoverage:${round(densityCoverage, 3)}<${PROFESSIONAL_DENSITY_COVERAGE_MINIMUM}`);
+  }
+  return Object.freeze({
+    version: 1,
+    passed: failures.length === 0,
+    minimums: PROFESSIONAL_CRITICAL_MINIMUMS,
+    failures: Object.freeze(failures),
+    scores: Object.freeze(scores),
+    lowestCriticalScore: Math.min(...Object.values(scores)),
+    densityTarget: round(densityTarget, 3),
+    densityObserved: round(densityObserved, 3),
+    densityCoverage: round(densityCoverage, 3),
+    densityCoverageMinimum: PROFESSIONAL_DENSITY_COVERAGE_MINIMUM,
+  });
+}
+
 function candidateSearchPlan(input = {}) {
   const thinkingDepth = input.thinkingDepth === "deep" ? "deep" : "standard";
   const baseCandidateCount = normalizeCandidateCount(
@@ -11591,6 +11635,7 @@ function candidateReleaseGate(candidate) {
 
 function evaluateCandidateOutcome(candidate, generation = candidate?.song?.generation ?? "new") {
   const balance = evaluateCandidateBalance(candidate?.evaluation);
+  const professional = evaluateProfessionalQualityGate(candidate?.evaluation);
   const releasePassed = Boolean(candidateReleaseGate(candidate).passed);
   const qualityPassed = Boolean(qualityGateForEvaluation(candidate?.evaluation).passed);
   const repairAccepted = candidate?.repairAccepted !== false;
@@ -11602,12 +11647,14 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
   const sectionOutcomePassed = Boolean(sectionOutcome.passed);
   const adaptiveTarget = repairAccepted
     && releasePassed
+    && professional.passed
     && balance.aspirational
     && diversityPassed
     && sectionOutcomePassed;
   const passed = repairAccepted
     && releasePassed
     && qualityPassed
+    && professional.passed
     && balance.passed
     && diversityPassed
     && sectionOutcomePassed;
@@ -11617,21 +11664,27 @@ function evaluateCandidateOutcome(candidate, generation = candidate?.song?.gener
       ? "release-blocked"
       : !qualityPassed
         ? "quality-below-gate"
-        : !balance.passed
-          ? "balance-below-gate"
-          : !diversityPassed
-            ? "diversity-below-gate"
-            : !sectionOutcomePassed
-              ? "section-outcome-below-gate"
-              : "release-ready";
+        : !professional.passed
+          ? "professional-gate-below-floor"
+          : !balance.passed
+            ? "balance-below-gate"
+            : !diversityPassed
+              ? "diversity-below-gate"
+              : !sectionOutcomePassed
+                ? "section-outcome-below-gate"
+                : "release-ready";
   return {
-    version: 2,
+    version: 3,
     generation,
     passed,
     status,
     repairAccepted,
     releasePassed,
     qualityPassed,
+    professionalPassed: Boolean(professional.passed),
+    professionalFailures: clone(professional.failures ?? []),
+    professionalLowestCriticalScore: finite(professional.lowestCriticalScore, 0),
+    professionalDensityCoverage: finite(professional.densityCoverage, 1),
     balancePassed: Boolean(balance.passed),
     aspirationalBalance: Boolean(balance.aspirational),
     diversityPassed,
@@ -13374,8 +13427,10 @@ function rankCandidates(candidates) {
     .sort((left, right) => {
       const leftOutcome = evaluateCandidateOutcome(left);
       const rightOutcome = evaluateCandidateOutcome(right);
-      return Number(rightOutcome.releasePassed) - Number(leftOutcome.releasePassed)
+      return Number(rightOutcome.adaptiveTarget) - Number(leftOutcome.adaptiveTarget)
+        || Number(rightOutcome.releasePassed) - Number(leftOutcome.releasePassed)
         || Number(rightOutcome.qualityPassed) - Number(leftOutcome.qualityPassed)
+        || Number(rightOutcome.professionalPassed) - Number(leftOutcome.professionalPassed)
         || Number(rightOutcome.balancePassed) - Number(leftOutcome.balancePassed)
         || Number(rightOutcome.diversityPassed) - Number(leftOutcome.diversityPassed)
         || Number(rightOutcome.sectionOutcomePassed) - Number(leftOutcome.sectionOutcomePassed)
@@ -13392,6 +13447,7 @@ function commitCandidate(candidates, search = {}) {
   if (!selected) throw new Error("Generation produced no candidates.");
   const qualityGate = qualityGateForEvaluation(selected.evaluation);
   const releaseGate = candidateReleaseGate(selected);
+  const professionalGate = evaluateProfessionalQualityGate(selected.evaluation);
   const balance = evaluateCandidateBalance(selected.evaluation);
   const diversity = selected.diversity ?? diversityReportFromNovelty(selected.novelty, selected.song.generation);
   const sectionOutcome = selected.sectionOutcome ?? evaluateSectionOutcomeQuality(selected.song);
@@ -13431,10 +13487,7 @@ function commitCandidate(candidates, search = {}) {
     ? (selectedFromRepair && criticRepair.targetReached ? "passed" : "best-available")
     : "not-needed";
   const composedCandidates = candidates.filter((candidate) => !candidate.repair).length;
-  const targetReached = candidates.some((candidate) => candidateMeetsAdaptiveTarget(
-    candidate,
-    selected.song.generation,
-  ));
+  const targetReached = candidateMeetsAdaptiveTarget(selected, selected.song.generation);
 
   selected.song.meta.scoreDetails = {
     criticVersion: selected.evaluation.version ?? 1,
@@ -13443,6 +13496,7 @@ function commitCandidate(candidates, search = {}) {
     subscores: selected.evaluation.subscores,
     diagnostics: selected.evaluation.diagnostics ?? {},
     releaseGate,
+    professionalGate,
     novelty: selected.novelty,
     diversity,
     sectionOutcome,
@@ -13510,6 +13564,10 @@ function commitCandidate(candidates, search = {}) {
         randomOctaveLeaps: registerOutcome.randomOctaveLeaps,
         outcomePassed: outcome.passed,
         outcomeStatus: outcome.status,
+        professionalPassed: outcome.professionalPassed,
+        professionalFailures: clone(outcome.professionalFailures ?? []),
+        professionalLowestCriticalScore: outcome.professionalLowestCriticalScore,
+        professionalDensityCoverage: outcome.professionalDensityCoverage,
         adaptiveTarget: outcome.adaptiveTarget,
         compositionRoute: song.compositionRoute?.id ?? null,
         passedPhase9: qualityGateForEvaluation(evaluation).passed,
