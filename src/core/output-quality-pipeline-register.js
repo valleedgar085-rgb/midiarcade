@@ -883,12 +883,14 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
   const dimensionDeltas = protectedDeltas(before, criticAfter, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(actualAfter?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const maxScoreCost = candidate.changedNotes > 1 ? 2 : 1;
+  const maxFloorCost = 1;
   const accepted = Boolean(
     release?.passed
     && scaleSafe
     && candidate.continuityErrorDelta < -1e-6
-    && scoreDelta >= -1e-9
-    && floorDelta >= -1e-9
+    && scoreDelta >= -maxScoreCost
+    && floorDelta >= -maxFloorCost
     && protectedSafe
   );
   return {
@@ -898,6 +900,8 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
     release,
     scoreDelta,
     floorDelta,
+    maxScoreCost,
+    maxFloorCost,
     protectedDeltas: dimensionDeltas,
     protectedSafe,
     accepted,
@@ -905,7 +909,7 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
       : !scaleSafe ? "scale-safety"
         : candidate.continuityErrorDelta >= -1e-6 ? "continuity-direction"
           : !protectedSafe ? "protected-dimension-regression"
-            : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "full-song-regression"
+            : scoreDelta < -maxScoreCost || floorDelta < -maxFloorCost ? "full-song-regression"
               : accepted ? "continuity-win" : "critic-regression",
   };
 }
@@ -959,6 +963,8 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
     continuityErrorDelta: round(selected?.continuityErrorDelta, 4),
     floorDelta: round(selected?.floorDelta),
     criticViewScore: round(selected?.criticAfter?.score),
+    maxScoreCost: finite(selected?.maxScoreCost),
+    maxFloorCost: finite(selected?.maxFloorCost),
     protectedDeltas: Object.fromEntries(
       Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
     ),
