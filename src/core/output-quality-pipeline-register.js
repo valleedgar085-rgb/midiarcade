@@ -883,8 +883,11 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
   const dimensionDeltas = protectedDeltas(before, criticAfter, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(actualAfter?.diagnostics?.scaleFit, 0) >= 0.999999;
-  const maxScoreCost = candidate.changedNotes > 1 ? 2 : 1;
-  const maxFloorCost = 1;
+  const changedNotes = Math.max(1, Math.round(finite(candidate.changedNotes, 1)));
+  const maxScoreCost = changedNotes <= 1
+    ? 1
+    : Math.min(4, 1 + Math.ceil(changedNotes / 8));
+  const maxFloorCost = changedNotes >= 16 ? 2 : 1;
   const accepted = Boolean(
     release?.passed
     && scaleSafe
