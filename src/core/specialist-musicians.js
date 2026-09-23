@@ -6,6 +6,7 @@ import {
 } from "./blueprint-composer.js";
 import { createProfessionalGenerationGauntletSong } from "./professional-gauntlet-song.js";
 import { checkSpecialistEnsemble } from "./specialist-ensemble-checker.js";
+import { createGrooveDNA } from "./groove-intelligence.js";
 
 export const SPECIALIST_MUSICIAN_ORDER = Object.freeze([
   "harmony",
@@ -119,10 +120,11 @@ function roleSnapshot(gauntletSong, roleIds = []) {
   ));
 }
 
-function contextForSpecialist(gauntletSong, specialistId) {
+function contextForSpecialist(gauntletSong, specialistId, grooveDNA = null) {
   const shared = {
     intent: cloneValue(gauntletSong?.intent ?? null),
     sections: cloneValue(gauntletSong?.sections ?? []),
+    grooveDNA: cloneValue(grooveDNA),
   };
   switch (specialistId) {
     case "harmony":
@@ -216,7 +218,10 @@ function authorityResult(definition, context) {
     return Object.freeze({
       grooveBars: context.grooveTimeline?.length ?? 0,
       sectionCount: context.sections?.length ?? 0,
-      contract: "groove-authority",
+      grooveDNAId: context.grooveDNA?.id ?? null,
+      grammarId: context.grooveDNA?.grammarId ?? null,
+      pipeline: Object.freeze([...(context.grooveDNA?.pipeline ?? [])]),
+      contract: "groove-dna-authority",
     });
   }
   return Object.freeze({
@@ -237,11 +242,19 @@ export function createSpecialistDirectorPlan(song) {
     throw new TypeError("createSpecialistDirectorPlan requires a generated source song");
   }
   const gauntletSong = createProfessionalGenerationGauntletSong(song);
+  const grooveDNA = createGrooveDNA({
+    seed: song?.seed,
+    genre: song?.meta?.genre ?? gauntletSong?.intent?.genre,
+    bars: song?.meta?.bars,
+    beatsPerBar: song?.meta?.beatsPerBar,
+    complexity: song?.meta?.complexity ?? 0.58,
+    variation: song?.meta?.variation ?? 0.48,
+  }, { structure: song?.structure ?? song?.sections ?? [] });
   const specialists = SPECIALIST_MUSICIAN_ORDER.map((id) => {
     const definition = specialistMusicianDefinition(id);
     return Object.freeze({
       ...definition,
-      context: contextForSpecialist(gauntletSong, id),
+      context: contextForSpecialist(gauntletSong, id, grooveDNA),
       compositionRoute: specialistRoute(id),
     });
   });
@@ -251,6 +264,7 @@ export function createSpecialistDirectorPlan(song) {
     sourceSongId: song?.id ?? null,
     sourceSeed: song?.seed ?? null,
     gauntletSong,
+    grooveDNA,
     order: SPECIALIST_MUSICIAN_ORDER,
     specialists: Object.freeze(specialists),
     rules: Object.freeze({
@@ -278,7 +292,8 @@ function stageDirective(plan, specialist, song, index) {
     reads: specialist.reads,
     trackId: specialist.trackId,
     route: specialist.compositionRoute,
-    context: contextForSpecialist(currentGauntletSong, specialist.id),
+    context: contextForSpecialist(currentGauntletSong, specialist.id, plan.grooveDNA),
+    grooveDNA: plan.grooveDNA,
     directorDirective,
   });
 }
@@ -300,6 +315,7 @@ export function runSpecialistMusicianGeneration(
       const authorityContext = contextForSpecialist(
         createProfessionalGenerationGauntletSong(current),
         specialist.id,
+        plan.grooveDNA,
       );
       stages.push(Object.freeze({
         specialistId: specialist.id,
@@ -328,6 +344,13 @@ export function runSpecialistMusicianGeneration(
 
     const seed = specialistSeed(input.seed ?? sourceSong?.seed, specialist.id, index);
     const directive = stageDirective(plan, specialist, current, index);
+    const relationship = specialist.id === "bass"
+      ? plan.grooveDNA?.relationships?.bass
+      : specialist.id === "chords"
+        ? plan.grooveDNA?.relationships?.chords
+        : ["lead", "counterline", "arp"].includes(specialist.id)
+          ? plan.grooveDNA?.relationships?.lead
+          : null;
     const candidate = createCompositionCandidate(
       current,
       { target: "track", trackId: specialist.trackId },
@@ -336,6 +359,17 @@ export function runSpecialistMusicianGeneration(
         seed,
         compositionRoute: specialist.compositionRoute,
         specialistMusician: directive,
+        grooveDNA: plan.grooveDNA,
+        specialistGroove: relationship,
+        ...(input.syncopation == null && Number.isFinite(Number(relationship?.syncopation))
+          ? { syncopation: Number(relationship.syncopation) }
+          : {}),
+        ...(input.swing == null && Number.isFinite(Number(plan.grooveDNA?.humanization?.swing))
+          ? { swing: Number(plan.grooveDNA.humanization.swing) }
+          : {}),
+        ...(input.humanize == null && Number.isFinite(Number(plan.grooveDNA?.humanization?.timing))
+          ? { humanize: Math.min(1, Number(plan.grooveDNA.humanization.timing) * 6) }
+          : {}),
       },
       composer ? { composer } : undefined,
     );
