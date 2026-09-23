@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { Midi } from "@tonejs/midi";
+import ToneMidi from "@tonejs/midi";\n\nconst { Midi } = ToneMidi;
 
 import {
   aggregateGroovePerformances,
