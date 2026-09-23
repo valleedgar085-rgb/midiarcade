@@ -3750,6 +3750,68 @@ function generationDebuggerDetailText(detail = {}) {
   }).join(" · ");
 }
 
+function ensureGenerationDebuggerControls() {
+  if (!$("#debuggerButton")) {
+    const button = document.createElement("button");
+    button.className = "icon-button debugger-button";
+    button.id = "debuggerButton";
+    button.type = "button";
+    button.setAttribute("aria-label", "Generation debugger");
+    button.title = "Generation debugger";
+    button.innerHTML = "<span>&lt;/&gt;</span><b>DEBUG</b>";
+    $("#helpButton")?.before(button);
+  }
+
+  if (!$("#menuItemDebugger")) {
+    const item = document.createElement("button");
+    item.className = "menu-item";
+    item.id = "menuItemDebugger";
+    item.type = "button";
+    item.innerHTML = '<span class="menu-icon">&lt;/&gt;</span><b>Generation Debugger</b><kbd>D</kbd>';
+    $("#menuItemPrivacy")?.before(item);
+  }
+
+  const dialog = $("#debuggerDialog");
+  if (!dialog) return;
+
+  if (!$("#closeDebugger")) {
+    const close = document.createElement("button");
+    close.className = "dialog-close";
+    close.id = "closeDebugger";
+    close.type = "button";
+    close.setAttribute("aria-label", "Close debugger");
+    close.textContent = "x";
+    dialog.prepend(close);
+  }
+
+  if (!$("#refreshDebugger")) {
+    const refresh = document.createElement("button");
+    refresh.className = "small-button";
+    refresh.id = "refreshDebugger";
+    refresh.type = "button";
+    refresh.textContent = "Refresh";
+    $(".debugger-section-heading", dialog)?.append(refresh);
+  }
+
+  const actions = $(".debugger-actions", dialog);
+  if (actions && !$("#copyDebuggerReport")) {
+    const copy = document.createElement("button");
+    copy.className = "small-button";
+    copy.id = "copyDebuggerReport";
+    copy.type = "button";
+    copy.textContent = "Copy report";
+    actions.append(copy);
+  }
+  if (actions && !$("#clearDebuggerHistory")) {
+    const clear = document.createElement("button");
+    clear.className = "small-button";
+    clear.id = "clearDebuggerHistory";
+    clear.type = "button";
+    clear.textContent = "Clear history";
+    actions.append(clear);
+  }
+}
+
 function renderGenerationDebugger() {
   const runs = generationExecutor.diagnosticsSnapshot();
   const latest = runs.at(-1) ?? null;
@@ -6550,6 +6612,7 @@ function toggleFullscreen() {
     if (event.target === dialog) dialog.close();
   });
 
+  ensureGenerationDebuggerControls();
   const debuggerDialog = $("#debuggerDialog");
   $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
   $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
