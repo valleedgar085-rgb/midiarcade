@@ -4598,42 +4598,6 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
   return notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
-function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {
-  if (!bassNotes?.length || settings.density <= 0.001) return drumNotes;
-  const result = drumNotes.map((note) => ({ ...note }));
-  const barBeats = beatsPerBar(config);
-  const totalBeats = config.bars * barBeats;
-  const desiredForBass = (note) => {
-    if (["house", "neoSoul"].includes(config.genre)) return note.start - 0.5;
-    if (config.genre === "techno" && Math.abs(mod(note.start, 1) - 0.5) < 0.16) return note.start - 0.5;
-    return note.start;
-  };
-  for (let bar = 0; bar < config.bars; bar += 1) {
-    const barStart = bar * barBeats;
-    const barEnd = barStart + barBeats;
-    const candidates = bassNotes
-      .map((note) => ({ note, desired: desiredForBass(note) }))
-      .filter(({ desired }) => desired >= barStart - 1e-6 && desired < barEnd - 0.04)
-      .sort((a, b) => b.note.velocity - a.note.velocity || a.desired - b.desired);
-    const baseMaximumAdditions = clamp(1 + Math.floor(settings.variation * 3), 1, 4);
-    const maximumAdditions = config.genre === "trap"
-      ? Math.max(baseMaximumAdditions, Math.ceil(candidates.length * 0.9))
-      : baseMaximumAdditions;
-    let additions = 0;
-    for (const { note, desired } of candidates) {
-      if (additions >= maximumAdditions) break;
-      if (result.some((drum) => drum.pitch === 36 && Math.abs(drum.start - desired) < 0.1)) continue;
-      const section = sectionForBar(structure, bar);
-      const local = rng.fork(`retained-bass-kick-${bar}-${round(desired, 4)}`);
-      const intensity = clamp(section.intensity * (0.58 + config.energy * 0.6), 0.35, 1.25);
-      const bassAccent = clamp(note.velocity / 100, 0.68, 1.08);
-      addNote(result, 36, desired, 0.08, eventVelocity(config, settings, intensity, local, 0.92 * bassAccent), totalBeats);
-      additions += 1;
-    }
-  }
-  return result.sort((a, b) => a.start - b.start || a.pitch - b.pitch);
-}
-
 function rootMidi(chord, octave) {
   return (octave + 1) * 12 + chord.rootPc;
 }
@@ -9436,16 +9400,6 @@ function compose(config, options = {}) {
     songBlueprint,
     grooveConductor,
   );
-  if (targetTrack === "drums" && contextTracks.bass?.length) {
-    raw.drums = fitDrumsToRetainedBass(
-      raw.drums,
-      contextTracks.bass,
-      config,
-      structure,
-      config.tracks.drums,
-      rootRng.fork("drums-retained-bass"),
-    );
-  }
   const retainedDrums = contextNotesForTarget(contextTracks, targetTrack, "drums");
   const drumsForBass = targetTrack === "bass" && retainedDrums ? retainedDrums : raw.drums;
   const drumContext = {
@@ -9745,32 +9699,6 @@ function compose(config, options = {}) {
   produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
   produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
   let tracks = tonalIntegrity.tracks;
-  if (targetTrack === "drums" && contextTracks.bass?.length) {
-    const finalDrumTrack = tracks.find((track) => track.id === "drums");
-    if (finalDrumTrack) {
-      const fittedFinalDrums = fitDrumsToRetainedBass(
-        finalDrumTrack.notes,
-        contextTracks.bass,
-        config,
-        structure,
-        config.tracks.drums,
-        rootRng.fork("final-drums-retained-bass"),
-      );
-      const finalNotesById = Object.fromEntries(tracks.map((track) => [track.id, track.notes]));
-      finalNotesById.drums = fittedFinalDrums;
-      const reconnectedFinal = applyGenerationInterlocks(
-        finalNotesById,
-        generationInterlock,
-        structure,
-        config,
-        { adjustVelocity: false },
-      );
-      tracks = tracks.map((track) => ({
-        ...track,
-        notes: reconnectedFinal[track.id] ?? track.notes,
-      }));
-    }
-  }
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
