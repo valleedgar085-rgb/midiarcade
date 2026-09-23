@@ -4,6 +4,9 @@ import test from "node:test";
 
 const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const packageJson = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+const activityMain = fs.readFileSync(new URL("../android/app/src/main/res/layout/activity_main.xml", import.meta.url), "utf8");
+const nativeShellDrawable = fs.readFileSync(new URL("../android/app/src/main/res/drawable/midi_arcade.xml", import.meta.url), "utf8");
+const brandColors = fs.readFileSync(new URL("../android/app/src/main/res/values/brand_colors_v2.xml", import.meta.url), "utf8");
 
 function between(start, end) {
   const from = appSource.indexOf(start);
@@ -62,6 +65,21 @@ test("native MIDI handoff stays clone-only and uses Capacitor cache + Share", ()
   assert.match(nativeHandoff, /Filesystem\.writeFile\(\{[\s\S]*?directory: "CACHE"[\s\S]*?recursive: true/);
   assert.match(nativeHandoff, /Share\.share\(\{[\s\S]*?url: result\.uri[\s\S]*?dialogTitle: "Save MIDI Song Idea"/);
   assert.match(nativeHandoff, /pruneMidiExportsCache\(\)\.catch/);
+});
+
+test("native Android shell preserves the uploaded MIDI Arcade frame responsively", () => {
+  assert.match(activityMain, /android:id="@\+id\/midi_arcade"/);
+  assert.match(activityMain, /android:layout_width="match_parent"/);
+  assert.match(activityMain, /android:layout_height="match_parent"/);
+  assert.match(activityMain, /android:background="@drawable\/midi_arcade"/);
+  assert.match(activityMain, /android:clipToOutline="true"/);
+  assert.match(activityMain, /android:outlineProvider="background"/);
+  assert.match(activityMain, /<WebView[\s\S]*?android:background="@android:color\/transparent"/);
+  assert.doesNotMatch(activityMain, /402dp|874dp/);
+
+  assert.match(nativeShellDrawable, /<solid android:color="#0D0E11"\s*\/>/);
+  assert.match(nativeShellDrawable, /<corners android:radius="24dp"\s*\/>/);
+  assert.match(brandColors, /<color name="midi_arcade_surface_v2">#0D0E11<\/color>/);
 });
 
 test("focused Android release command runs the protected contract suites", () => {
