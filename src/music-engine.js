@@ -11485,6 +11485,17 @@ const CREATIVE_FLOOR_DIMENSIONS = Object.freeze([
   "drumVariety",
   "genreAuthenticity",
 ]);
+const CRITICAL_FLOOR_DIMENSIONS = Object.freeze([
+  "harmonic",
+  "groove",
+  "voiceLeading",
+  "separation",
+  "phraseResolution",
+  "registerHealth",
+  "stageInterlock",
+  "genreAuthenticity",
+]);
+const ASPIRATIONAL_CRITICAL_FLOOR = 68;
 const TARGETED_REPAIR_GROUPS = deepFreeze([
   {
     id: "harmony",
@@ -11530,25 +11541,38 @@ export function evaluateCandidateBalance(evaluation = {}) {
   const subscores = evaluation?.subscores ?? {};
   const scores = BALANCE_DIMENSIONS.map((name) => clamp(finite(subscores[name], 70), 0, 100));
   const creativeScores = CREATIVE_FLOOR_DIMENSIONS.map((name) => clamp(finite(subscores[name], 70), 0, 100));
+  const criticalScores = CRITICAL_FLOOR_DIMENSIONS.map((name) => ({
+    name,
+    score: clamp(finite(subscores[name], 70), 0, 100),
+  }));
   const sorted = [...scores].sort((left, right) => left - right);
   const lowerBand = sorted.slice(0, Math.max(3, Math.ceil(sorted.length * 0.3)));
   const mean = average(scores, 0);
   const spread = Math.sqrt(average(scores.map((score) => (score - mean) ** 2), 0));
   const balanceScore = Math.round(average(lowerBand, 0));
   const creativeFloor = Math.round(Math.min(...creativeScores));
+  const weakestCritical = [...criticalScores].sort((left, right) => left.score - right.score || left.name.localeCompare(right.name))[0];
+  const criticalFloor = Math.round(weakestCritical?.score ?? 70);
   const scaleSafe = finite(evaluation?.diagnostics?.scaleFit, 0) >= 1 - 1e-9;
   const totalScore = finite(evaluation?.score, 0);
   return {
-    version: 1,
+    version: 2,
     balanceScore,
     creativeFloor,
+    criticalFloor,
+    lowestCriticalDimension: weakestCritical?.name ?? null,
+    aspirationalCriticalFloor: ASPIRATIONAL_CRITICAL_FLOOR,
     spread: round(spread),
     passed: scaleSafe && totalScore >= 82 && balanceScore >= 68 && creativeFloor >= 64,
     // A studio-ready draft may land around 92, but adaptive generation keeps
     // listening until it finds a more balanced 95-point candidate or exhausts
     // its strict CPU budget. Scores near 98 remain exceptional rather than a
     // number the UI manufactures.
-    aspirational: scaleSafe && totalScore >= 95 && balanceScore >= 82 && creativeFloor >= 75,
+    aspirational: scaleSafe
+      && totalScore >= 95
+      && balanceScore >= 82
+      && creativeFloor >= 75
+      && criticalFloor >= ASPIRATIONAL_CRITICAL_FLOOR,
   };
 }
 
