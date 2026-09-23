@@ -276,3 +276,41 @@ test("accept commits only a valid candidate; reject restores the source snapshot
   assert.deepEqual(acceptCompositionCandidate(transaction), transaction.after);
   assert.deepEqual(rejectCompositionCandidate(transaction), source);
 });
+
+test("Director carries source Groove Conductor and publishes complete specialist lanes", () => {
+  const source = sourceSong();
+  source.grooveConductor = {
+    version: 5,
+    bars: [
+      { bar: 0, sectionId: "verse-1", anchors: [0], answers: [0.75], bassPulses: [0.5], chordPulses: [1], leadPulses: [1.5], counterPulses: [2], spaces: [3] },
+      { bar: 1, sectionId: "verse-1", anchors: [0], answers: [0.75], bassPulses: [0.5], chordPulses: [1], leadPulses: [1.5], counterPulses: [2], spaces: [3] },
+      { bar: 2, sectionId: "chorus-1", anchors: [0, 2], answers: [0.75], bassPulses: [0.5, 2.5], chordPulses: [1, 3], leadPulses: [0.75, 2.75], counterPulses: [1.5, 3.5], spaces: [2.25] },
+      { bar: 3, sectionId: "chorus-1", anchors: [0, 2], answers: [0.75], bassPulses: [0.5, 2.5], chordPulses: [1, 3], leadPulses: [0.75, 2.75], counterPulses: [1.5, 3.5], spaces: [2.25] },
+    ],
+  };
+
+  const directive = createDirectorDirective(source, {
+    target: "track",
+    sectionId: "chorus-1",
+    trackId: "bass",
+  });
+  assert.deepEqual(directive.grooveConductor, source.grooveConductor);
+  assert.notStrictEqual(directive.grooveConductor, source.grooveConductor);
+  assert.deepEqual(directive.ensembleContext.groove.bars[0].bassPulses, [0.5, 2.5]);
+  assert.deepEqual(directive.ensembleContext.groove.bars[0].leadPulses, [0.75, 2.75]);
+  assert.deepEqual(directive.ensembleContext.groove.bars[0].spaces, [2.25]);
+
+  let observedInput = null;
+  createCompositionCandidate(
+    source,
+    { target: "track", sectionId: "chorus-1", trackId: "bass" },
+    { seed: "source-groove-authority" },
+    {
+      composer(song, input) {
+        observedInput = structuredClone(input);
+        return composerStub(song, input);
+      },
+    },
+  );
+  assert.deepEqual(observedInput.grooveConductor, source.grooveConductor);
+});
