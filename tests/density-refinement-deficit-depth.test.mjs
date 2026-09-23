@@ -35,7 +35,7 @@ test("large under-density unlocks deeper support articulation without widening c
   const candidates = createDensityRefinementCandidates(source, { densityTarget: 10 });
 
   assert.deepEqual(source, before);
-  assert.equal(candidates.length, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.equal(candidates.length, 3);
   assert.deepEqual(candidates.map(({ id }) => id), ["light-support", "balanced-support", "full-support"]);
   assert.deepEqual(candidates.map(({ articulationParts }) => articulationParts), [2, 3, 3]);
   assert.deepEqual(candidates.map(({ afterNotesPerBar }) => afterNotesPerBar), [3.25, 4, 5]);
