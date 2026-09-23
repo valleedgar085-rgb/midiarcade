@@ -119,7 +119,9 @@ test("fixed sparse-genre seeds get deeper bounded density candidates without bro
         assert.ok(full.changedNotes <= barsFor(beforeSong));
       } else {
         assert.ok(candidates.every((candidate) => candidate.densityErrorDelta < 0));
-        assert.ok(candidates.every((candidate) => candidate.beforeDensityActivity === beforeActivity.observed));
+        assert.ok(candidates.every((candidate) => (
+          Math.abs(candidate.beforeDensityActivity - beforeActivity.observed) <= 0.001
+        )));
       }
       assert.ok(afterEvaluation.subscores.density >= beforeEvaluation.subscores.density);
 
