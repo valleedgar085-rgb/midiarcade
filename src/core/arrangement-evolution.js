@@ -326,6 +326,127 @@ function reorderSectionAddressedArray(entries, orderedIds) {
   return [...ordered, ...entries.filter((entry) => !addressed.has(String(entry?.sectionId ?? "")))];
 }
 
+function sectionStartBar(section) {
+  return finite(section?.startBar, finite(section?.start, 0));
+}
+
+function reorderBlueprintAuthorities(blueprint, orderedIds) {
+  if (!blueprint || typeof blueprint !== "object") return blueprint;
+  const next = { ...blueprint };
+  for (const key of ["sectionPlans", "tensionCurve", "orchestrationMatrix", "memoryMap"]) {
+    if (Array.isArray(next[key])) next[key] = reorderSectionAddressedArray(next[key], orderedIds);
+  }
+  if (next.phraseMemory?.sections) {
+    next.phraseMemory = {
+      ...next.phraseMemory,
+      sections: reorderSectionAddressedArray(next.phraseMemory.sections, orderedIds),
+    };
+  }
+  if (next.songDNA?.sections) {
+    next.songDNA = {
+      ...next.songDNA,
+      sections: reorderSectionAddressedArray(next.songDNA.sections, orderedIds),
+    };
+  }
+  if (next.producerIntent?.scenes) {
+    const scenes = reorderSectionAddressedArray(next.producerIntent.scenes, orderedIds);
+    next.producerIntent = {
+      ...next.producerIntent,
+      identity: {
+        ...(next.producerIntent.identity ?? {}),
+        structuralArc: scenes.map((scene) => `${scene?.purpose ?? "develop"}:${scene?.developmentAxis ?? "statement"}`),
+      },
+      scenes,
+    };
+  }
+  return next;
+}
+
+function relocateSectionBars(entries, sourceById, destinationById, fallbackSectionId = null) {
+  if (!Array.isArray(entries)) return entries;
+  return entries
+    .map((entry) => {
+      const next = cloneValue(entry);
+      const sectionId = String(next?.sectionId ?? fallbackSectionId ?? "");
+      const source = sourceById.get(sectionId);
+      const destination = destinationById.get(sectionId);
+      const bar = Number(next?.bar);
+      if (!source || !destination || !Number.isFinite(bar)) return next;
+      next.bar = Math.round(destination.startBar + (bar - sectionStartBar(source)));
+      return next;
+    })
+    .sort((left, right) => finite(left?.bar, 0) - finite(right?.bar, 0));
+}
+
+function realignSequenceAuthorities(song, originalSections, reordered, orderedIds) {
+  const sourceById = new Map(originalSections.map((section) => [String(section?.id ?? ""), section]));
+  const destinationById = new Map(reordered.map((section) => [String(section?.id ?? ""), section]));
+  let relocatedBarEntries = 0;
+
+  if (song.songBlueprint) song.songBlueprint = reorderBlueprintAuthorities(song.songBlueprint, orderedIds);
+  if (song.songPlan) song.songPlan = reorderBlueprintAuthorities(song.songPlan, orderedIds);
+
+  // songBlueprint is the canonical authority. Refresh public aliases from it
+  // instead of independently evolving duplicate copies that can drift.
+  if (song.songBlueprint?.songDNA) song.songDNA = cloneValue(song.songBlueprint.songDNA);
+  if (song.songBlueprint?.producerIntent) song.producerIntent = cloneValue(song.songBlueprint.producerIntent);
+  if (song.songBlueprint?.orchestrationMatrix) song.orchestrationMatrix = cloneValue(song.songBlueprint.orchestrationMatrix);
+  if (song.songBlueprint?.memoryMap) song.memoryMap = cloneValue(song.songBlueprint.memoryMap);
+  if (song.songBlueprint?.phraseMemory) song.phraseMemory = cloneValue(song.songBlueprint.phraseMemory);
+  if (song.spectrumPlan?.sections) {
+    song.spectrumPlan = {
+      ...song.spectrumPlan,
+      sections: reorderSectionAddressedArray(song.spectrumPlan.sections, orderedIds),
+    };
+  }
+  if (song.motifs?.sectionAssignments) {
+    song.motifs = {
+      ...song.motifs,
+      sectionAssignments: reorderSectionAddressedArray(song.motifs.sectionAssignments, orderedIds),
+    };
+  }
+
+  if (song.grooveConductor?.bars) {
+    const before = song.grooveConductor.bars;
+    const bars = relocateSectionBars(before, sourceById, destinationById);
+    relocatedBarEntries += bars.filter((bar, index) => Number(bar?.bar) !== Number(before[index]?.bar)).length;
+    song.grooveConductor = { ...song.grooveConductor, bars };
+  }
+
+  if (song.generationInterlock?.sectionContracts) {
+    const contracts = reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds)
+      .map((contract) => {
+        const barsBefore = contract?.bars ?? [];
+        const bars = relocateSectionBars(
+          barsBefore,
+          sourceById,
+          destinationById,
+          contract.sectionId,
+        );
+        relocatedBarEntries += bars.filter((bar, index) => Number(bar?.bar) !== Number(barsBefore[index]?.bar)).length;
+        return { ...contract, bars };
+      });
+    song.generationInterlock = {
+      ...song.generationInterlock,
+      sectionContracts: contracts,
+    };
+  }
+
+  return { relocatedBarEntries };
+}
+
+function syncInterlockTransitions(song, transitions) {
+  if (!song.generationInterlock?.sectionContracts) return;
+  const outgoing = new Map(transitions.map((transition) => [String(transition.fromSectionId), transition]));
+  song.generationInterlock = {
+    ...song.generationInterlock,
+    sectionContracts: song.generationInterlock.sectionContracts.map((contract) => ({
+      ...contract,
+      transitionOut: outgoing.get(String(contract.sectionId))?.type ?? null,
+    })),
+  };
+}
+
 function clampRange(value, min, max) {
   return Math.min(max, Math.max(min, finite(value, min)));
 }
@@ -341,34 +462,33 @@ function allTrackNotes(song) {
   ));
 }
 
-function transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy) {
+function transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes) {
   const delta = toEnergy - fromEnergy;
   if (delta >= 0.14) return "lift";
   if (delta > -0.22) return "push";
 
   const boundary = finite(from.endBeat, 0);
   const pickup = 0.5;
-  const notes = allTrackNotes(song);
-  const before = notes.filter(({ note }) => {
+  let before = 0;
+  let gap = 0;
+  for (const { note } of notes) {
     const start = eventStart(note);
-    return start >= boundary - pickup * 2 && start < boundary - pickup;
-  }).length;
-  const gap = notes.filter(({ note }) => {
-    const start = eventStart(note);
-    return start >= boundary - pickup && start < boundary;
-  }).length;
+    if (start >= boundary - pickup * 2 && start < boundary - pickup) before += 1;
+    else if (start >= boundary - pickup && start < boundary) gap += 1;
+  }
   return before > 0 && gap <= Math.max(1, Math.floor(before * 0.45)) ? "drop-out" : "push";
 }
 
 function buildTransitionContext(song) {
   const sections = song.structure ?? [];
   const transitions = [];
+  const notes = allTrackNotes(song);
   for (let index = 0; index < sections.length - 1; index += 1) {
     const from = sections[index];
     const to = sections[index + 1];
     const fromEnergy = sectionEnergy(song, from);
     const toEnergy = sectionEnergy(song, to);
-    const type = transitionTypeForBoundary(song, from, to, fromEnergy, toEnergy);
+    const type = transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes);
     const delta = toEnergy - fromEnergy;
     const pickupBeats = type === "lift" ? 1 : type === "push" ? 0.75 : 0.5;
     const connectionId = `connection:${from.id}->${to.id}`;
@@ -393,6 +513,12 @@ function recontextualizeTransitions(song) {
     ...(song.songBlueprint ?? {}),
     transitions: cloneValue(transitions),
   };
+  if (song.songPlan) {
+    song.songPlan = {
+      ...song.songPlan,
+      transitions: cloneValue(transitions),
+    };
+  }
   song.arrangementTransitions = transitions.map((transition) => ({
     ...transition,
     handoffId: `handoff:${transition.fromSectionId}->${transition.toSectionId}`,
@@ -473,32 +599,9 @@ export function evolveSongArrangement(sourceSong, config = {}) {
     bars: cursorBars,
     totalBeats: cursorBars * beatsPerBar,
   };
-  if (song.songBlueprint?.sectionPlans) {
-    song.songBlueprint = {
-      ...song.songBlueprint,
-      sectionPlans: reorderSectionAddressedArray(song.songBlueprint.sectionPlans, orderedIds),
-    };
-  }
-  if (song.phraseMemory?.sections) {
-    song.phraseMemory = {
-      ...song.phraseMemory,
-      sections: reorderSectionAddressedArray(song.phraseMemory.sections, orderedIds),
-    };
-  }
-  if (song.songDNA?.sections) {
-    song.songDNA = {
-      ...song.songDNA,
-      sections: reorderSectionAddressedArray(song.songDNA.sections, orderedIds),
-    };
-  }
-  if (song.generationInterlock?.sectionContracts) {
-    song.generationInterlock = {
-      ...song.generationInterlock,
-      sectionContracts: reorderSectionAddressedArray(song.generationInterlock.sectionContracts, orderedIds),
-    };
-  }
-
+  const sequenceAlignment = realignSequenceAuthorities(song, original, reordered, orderedIds);
   const transitionContext = recontextualizeTransitions(song);
+  syncInterlockTransitions(song, transitionContext.transitions);
   song.outputQualityEvolution = {
     ...(song.outputQualityEvolution ?? {}),
     arrangement: {
@@ -509,6 +612,8 @@ export function evolveSongArrangement(sourceSong, config = {}) {
       sectionOrder: orderedIds,
       transitionsRebuilt: transitionContext.transitions.length,
       transitionNotesShaped: transitionContext.shapedNotes,
+      sequenceAuthoritiesRealigned: true,
+      relocatedBarEntries: sequenceAlignment.relocatedBarEntries,
     },
   };
   return { changed: true, song, evolution };

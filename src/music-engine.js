@@ -6758,6 +6758,20 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   return entryBeat != null || exitBeat != null ? { entryBeat, exitBeat } : null;
 }
 
+function isProtectedArrangementNote(note) {
+  return Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.transitionRole
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.memoryRole
+    || note?.motifHandoffRole
+    || note?.ensembleAccent
+    || note?.finalAssemblyRole
+  );
+}
+
 function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
   const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
@@ -6798,12 +6812,16 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
             ? 0.68
             : 1;
-      const rockPowerChordStarts = config.genre === "rock" && id === "chords"
-        ? [...new Set(notes
-          .filter((note) => note.genrePhrase === "power-chord-drive")
-          .map((note) => round(note.start, 4)))]
-          .sort((left, right) => left - right)
-        : [];
+      const rockPowerChordGroups = new Map();
+      if (config.genre === "rock" && id === "chords") {
+        for (const note of notes) {
+          if (note.genrePhrase !== "power-chord-drive") continue;
+          const attackKey = round(note.start, 4);
+          if (!rockPowerChordGroups.has(attackKey)) rockPowerChordGroups.set(attackKey, []);
+          rockPowerChordGroups.get(attackKey).push(note);
+        }
+      }
+      const rockPowerChordStarts = [...rockPowerChordGroups.keys()].sort((left, right) => left - right);
       const rockPowerChordDecisions = new Map();
       const roleVelocity = {
         foreground: 1.05,
@@ -6826,15 +6844,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           continue;
         }
         const barPosition = mod(note.start, beatsPerBar(config));
-        const protectedAnchor = note.phraseAnchor
-          || note.resolutionRole
-          || note.transitionRole
-          || note.transitionFeature
-          || note.transitionHandoffRole
-          || note.memoryRole
-          || note.motifHandoffRole
-          || note.ensembleAccent
-          || note.finalAssemblyRole;
+        const protectedAnchor = isProtectedArrangementNote(note);
         const outsideRoleGate = !protectedAnchor && Boolean(
           (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
           || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
@@ -6854,21 +6864,8 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           const attackKey = round(note.start, 4);
           let keepAttack = rockPowerChordDecisions.get(attackKey);
           if (keepAttack == null) {
-            const attackNotes = notes.filter((candidate) => (
-              candidate.genrePhrase === "power-chord-drive"
-              && Math.abs(candidate.start - note.start) < 0.01
-            ));
-            const attackProtected = attackNotes.some((candidate) => (
-              candidate.phraseAnchor
-              || candidate.resolutionRole
-              || candidate.transitionRole
-              || candidate.transitionFeature
-              || candidate.transitionHandoffRole
-              || candidate.memoryRole
-              || candidate.motifHandoffRole
-              || candidate.ensembleAccent
-              || candidate.finalAssemblyRole
-            ));
+            const attackNotes = rockPowerChordGroups.get(attackKey) ?? [note];
+            const attackProtected = attackNotes.some(isProtectedArrangementNote);
             const outsideAttackGate = !attackProtected && Boolean(
               (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
               || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
@@ -6995,17 +6992,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     const foreground = notesFor(scene.foregroundTrack);
     const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
     const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
-    const protectedSharedAnchors = collidingAnswers.filter((note) => (
-      note.phraseAnchor
-      || note.resolutionRole
-      || note.transitionRole
-      || note.transitionFeature
-      || note.transitionHandoffRole
-      || note.memoryRole
-      || note.motifHandoffRole
-      || note.ensembleAccent
-      || note.finalAssemblyRole
-    )).length;
+    const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
     const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
@@ -13110,6 +13097,112 @@ function qualityGateForEvaluation(evaluation) {
   };
 }
 
+function sectionAuthorityIds(entries = []) {
+  return Array.isArray(entries)
+    ? entries.map((entry) => String(entry?.sectionId ?? "")).filter(Boolean)
+    : [];
+}
+
+function followsSectionOrder(entries, order) {
+  const ids = sectionAuthorityIds(entries);
+  if (!ids.length) return true;
+  let cursor = -1;
+  for (const id of ids) {
+    const index = order.indexOf(id);
+    if (index < 0 || index <= cursor) return false;
+    cursor = index;
+  }
+  return true;
+}
+
+export function evaluateSongSequenceAuthority(song) {
+  const structure = song?.structure ?? song?.sections ?? [];
+  if (!Array.isArray(structure) || structure.length < 1) {
+    return Object.freeze({ passed: true, checks: Object.freeze({ available: false }), failures: Object.freeze([]) });
+  }
+  const order = structure.map((section) => String(section?.id ?? ""));
+  const sectionById = new Map(structure.map((section) => [String(section?.id ?? ""), section]));
+  const failures = [];
+  const checks = {
+    available: true,
+    sectionPlans: followsSectionOrder(song?.songBlueprint?.sectionPlans, order),
+    tensionCurve: followsSectionOrder(song?.songBlueprint?.tensionCurve, order),
+    orchestration: followsSectionOrder(song?.songBlueprint?.orchestrationMatrix, order),
+    memory: followsSectionOrder(song?.songBlueprint?.memoryMap, order),
+    phraseMemory: followsSectionOrder(song?.songBlueprint?.phraseMemory?.sections, order),
+    songDNA: followsSectionOrder(song?.songBlueprint?.songDNA?.sections, order),
+    producerScenes: followsSectionOrder(song?.songBlueprint?.producerIntent?.scenes, order),
+    publicProducerScenes: followsSectionOrder(song?.producerIntent?.scenes, order),
+    publicOrchestration: followsSectionOrder(song?.orchestrationMatrix, order),
+    publicMemory: followsSectionOrder(song?.memoryMap, order),
+    publicPhraseMemory: followsSectionOrder(song?.phraseMemory?.sections, order),
+    publicSongDNA: followsSectionOrder(song?.songDNA?.sections, order),
+    spectrumPlan: followsSectionOrder(song?.spectrumPlan?.sections, order),
+    motifAssignments: followsSectionOrder(song?.motifs?.sectionAssignments, order),
+    interlockContracts: followsSectionOrder(song?.generationInterlock?.sectionContracts, order),
+    grooveBars: true,
+    interlockBars: true,
+    transitionAdjacency: true,
+    interlockTransitions: true,
+  };
+
+  for (const bar of song?.grooveConductor?.bars ?? []) {
+    const section = sectionById.get(String(bar?.sectionId ?? ""));
+    const index = Number(bar?.bar);
+    if (!section || !Number.isFinite(index) || index < finite(section.startBar, section.start) - 1e-6
+      || index >= finite(section.startBar, section.start) + Math.max(1, finite(section.bars, 1)) - 1e-6) {
+      checks.grooveBars = false;
+      break;
+    }
+  }
+
+  const transitionByFrom = new Map((song?.songBlueprint?.transitions ?? []).map((transition) => [
+    String(transition?.fromSectionId ?? ""),
+    transition,
+  ]));
+  for (const contract of song?.generationInterlock?.sectionContracts ?? []) {
+    const section = sectionById.get(String(contract?.sectionId ?? ""));
+    for (const bar of contract?.bars ?? []) {
+      const index = Number(bar?.bar);
+      if (!section || !Number.isFinite(index) || index < finite(section.startBar, section.start) - 1e-6
+        || index >= finite(section.startBar, section.start) + Math.max(1, finite(section.bars, 1)) - 1e-6) {
+        checks.interlockBars = false;
+        break;
+      }
+    }
+    if (!checks.interlockBars) break;
+    const expectedTransition = transitionByFrom.get(String(contract?.sectionId ?? ""))?.type ?? null;
+    if ((contract?.transitionOut ?? null) !== expectedTransition) checks.interlockTransitions = false;
+  }
+
+  const transitions = song?.songBlueprint?.transitions ?? [];
+  if (transitions.length) {
+    if (transitions.length !== Math.max(0, order.length - 1)) {
+      checks.transitionAdjacency = false;
+    } else {
+      for (let index = 0; index < transitions.length; index += 1) {
+        const transition = transitions[index];
+        if (
+          String(transition?.fromSectionId ?? "") !== order[index]
+          || String(transition?.toSectionId ?? "") !== order[index + 1]
+        ) {
+          checks.transitionAdjacency = false;
+          break;
+        }
+      }
+    }
+  }
+
+  for (const [id, passed] of Object.entries(checks)) {
+    if (id !== "available" && !passed) failures.push(id);
+  }
+  return Object.freeze({
+    passed: failures.length === 0,
+    checks: Object.freeze(checks),
+    failures: Object.freeze(failures),
+  });
+}
+
 export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate(song)) {
   const subscores = evaluation?.subscores ?? {};
   const minimums = {
@@ -13131,6 +13224,8 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
     const value = finite(subscores[dimension], 0);
     if (value < floor) failures.push(`${dimension}:${round(value)}<${floor}`);
   }
+  const sequenceAuthority = evaluateSongSequenceAuthority(song);
+  if (!sequenceAuthority.passed) failures.push("sequence-authority");
   const finalChecks = {
     ...(song?.finalMaster?.checks ?? {}),
     ...(song?.finalAssembly?.checks ?? {}),
@@ -13149,6 +13244,8 @@ export function evaluateSongReleaseGate(song, evaluation = evaluateSongCandidate
     minimums,
     failures,
     totalScore: finite(evaluation?.score, 0),
+    sequenceChecks: sequenceAuthority.checks,
+    sequenceFailures: sequenceAuthority.failures,
     exportChecks: exportReport?.checks ?? null,
   };
 }
