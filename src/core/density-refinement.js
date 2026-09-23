@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { densityActivityForSong } from "./density-activity.js";
 const SUPPORT_TRACK_PRIORITY = ["chords", "counterpoint", "pad"];
 const SPLITS_PER_BAR = [0.25, 0.5, 1];
 const DEEP_ARTICULATION_DEFICIT_PER_BAR = 6;
@@ -26,6 +27,10 @@ function pitchedNoteCount(song) {
 
 function notesPerBar(song) {
   return pitchedNoteCount(song) / songBars(song);
+}
+
+function densityObserved(song) {
+  return densityActivityForSong(song).observed;
 }
 
 function protectedSupportNote(note) {
@@ -107,8 +112,9 @@ export function createDensityRefinementCandidates(song, {
 } = {}) {
   const bars = songBars(song);
   const beforeNotesPerBar = notesPerBar(song);
+  const beforeDensityActivity = densityObserved(song);
   const target = Math.max(0, finite(densityTarget));
-  const densityDeficitPerBar = Math.max(0, target - beforeNotesPerBar);
+  const densityDeficitPerBar = Math.max(0, target - beforeDensityActivity);
   const deficitNotes = Math.max(0, Math.ceil(densityDeficitPerBar * bars));
   const eligibleCount = eligibleSplitNotes(song).length;
   if (!deficitNotes || !eligibleCount) return [];
@@ -132,6 +138,7 @@ export function createDensityRefinementCandidates(song, {
       seenBudgets.add(budgetKey);
       const articulated = articulateSupport(song, splitCount, parts);
       const afterNotesPerBar = notesPerBar(articulated.song);
+      const afterDensityActivity = densityObserved(articulated.song);
       return {
         id: ["light-support", "balanced-support", "full-support"][candidateIndex],
         candidateIndex,
@@ -140,9 +147,11 @@ export function createDensityRefinementCandidates(song, {
         articulationParts: parts,
         beforeNotesPerBar: round(beforeNotesPerBar, 3),
         afterNotesPerBar: round(afterNotesPerBar, 3),
+        beforeDensityActivity: round(beforeDensityActivity, 3),
+        afterDensityActivity: round(afterDensityActivity, 3),
         densityTarget: round(target, 3),
         densityErrorDelta: round(
-          Math.abs(afterNotesPerBar - target) - Math.abs(beforeNotesPerBar - target),
+          Math.abs(afterDensityActivity - target) - Math.abs(beforeDensityActivity - target),
           3,
         ),
       };
