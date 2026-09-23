@@ -292,6 +292,8 @@ test("Phase 5 core genres opt into the bounded signed repetition repair", () => 
     trap: "trap",
     pop: "pop",
     neoSoul: "neo-soul",
+    drumBass: "drum-bass",
+    afrobeats: "afrobeats",
   };
 
   for (const [genre, family] of Object.entries(families)) {
