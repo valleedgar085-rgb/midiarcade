@@ -6,13 +6,10 @@ function defaultClock() {
 }
 
 function cloneDetail(value) {
-  if (!value || typeof value !== "object") return {};
+  if (value == null || ["string", "number", "boolean"].includes(typeof value)) return value;
+  if (typeof value !== "object") return String(value);
   if (Array.isArray(value)) return value.map((entry) => cloneDetail(entry));
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => {
-    if (entry && typeof entry === "object") return [key, cloneDetail(entry)];
-    if (["string", "number", "boolean"].includes(typeof entry) || entry == null) return [key, entry];
-    return [key, String(entry)];
-  }));
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneDetail(entry)]));
 }
 
 function summarizeConfig(config = {}) {
@@ -36,21 +33,35 @@ function summarizeConfig(config = {}) {
 }
 
 function summarizeSong(song) {
-  const search = song?.meta?.scoreDetails?.candidateSearch;
-  const score = song?.meta?.score ?? song?.meta?.qualityScore ?? null;
+  const details = song?.meta?.scoreDetails;
+  const search = details?.candidateSearch;
+  const score = details?.totalScore ?? song?.meta?.qualityScore ?? song?.meta?.score ?? null;
   return Object.freeze({
     id: song?.id ?? null,
     title: song?.title ?? null,
     seed: song?.seed ?? null,
     score: Number.isFinite(Number(score)) ? Number(score) : null,
+    selectedCandidate: Number.isFinite(Number(details?.selectedCandidate))
+      ? Number(details.selectedCandidate)
+      : null,
+    professionalGate: details?.professionalGate ? cloneDetail(details.professionalGate) : null,
     candidateSearch: search ? cloneDetail({
       thinkingDepth: search.thinkingDepth,
-      totalCandidates: search.totalCandidates,
+      targetReached: search.targetReached,
+      candidatesEvaluated: search.candidatesEvaluated ?? search.totalCandidates,
+      // Keep the original recorder keys as compatibility aliases while exposing
+      // the new authoritative search/provenance fields.
+      totalCandidates: search.totalCandidates ?? search.candidatesEvaluated,
       baseCandidateCount: search.baseCandidateCount,
       maxCandidateCount: search.maxCandidateCount,
-      weakestDimension: search.weakestDimension,
+      expandedBy: search.expandedBy,
+      weakestDimension: search.weakestDimension ?? search.focusDimension,
       repairAttempts: search.repairAttempts,
       repairAccepted: search.repairAccepted,
+      focusGroup: search.focusGroup,
+      focusDimension: search.focusDimension ?? search.weakestDimension,
+      focusRoute: search.focusRoute,
+      focusScore: search.focusScore,
       focusHistory: search.focusHistory,
     }) : null,
   });
