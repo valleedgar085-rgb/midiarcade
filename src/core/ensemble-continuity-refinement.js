@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_ENSEMBLE_CONTINUITY_CANDIDATES = 3;
 export const ENSEMBLE_CONTINUITY_TRACKS = Object.freeze(["drums", "chords", "counterpoint", "pad"]);
@@ -269,22 +270,13 @@ function rootPitchNear(chord, center, min, max) {
 }
 
 function conductorPulses(song, metric, window) {
-  const lane = metric.trackId === "drums" ? "anchors"
-    : metric.trackId === "chords" ? "chordPulses"
-      : metric.trackId === "counterpoint" ? "counterPulses"
-        : null;
-  if (!lane) return [];
-  const pulses = [];
-  const firstBar = Math.max(0, Math.floor(window.start / metric.beatsPerBar));
-  const lastBar = Math.max(firstBar, Math.floor(Math.max(window.start, window.end - 0.001) / metric.beatsPerBar));
-  for (let bar = firstBar; bar <= lastBar; bar += 1) {
-    const plan = song?.grooveConductor?.bars?.[bar];
-    for (const offset of plan?.[lane] ?? []) {
-      const beat = bar * metric.beatsPerBar + finite(offset);
-      if (beat >= window.start + 0.04 && beat < window.end - 0.06) pulses.push(beat);
-    }
-  }
-  return pulses;
+  return trackGroovePulses(
+    song?.grooveConductor,
+    metric.trackId,
+    window.start + 0.04,
+    window.end - 0.06,
+    metric.beatsPerBar,
+  );
 }
 
 function chooseBeat(song, metric, window) {
