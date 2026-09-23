@@ -22,19 +22,24 @@ function melody(song) {
 
 export function repetitionRefinementFamily(song) {
   const primary = normalizeGenreId(song?.genre ?? song?.meta?.genre);
+  // Preserve the established R&B calibration and all fusion-specific families
+  // before considering the new pure-genre Phase 5 rollout.
   if (primary === "rnbSoul") return "rnb";
+  const secondary = normalizeGenreId(song?.meta?.secondaryGenre ?? song?.secondaryGenre);
+  if (song?.meta?.isFusion === true) {
+    const hipHopRap = (primary === "hipHop" && secondary === "rap")
+      || (primary === "rap" && secondary === "hipHop");
+    if (hipHopRap) return "hiphop-rap-fusion";
+    const popRap = (primary === "pop" && secondary === "rap")
+      || (primary === "rap" && secondary === "pop");
+    if (popRap) return "pop-rap-fusion";
+    return null;
+  }
   if (primary === "hipHop") return "hiphop";
   if (primary === "trap") return "trap";
   if (primary === "pop") return "pop";
   if (primary === "neoSoul") return "neo-soul";
-  const secondary = normalizeGenreId(song?.meta?.secondaryGenre ?? song?.secondaryGenre);
-  if (song?.meta?.isFusion !== true) return null;
-  const hipHopRap = (primary === "hipHop" && secondary === "rap")
-    || (primary === "rap" && secondary === "hipHop");
-  if (hipHopRap) return "hiphop-rap-fusion";
-  const popRap = (primary === "pop" && secondary === "rap")
-    || (primary === "rap" && secondary === "pop");
-  return popRap ? "pop-rap-fusion" : null;
+  return null;
 }
 
 function coverage(signature, reference) {
