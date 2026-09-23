@@ -4331,14 +4331,8 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
   const barBeats = beatsPerBar(config);
   const totalBeats = config.bars * barBeats;
-  const compound = config.timeSignature[1] === 8 && config.timeSignature[0] % 3 === 0;
-  const detailedHats = ["trap", "drumBass", "techno"].includes(config.genre)
-    || ["skip", "rising"].includes(rhythmIdentity.hatMotion)
-    || config.complexity > 0.64;
-  const hatStep = compound ? 0.5 : detailedHats ? 0.25 : 0.5;
   const maximumRolls = Math.max(1, Math.floor(Math.max(1, structure.length - 1) / 3));
   let rollFigures = 0;
-  let tripletFigures = 0;
   let preDropPunctuationFigures = 0;
   const maximumPreDropPunctuation = Math.max(1, Math.floor(config.bars / 16));
   let lastFillId = null;
@@ -4386,60 +4380,41 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     const kickVelocity = eventVelocity(config, settings, intensity, barRng.fork("kick-velocity"), 1.08);
     const snareVelocity = eventVelocity(config, settings, intensity, barRng.fork("snare-velocity"), 1.02);
 
-    const variantRng = grammarRng.fork("kick-grammar");
-    const patternBar = evolution.grammarBar + variantRng.int(0, 1);
     const groovePlan = grooveBar(grooveConductor, bar);
-    let kicks = groovePlan?.anchors?.length
-      ? [...groovePlan.anchors]
-      : genreKickOffsets(config, style, barBeats, patternBar);
-    const mutationChance = settings.variation
-      * (0.14 + config.syncopation * 0.28 + config.evolution * 0.18 + rhythmIdentity.mutationBias * 0.26)
-      * (0.82 + barTension * 0.32);
-    if (!groovePlan && variantRng.bool(mutationChance)) {
-      const candidates = (barBeats >= 3.75 ? [0.5, 0.75, 1.5, 2.5, 2.75, 3.5] : [barBeats / 4, barBeats * 0.75])
-        .filter((offset) => offset < barBeats - 0.05 && !kicks.some((kick) => Math.abs(kick - offset) < 1e-6));
-      const mayRemove = !["house", "techno"].includes(config.genre) && kicks.length > 2 && variantRng.bool(0.34);
-      if (mayRemove) kicks = kicks.filter((_, index) => index !== variantRng.int(1, kicks.length - 1));
-      else if (candidates.length) kicks = [...kicks, variantRng.pick(candidates)].sort((a, b) => a - b);
+    if (!groovePlan?.grooveDNA) {
+      throw new Error(`Missing Groove DNA plan for drum bar ${bar}`);
     }
-    kicks.forEach((offset, index) => {
-      const anchor = index === 0 || ["house", "techno", "synthwave"].includes(config.genre);
+
+    for (const [index, offset] of (groovePlan.anchors ?? []).entries()) {
+      const cellRng = grammarRng.fork(`kick-${round(offset, 3)}`);
       const fourFloorGhost = ["house", "techno"].includes(config.genre)
         && Math.abs(offset - Math.round(offset)) > 0.01;
-      const probability = clamp(0.42 + settings.density * 0.42 + (anchor ? 0.35 : settings.variation * 0.18), 0, 1);
-      const cellRng = grammarRng.fork(`kick-${round(offset, 3)}`);
-      if (groovePlan || anchor || cellRng.bool(probability)) {
-        hit(
-          36,
-          start + offset,
-          kickVelocity - (fourFloorGhost ? cellRng.int(15, 23) : index ? cellRng.int(1, 9) : 0),
-          0.08,
-          groovePlan ? {
-            grooveRole: groovePlan.role,
-            genrePhrase: groovePlan.genrePhrase,
-            grooveSource: groovePlan.grooveDNA ? `${groovePlan.grooveDNA.grammarId}.kick` : "legacy.kick",
-            grammarRole: index === 0 ? "anchor" : "optional",
-            ...(fourFloorGhost ? { rhythmicFeature: "ghost-kick" } : {}),
-          } : null,
-        );
-      }
-    });
+      hit(
+        36,
+        start + offset,
+        kickVelocity - (fourFloorGhost ? cellRng.int(15, 23) : index ? cellRng.int(1, 9) : 0),
+        0.08,
+        {
+          grooveRole: groovePlan.role,
+          genrePhrase: groovePlan.genrePhrase,
+          grooveSource: `${groovePlan.grooveDNA.grammarId}.kick`,
+          grammarRole: index === 0 ? "anchor" : "optional",
+          ...(fourFloorGhost ? { rhythmicFeature: "ghost-kick" } : {}),
+        },
+      );
+    }
 
-    for (const offset of (
-      groovePlan?.snarePulses?.length
-        ? groovePlan.snarePulses
-        : genreSnareOffsets(config, style, barBeats)
-    )) {
+    for (const offset of groovePlan.snarePulses ?? []) {
       const cellRng = grammarRng.fork(`snare-${round(offset, 3)}`);
       hit(
         38,
         start + offset,
         snareVelocity + cellRng.int(-3, 3),
         0.08,
-        groovePlan?.grooveDNA ? {
+        {
           grooveSource: `${groovePlan.grooveDNA.grammarId}.snare`,
           grammarRole: "backbeat-or-comp",
-        } : null,
+        },
       );
       const layeredBackbeat = ["house", "techno"].includes(config.genre)
         || (
@@ -4448,26 +4423,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           && barTension >= 0.58
         );
       if (layeredBackbeat && cellRng.bool(["house", "techno"].includes(config.genre) ? 0.72 : 0.62)) {
-        hit(39, start + offset, snareVelocity - 7, 0.08, { rhythmicFeature: "layered-backbeat" });
-      }
-      const embellish = groovePlan?.role === "answer"
-        ? offset - (compound ? 0.5 : 0.25)
-        : groovePlan?.role === "development"
-          ? offset + (compound ? 0.5 : 0.25)
-          : null;
-      if (
-        embellish !== null
-        && embellish > 0.05
-        && embellish < barBeats - 0.05
-        && cellRng.bool(0.18 + settings.variation * 0.34 + config.syncopation * 0.22)
-      ) {
-        hit(
-          cellRng.bool(0.58) ? 37 : 38,
-          start + embellish,
-          eventVelocity(config, settings, intensity, cellRng, 0.38),
-          0.07,
-          { rhythmicFeature: "phrase-ghost-note", grooveRole: groovePlan.role },
-        );
+        hit(39, start + offset, snareVelocity - 7, 0.08, {
+          rhythmicFeature: "layered-backbeat",
+          grooveSource: `${groovePlan.grooveDNA.grammarId}.snare-layer`,
+          grammarRole: "timbre-layer",
+        });
       }
     }
 
@@ -4496,245 +4456,41 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       );
     }
 
+    for (let cell = 0; cell < (groovePlan.hatPulses ?? []).length; cell += 1) {
+      const offset = groovePlan.hatPulses[cell];
+      const cellRng = grammarRng.fork(`hat-${cell}`);
+      if (groovePlan.spaces?.some((space) => Math.abs(space - offset) < 0.01)) continue;
+      const isBeat = Math.abs(offset - Math.round(offset)) < 0.01;
+      const offSixteenthGrid = Math.abs(offset * 4 - Math.round(offset * 4)) > 0.01;
+      const exactSixthTriplet = offSixteenthGrid && Math.abs(offset * 6 - Math.round(offset * 6)) < 0.002;
+      const exactEighthTriplet = offSixteenthGrid && Math.abs(offset * 3 - Math.round(offset * 3)) < 0.002;
+      const open = ["house", "techno"].includes(config.genre)
+        ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
+        : cellRng.bool(0.08 + settings.variation * 0.16);
+      const grooveFeature = exactSixthTriplet
+        ? "triplet-sixteenth"
+        : exactEighthTriplet
+          ? "triplet-eighth"
+          : open ? "groove-dna-open-hat" : "groove-dna-hat";
+      hit(
+        open ? 46 : 42,
+        start + offset,
+        eventVelocity(config, settings, intensity, cellRng, isBeat ? 0.68 : 0.56),
+        open ? 0.22 : 0.055,
+        {
+          rhythmicFeature: grooveFeature,
+          grooveSource: `${groovePlan.grooveDNA.grammarId}.hat`,
+          grammarRole: exactSixthTriplet || exactEighthTriplet ? "triplet-subdivision" : "timekeeper",
+          ...(offSixteenthGrid ? { preserveSubdivision: true } : {}),
+        },
+      );
+    }
+
     const sectionEnd = bar === section.startBar + section.bars - 1;
     const transition = sectionEnd ? transitionFromSection(songBlueprint, section) : null;
     const incomingTransition = bar === section.startBar ? transitionIntoSection(songBlueprint, section) : null;
-    const phraseEnd = evolution.phraseEnd;
-
-    // Phase 3: evolve one restrained, genre-native detail per bar. Core kick/snare
-    // anchors are never deleted or moved; this layer creates statement/answer/lift/
-    // cadence contrast so repeated sections retain identity without cloning bars.
-    const phase3Family = phase3DrumFamilyForGenre(config.genre);
-    const phase3Role = phraseEnd
-      ? "cadence"
-      : evolution.barInPhrase === 0
-        ? "statement"
-        : evolution.barInPhrase === 1
-          ? "answer"
-          : "lift";
-    const phase3Rng = phraseRng.fork(`phase3-groove-${phase3Role}-${evolution.phraseIndex}`);
-    const phase3Variant = mod(evolution.phraseIndex + bar + phase3Rng.int(0, 2), 3);
-    const phase3Strength = clamp(0.48 + settings.variation * 0.2 + config.evolution * 0.18 + config.energy * 0.12, 0.48, 0.88);
-    const phase3Meta = {
-      rhythmicFeature: "phase3-groove-development",
-      grooveRole: phase3Role,
-      grooveFamily: phase3Family,
-      grooveVariant: phase3Variant,
-    };
-    const phase3Add = (pitches, offsets, scale = 0.62, duration = 0.07) => {
-      if (config.genre === "jazz") return false;
-      const pitch = pitches[phase3Variant % pitches.length];
-      const requestedOffset = Math.min(Math.max(0, offsets[phase3Variant % offsets.length]), Math.max(0, barBeats - 0.0625));
-      const grammarCandidates = groovePlan?.grooveDNA
-        ? uniqueGrooveOffsets([
-          ...(groovePlan?.percussionPulses ?? []),
-          ...(groovePlan?.hatPulses ?? []),
-        ], barBeats).filter((candidate) => !(groovePlan?.spaces ?? []).includes(candidate))
-        : [];
-      const offset = grammarCandidates.length
-        ? grammarCandidates[phase3Variant % grammarCandidates.length]
-        : requestedOffset;
-      return hit(
-        pitch,
-        start + offset,
-        eventVelocity(config, settings, intensity, phase3Rng.fork(`detail-${pitch}-${offset}`), scale),
-        duration,
-        phase3Meta,
-      );
-    };
-
-    if (phase3Role === "statement") {
-      if (phase3Rng.bool(phase3Strength * 0.58)) {
-        if (phase3Family === "afroLatin") phase3Add([70, 75, 70], [0.75, 1.25, 2.75], 0.52);
-        else if (phase3Family === "electronic") phase3Add([42, 42, 46], [0.75, 1.75, 2.75], 0.5);
-        else phase3Add([42, 37, 42], [0.75, 1.5, 2.75], 0.48);
-      }
-    } else if (phase3Role === "answer") {
-      if (phase3Family === "electronic") phase3Add([46, 42, 51], [1.5, 2.5, 3.5], 0.58);
-      else if (phase3Family === "bassMusic") phase3Add([42, 37, 46], [1.75, 2.75, 3.25], 0.54);
-      else if (phase3Family === "afroLatin") phase3Add([75, 70, 63], [1.25, 2.25, 3.25], 0.56);
-      else if (phase3Family === "acoustic") phase3Add([37, 42, 46], [1.5, 2.5, 3.5], 0.52);
-      else phase3Add([37, 42, 70], [1.25, 2.5, 3.25], 0.5);
-    } else if (phase3Role === "lift") {
-      if (phase3Family === "electronic") phase3Add([46, 42, 39], [2.25, 2.75, 3.25], 0.62);
-      else if (phase3Family === "bassMusic") phase3Add([42, 46, 38], [2 + 1 / 3, 2.75, 3 + 1 / 6], 0.58);
-      else if (phase3Family === "afroLatin") phase3Add([70, 75, 64], [2.25, 2.75, 3.25], 0.6);
-      else if (phase3Family === "acoustic") phase3Add([42, 47, 46], [2.25, 2.75, 3.25], 0.58);
-      else phase3Add([42, 37, 46], [2.25, 2.75, 3.25], 0.54);
-    } else {
-      if (phase3Family === "electronic") phase3Add([46, 49, 39], [3.25, 3.5, 3.75], 0.68);
-      else if (phase3Family === "bassMusic") phase3Add([38, 42, 46], [3 + 1 / 6, 3.5, 3.75], 0.64);
-      else if (phase3Family === "afroLatin") phase3Add([75, 70, 63], [3.25, 3.5, 3.75], 0.64);
-      else if (phase3Family === "acoustic") phase3Add([47, 50, 38], [3.25, 3.5, 3.75], 0.62);
-      else phase3Add([37, 42, 46], [3.25, 3.5, 3.75], 0.58);
-    }
-
     const featuredGenre = config.genre === "trap" || config.genre === "drumBass";
     const transitionRng = phraseRng.fork("transition-detail");
-    const forceTriplet = config.tripletAmount >= 0.5 && featuredGenre && config.energy >= 0.8 && config.complexity >= 0.7 && tripletFigures === 0 && sectionEnd;
-    const tripletProbability = config.tripletAmount * (0.32 + config.energy * 0.42 + config.complexity * 0.38);
-    const useTriplet = !groovePlan?.grooveDNA
-      && !compound
-      && phraseEnd
-      && (forceTriplet || transitionRng.bool(tripletProbability));
-    const tripletStep = config.complexity > 0.66 && (config.genre === "trap" || transitionRng.bool(0.42)) ? 1 / 6 : 1 / 3;
-    const tripletStart = Math.max(0, barBeats - 1);
-
-    // Keep note placement coherent at each position of the selected 2–4 bar
-    // phrase. Velocity can still describe a gradual arc across repetitions.
-    // The gradual intensity arc belongs in velocity, not in hit probability.
-    const hatProbability = clamp(
-      settings.density * grammarIntensity * (hatStep === 0.25 ? 0.78 : 1.08) * (0.88 + barTension * 0.18),
-      0.12,
-      0.98,
-    );
-    const grooveHatOffsets = groovePlan?.hatPulses?.length ? groovePlan.hatPulses : null;
-    const hatOffsets = grooveHatOffsets
-      ?? Array.from(
-        { length: Math.max(0, Math.ceil((barBeats - 0.01) / hatStep)) },
-        (_, cell) => round(cell * hatStep, 4),
-      );
-    for (let cell = 0; cell < hatOffsets.length; cell += 1) {
-      const offset = hatOffsets[cell];
-      if (useTriplet && offset >= tripletStart - 1e-6) continue;
-      if (transition?.type === "drop-out" && offset >= barBeats - transition.pickupBeats - 1e-6) continue;
-      if (groovePlan?.spaces?.some((space) => Math.abs(space - offset) < 0.01)) continue;
-      const cellRng = grammarRng.fork(`hat-${cell}`);
-      if (grooveHatOffsets || cellRng.bool(hatProbability)) {
-        const isBeat = Math.abs(offset - Math.round(offset)) < 0.01;
-        const accentCell = mod(cell + rhythmIdentity.accentRotation + evolution.grammarBar, 4);
-        const motionAccent = rhythmIdentity.hatMotion === "offbeat" ? !isBeat
-          : rhythmIdentity.hatMotion === "skip" ? accentCell === 1 || accentCell === 3
-            : rhythmIdentity.hatMotion === "rising" ? accentCell >= 2
-              : accentCell === 0;
-        const open = ["house", "techno"].includes(config.genre)
-          ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
-          : (motionAccent || offset > barBeats - 0.75) && cellRng.bool(0.1 + settings.variation * 0.2);
-        const offSixteenthGrid = Boolean(
-          grooveHatOffsets
-          && Math.abs(offset * 4 - Math.round(offset * 4)) > 0.01
-        );
-        const exactSixthTriplet = offSixteenthGrid
-          && Math.abs(offset * 6 - Math.round(offset * 6)) < 0.002;
-        const exactEighthTriplet = offSixteenthGrid
-          && Math.abs(offset * 3 - Math.round(offset * 3)) < 0.002;
-        const preserveSubdivision = offSixteenthGrid;
-        const grooveFeature = exactSixthTriplet
-          ? "triplet-sixteenth"
-          : exactEighthTriplet
-            ? "triplet-eighth"
-            : open ? "groove-dna-open-hat" : "groove-dna-hat";
-        hit(
-          open ? 46 : 42,
-          start + offset,
-          eventVelocity(config, settings, intensity, cellRng, (isBeat ? 0.68 : 0.54) + (motionAccent ? 0.1 : 0)),
-          open ? 0.22 : 0.055,
-          grooveHatOffsets
-            ? {
-              rhythmicFeature: grooveFeature,
-              grooveSource: `${groovePlan.grooveDNA?.grammarId ?? "groove-dna"}.hat`,
-              grammarRole: exactSixthTriplet || exactEighthTriplet ? "triplet-subdivision" : "timekeeper",
-              ...(preserveSubdivision ? { preserveSubdivision: true } : {}),
-            }
-            : open ? { rhythmicFeature: "open-hat-accent" } : null,
-        );
-      }
-    }
-    if (useTriplet) {
-      const count = tripletStep === 1 / 6 ? 6 : 3;
-      const feature = tripletStep === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth";
-      for (let index = 0; index < count; index += 1) {
-        const accent = index === count - 1 ? 0.82 : index % 3 === 0 ? 0.72 : 0.52;
-        hit(42, start + tripletStart + index * tripletStep, eventVelocity(config, settings, intensity, transitionRng, accent), Math.min(0.08, tripletStep * 0.65), { rhythmicFeature: feature });
-      }
-      tripletFigures += 1;
-    }
-
-    const tensionPickup = phraseEnd
-      && !sectionEnd
-      && barTension >= 0.7
-      && settings.variation > 0.28
-      && transitionRng.bool(config.drumFills * (0.18 + barTension * 0.34));
-    if (tensionPickup) {
-      const pickupStep = config.complexity > 0.62 ? 0.25 : 0.5;
-      const pickupStart = Math.max(0, barBeats - pickupStep * 2);
-      for (let index = 0; index < 2; index += 1) {
-        hit(
-          index === 0 ? 45 : 47,
-          start + pickupStart + index * pickupStep,
-          eventVelocity(config, settings, intensity, transitionRng, 0.52 + index * 0.12),
-          0.075,
-          { rhythmicFeature: "tension-pickup", plannedTension: barTension },
-        );
-      }
-    }
-
-    if (
-      groovePlan?.role === "turnaround"
-      && barTension >= 0.58
-      && settings.variation >= 0.32
-      && transitionRng.bool(0.28 + config.energy * 0.28)
-    ) {
-      hit(
-        41,
-        start + Math.max(0, barBeats - 0.5),
-        eventVelocity(config, settings, intensity, transitionRng, 0.62),
-        0.11,
-        { rhythmicFeature: "low-tom-turnaround", plannedTension: barTension },
-      );
-    }
-
-    const ghostRng = phraseRng.fork("snare-ghost-lane");
-    const ghostRole = ghostRng.int(0, 1);
-    if (evolution.grammarBar === ghostRole && ghostRng.bool(
-      config.syncopation * settings.variation * (0.34 + rhythmIdentity.ghostBias * 0.48)
-    )) {
-      const backbeat = genreSnareOffsets(config, style, barBeats)[0] ?? barBeats / 2;
-      const ghostAt = start + clamp(backbeat - (compound ? 0.5 : 0.25), 0.25, barBeats - 0.2);
-      hit(
-        ghostRng.bool(0.5) ? 37 : 38,
-        ghostAt,
-        eventVelocity(config, settings, intensity, ghostRng, 0.4),
-        0.08,
-        { rhythmicFeature: "ghost-note" },
-      );
-    }
-
-    // One quiet auxiliary lane is chosen for the whole phrase. Each phrase
-    // position has a recognizable part, then evolves at the next boundary.
-    const percussionRng = phraseRng.fork("percussion-lane");
-    if (settings.density > 0.34 && percussionRng.bool(0.2 + config.complexity * 0.38 + section.intensity * 0.12)) {
-      const percussionPitch = {
-        ride: 51,
-        tambourine: 54,
-        cowbell: 56,
-        shaker: 70,
-      }[rhythmIdentity.percussionVoice] ?? percussionRng.pick([51, 54, 56]);
-      const lanes = {
-        steady: [[0.5, 1.5, 2.5, 3.5], [1.5, 3.5]],
-        offbeat: [[0.5, 1.5, 2.5, 3.5], [0.75, 2.75]],
-        skip: [[0.75, 1.5, 2.75, 3.5], [0.5, 2.75]],
-        rising: [[1.5, 2.5, 3, 3.5], [0.75, 2.5, 3.5]],
-      };
-      const laneChoices = rhythmIdentity.hatMotion === "alternating"
-        ? [lanes.offbeat[evolution.grammarBar % lanes.offbeat.length]]
-        : lanes[rhythmIdentity.hatMotion] ?? lanes.steady;
-      const lane = percussionRng.pick(laneChoices);
-      for (const offset of lane.filter((value) => value < barBeats - 0.05)) {
-        if (useTriplet && offset >= tripletStart - 1e-6) continue;
-        const cellRng = phraseRng.fork(`percussion-${evolution.grammarBar}-${offset}`);
-        if (evolution.grammarBar === 0 || cellRng.bool(0.7)) {
-          hit(
-            percussionPitch,
-            start + offset,
-            eventVelocity(config, settings, intensity, cellRng, 0.38 + evolution.progress * 0.08),
-            0.08,
-            { rhythmicFeature: `${rhythmIdentity.percussionVoice}-accent` },
-          );
-        }
-      }
-    }
-
     const boundary = sectionEnd && bar !== config.bars - 1;
     const importantBoundary = section.name === "build" || nextSection?.name === "drop" || nextSection?.name === "chorus";
     const preDropRng = transitionRng.fork("pre-drop-punctuation");
@@ -4893,199 +4649,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     );
     preDropPunctuationFigures += 1;
   }
-  return developDuplicateDrumBars(notes, config, structure, settings, rng.fork("drum-development"), grooveConductor);
-}
-
-function drumBarSignature(notes, bar, barBeats) {
-  const start = bar * barBeats;
-  const end = start + barBeats;
-  return notes
-    .filter((note) => note.start >= start - 1e-6 && note.start < end - 1e-6)
-    .map((note) => `${note.pitch}:${round(note.start - start, 4)}`)
-    .sort()
-    .join("|");
-}
-
-function developDuplicateDrumBars(source, config, structure, settings, rng, grooveConductor = null) {
-  if (settings.variation <= 0.08 || source.length < 2) return source;
-  const result = source.map((note) => ({ ...note }));
-  const barBeats = beatsPerBar(config);
-  const totalBeats = config.bars * barBeats;
-  let previousSignature = "";
-  for (let bar = 0; bar < config.bars; bar += 1) {
-    const signature = drumBarSignature(result, bar, barBeats);
-    if (!signature || signature !== previousSignature) {
-      previousSignature = signature;
-      continue;
-    }
-
-    const start = bar * barBeats;
-    const end = start + barBeats;
-    const plan = grooveBar(grooveConductor, bar);
-    const section = sectionForBar(structure, bar);
-    const local = rng.fork(`duplicate-bar-${bar}`);
-    const hats = result.filter((note) => (
-      [42, 46].includes(note.pitch)
-      && note.start >= start + 0.2
-      && note.start < end - 0.05
-    ));
-    if (hats.length) {
-      const chosen = local.pick(hats);
-      chosen.pitch = chosen.pitch === 42 ? 46 : 42;
-      chosen.duration = chosen.pitch === 46 ? Math.max(0.16, chosen.duration) : Math.min(0.08, chosen.duration);
-      chosen.velocity = clamp(chosen.velocity - local.int(5, 12), 1, 127);
-      chosen.rhythmicFeature = "developed-hat-color";
-      chosen.grooveRole = plan?.role ?? chosen.grooveRole;
-    } else {
-      const candidates = [0.75, 1.75, 2.75, barBeats - 0.25]
-        .filter((offset) => offset > 0 && offset < barBeats - 0.05)
-        .filter((offset) => !(plan?.spaces ?? []).some((space) => Math.abs(space - offset) < 0.01))
-        .filter((offset) => !result.some((note) => (
-          note.pitch === 37 && Math.abs(note.start - (start + offset)) < 1e-6
-        )));
-      if (candidates.length) {
-        addNote(
-          result,
-          37,
-          start + local.pick(candidates),
-          0.06,
-          clamp(Math.round(38 + settings.velocity * 28 + section.intensity * 8), 32, 72),
-          totalBeats,
-          { rhythmicFeature: "developed-ghost-note", grooveRole: plan?.role ?? "development" },
-        );
-      }
-    }
-    previousSignature = drumBarSignature(result, bar, barBeats);
-  }
-  return result.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-}
-
-function reinforceGrooveMemory(source, config, structure, songBlueprint, grooveConductor) {
-  if (source.length < 2 || config.bars < 8 || config.genre === "jazz") return source;
-  const barBeats = beatsPerBar(config);
-  const phraseBars = clamp(Math.round(finite(grooveConductor?.phraseBars, 2)), 2, config.professionalUpgrade ? 8 : 4);
-  const sectionForBar = (bar) => structure.find((section) => (
-    bar >= section.startBar && bar < section.startBar + section.bars
-  )) ?? structure.at(-1);
-  const transitionBars = new Set();
-  for (const transition of songBlueprint?.transitions ?? []) {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
-    const to = structure.find((section) => section.id === transition.toSectionId);
-    if (from) transitionBars.add(from.startBar + from.bars - 1);
-    if (to) transitionBars.add(to.startBar);
-  }
-
-  const notesByBar = Array.from({ length: config.bars }, () => []);
-  const outsideNotes = [];
-  for (const sourceNote of source) {
-    const note = { ...sourceNote };
-    const bar = Math.floor(note.start / barBeats);
-    if (bar >= 0 && bar < config.bars) notesByBar[bar].push(note);
-    else outsideNotes.push(note);
-  }
-  const notesForBar = (bar) => notesByBar[bar] ?? [];
-  const signatureForBar = (bar) => notesForBar(bar)
-    .map((note) => note.pitch + ":" + round(mod(note.start, barBeats), 4))
-    .sort()
-    .join("|");
-  const isProtectedBar = (bar) => {
-    const section = sectionForBar(bar);
-    const barNotes = notesForBar(bar);
-    if (!section || bar <= 0 || bar >= config.bars - 1) return true;
-    if (bar === section.startBar || transitionBars.has(bar)) return true;
-    if (mod(bar - section.startBar, phraseBars) === 0) return true;
-    return barNotes.some((note) => (
-      note.drumFillId
-      || note.transitionFeature
-      || note.transitionHandoffRole
-      || note.transitionHandoffId
-      || note.preDropPunctuation
-      || note.rhythmicFeature === "phrase-boundary-roll"
-      || note.rhythmicFeature === "transition-fill"
-    ));
-  };
-  const averageVelocity = (notes) => notes.length
-    ? notes.reduce((sum, note) => sum + finite(note.velocity, 80), 0) / notes.length
-    : 80;
-
-  let recalls = 0;
-  for (let bar = 2; bar < config.bars - 1; bar += 1) {
-    if (isProtectedBar(bar)) continue;
-    const targetSection = sectionForBar(bar);
-    if (!targetSection) continue;
-    const targetRole = mod(bar - targetSection.startBar, phraseBars);
-    const previousSignature = signatureForBar(bar - 1);
-    const candidates = [];
-    const coreSectionNames = new Set(["verse", "chorus", "drop"]);
-    const targetFamily = coreSectionNames.has(targetSection.name) ? "song-core" : targetSection.name;
-    for (let referenceBar = 0; referenceBar <= bar - 2; referenceBar += 1) {
-      if (isProtectedBar(referenceBar)) continue;
-      const referenceSection = sectionForBar(referenceBar);
-      if (!referenceSection) continue;
-      const sameSection = referenceSection.name === targetSection.name;
-      const referenceFamily = coreSectionNames.has(referenceSection.name) ? "song-core" : referenceSection.name;
-      if (!sameSection && referenceFamily !== targetFamily) continue;
-      const referenceRole = mod(referenceBar - referenceSection.startBar, phraseBars);
-      if (referenceRole !== targetRole) continue;
-      const referenceNotes = notesForBar(referenceBar);
-      if (!referenceNotes.length) continue;
-      const referenceSignature = signatureForBar(referenceBar);
-      if (!referenceSignature || referenceSignature === previousSignature) continue;
-      candidates.push({ referenceBar, sameSection });
-    }
-    candidates.sort((left, right) => Number(right.sameSection) - Number(left.sameSection) || left.referenceBar - right.referenceBar);
-    const referenceBar = candidates[0]?.referenceBar;
-    if (!Number.isInteger(referenceBar)) continue;
-
-    const referenceNotes = notesForBar(referenceBar);
-    const targetNotes = notesForBar(bar);
-    if (!referenceNotes.length || !targetNotes.length) continue;
-    const targetConnectionNote = targetNotes.find((note) => note.connectionId) ?? targetNotes[0];
-    const targetStart = bar * barBeats;
-    const velocityRatio = clamp(
-      averageVelocity(targetNotes) / Math.max(1, averageVelocity(referenceNotes)),
-      0.86,
-      1.16,
-    );
-    const replacement = referenceNotes.map((note) => {
-      const {
-        connectionId: _connectionId,
-        connectionRole: _connectionRole,
-        sectionPatternId: _sectionPatternId,
-        phraseRole: _phraseRole,
-        transitionFeature: _transitionFeature,
-        transitionHandoffRole: _transitionHandoffRole,
-        transitionHandoffId: _transitionHandoffId,
-        ensembleCadenceRole: _ensembleCadenceRole,
-        sectionId: _sectionId,
-        ...rhythmicNote
-      } = note;
-      return {
-        ...rhythmicNote,
-        start: round(targetStart + round(mod(note.start, barBeats))),
-        velocity: clamp(Math.round(finite(note.velocity, 80) * velocityRatio), 1, 120),
-        sectionId: targetSection.id,
-        connectionId: targetConnectionNote?.connectionId ?? `interlock:${targetSection.id}`,
-        ...(targetConnectionNote?.connectionRole ? { connectionRole: targetConnectionNote.connectionRole } : {}),
-        ...(targetConnectionNote?.sectionPatternId ? { sectionPatternId: targetConnectionNote.sectionPatternId } : {}),
-        ...(targetConnectionNote?.phraseRole ? { phraseRole: targetConnectionNote.phraseRole } : {}),
-        grooveMemoryRecall: true,
-        grooveMemorySourceBar: referenceBar,
-        grooveMemorySectionRole: targetRole,
-      };
-    });
-    notesByBar[bar] = replacement;
-    recalls += 1;
-  }
-
-  if (!recalls) return source;
-  return [...outsideNotes, ...notesByBar.flat()]
-    .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-}
-function applyFinalGrooveMemory(tracks, config, structure, songBlueprint, grooveConductor) {
-  return tracks.map((track) => track.id === "drums"
-    ? { ...track, notes: reinforceGrooveMemory(track.notes, config, structure, songBlueprint, grooveConductor) }
-    : track);
+  return notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
 function fitDrumsToRetainedBass(drumNotes, bassNotes, config, structure, settings, rng) {
