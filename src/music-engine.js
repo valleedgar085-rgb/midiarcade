@@ -1480,7 +1480,8 @@ function extendUrbanIntro(layout, sizes, config) {
   const introIndex = layout.findIndex((item) => item.name === "intro");
   if (introIndex < 0) return sizes;
   const current = sizes[introIndex];
-  const target = Math.min(current * 2, config.bars - (sizes.length - 1));
+  const minimumExtendedIntro = Math.max(current * 2, Math.ceil(config.bars / 4));
+  const target = Math.min(minimumExtendedIntro, config.bars - (sizes.length - 1));
   let remaining = Math.max(0, target - current);
   if (!remaining) return sizes;
   const result = [...sizes];
