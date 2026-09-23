@@ -1,3 +1,7 @@
+import {
+  phraseResolutionArticulationSatisfied,
+  phraseResolutionDesiredDuration,
+} from "./phrase-resolution-style.js";
 import { cloneValue } from "./clone-value.js";
 export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
 export const MAX_PHRASE_RESOLUTION_EDITS = 3;
@@ -37,15 +41,20 @@ function chordToneSet(chord) {
     .filter((tone) => Number.isFinite(tone)));
 }
 
-function landingScore(note, chord, tonic, beatsPerBar) {
+function landingScore(note, chord, tonic, beatsPerBar, genre, sectionEnd) {
   if (!note) return 0.55;
   const tones = chordToneSet(chord);
   const pitchClass = mod(note.pitch, 12);
   const chordTone = tones.has(pitchClass);
   const tonicLanding = pitchClass === tonic;
-  const held = finite(note.duration) >= beatsPerBar * 0.35 - 1e-6;
+  const articulated = phraseResolutionArticulationSatisfied({
+    genre,
+    note,
+    sectionEnd,
+    beatsPerBar,
+  });
   return clamp(
-    0.38 + Number(chordTone) * 0.32 + Number(tonicLanding) * 0.18 + Number(held) * 0.12,
+    0.38 + Number(chordTone) * 0.32 + Number(tonicLanding) * 0.18 + Number(articulated) * 0.12,
     0,
     1,
   );
@@ -94,7 +103,14 @@ function sectionLandingEntries(song) {
     ));
     const landing = phraseNotes.at(-1) ?? null;
     const chord = landing ? harmonyAt(song?.harmony ?? [], finite(landing.note.start)) : null;
-    const score = landing ? landingScore(landing.note, chord, tonic, beatsPerBar) : 0.55;
+    const score = landing ? landingScore(
+      landing.note,
+      chord,
+      tonic,
+      beatsPerBar,
+      song?.genre ?? song?.meta?.genre,
+      endBeat,
+    ) : 0.55;
     return {
       section,
       sectionIndex,
@@ -116,10 +132,18 @@ function selectedEntries(song, limit, hold, payoff) {
       if (!tones.size) return false;
       const note = entry.landing.note;
       const pitchClass = mod(note.pitch, 12);
-      const desiredDuration = entry.beatsPerBar * 0.35;
+      const genre = song?.genre ?? song?.meta?.genre;
+      const desiredDuration = phraseResolutionDesiredDuration(genre, entry.beatsPerBar);
+      const articulated = phraseResolutionArticulationSatisfied({
+        genre,
+        note,
+        sectionEnd: entry.section?.endBeat,
+        beatsPerBar: entry.beatsPerBar,
+      });
       return !tones.has(pitchClass)
         || (payoff && entry.isFinal && tones.has(entry.tonic) && pitchClass !== entry.tonic)
         || (hold
+          && !articulated
           && finite(note.duration) < desiredDuration
           && finite(entry.section?.endBeat) - finite(note.start) - 0.02 >= desiredDuration);
     })

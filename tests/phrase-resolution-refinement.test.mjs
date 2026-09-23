@@ -8,6 +8,10 @@ import {
   MAX_PHRASE_RESOLUTION_CANDIDATES,
   MAX_PHRASE_RESOLUTION_EDITS,
 } from "../src/core/phrase-resolution-refinement.js";
+import {
+  phraseResolutionArticulationSatisfied,
+  phraseResolutionDesiredDuration,
+} from "../src/core/phrase-resolution-style.js";
 
 function sourceSong() {
   return {
@@ -246,4 +250,40 @@ test("fresh generation opts into cadence refinement while explicit opt-out remai
   });
   disabled.dispose();
   assert.equal(captures.at(-1).config.phraseResolutionRefinement, false);
+});
+
+
+
+test("Funk and Afrobeats accept short boundary punctuation without changing standard held-cadence semantics", () => {
+  const note = { start: 7.55, duration: 0.3, pitch: 60 };
+  for (const genre of ["funk", "afrobeats"]) {
+    assert.equal(phraseResolutionDesiredDuration(genre, 4), 0.48);
+    assert.equal(phraseResolutionArticulationSatisfied({
+      genre,
+      note,
+      sectionEnd: 8,
+      beatsPerBar: 4,
+    }), true);
+  }
+
+  assert.equal(phraseResolutionDesiredDuration("trap", 4), 1.4);
+  assert.equal(phraseResolutionArticulationSatisfied({
+    genre: "trap",
+    note,
+    sectionEnd: 8,
+    beatsPerBar: 4,
+  }), false);
+});
+
+test("phrase-resolution candidate budget remains capped at the original three candidates", () => {
+  for (const genre of ["trap", "funk", "afrobeats"]) {
+    const song = sourceSong();
+    song.genre = genre;
+    song.meta.genre = genre;
+    const candidates = createPhraseResolutionCandidates(song, {
+      maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES,
+    });
+    assert.ok(candidates.length <= 3);
+    assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_PHRASE_RESOLUTION_EDITS));
+  }
 });
