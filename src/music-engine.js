@@ -6758,6 +6758,20 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   return entryBeat != null || exitBeat != null ? { entryBeat, exitBeat } : null;
 }
 
+function isProtectedArrangementNote(note) {
+  return Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.transitionRole
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.memoryRole
+    || note?.motifHandoffRole
+    || note?.ensembleAccent
+    || note?.finalAssemblyRole
+  );
+}
+
 function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
   const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
@@ -6798,12 +6812,16 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
             ? 0.68
             : 1;
-      const rockPowerChordStarts = config.genre === "rock" && id === "chords"
-        ? [...new Set(notes
-          .filter((note) => note.genrePhrase === "power-chord-drive")
-          .map((note) => round(note.start, 4)))]
-          .sort((left, right) => left - right)
-        : [];
+      const rockPowerChordGroups = new Map();
+      if (config.genre === "rock" && id === "chords") {
+        for (const note of notes) {
+          if (note.genrePhrase !== "power-chord-drive") continue;
+          const attackKey = round(note.start, 4);
+          if (!rockPowerChordGroups.has(attackKey)) rockPowerChordGroups.set(attackKey, []);
+          rockPowerChordGroups.get(attackKey).push(note);
+        }
+      }
+      const rockPowerChordStarts = [...rockPowerChordGroups.keys()].sort((left, right) => left - right);
       const rockPowerChordDecisions = new Map();
       const roleVelocity = {
         foreground: 1.05,
@@ -6826,15 +6844,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           continue;
         }
         const barPosition = mod(note.start, beatsPerBar(config));
-        const protectedAnchor = note.phraseAnchor
-          || note.resolutionRole
-          || note.transitionRole
-          || note.transitionFeature
-          || note.transitionHandoffRole
-          || note.memoryRole
-          || note.motifHandoffRole
-          || note.ensembleAccent
-          || note.finalAssemblyRole;
+        const protectedAnchor = isProtectedArrangementNote(note);
         const outsideRoleGate = !protectedAnchor && Boolean(
           (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
           || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
@@ -6854,21 +6864,8 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           const attackKey = round(note.start, 4);
           let keepAttack = rockPowerChordDecisions.get(attackKey);
           if (keepAttack == null) {
-            const attackNotes = notes.filter((candidate) => (
-              candidate.genrePhrase === "power-chord-drive"
-              && Math.abs(candidate.start - note.start) < 0.01
-            ));
-            const attackProtected = attackNotes.some((candidate) => (
-              candidate.phraseAnchor
-              || candidate.resolutionRole
-              || candidate.transitionRole
-              || candidate.transitionFeature
-              || candidate.transitionHandoffRole
-              || candidate.memoryRole
-              || candidate.motifHandoffRole
-              || candidate.ensembleAccent
-              || candidate.finalAssemblyRole
-            ));
+            const attackNotes = rockPowerChordGroups.get(attackKey) ?? [note];
+            const attackProtected = attackNotes.some(isProtectedArrangementNote);
             const outsideAttackGate = !attackProtected && Boolean(
               (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
               || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
@@ -6995,17 +6992,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     const foreground = notesFor(scene.foregroundTrack);
     const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
     const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
-    const protectedSharedAnchors = collidingAnswers.filter((note) => (
-      note.phraseAnchor
-      || note.resolutionRole
-      || note.transitionRole
-      || note.transitionFeature
-      || note.transitionHandoffRole
-      || note.memoryRole
-      || note.motifHandoffRole
-      || note.ensembleAccent
-      || note.finalAssemblyRole
-    )).length;
+    const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
     const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
