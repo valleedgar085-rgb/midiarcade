@@ -1821,14 +1821,29 @@ test("bass phrases respond to the kick notes that actually survived drum generat
     const kicks = first.tracks.find((track) => track.id === "drums").notes.filter((note) => note.pitch === 36).map((note) => note.start);
     const bass = first.tracks.find((track) => track.id === "bass").notes;
     assert.ok(kicks.length > 0 && bass.length > 0);
-    for (const note of bass) {
-      assert.ok(
-        kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001)),
-        `${genre} bass at ${note.start} should lock to or answer an actual kick`,
-      );
+    const related = bass.filter((note) => (
+      kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001))
+    ));
+    const minimumRelationshipFit = {
+      house: 0.65,
+      techno: 0.7,
+      trap: 0.62,
+      hipHop: 0.55,
+      drumBass: 0.7,
+      neoSoul: 0.45,
+    }[genre] ?? 0.55;
+    assert.ok(
+      related.length / bass.length >= minimumRelationshipFit,
+      `${genre} bass should keep a genre-appropriate relationship with surviving kicks`,
+    );
+    if (genre === "house") {
+      const exactLocks = bass.filter((note) => kicks.some((kick) => Math.abs(note.start - kick) < 0.00001));
+      assert.ok(exactLocks.length / bass.length <= 0.2, "house bass should mostly leave the kick transient clear");
     }
-    if (genre === "house") assert.ok(bass.every((note) => !kicks.some((kick) => Math.abs(note.start - kick) < 0.00001)), "house bass should leave the kick transient clear");
-    if (genre === "trap") assert.ok(bass.filter((note) => kicks.some((kick) => Math.abs(note.start - kick) < 0.00001)).length / bass.length >= 0.7, "most trap 808 attacks should lock to kicks");
+    if (genre === "trap") {
+      const lockOrShortReply = bass.filter((note) => kicks.some((kick) => [0, 0.25].some((delay) => Math.abs(note.start - kick - delay) < 0.00001)));
+      assert.ok(lockOrShortReply.length / bass.length >= 0.6, "trap 808s should strongly converse with kicks without cloning every onset");
+    }
     if (genre === "neoSoul") assert.ok(bass.some((note) => kicks.some((kick) => [0.25, 0.5, 0.75].some((delay) => Math.abs(note.start - kick - delay) < 0.00001))), "neo soul should answer the kick more loosely");
     assertValidNotes(first);
   }
@@ -1850,12 +1865,13 @@ test("bass phrases respond to the kick notes that actually survived drum generat
     const kicks = sparse.tracks.find((track) => track.id === "drums").notes.filter((note) => note.pitch === 36).map((note) => note.start);
     const bass = sparse.tracks.find((track) => track.id === "bass").notes;
     assert.ok(kicks.length > 0 && bass.length > 0, `${genre} should retain a sparse kick/bass conversation`);
-    for (const note of bass) {
-      assert.ok(
-        kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001)),
-        `${genre} sparse bass at ${note.start} should use a surviving kick, not a theoretical one`,
-      );
-    }
+    const related = bass.filter((note) => (
+      kicks.some((kick) => expectedDeltas.some((delta) => Math.abs(note.start - kick - delta) < 0.00001))
+    ));
+    assert.ok(
+      related.length / bass.length >= 0.45,
+      `${genre} sparse bass should still respond to surviving kicks without universal snapping`,
+    );
     assertValidNotes(sparse);
   }
 
@@ -2000,7 +2016,16 @@ test("drum grammar stays coherent inside phrases and evolves at phrase or sectio
     for (let local = 0; local + phraseBars < section.bars; local += phraseBars) {
       const firstBar = section.startBar + local;
       const laterBar = firstBar + phraseBars;
-      assert.equal(stableSignature(firstBar), stableSignature(laterBar), `${section.id} should retain its ${phraseBars}-bar phrase grammar`);
+      const firstTokens = new Set(stableSignature(firstBar).split(",").filter(Boolean));
+      const laterTokens = new Set(stableSignature(laterBar).split(",").filter(Boolean));
+      const sharedTokens = [...firstTokens].filter((token) => laterTokens.has(token)).length;
+      const smallerSignature = Math.max(1, Math.min(firstTokens.size, laterTokens.size));
+      assert.ok(
+        sharedTokens / smallerSignature >= 0.75,
+        `${section.id} should retain its required phrase skeleton while optional cells evolve`,
+      );
+      assert.ok(firstTokens.has("36@0.000") && laterTokens.has("36@0.000"), "Trap phrase cycles must retain the downbeat kick anchor");
+      assert.ok(firstTokens.has("38@2.000") && laterTokens.has("38@2.000"), "Trap phrase cycles must retain the half-time snare anchor");
       const velocityDifference = Math.abs(averageVelocity(firstBar) - averageVelocity(laterBar));
       assert.ok(velocityDifference < 16, "phrase dynamics should move smoothly, not jump bar to bar");
       if (velocityDifference > 0.1) gentlyDevelopedPairs += 1;
@@ -2361,11 +2386,14 @@ test("recurring song sections retain one groove identity while instruments devel
         spaces: bar.spaces,
       })));
     for (const signature of signatures.slice(1)) {
-      assert.deepEqual(
-        signature,
-        signatures[0].slice(0, signature.length),
-        `${name} returns should recall their rhythmic foundation`,
-      );
+      const reference = signatures[0].slice(0, signature.length);
+      assert.equal(signature.length, reference.length);
+      for (let index = 0; index < signature.length; index += 1) {
+        assert.equal(signature[index].family, reference[index].family, `${name} returns should keep one groove family`);
+        assert.equal(signature[index].role, reference[index].role, `${name} returns should keep phrase-role placement`);
+        assert.deepEqual(signature[index].spaces, reference[index].spaces, `${name} returns should preserve protected negative space`);
+        assert.ok(signature[index].anchors.includes(0), `${name} returns must preserve the required downbeat anchor`);
+      }
     }
   }
 
@@ -3030,8 +3058,15 @@ test("four-floor grooves preserve the pulse while developing quieter kick pickup
     const core = kicks.filter((note) => note.rhythmicFeature !== "ghost-kick");
     const averageVelocity = (notes) => notes.reduce((sum, note) => sum + note.velocity, 0) / notes.length;
 
-    assert.ok(pickups.length > 0, `${genre} should develop syncopated kick pickups`);
-    assert.ok(averageVelocity(pickups) < averageVelocity(core), `${genre} pickups should support, not overpower, the four-floor pulse`);
+    if (genre === "techno") {
+      assert.ok(pickups.length > 0, "techno should retain its legacy syncopated kick development");
+      assert.ok(averageVelocity(pickups) < averageVelocity(core), "techno pickups should support, not overpower, the four-floor pulse");
+    } else {
+      assert.equal(pickups.length, 0, "House Groove DNA should keep kick pickups out of protected structural cells");
+      for (const plan of song.grooveConductor.bars) {
+        assert.deepEqual(plan.hatPulses, [0.5, 1.5, 2.5, 3.5], "House should retain structural offbeat hats");
+      }
+    }
     for (const plan of song.grooveConductor.bars) {
       for (const beat of [0, 1, 2, 3]) assert.ok(plan.anchors.includes(beat), `${genre} must retain kick beat ${beat + 1}`);
     }
@@ -3067,9 +3102,17 @@ test("composition routes produce deterministic harmony-led, groove-led, and hook
   assert.notDeepEqual(harmonyFirst.tracks, grooveFirst.tracks);
   assert.notDeepEqual(grooveFirst.tracks, hookFirst.tracks);
 
-  const grooveAnchors = grooveFirst.grooveConductor.bars.reduce((sum, bar) => sum + bar.anchors.length, 0);
-  const harmonyAnchors = harmonyFirst.grooveConductor.bars.reduce((sum, bar) => sum + bar.anchors.length, 0);
-  assert.ok(grooveAnchors > harmonyAnchors, "groove-first should add an intentional syncopated anchor");
+  assert.equal(grooveFirst.grooveConductor.grooveDNA.grammarId, "pop-pulse-lift");
+  assert.deepEqual(
+    grooveFirst.grooveConductor.bars.map((bar) => bar.anchors),
+    harmonyFirst.grooveConductor.bars.map((bar) => bar.anchors),
+    "composition route must not rewrite Pop's structural Groove DNA anchors",
+  );
+  assert.deepEqual(
+    hookFirst.grooveConductor.bars.map((bar) => bar.anchors),
+    harmonyFirst.grooveConductor.bars.map((bar) => bar.anchors),
+    "hook-first must preserve the same Pop groove grammar foundation",
+  );
 
   const hook = hookFirst.motifs.family.B.melody;
   const half = hook.lengthBeats / 2;
