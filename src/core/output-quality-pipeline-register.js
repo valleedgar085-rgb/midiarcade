@@ -693,6 +693,16 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_ENSEMBLE_CONTINUITY_CANDIDATES,
     candidateIds,
+    candidateSummaries: assessments.map((assessment) => ({
+      id: assessment.id,
+      accepted: Boolean(assessment.accepted),
+      reason: assessment.reason,
+      changedNotes: finite(assessment.changedNotes),
+      afterContinuityDeficit: round(assessment.afterContinuityDeficit, 4),
+      continuityErrorDelta: round(assessment.continuityErrorDelta, 4),
+      scoreDelta: round(assessment.scoreDelta),
+      floorDelta: round(assessment.floorDelta),
+    })),
     beforeScore: round(before?.score),
     afterScore: round(selected?.after?.score),
     scoreDelta: round(selected?.scoreDelta),
@@ -864,14 +874,15 @@ function melodyContinuityCriticSong(song) {
 }
 
 function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
-  const after = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
-  const release = evaluateReleaseGate(candidate.song, after);
-  const scoreDelta = finite(after?.score) - finite(before?.score);
-  const floorDelta = creativeFloor(after) - beforeFloor;
+  const criticAfter = evaluateCandidate(melodyContinuityCriticSong(candidate.song));
+  const actualAfter = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, actualAfter);
+  const scoreDelta = finite(actualAfter?.score) - finite(before?.score);
+  const floorDelta = creativeFloor(actualAfter) - beforeFloor;
   const dimensions = Object.keys(before?.subscores ?? {});
-  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const dimensionDeltas = protectedDeltas(before, criticAfter, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
-  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const scaleSafe = finite(actualAfter?.diagnostics?.scaleFit, 0) >= 0.999999;
   const accepted = Boolean(
     release?.passed
     && scaleSafe
@@ -882,7 +893,8 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
   );
   return {
     ...candidate,
-    after,
+    after: actualAfter,
+    criticAfter,
     release,
     scoreDelta,
     floorDelta,
@@ -893,7 +905,7 @@ function assessMelodyContinuityCandidate(candidate, before, beforeFloor, evaluat
       : !scaleSafe ? "scale-safety"
         : candidate.continuityErrorDelta >= -1e-6 ? "continuity-direction"
           : !protectedSafe ? "protected-dimension-regression"
-            : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "critic-regression"
+            : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "full-song-regression"
               : accepted ? "continuity-win" : "critic-regression",
   };
 }
@@ -946,6 +958,7 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
     afterContinuityDeficit: round(selected?.afterContinuityDeficit, 4),
     continuityErrorDelta: round(selected?.continuityErrorDelta, 4),
     floorDelta: round(selected?.floorDelta),
+    criticViewScore: round(selected?.criticAfter?.score),
     protectedDeltas: Object.fromEntries(
       Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
     ),
