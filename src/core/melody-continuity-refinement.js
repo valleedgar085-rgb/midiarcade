@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
 export const MAX_MELODY_CONTINUITY_LINKS = 24;
@@ -142,16 +143,26 @@ export function analyzeMelodyContinuity(song) {
   });
 }
 
-function chooseInsertionBeat(window, slot = 0, slots = 1) {
+function chooseInsertionBeat(song, window, slot = 0, slots = 1) {
   const ratio = slots > 1 ? (slot + 1) / (slots + 1) : 0.5;
   const midpoint = window.start + (window.end - window.start) * ratio;
+  const groovePulses = trackGroovePulses(
+    song?.grooveConductor,
+    "melody",
+    window.start,
+    window.end - 0.12,
+    Math.max(1, finite(song?.meta?.beatsPerBar, 4)),
+  );
+  if (groovePulses.length) {
+    return round([...groovePulses].sort((left, right) => Math.abs(left - midpoint) - Math.abs(right - midpoint) || left - right)[0], 4);
+  }
   const quantized = Math.round(midpoint * 4) / 4;
   return round(clamp(quantized, window.start, window.end - 0.12), 4);
 }
 
-function connectorNote(window, sectionId, mode, ordinal, slot = 0, slots = 1) {
+function connectorNote(song, window, sectionId, mode, ordinal, slot = 0, slots = 1) {
   const source = mode === "anticipation" ? window.next : window.previous;
-  const start = chooseInsertionBeat(window, slot, slots);
+  const start = chooseInsertionBeat(song, window, slot, slots);
   const available = Math.max(0.12, window.end - start);
   const duration = round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
@@ -171,7 +182,7 @@ function addConnectors(song, requests) {
   const track = melodyTrack(candidate);
   if (!track) return candidate;
   const additions = requests.map(({ window, sectionId, mode, slot = 0, slots = 1 }, index) => (
-    connectorNote(window, sectionId, mode, index, slot, slots)
+    connectorNote(candidate, window, sectionId, mode, index, slot, slots)
   ));
   track.notes = [...(track.notes ?? []), ...additions]
     .sort((left, right) => finite(left?.start) - finite(right?.start) || finite(left?.pitch) - finite(right?.pitch));
