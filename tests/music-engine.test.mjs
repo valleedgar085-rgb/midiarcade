@@ -148,6 +148,19 @@ test("seeded new-song generation is deterministic and structurally complete", ()
     "counterpoint",
     "pad",
   ]);
+  assert.equal(first.ensembleCoordination.status, "complete");
+  assert.equal(first.ensembleCoordination.active, true);
+  assert.equal(first.ensembleCoordination.mode, "whole-song-contract");
+  assert.equal(first.ensembleCoordination.mutating, true);
+  assert.equal(first.ensembleCoordination.sharedIntentSections, first.structure.length);
+  assert.ok(
+    first.generationPhases.some((phase) => phase.id === "director-ensemble-coordination" && phase.status === "complete"),
+  );
+  assert.ok(
+    first.generationInterlock.sectionContracts.every((contract) => (
+      contract.bars.every((bar) => Array.isArray(bar.chordPulses) && Array.isArray(bar.counterPulses))
+    )),
+  );
 
   for (const track of first.tracks) {
     assert.ok(track.notes.length > 0, `${track.id} should contain notes`);
@@ -160,6 +173,44 @@ test("seeded new-song generation is deterministic and structurally complete", ()
       assert.ok(note.start + note.duration <= first.meta.totalBeats + 1e-5);
     }
   }
+});
+
+test("Rock writes power-chord drive instead of generic keyboard comping", () => {
+  const song = engine.generateNew({
+    genre: "rock",
+    seed: "rock-power-chord-drive-proof",
+    bars: 12,
+    candidateCount: 1,
+  });
+
+  assert.equal(song.style.drumGroove, "backbeat");
+  assert.ok(song.grooveConductor.bars.every((bar) => bar.genrePhrase === "live-backbeat"));
+  assert.ok(
+    song.grooveConductor.bars.some((bar) => bar.chordPulses.length >= 4),
+    "Rock should publish a driving guitar pulse lane",
+  );
+
+  const chords = song.tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const tagged = chords.filter((note) => note.genrePhrase === "power-chord-drive");
+  assert.ok(tagged.length >= 6, "Rock harmony should retain explicit power-chord writing");
+
+  const roleCounts = Object.fromEntries(
+    ["root", "fifth", "octave"].map((role) => [
+      role,
+      tagged.filter((note) => note.rockChordRole === role).length,
+    ]),
+  );
+  assert.ok(
+    roleCounts.root >= 2,
+    `Rock should expose repeated complete power-chord attacks: ${JSON.stringify(roleCounts)}`,
+  );
+  assert.equal(roleCounts.fifth, roleCounts.root, "orchestration must keep the fifth with every Rock root");
+  assert.equal(roleCounts.octave, roleCounts.root, "orchestration must keep the octave with every Rock root");
+  assert.ok(
+    tagged.every((note) => ["root", "fifth", "octave"].includes(note.rockChordRole)),
+    "Rock chord grammar should omit generic third/extension roles from the power-chord lane",
+  );
+  assertAllGeneratedPitchesInScale(song);
 });
 
 test("genre fusion engine blends two distinct genres into a valid hybrid profile", () => {
@@ -648,7 +699,7 @@ test("phases 7, 8, and 9 orchestrate sections, recall musical ideas, and pass a 
   const song = engine.generateNew(config);
   assert.deepEqual(engine.generateNew(config), song, "phase 9 must remain deterministic for a fixed generation");
   assert.equal(song.songBlueprint.version, 6);
-  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76]);
+  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 43, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76]);
   assert.ok(song.generationPhases.every(({ status }) => status === "complete" || status === "passed" || status === "best-available"));
 
   assert.equal(song.orchestrationMatrix.length, song.structure.length);

@@ -185,6 +185,28 @@ export function createGenerationExecutor({
       flightRecorder.mark(flightId, "compose", { pass: 0 });
       const originalResult = await executeAdapted(kind, adaptedPayload, expectedLifecycle);
       requireCurrentLifecycle(expectedLifecycle);
+
+      if (kind === "compositionCandidate") {
+        const transaction = originalResult?.transaction;
+        const correction = transaction?.selfCorrection;
+        flightRecorder.mark(flightId, "diagnose", {
+          valid: transaction?.validation?.valid === true,
+          issues: transaction?.validation?.issues ?? [],
+          attempts: correction?.attemptCount ?? 1,
+          selectedAttempt: correction?.selectedAttempt ?? 0,
+        });
+        flightRecorder.mark(flightId, "compare", {
+          selected: transaction?.validation?.valid ? "candidate" : "rejected",
+          reason: correction?.stoppedReason ?? "composition-candidate",
+        });
+        flightRecorder.mark(flightId, "finalize", {
+          compositionCandidate: true,
+          passed: transaction?.validation?.valid === true,
+        });
+        flightRecorder.complete(flightId, transaction?.after ?? adaptedPayload?.sourceSong);
+        return originalResult;
+      }
+
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
       flightRecorder.mark(flightId, "diagnose", {
         shouldRetry: diagnosis.shouldRetry,

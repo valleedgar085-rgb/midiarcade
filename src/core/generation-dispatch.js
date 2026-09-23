@@ -14,6 +14,21 @@ const GENERATION_HANDLERS = Object.freeze({
       };
     },
   }),
+  compositionCandidate: Object.freeze({
+    engineMethod: "createSelfCorrectingCompositionCandidate",
+    run(fn, payload) {
+      const transaction = fn(
+        payload.sourceSong,
+        payload.selection ?? {},
+        payload.input ?? payload.config ?? {},
+        { maxAttempts: payload.maxAttempts },
+      );
+      return {
+        status: transaction?.validation?.valid ? "candidate" : "rejected",
+        transaction,
+      };
+    },
+  }),
   sectionVariations: Object.freeze({
     engineMethod: "generateSectionVariations",
     run(fn, payload) {

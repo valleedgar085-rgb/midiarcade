@@ -158,6 +158,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     ensembleContinuityRefinement: typeof source.ensembleContinuityRefinement === "boolean"
       ? source.ensembleContinuityRefinement
       : freshGeneration,
+    transitionFxRefinement: typeof source.transitionFxRefinement === "boolean"
+      ? source.transitionFxRefinement
+      : freshGeneration,
     repetitionRefinement: typeof source.repetitionRefinement === "boolean"
       ? source.repetitionRefinement
       : freshGeneration,

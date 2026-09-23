@@ -4,6 +4,7 @@ import {
   generateSimilar,
 } from "../music-engine.js";
 import { dispatchGenerationRequest } from "./generation-dispatch.js";
+import { createSelfCorrectingCompositionCandidate } from "./composition-self-correction.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
 import { finalizeGeneratedSong } from "./generation-finalizer.js";
 
@@ -12,6 +13,7 @@ function generateSongVariations(sourceSong, config = {}) {
 }
 
 const ENGINE_API = Object.freeze({
+  createSelfCorrectingCompositionCandidate,
   generateNew,
   generateSimilar,
   generateSectionVariations,

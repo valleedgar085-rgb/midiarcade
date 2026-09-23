@@ -41,6 +41,7 @@ import {
   createQualityEvaluationContext,
   runQualityStageSequence,
 } from "./output-quality-stage-runner.js";
+import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
@@ -986,11 +987,14 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
     { id: "repetitionRefinement", run: (current) => applyRepetitionRefinement(current, config, evaluate, release) },
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, config, evaluate, release) },
-    { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
+    // Genre identity is the final note-writing stage. Transition FX runs after it
+    // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
+    { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
+    { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
   ]);
   const diagnostics = sequence.diagnostics;
   return {
@@ -1007,6 +1011,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
     bassContinuityDiagnostics: diagnostics.bassContinuityRefinement,
     ensembleContinuityDiagnostics: diagnostics.ensembleContinuityRefinement,
+    transitionFxDiagnostics: diagnostics.transitionFxRefinement,
   };
 }
 
@@ -1032,6 +1037,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
     ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
+    ["transitionFxRefinement", processed.transitionFxDiagnostics],
   ];
   for (const [key, diagnostics] of acceptedStages) {
     if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;

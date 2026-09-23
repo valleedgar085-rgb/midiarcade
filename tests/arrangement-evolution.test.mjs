@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createArrangementEvolution,
+  evolveArrangementLayout,
   evolveSongArrangement,
 } from "../src/core/arrangement-evolution.js";
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
@@ -10,7 +11,7 @@ import {
   applyResultOutputQualityPostprocess,
   applySongOutputQualityPostprocess,
 } from "../src/core/output-quality-postprocess.js";
-import { createSongFingerprint, generateNew } from "../src/music-engine.js";
+import { createSongFingerprint, evaluateSongSequenceAuthority, generateNew } from "../src/music-engine.js";
 
 function fixtureSong() {
   const names = ["intro", "verse", "chorus", "bridge", "chorus", "outro"];
@@ -56,9 +57,52 @@ function fixtureSong() {
       duration: 8,
       degree: index % 7,
     })),
-    songBlueprint: { sectionPlans: sections.map((section) => ({ sectionId: section.id, role: "fixture" })) },
+    songBlueprint: {
+      sectionPlans: sections.map((section, index) => ({ sectionId: section.id, role: "fixture", energy: 0.4 + index * 0.05 })),
+      tensionCurve: sections.map((section, index) => ({ sectionId: section.id, tension: 0.3 + index * 0.06 })),
+      orchestrationMatrix: sections.map((section) => ({ sectionId: section.id, featuredTrack: "melody" })),
+      memoryMap: sections.map((section) => ({ sectionId: section.id, originSectionId: section.id, relationship: "statement" })),
+      phraseMemory: { sections: sections.map((section) => ({ sectionId: section.id, sentenceRole: "statement" })) },
+      songDNA: { sections: sections.map((section) => ({ sectionId: section.id, developmentSeed: section.startBeat })) },
+      producerIntent: {
+        identity: { structuralArc: sections.map((section, index) => `${section.name}:axis-${index}`) },
+        scenes: sections.map((section, index) => ({
+          sectionId: section.id,
+          purpose: section.name,
+          developmentAxis: `axis-${index}`,
+          roles: { melody: "foreground" },
+        })),
+      },
+    },
+    producerIntent: {
+      identity: { structuralArc: sections.map((section) => `${section.name}:legacy`) },
+      scenes: sections.map((section) => ({ sectionId: section.id, purpose: section.name, developmentAxis: "legacy" })),
+    },
+    orchestrationMatrix: sections.map((section) => ({ sectionId: section.id, featuredTrack: "counterpoint" })),
+    memoryMap: sections.map((section) => ({ sectionId: section.id, originSectionId: section.id, relationship: "legacy" })),
     phraseMemory: { sections: sections.map((section) => ({ sectionId: section.id, relationship: "statement" })) },
     songDNA: { sections: sections.map((section) => ({ sectionId: section.id, phraseSeed: section.startBeat })) },
+    spectrumPlan: { sections: sections.map((section) => ({ sectionId: section.id, role: "legacy" })) },
+    motifs: {
+      sectionAssignments: sections.map((section, index) => ({ sectionId: section.id, motifId: index % 2 ? "B" : "A" })),
+    },
+    grooveConductor: {
+      bars: sections.flatMap((section) => [0, 1].map((localBar) => ({
+        sectionId: section.id,
+        bar: section.startBar + localBar,
+        role: localBar === 0 ? "statement" : "answer",
+      }))),
+    },
+    generationInterlock: {
+      sectionContracts: sections.map((section) => ({
+        sectionId: section.id,
+        transitionOut: "stale",
+        bars: [0, 1].map((localBar) => ({
+          bar: section.startBar + localBar,
+          role: localBar === 0 ? "statement" : "answer",
+        })),
+      })),
+    },
   };
 }
 
@@ -119,6 +163,60 @@ test("Phase 6B arrangement families are deterministic and respect explicit enabl
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "manual-off", bars: 16, arrangementEvolution: false }, { kind: "new" }).arrangementEvolution, false);
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "similar-default", bars: 16 }, { kind: "similar" }).arrangementEvolution, false);
   assert.equal(applyOutputQualityEvolution({ genre: "pop", seed: "similar-manual", bars: 16, arrangementEvolution: true }, { kind: "similar" }).arrangementEvolution, true);
+  assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-default-on", bars: 16 }, { kind: "new" }).transitionFxRefinement, true);
+  assert.equal(applyOutputQualityEvolution({ genre: "techno", seed: "fx-similar-off", bars: 16 }, { kind: "similar" }).transitionFxRefinement, false);
+});
+
+test("genre storytelling layouts give Pop, Rock, and Techno distinct long-form arcs", () => {
+  const base = [
+    { name: "intro", weight: 1 },
+    { name: "verse", weight: 1 },
+    { name: "chorus", weight: 1 },
+    { name: "bridge", weight: 1 },
+    { name: "chorus", weight: 1 },
+    { name: "outro", weight: 1 },
+  ];
+
+  const pop = evolveArrangementLayout(base, {
+    genre: "pop",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+  const rock = evolveArrangementLayout(base, {
+    genre: "rock",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+  const techno = evolveArrangementLayout(base, {
+    genre: "techno",
+    bars: 24,
+    seed: "story-layout-proof",
+    arrangementEvolution: true,
+  }).map(({ name }) => name);
+
+  assert.notDeepEqual(pop, rock, "Pop and Rock must not share the same generic song form");
+  assert.notDeepEqual(pop, techno, "Pop and Techno must not share the same generic song form");
+  assert.notDeepEqual(rock, techno, "Rock and Techno must not share the same generic song form");
+
+  const finalPopChorus = pop.lastIndexOf("chorus");
+  assert.ok(finalPopChorus > 0);
+  assert.ok(
+    pop[finalPopChorus - 1] === "prechorus" || pop.includes("bridge"),
+    "Pop must earn the final chorus with a prechorus or bridge setup",
+  );
+
+  assert.ok(rock.includes("solo") || rock.includes("bridge"), "Rock must reserve a live-band contrast section");
+  assert.equal(rock.includes("drop"), false, "Rock should not inherit EDM drop grammar");
+
+  const finalDrop = techno.lastIndexOf("drop");
+  assert.ok(finalDrop > 1);
+  assert.equal(techno[finalDrop - 1], "build", "Techno must rebuild immediately into its final drop");
+  assert.ok(
+    techno.slice(0, finalDrop - 1).includes("breakdown"),
+    "Techno must create a reset/breath before the final rebuild",
+  );
 });
 
 test("arrangement evolution moves complete sections atomically without changing song duration or section identity", () => {
@@ -143,9 +241,70 @@ test("arrangement evolution moves complete sections atomically without changing 
   assertRelocatedEvents(source, result.song, source.harmony, result.song.harmony);
 
   const order = result.song.structure.map(({ id }) => id);
-  assert.deepEqual(result.song.songBlueprint.sectionPlans.map(({ sectionId }) => sectionId), order);
+  const orderedBlueprintKeys = [
+    "sectionPlans",
+    "tensionCurve",
+    "orchestrationMatrix",
+    "memoryMap",
+  ];
+  for (const key of orderedBlueprintKeys) {
+    assert.deepEqual(
+      result.song.songBlueprint[key].map(({ sectionId }) => sectionId),
+      order,
+      `songBlueprint.${key} must follow the final section sequence`,
+    );
+  }
+  assert.deepEqual(result.song.songBlueprint.phraseMemory.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.songBlueprint.songDNA.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.songBlueprint.producerIntent.scenes.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(
+    result.song.songBlueprint.producerIntent.identity.structuralArc,
+    result.song.songBlueprint.producerIntent.scenes.map((scene) => `${scene.purpose}:${scene.developmentAxis}`),
+    "producer structural arc must be rebuilt in final sequence order",
+  );
   assert.deepEqual(result.song.phraseMemory.sections.map(({ sectionId }) => sectionId), order);
   assert.deepEqual(result.song.songDNA.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.producerIntent.scenes.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.orchestrationMatrix.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.memoryMap.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.spectrumPlan.sections.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.producerIntent, result.song.songBlueprint.producerIntent);
+  assert.deepEqual(result.song.orchestrationMatrix, result.song.songBlueprint.orchestrationMatrix);
+  assert.deepEqual(result.song.memoryMap, result.song.songBlueprint.memoryMap);
+  assert.deepEqual(result.song.phraseMemory, result.song.songBlueprint.phraseMemory);
+  assert.deepEqual(result.song.songDNA, result.song.songBlueprint.songDNA);
+  assert.deepEqual(result.song.motifs.sectionAssignments.map(({ sectionId }) => sectionId), order);
+  assert.deepEqual(result.song.generationInterlock.sectionContracts.map(({ sectionId }) => sectionId), order);
+
+  const sectionById = new Map(result.song.structure.map((section) => [section.id, section]));
+  for (const bar of result.song.grooveConductor.bars) {
+    const section = sectionById.get(bar.sectionId);
+    assert.ok(section, `missing section for groove bar ${bar.sectionId}`);
+    assert.ok(
+      bar.bar >= section.startBar && bar.bar < section.startBar + section.bars,
+      `groove bar ${bar.bar} must live inside relocated ${bar.sectionId}`,
+    );
+  }
+  for (const contract of result.song.generationInterlock.sectionContracts) {
+    const section = sectionById.get(contract.sectionId);
+    for (const bar of contract.bars) {
+      assert.ok(
+        bar.bar >= section.startBar && bar.bar < section.startBar + section.bars,
+        `interlock bar ${bar.bar} must live inside relocated ${contract.sectionId}`,
+      );
+    }
+    const transition = result.song.songBlueprint.transitions.find((entry) => entry.fromSectionId === contract.sectionId);
+    assert.equal(contract.transitionOut, transition?.type ?? null, "interlock transition must match the rebuilt final neighbor");
+  }
+  assert.equal(result.song.outputQualityEvolution.arrangement.sequenceAuthoritiesRealigned, true);
+  assert.ok(result.song.outputQualityEvolution.arrangement.relocatedBarEntries > 0);
+  assert.equal(evaluateSongSequenceAuthority(result.song).passed, true);
+
+  const corrupted = structuredClone(result.song);
+  corrupted.grooveConductor.bars[0].bar += 64;
+  const corruptedAuthority = evaluateSongSequenceAuthority(corrupted);
+  assert.equal(corruptedAuthority.passed, false);
+  assert.ok(corruptedAuthority.failures.includes("grooveBars"));
 });
 
 test("candidate-first postprocess accepts only a scored arrangement win and refreshes authoritative metadata", () => {

@@ -21,6 +21,7 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
+import { acceptCompositionCandidate } from "./core/blueprint-composer.js";
 import { createGenerationOwnership } from "./core/generation-ownership.js";
 import { normalizeCreativeRange } from "./core/creative-range-policy.js";
 import { createAppGenerationFallback } from "./core/app-generation-fallback.js";
@@ -2386,6 +2387,43 @@ function shapeDirectorSelection(section = editorSection()) {
   return { target: "section", sectionId: section.id };
 }
 
+function blueprintCompositionSelection(section = editorSection()) {
+  const selection = shapeDirectorSelection(section);
+  if (!selection || selection.target === "notes") return null;
+  if (selection.target === "track") {
+    return {
+      target: "section-track",
+      sectionId: selection.sectionId,
+      trackId: selection.trackId,
+    };
+  }
+  return {
+    target: "section",
+    sectionId: selection.sectionId,
+  };
+}
+
+function blueprintCompositionLabel(transaction, section = editorSection()) {
+  const selection = transaction?.selection;
+  if (selection?.target === "section-track") {
+    return `${section?.name ?? "Section"} · ${TRACK_META[selection.trackId]?.name ?? selection.trackId}`;
+  }
+  return section?.name ?? "Selected section";
+}
+
+function wrapBlueprintCompositionCandidate(transaction) {
+  return {
+    ...transaction,
+    compositionCandidate: true,
+    intent: {
+      selection: transaction.selection,
+      direction: { id: "blueprintRecompose", label: "Blueprint Recompose" },
+      size: { id: "validated", label: "Validated" },
+      preserve: [],
+    },
+  };
+}
+
 function shapeDirectorPersistenceState() {
   const director = state.shapeDirector;
   if (director?.transaction && director.audition === "after") {
@@ -2431,6 +2469,18 @@ function renderShapeDirector(section = editorSection()) {
   const candidate = $("#shapeDirectorCandidate");
   const directions = $("#shapeDirectorDirections");
   const auditionControls = $("#shapeDirectorAudition");
+  const composeButton = $("#shapeDirectorCompose");
+  if (composeButton) {
+    const notesOnly = director.target === "notes";
+    const composeDisabled = notesOnly || state.isGenerating;
+    composeButton.disabled = composeDisabled;
+    composeButton.setAttribute?.("aria-disabled", String(composeDisabled));
+    const composeLabel = $("#shapeDirectorComposeLabel");
+    if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
+    composeButton.title = notesOnly
+      ? "Blueprint recomposition works on the current instrument or whole section; note-level edits stay with Shape Director."
+      : "Generate a new scoped part from the song blueprint, then validate harmony and groove before audition.";
+  }
   if (directions && !directions.childElementCount) {
     directions.innerHTML = Object.values(SHAPE_QUICK_DIRECTIONS)
       .map((entry) => '<button type="button" data-shape-direction="' + entry.id + '">' + entry.label + '</button>')
@@ -2498,8 +2548,21 @@ function renderShapeDirector(section = editorSection()) {
   }
   const summary = director.transaction.summary;
   if (candidate) candidate.hidden = false;
-  $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
-  $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+  if (director.transaction.compositionCandidate) {
+    const correction = director.transaction.selfCorrection;
+    const scores = director.transaction.validation?.judge?.candidate?.scores ?? {};
+    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · Blueprint validated";
+    $("#shapeDirectorCandidateMeta").textContent = [
+      `${correction?.attemptCount ?? 1} pass${(correction?.attemptCount ?? 1) === 1 ? "" : "es"}`,
+      `harmony ${scores.harmony ?? "—"}`,
+      `groove ${scores.groove ?? "—"}`,
+      `register ${scores.register ?? "—"}`,
+      `phrase ${scores.phrase ?? "—"}`,
+    ].join(" · ");
+  } else {
+    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
+    $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+  }
   $$('[data-shape-audition]', panel).forEach((button) => {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
   });
@@ -2547,10 +2610,75 @@ function prepareShapeDirectorCandidate(direction) {
   return true;
 }
 
+async function prepareBlueprintCompositionCandidate() {
+  const section = editorSection();
+  if (!section || !state.song || state.isGenerating) return false;
+  if (state.sectionVariations) {
+    showToast("Finish or cancel the current A/B section variation before recomposing this scope.");
+    return false;
+  }
+  const selection = blueprintCompositionSelection(section);
+  if (!selection) {
+    showToast("Blueprint recomposition works on the whole section or current instrument. Use Shape Director for selected-note edits.");
+    return false;
+  }
+
+  clearShapeDirectorCandidate({ restore: true, rerender: false });
+  const original = deepClone(state.song);
+  appStore.transaction("generation:blueprint-recompose-start", (draft) => {
+    draft.isGenerating = true;
+  });
+  const operation = armGenerationSafetyTimer();
+  showGenerationActivity("COMPOSING + CHECKING HARMONY AND GROOVE", {
+    kind: "similar",
+    threadCopy: "Director → Composer → Judge",
+  });
+
+  try {
+    const seed = createSeed();
+    const input = {
+      ...buildConfig(seed),
+      recentSongs: recentSongsForGeneration(original),
+      ...(original.compositionRoute?.id ? { compositionRoute: original.compositionRoute.id } : {}),
+    };
+    const result = await generationExecutor.run("compositionCandidate", {
+      sourceSong: original,
+      selection,
+      input,
+      maxAttempts: 3,
+    });
+    if (!generationOwnership.isCurrent(operation)) return false;
+    const transaction = result?.transaction;
+    if (!transaction?.validation?.valid) {
+      const reason = transaction?.validation?.issues?.[0]?.replaceAll(":", " ") ?? "quality judge rejected the candidate";
+      renderShapeDirector(section);
+      showToast(`No safe blueprint candidate was committed — ${reason}. The original music is unchanged.`);
+      return false;
+    }
+
+    const director = shapeDirectorState();
+    director.transaction = wrapBlueprintCompositionCandidate(transaction);
+    director.audition = "before";
+    director.direction = null;
+    renderShapeDirector(section);
+    const attempts = transaction.selfCorrection?.attemptCount ?? 1;
+    showToast(`Blueprint candidate passed the Harmony + Groove Judge in ${attempts} pass${attempts === 1 ? "" : "es"}. Compare Before and After.`);
+    return true;
+  } catch (error) {
+    if (!generationOwnership.isCurrent(operation)) return false;
+    console.error(error);
+    renderShapeDirector(section);
+    showToast("Blueprint recomposition could not finish safely. The original music is unchanged.");
+    return false;
+  } finally {
+    if (finishGenerationActivity(operation, "generation:blueprint-recompose-finish")) hideGenerationActivity();
+  }
+}
+
 async function auditionShapeDirector(side) {
   const director = shapeDirectorState();
   const transaction = director.transaction;
-  const sectionId = transaction?.intent?.selection?.sectionId;
+  const sectionId = transaction?.intent?.selection?.sectionId ?? transaction?.selection?.sectionId;
   if (!transaction || !sectionId) return false;
   const song = auditionShapeCandidate(transaction, side);
   if (!song) return false;
@@ -2575,9 +2703,15 @@ function acceptShapeDirectorCandidate() {
   if (!transaction) return false;
   player.stop();
   pushHistory({ ...createHistorySnapshot(), song: deepClone(transaction.before) });
-  state.song = deepClone(transaction.after);
+  if (transaction.compositionCandidate && transaction.validation?.valid !== true) {
+    showToast("That blueprint candidate no longer passes validation, so it was not committed.");
+    return false;
+  }
+  state.song = transaction.compositionCandidate
+    ? acceptCompositionCandidate(transaction)
+    : deepClone(transaction.after);
   applyTrackSettingsToSong(state.song);
-  const label = transaction.intent.direction.label;
+  const label = transaction.compositionCandidate ? "Blueprint recompose" : transaction.intent.direction.label;
   director.transaction = null;
   director.audition = "before";
   director.direction = null;
@@ -3879,49 +4013,67 @@ export function buildTrackRerollInput(id, song = state.song, seed = createSeed()
 async function regenerateTrack(id, options = {}) {
   if (state.isGenerating || !state.song) return;
   const original = state.song;
-  pushHistory(options.historySnapshot);
+  const historySnapshot = options.historySnapshot ?? createHistorySnapshot();
   appStore.transaction("generation:reroll-start", (draft) => {
     draft.isGenerating = true;
   });
   const operation = armGenerationSafetyTimer(() => {
-    restoreHistory({ captureFuture: false, announce: false });
+    if (historySnapshot) applyHistorySnapshot(historySnapshot);
   });
   showGenerationActivity(trackRewriteStatus(TRACK_META[id].name), { kind: "similar" });
   try {
     const generationInput = buildTrackRerollInput(id, original, createSeed());
-    const work = generationExecutor.run("similar", { sourceSong: original, config: generationInput })
-      .then((result) => result?.song);
-    let [candidate] = await Promise.all([work, generationDelay()]);
+    const result = await generationExecutor.run("compositionCandidate", {
+      sourceSong: original,
+      selection: { target: "track", trackId: id },
+      input: generationInput,
+      maxAttempts: 3,
+    });
     if (!generationOwnership.isCurrent(operation)) return;
-    if (!candidate) candidate = generateSimilar(original, generationInput);
-    const replacement = songTracks(candidate).find((track, index) => trackId(track, index) === id);
-    if (!replacement) throw new Error(`No ${id} track was generated.`);
-    const next = deepClone(original);
-    next.id = candidate.id ?? next.id;
-    next.parentId = original.id ?? null;
-    next.generation = "similar";
-    next.revision = candidate.revision ?? (Number(original.revision) || 0) + 1;
-    next.seed = candidate.seed ?? createSeed();
-    next.tracks = songTracks(next).map((track, index) => trackId(track, index) === id ? deepClone(replacement) : track);
+    const transaction = result?.transaction;
+    if (!transaction?.validation?.valid) {
+      const issue = transaction?.validation?.issues?.[0]?.replaceAll(":", " ");
+      if (options.attitude && historySnapshot) {
+        // Three critic-gated note attempts can legitimately all fail. An
+        // attitude command still has a safe meaning: keep the canonical notes
+        // and apply only the user's performance controls. This creates one
+        // truthful undo step instead of exposing an older unrelated history
+        // entry after a rejected reroll.
+        pushHistory(historySnapshot);
+        state.song = applyTrackSettingsToSong(deepClone(original));
+        renderAll();
+        scheduleSessionSave();
+        const message = `${TRACK_META[id].name} kept its safe notes and applied ${ATTITUDE_LABELS[options.attitude].toLowerCase()} performance only; the rest of the band stayed untouched.`;
+        renderAttitudeStrip(message);
+        showToast(message);
+        return;
+      }
+      throw new Error(issue || `No validated ${id} candidate was generated.`);
+    }
+
+    const next = acceptCompositionCandidate(transaction);
     next.settings = { ...(next.settings || {}) };
-    const candidateSettings = candidate.settings || {};
+    const candidateSettings = transaction.generated?.settings || {};
     if ((id === "drums" || id === "melody") && candidateSettings.tripletAmount != null) {
       next.settings.tripletAmount = candidateSettings.tripletAmount;
     }
     if (id === "drums" && candidateSettings.rollAmount != null) {
       next.settings.rollAmount = candidateSettings.rollAmount;
     }
+    pushHistory(historySnapshot);
     state.song = applyTrackSettingsToSong(next);
     renderAll();
+    scheduleSessionSave();
     const attitude = options.attitude ? ` with ${ATTITUDE_LABELS[options.attitude].toLowerCase()} attitude` : "";
-    const message = `${TRACK_META[id].name} found a fresh part${attitude}; the rest of the band stayed untouched.`;
+    const attempts = transaction.selfCorrection?.attemptCount ?? 1;
+    const message = `${TRACK_META[id].name} found a validated fresh part${attitude} in ${attempts} pass${attempts === 1 ? "" : "es"}; the rest of the band stayed untouched.`;
     renderAttitudeStrip(message);
     showToast(message);
   } catch (error) {
     if (!generationOwnership.isCurrent(operation)) return;
     console.error(error);
-    restoreHistory({ captureFuture: false, announce: false });
-    showToast(`Could not rewrite ${TRACK_META[id].name.toLowerCase()} this time.`);
+    if (historySnapshot) applyHistorySnapshot(historySnapshot);
+    showToast(`Could not safely rewrite ${TRACK_META[id].name.toLowerCase()} this time. The original part was restored.`);
   } finally {
     if (finishGenerationActivity(operation, "generation:reroll-finish")) hideGenerationActivity();
   }
@@ -4180,10 +4332,11 @@ async function exportSong() {
   }
 }
 
-function expressionPoints(automation) {
+function controllerPoints(automation, controller) {
+  const targetController = Number(controller);
   const sorted = (Array.isArray(automation) ? automation : [])
     .filter((event) => String(event?.type).toLowerCase() === "cc"
-      && Number(event?.controller) === 11
+      && Number(event?.controller) === targetController
       && Number.isFinite(Number(event?.beat))
       && Number.isFinite(Number(event?.value)))
     .map((event) => ({ beat: Number(event.beat), value: clamp(Number(event.value), 0, 127) }))
@@ -4195,8 +4348,8 @@ function expressionPoints(automation) {
   }, []);
 }
 
-export function expressionAtBeat(automation, beat, fallback = 127) {
-  const points = expressionPoints(automation);
+export function controllerValueAtBeat(automation, controller, beat, fallback = 64) {
+  const points = controllerPoints(automation, controller);
   const targetBeat = Number(beat);
   if (!points.length || !Number.isFinite(targetBeat)) return clamp(Number(fallback), 0, 127);
   if (targetBeat < points[0].beat) return clamp(Number(fallback), 0, 127);
@@ -4206,6 +4359,14 @@ export function expressionAtBeat(automation, beat, fallback = 127) {
   const right = points[rightIndex];
   const ratio = (targetBeat - left.beat) / Math.max(0.000001, right.beat - left.beat);
   return left.value + (right.value - left.value) * ratio;
+}
+
+function expressionPoints(automation) {
+  return controllerPoints(automation, 11);
+}
+
+export function expressionAtBeat(automation, beat, fallback = 127) {
+  return controllerValueAtBeat(automation, 11, beat, fallback);
 }
 
 export function expressionCurveBetween(automation, startBeat, endBeat) {
@@ -4320,6 +4481,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const startBeat = Math.max(0, noteStart(note));
       const durationBeats = Math.max(0.01, noteDuration(note));
       const phrasePerformance = renderPhrasePerformance(note);
+      const baseReverb = clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1);
+      const automatedReverb = controllerValueAtBeat(automation, 91, startBeat, baseReverb * 127) / 127;
+      const brightnessCc = controllerValueAtBeat(automation, 74, startBeat, 64);
+      const brightnessScale = clamp(0.5 + brightnessCc / 128, 0.5, 1.5);
       const audibleDurationBeats = durationBeats
         * clamp(gateScale, 0.65, 1.4)
         * phrasePerformance.durationScale;
@@ -4352,9 +4517,9 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         mixGain,
         spotlight: spotlight.active,
         pan: clamp(Number(settings.pan ?? defaults.pan ?? 0) * mixProfile.panWidth, -1, 1),
-        reverb: clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2) * Number(mixProfile.reverbScale[id] ?? 1) * spotlight.reverb, 0, 1),
+        reverb: clamp(automatedReverb * Number(mixProfile.reverbScale[id] ?? 1) * spotlight.reverb, 0, 1),
         delaySend: clamp(Number(mixProfile.delaySend[id] ?? 0) * spotlight.delay, 0, 0.24),
-        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * spotlight.cutoff, 1000, 14000),
+        cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * brightnessScale * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
         articulation: String(note.articulation || "natural"),
@@ -6035,6 +6200,13 @@ function toggleFullscreen() {
       const panel = $("#shapeDirectorPanel");
       if (panel) panel.dataset.shapeMore = panel.dataset.shapeMore === "true" ? "false" : "true";
       renderShapeDirector();
+      return;
+    }
+    const composeControl = event.target.closest?.("[data-shape-compose]");
+    if (composeControl) {
+      event.preventDefault?.();
+      if (composeControl.disabled || composeControl.getAttribute?.("aria-disabled") === "true") return;
+      void prepareBlueprintCompositionCandidate();
       return;
     }
     const direction = event.target.closest?.("[data-shape-direction]")?.dataset.shapeDirection;

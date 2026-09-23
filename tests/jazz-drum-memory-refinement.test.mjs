@@ -84,6 +84,48 @@ test("Jazz fixed seeds gain drum memory without groove, performance, authenticit
   console.log("JAZZ_DRUM_MEMORY_FIXED_SEEDS", JSON.stringify(rows));
 });
 
+test("quality-lab-03 recalls a remembered Jazz pocket without weakening groove identity", () => {
+  const source = jazzSong("quality-lab-03");
+  const candidate = createJazzDrumMemoryCandidate(source);
+  if (!candidate) {
+    const drums = source.tracks.find((track) => track.id === "drums")?.notes ?? [];
+    const barBeats = finite(source.meta?.beatsPerBar, 4);
+    const bars = Math.max(1, Math.round(finite(source.meta?.bars, 1)));
+    const signatures = Array.from({ length: bars }, (_, bar) => drums
+      .filter((note) => Math.floor(finite(note.start) / barBeats) === bar)
+      .map((note) => `${note.pitch}:${Math.round((((finite(note.start) % barBeats) + barBeats) % barBeats) * 1000) / 1000}`)
+      .join("|"));
+    console.log("JAZZ_MEMORY_Q03_DIAGNOSTIC", JSON.stringify({
+      score: evaluateSongCandidate(source),
+      structure: source.structure,
+      memoryMap: source.memoryMap,
+      signatures,
+      uniqueCount: new Set(signatures.filter(Boolean)).size,
+      populatedBars: signatures.filter(Boolean).length,
+    }));
+  }
+  assert.ok(candidate, "quality-lab-03 needs a critic-safe Jazz memory candidate");
+
+  const beforeDrums = source.tracks.find((track) => track.id === "drums").notes;
+  const afterDrums = candidate.song.tracks.find((track) => track.id === "drums").notes;
+  const skeleton = (notes) => notes
+    .filter((note) => [35, 36, 37, 38, 39, 40].includes(Number(note.pitch)))
+    .map((note) => [Number(note.pitch), Number(note.start)])
+    .sort((left, right) => left[1] - right[1] || left[0] - right[0]);
+  assert.deepEqual(skeleton(afterDrums), skeleton(beforeDrums), "kick/snare pocket must remain byte-equivalent");
+  assert.equal(candidate.changedBars, 1, "Jazz memory must stay bounded to one return bar");
+  assert.ok(
+    afterDrums.some((note) => note.jazzMemoryPocketRecall === true || note.jazzMemoryColorRecall === true),
+    "the return must carry an explicit remembered/developed drum event",
+  );
+
+  const before = evaluateSongCandidate(source);
+  const after = evaluateSongCandidate(candidate.song);
+  assert.ok(finite(after.subscores?.drumVariety) - finite(before.subscores?.drumVariety) >= 2);
+  assert.ok(finite(after.subscores?.groove) >= finite(before.subscores?.groove));
+  assert.ok(finite(after.subscores?.genreAuthenticity) >= finite(before.subscores?.genreAuthenticity));
+});
+
 test("explicit Jazz identity opt-in accepts only critic-safe groove memory", () => {
   const rows = [];
   for (const seed of SEEDS) {

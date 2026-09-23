@@ -27,7 +27,7 @@ jobs:
           cache: npm
       - name: Install project dependencies
         run: npm ci
-      - name: Install Tonal shadow dependency
+      - name: Install pinned Tonal shadow dependency
         run: npm install --no-save --package-lock=false --ignore-scripts tonal@6.4.3
-      - name: Run Tonal secondary authority audit
+      - name: Audit all scale definitions and generated preferred-scale output
         run: node scripts/tonal-shadow-check.mjs

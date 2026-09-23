@@ -84,6 +84,42 @@ function familyFitScore(names, family) {
   return Math.round(score * 1000) / 1000;
 }
 
+export function genreSequenceFitScore(names, genre) {
+  const finalChorus = names.lastIndexOf("chorus");
+  const finalDrop = names.lastIndexOf("drop");
+  const finalPayoff = Math.max(finalChorus, finalDrop, names.lastIndexOf("theme"));
+  let score = 0;
+
+  if (["pop", "popRadio", "synthPopRadio"].includes(genre) && finalChorus > 0) {
+    const prechoruses = indicesOf(names, (name) => name === "prechorus");
+    const bridges = indicesOf(names, (name) => name === "bridge");
+    if (prechoruses.includes(finalChorus - 1)) score += 1.25;
+    else if (prechoruses.some((index) => index < finalChorus)) score += 0.45;
+    if (bridges.some((index) => index < finalChorus && index >= Math.floor(names.length * 0.45))) score += 0.5;
+    if (names[finalChorus + 1] === "verse") score -= 0.45;
+  }
+
+  if (genre === "techno" && finalDrop > 0) {
+    const builds = indicesOf(names, (name) => name === "build");
+    const breakdowns = indicesOf(names, (name) => name === "breakdown");
+    if (builds.includes(finalDrop - 1)) score += 1.4;
+    else if (builds.some((index) => index < finalDrop)) score += 0.35;
+    const lastBuild = builds.filter((index) => index < finalDrop).at(-1) ?? -1;
+    if (lastBuild > 0 && breakdowns.some((index) => index < lastBuild)) score += 0.8;
+    if (breakdowns.includes(finalDrop - 1)) score -= 0.5;
+  }
+
+  if (genre === "rock" && finalPayoff > 0) {
+    const contrast = indicesOf(names, (name) => name === "bridge" || name === "solo");
+    if (contrast.some((index) => index > 0 && index < finalPayoff)) score += 0.85;
+    if (contrast.includes(finalPayoff - 1)) score += 0.55;
+    if (contrast.some((index) => index > finalPayoff)) score -= 0.5;
+    if (names.includes("drop")) score -= 0.8;
+  }
+
+  return Math.round(score * 1000) / 1000;
+}
+
 function compareNarrativeCandidates(left, right) {
   const scoreDelta = right.narrativeScore - left.narrativeScore;
   if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
@@ -152,7 +188,13 @@ export function createArrangementCandidates(sourceSong, config = {}, {
     discovered.push({
       attemptIndex,
       orderKey,
-      narrativeScore: familyFitScore(sectionNames(evolved.song), evolved.evolution.family),
+      narrativeScore: (() => {
+        const names = sectionNames(evolved.song);
+        return Math.round((
+          familyFitScore(names, evolved.evolution.family)
+          + genreSequenceFitScore(names, evolved.evolution.genre)
+        ) * 1000) / 1000;
+      })(),
       song: evolved.song,
       evolution: evolved.evolution,
     });
