@@ -46,7 +46,7 @@ test("high-density targets deepen support articulation without broadening the ca
   const candidates = createDensityRefinementCandidates(source, { densityTarget: 36 });
 
   assert.deepEqual(source, before);
-  assert.equal(candidates.length, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.equal(candidates.length, 3);
   assert.deepEqual(candidates.map(({ id }) => id), ["light-support", "balanced-support", "full-support"]);
   assert.deepEqual(candidates.map(({ afterNotesPerBar }) => afterNotesPerBar), [3.25, 4, 5]);
   assert.equal(candidates[2].afterNotesPerBar - candidates[2].beforeNotesPerBar, 2);
@@ -63,9 +63,39 @@ test("high-density targets deepen support articulation without broadening the ca
   }
 });
 
+test("long severely sparse songs expose one deeper bounded support candidate", () => {
+  const source = sourceSong();
+  source.genre = "pop";
+  source.meta.genre = "pop";
+  source.meta.bars = 32;
+  source.meta.totalBeats = 128;
+  source.structure = [{ id: "a", name: "verse", startBeat: 0, endBeat: 128, bars: 32 }];
+  source.tracks.find((track) => track.id === "chords").notes = Array.from({ length: 32 }, (_, bar) => ({
+    id: `lc-${bar}`, start: bar * 4, pitch: 60 + (bar % 4), duration: 4, velocity: 80,
+  }));
+  source.tracks.find((track) => track.id === "counterpoint").notes = Array.from({ length: 32 }, (_, bar) => ({
+    id: `lq-${bar}`, start: bar * 4 + 1, pitch: 72 + (bar % 3), duration: 2, velocity: 74,
+  }));
+  source.tracks.find((track) => track.id === "pad").notes = Array.from({ length: 32 }, (_, bar) => ({
+    id: `lp-${bar}`, start: bar * 4, pitch: 55 + (bar % 2), duration: 4, velocity: 64,
+  }));
+
+  const candidates = createDensityRefinementCandidates(source, { densityTarget: 25 });
+  const full = candidates.find(({ id }) => id === "full-support");
+  const deep = candidates.find(({ id }) => id === "deep-support");
+
+  assert.equal(candidates.length, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.ok(full);
+  assert.ok(deep);
+  assert.ok(deep.changedNotes > full.changedNotes);
+  assert.ok(deep.changedNotes <= source.meta.bars * 2);
+  assert.ok(deep.afterNotesPerBar > full.afterNotesPerBar);
+  assert.ok(deep.densityErrorDelta < full.densityErrorDelta);
+});
+
 test("lower density targets retain the original two-part articulation depth", () => {
   const source = sourceSong();
   const candidates = createDensityRefinementCandidates(source, { densityTarget: 8 });
-  assert.equal(candidates.length, MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.equal(candidates.length, 3);
   assert.deepEqual(candidates.map(({ afterNotesPerBar }) => afterNotesPerBar), [3.25, 3.5, 4]);
 });
