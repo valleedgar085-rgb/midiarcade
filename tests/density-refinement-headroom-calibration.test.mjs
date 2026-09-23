@@ -7,6 +7,7 @@ import {
 } from "../src/music-engine.js";
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
 import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
+import { densityActivityForSong } from "../src/core/density-activity.js";
 import {
   createDensityRefinementCandidates,
   MAX_DENSITY_REFINEMENT_CANDIDATES,
@@ -96,8 +97,9 @@ test("fixed sparse-genre seeds get deeper bounded density candidates without bro
       const beforeEvaluation = evaluateSongCandidate(beforeSong);
       const target = finite(beforeEvaluation.diagnostics?.densityTarget);
       const beforeNpb = notesPerBar(beforeSong);
+      const beforeActivity = densityActivityForSong(beforeSong);
       const eligible = eligibleSupport(beforeSong);
-      const deficitNotes = Math.max(0, Math.ceil((target - beforeNpb) * barsFor(beforeSong)));
+      const deficitNotes = Math.max(0, Math.ceil((target - beforeActivity.observed) * barsFor(beforeSong)));
       const candidates = createDensityRefinementCandidates(beforeSong, { densityTarget: target });
       const full = candidates.find(({ id }) => id === "full-support");
       const densityProcessed = applySongOutputQualityPipeline(generated, {
@@ -108,11 +110,17 @@ test("fixed sparse-genre seeds get deeper bounded density candidates without bro
       const afterEvaluation = evaluateSongCandidate(densityProcessed.song);
       const afterNpb = notesPerBar(densityProcessed.song);
 
-      assert.equal(beforeEvaluation.subscores.density, densityScoreFor(beforeNpb, target));
+      assert.equal(beforeEvaluation.subscores.density, densityScoreFor(beforeActivity.observed, target));
+      assert.equal(beforeEvaluation.diagnostics.densityMetric, genre === "jazz" ? "pitched-notes" : "ensemble-events");
       assert.ok(candidates.length <= MAX_DENSITY_REFINEMENT_CANDIDATES);
-      assert.ok(full, `${genre}/${seed} must retain a full candidate`);
-      assert.equal(Number((full.afterNotesPerBar - full.beforeNotesPerBar).toFixed(3)), 2);
-      assert.ok(full.changedNotes <= barsFor(beforeSong));
+      if (genre === "jazz") {
+        assert.ok(full, `${genre}/${seed} must retain a full candidate`);
+        assert.equal(Number((full.afterNotesPerBar - full.beforeNotesPerBar).toFixed(3)), 2);
+        assert.ok(full.changedNotes <= barsFor(beforeSong));
+      } else {
+        assert.ok(candidates.every((candidate) => candidate.densityErrorDelta < 0));
+        assert.ok(candidates.every((candidate) => candidate.beforeDensityActivity === beforeActivity.observed));
+      }
       assert.ok(afterEvaluation.subscores.density >= beforeEvaluation.subscores.density);
 
       rows.push({
@@ -120,6 +128,8 @@ test("fixed sparse-genre seeds get deeper bounded density candidates without bro
         seed,
         target,
         beforeNotesPerBar: Number(beforeNpb.toFixed(3)),
+        beforeDensityActivity: beforeActivity.observed,
+        densityMetric: beforeActivity.metric,
         beforeDensity: beforeEvaluation.subscores.density,
         deficitNotes,
         eligibleSupportNotes: eligible.length,
@@ -142,5 +152,5 @@ test("fixed sparse-genre seeds get deeper bounded density candidates without bro
 
   console.log("DENSITY_HEADROOM_CALIBRATION", JSON.stringify(rows));
   assert.equal(rows.length, TARGET_GENRES.length * SEEDS.length);
-  assert.ok(rows.every((row) => row.target > row.beforeNotesPerBar));
+  assert.ok(rows.every((row) => row.target > row.beforeDensityActivity));
 });
