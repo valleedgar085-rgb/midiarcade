@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
 import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline.js";
+import { densityActivityForSong } from "../src/core/density-activity.js";
 import {
   createDensityRefinementCandidates,
   MAX_DENSITY_REFINEMENT_CANDIDATES,
@@ -219,4 +220,66 @@ test("fresh generation opts into density refinement while Similar and explicit o
   assert.equal(similar.densityRefinement, false);
   assert.equal(disabled.densityRefinement, false);
   assert.equal(enabledSimilar.densityRefinement, true);
+});
+
+
+test("rhythm-led genres count bounded drum-onset activity without inflating other genres", () => {
+  const base = sourceSong();
+  base.meta.bars = 4;
+  base.bars = 4;
+  base.tracks.find((track) => track.id === "drums").notes = Array.from({ length: 32 }, (_, index) => ({
+    id: `d-${index}`,
+    start: index * 0.5,
+    pitch: index % 4 === 0 ? 36 : 42,
+    duration: 0.08,
+    velocity: 96,
+  }));
+
+  const pop = structuredClone(base);
+  pop.genre = "pop";
+  pop.meta.genre = "pop";
+  const dnb = structuredClone(base);
+  dnb.genre = "drumBass";
+  dnb.meta.genre = "drumBass";
+  const funk = structuredClone(base);
+  funk.genre = "funk";
+  funk.meta.genre = "funk";
+  const afro = structuredClone(base);
+  afro.genre = "afrobeats";
+  afro.meta.genre = "afrobeats";
+
+  const popDensity = densityActivityForSong(pop);
+  const dnbDensity = densityActivityForSong(dnb);
+  const funkDensity = densityActivityForSong(funk);
+  const afroDensity = densityActivityForSong(afro);
+
+  assert.equal(popDensity.metric, "pitched-notes");
+  assert.equal(popDensity.observed, popDensity.pitchedNotesPerBar);
+  for (const result of [dnbDensity, funkDensity, afroDensity]) {
+    assert.equal(result.metric, "ensemble-events");
+    assert.ok(result.observed > result.pitchedNotesPerBar);
+    assert.ok(result.drumContribution > 0);
+    assert.ok(result.drumContribution <= 16);
+  }
+});
+
+test("rhythm-led density candidates improve ensemble density error rather than chasing pad-only note count", () => {
+  const song = sourceSong();
+  song.genre = "funk";
+  song.meta.genre = "funk";
+  song.meta.bars = 4;
+  song.bars = 4;
+  song.tracks.find((track) => track.id === "drums").notes = Array.from({ length: 40 }, (_, index) => ({
+    id: `funk-d-${index}`,
+    start: index * 0.4,
+    pitch: index % 5 === 0 ? 36 : 42,
+    duration: 0.08,
+    velocity: 92,
+  }));
+  const beforeActivity = densityActivityForSong(song).observed;
+  const candidates = createDensityRefinementCandidates(song, { densityTarget: beforeActivity + 2 });
+  assert.ok(candidates.length <= MAX_DENSITY_REFINEMENT_CANDIDATES);
+  assert.ok(candidates.every((candidate) => candidate.densityErrorDelta < 0));
+  assert.ok(candidates.every((candidate) => candidate.beforeDensityActivity === beforeActivity));
+  assert.ok(candidates.every((candidate) => candidate.afterDensityActivity >= candidate.beforeDensityActivity));
 });
