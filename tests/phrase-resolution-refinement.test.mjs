@@ -8,6 +8,10 @@ import {
   MAX_PHRASE_RESOLUTION_CANDIDATES,
   MAX_PHRASE_RESOLUTION_EDITS,
 } from "../src/core/phrase-resolution-refinement.js";
+import {
+  phraseResolutionArticulationSatisfied,
+  phraseResolutionDesiredDuration,
+} from "../src/core/phrase-resolution-style.js";
 
 function sourceSong() {
   return {
@@ -249,50 +253,37 @@ test("fresh generation opts into cadence refinement while explicit opt-out remai
 });
 
 
-function fourSectionPhraseSong(genre) {
-  const song = sourceSong();
-  song.genre = genre;
-  song.meta.genre = genre;
-  song.bars = 8;
-  song.meta.bars = 8;
-  song.meta.totalBeats = 32;
-  song.structure = [
-    { id: "a", name: "verse", startBeat: 0, endBeat: 8 },
-    { id: "b", name: "chorus", startBeat: 8, endBeat: 16 },
-    { id: "c", name: "bridge", startBeat: 16, endBeat: 24 },
-    { id: "d", name: "final", startBeat: 24, endBeat: 32 },
-  ];
-  song.harmony = [{ start: 0, duration: 32, root: 0, tones: [0, 4, 7] }];
-  track(song, "pad").notes[0].duration = 32;
-  track(song, "melody").notes.push(
-    { id: "m6", start: 25, pitch: 69, duration: 0.5, velocity: 94 },
-    { id: "m7", start: 31, pitch: 62, duration: 0.25, velocity: 98 },
-  );
-  return song;
-}
 
-test("Funk and Afrobeats may evaluate one extra bounded section-cadence candidate", () => {
+test("Funk and Afrobeats accept short boundary punctuation without changing standard held-cadence semantics", () => {
+  const note = { start: 7.55, duration: 0.3, pitch: 60 };
   for (const genre of ["funk", "afrobeats"]) {
-    const song = fourSectionPhraseSong(genre);
-    const candidates = createPhraseResolutionCandidates(song, { maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES });
-    assert.ok(candidates.length > 0 && candidates.length <= 4);
-    assert.ok(candidates.some((candidate) => candidate.id === "section-cadence-sweep"));
-    for (const candidate of candidates) {
-      assert.ok(candidate.changedNotes <= 4);
-      assert.ok(candidate.localScoreDelta > 0);
-      assert.deepEqual(noteShape(candidate.song, "drums"), noteShape(song, "drums"));
-      assert.deepEqual(noteShape(candidate.song, "bass"), noteShape(song, "bass"));
-      assert.deepEqual(
-        track(candidate.song, "melody").notes.map((note) => note.start),
-        track(song, "melody").notes.map((note) => note.start),
-      );
-    }
+    assert.equal(phraseResolutionDesiredDuration(genre, 4), 0.48);
+    assert.equal(phraseResolutionArticulationSatisfied({
+      genre,
+      note,
+      sectionEnd: 8,
+      beatsPerBar: 4,
+    }), true);
   }
+
+  assert.equal(phraseResolutionDesiredDuration("trap", 4), 1.4);
+  assert.equal(phraseResolutionArticulationSatisfied({
+    genre: "trap",
+    note,
+    sectionEnd: 8,
+    beatsPerBar: 4,
+  }), false);
 });
 
-test("standard genres keep the original three-candidate phrase-resolution ceiling", () => {
-  const trap = fourSectionPhraseSong("trap");
-  const candidates = createPhraseResolutionCandidates(trap, { maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES });
-  assert.ok(candidates.length <= 3);
-  assert.ok(candidates.every((candidate) => candidate.id !== "section-cadence-sweep"));
+test("phrase-resolution candidate budget remains capped at the original three candidates", () => {
+  for (const genre of ["trap", "funk", "afrobeats"]) {
+    const song = sourceSong();
+    song.genre = genre;
+    song.meta.genre = genre;
+    const candidates = createPhraseResolutionCandidates(song, {
+      maxCandidates: MAX_PHRASE_RESOLUTION_CANDIDATES,
+    });
+    assert.ok(candidates.length <= 3);
+    assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_PHRASE_RESOLUTION_EDITS));
+  }
 });
