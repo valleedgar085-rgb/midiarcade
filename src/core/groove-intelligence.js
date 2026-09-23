@@ -282,6 +282,97 @@ export const GENRE_GROOVE_GRAMMARS = Object.freeze({
   }),
 });
 
+const GROOVE_CELL_POLICIES = Object.freeze({
+  hipHop: Object.freeze({
+    protectedSpaces: Object.freeze([5, 13]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 3, 6, 7, 10, 11, 14, 15]),
+      snare: Object.freeze([3, 4, 5, 11, 12, 13]),
+      hat: Object.freeze([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15]),
+      percussion: Object.freeze([6, 7, 10, 11, 14, 15]),
+    }),
+  }),
+  trap: Object.freeze({
+    protectedSpaces: Object.freeze([5, 9]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 3, 6, 7, 10, 11, 13, 14, 15]),
+      snare: Object.freeze([7, 8, 10, 15]),
+      hat: Object.freeze([0, 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 15]),
+      percussion: Object.freeze([3, 7, 11, 13, 15]),
+    }),
+  }),
+  pop: Object.freeze({
+    protectedSpaces: Object.freeze([3, 11]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 6, 8, 10, 14]),
+      snare: Object.freeze([4, 5, 12, 13]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([7, 15]),
+    }),
+  }),
+  house: Object.freeze({
+    protectedSpaces: Object.freeze([1, 5, 9, 13]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 4, 8, 12]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([2, 6, 10, 14]),
+      percussion: Object.freeze([3, 7, 11, 15]),
+    }),
+  }),
+  neoSoul: Object.freeze({
+    protectedSpaces: Object.freeze([1, 9]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 3, 5, 7, 10, 13, 14, 15]),
+      snare: Object.freeze([3, 4, 5, 11, 12, 13]),
+      hat: Object.freeze([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15]),
+      percussion: Object.freeze([3, 7, 11, 15]),
+    }),
+  }),
+  jazz: Object.freeze({
+    protectedSpaces: Object.freeze([2, 10]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 4, 8, 12, 14]),
+      snare: Object.freeze([3, 5, 6, 7, 11, 13, 14, 15]),
+      hat: Object.freeze([0, 3, 4, 7, 8, 11, 12, 15]),
+      percussion: Object.freeze([5, 13, 15]),
+    }),
+  }),
+  rock: Object.freeze({
+    protectedSpaces: Object.freeze([3, 11]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 6, 8, 10, 14]),
+      snare: Object.freeze([4, 5, 12, 13]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([7, 15]),
+    }),
+  }),
+  general: Object.freeze({
+    protectedSpaces: Object.freeze([3, 11]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 6, 8, 10, 14]),
+      snare: Object.freeze([4, 5, 12, 13]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([7, 15]),
+    }),
+  }),
+});
+
+function cellPolicyForGenre(genre) {
+  return GROOVE_CELL_POLICIES[genre] ?? GROOVE_CELL_POLICIES.general;
+}
+
+function sanitizeLaneSteps(steps, allowedSteps, requiredSteps, protectedSteps) {
+  const allowed = new Set(uniqueSorted([...allowedSteps, ...requiredSteps]).map((step) => round(step, 4)));
+  const protectedSet = new Set(uniqueSorted(protectedSteps).map((step) => round(step, 4)));
+  return uniqueSorted([
+    ...requiredSteps,
+    ...steps.filter((step) => (
+      allowed.has(round(step, 4))
+      && !protectedSet.has(round(step, 4))
+    )),
+  ]);
+}
+
 function grammarForGenre(genre) {
   return GENRE_GROOVE_GRAMMARS[genreId(genre)] ?? GENRE_GROOVE_GRAMMARS.general;
 }
@@ -294,13 +385,26 @@ function applyProbability(steps, probability, lockedSteps, seed) {
   )));
 }
 
-function applyDensity(steps, targetFactor, lockedSteps, gridSteps, seed) {
-  const locked = new Set((lockedSteps ?? []).map((value) => round(value, 4)));
-  const baseTarget = Math.max(locked.size, Math.round(Math.max(1, steps.length) * clamp(targetFactor, 0.25, 2)));
-  let out = uniqueSorted([...steps, ...locked]);
+function applyDensity(
+  steps,
+  targetFactor,
+  requiredSteps,
+  allowedOptionalSteps,
+  protectedSteps,
+  seed,
+) {
+  const required = new Set((requiredSteps ?? []).map((value) => round(value, 4)));
+  const protectedSet = new Set((protectedSteps ?? []).map((value) => round(value, 4)));
+  const allowed = uniqueSorted([...(allowedOptionalSteps ?? []), ...(requiredSteps ?? [])])
+    .filter((step) => !protectedSet.has(round(step, 4)));
+  const baseTarget = Math.max(
+    required.size,
+    Math.min(allowed.length, Math.round(Math.max(1, steps.length) * clamp(targetFactor, 0.25, 2))),
+  );
+  let out = sanitizeLaneSteps(steps, allowed, requiredSteps, protectedSteps);
   if (out.length > baseTarget) {
     const removable = out
-      .filter((step) => !locked.has(round(step, 4)))
+      .filter((step) => !required.has(round(step, 4)))
       .sort((left, right) => (
         randomUnit(`${seed}:remove:${left}`) - randomUnit(`${seed}:remove:${right}`)
         || left - right
@@ -311,17 +415,15 @@ function applyDensity(steps, targetFactor, lockedSteps, gridSteps, seed) {
   }
   if (out.length < baseTarget) {
     const existing = new Set(out.map((step) => round(step, 4)));
-    const candidates = [];
-    for (let step = 0; step < gridSteps; step += 1) {
-      if (!existing.has(round(step, 4))) candidates.push(step);
-    }
-    candidates.sort((left, right) => (
-      randomUnit(`${seed}:add:${right}`) - randomUnit(`${seed}:add:${left}`)
-      || left - right
-    ));
+    const candidates = allowed
+      .filter((step) => !existing.has(round(step, 4)))
+      .sort((left, right) => (
+        randomUnit(`${seed}:add:${right}`) - randomUnit(`${seed}:add:${left}`)
+        || left - right
+      ));
     out = uniqueSorted([...out, ...candidates.slice(0, baseTarget - out.length)]);
   }
-  return out;
+  return sanitizeLaneSteps(out, allowed, requiredSteps, protectedSteps);
 }
 
 function applyTransforms(steps, transforms, {
@@ -457,6 +559,7 @@ export function createGrooveDNA(input = {}, {
   const seed = String(input?.seed ?? "midi-arcade");
   const genre = genreId(input?.genre);
   const grammar = grammarForGenre(genre);
+  const cellPolicy = cellPolicyForGenre(genre);
   const bars = Math.max(1, Math.round(finite(input?.bars, 8)));
   const beatsPerBar = Math.max(1, finite(input?.beatsPerBar, Array.isArray(input?.timeSignature) ? input.timeSignature[0] : 4));
   const gridSteps = Math.max(4, Math.round(beatsPerBar * 4));
@@ -468,10 +571,19 @@ export function createGrooveDNA(input = {}, {
 
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
+    const protectedSpaceSteps = scaleSteps(cellPolicy.protectedSpaces, gridSteps);
     const lanePlans = {};
     for (const lane of ["kick", "snare", "hat", "percussion"]) {
-      const baseSteps = scaleSteps(grammar.base[lane], gridSteps);
-      const lockedSteps = scaleSteps(grammar.locked[lane], gridSteps);
+      const protectedSteps = protectedSpaceSteps;
+      const requiredSteps = scaleSteps(grammar.locked[lane], gridSteps);
+      const optionalSteps = scaleSteps(cellPolicy.lanes[lane], gridSteps);
+      const baseSteps = sanitizeLaneSteps(
+        scaleSteps(grammar.base[lane], gridSteps),
+        optionalSteps,
+        requiredSteps,
+        protectedSteps,
+      );
+      const lockedSteps = requiredSteps;
       const probabilitySteps = applyProbability(
         baseSteps,
         grammar.probability[lane],
@@ -489,18 +601,29 @@ export function createGrooveDNA(input = {}, {
         * (0.72 + densityControl * 0.56)
         * sectionDensityMultiplier(genre, section)
         * transformed.densityMultiplier;
+      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps]);
       const densitySteps = applyDensity(
         transformed.steps,
         factor,
         lockedSteps,
-        gridSteps,
+        transformAuthorizedSteps,
+        protectedSteps,
         `${seed}:${genre}:${bar}:${lane}:density`,
       );
       const variationAmount = Math.round(variation * (lane === "hat" ? 2 : 1));
-      const variedSteps = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
+      const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
         ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
         : densitySteps;
+      const variedSteps = sanitizeLaneSteps(
+        variedCandidate,
+        transformAuthorizedSteps,
+        lockedSteps,
+        protectedSteps,
+      );
       lanePlans[lane] = Object.freeze({
+        requiredSteps: Object.freeze(requiredSteps),
+        optionalSteps: Object.freeze(optionalSteps),
+        protectedSteps: Object.freeze(protectedSteps),
         baseSteps: Object.freeze(baseSteps),
         probabilitySteps: Object.freeze(probabilitySteps),
         densitySteps: Object.freeze(densitySteps),
@@ -522,7 +645,7 @@ export function createGrooveDNA(input = {}, {
         beatsPerStep,
         gridSteps,
         `${seed}:${genre}:${bar}:${role}`,
-      );
+      ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
         ...relationship,
         steps: Object.freeze(steps),
@@ -543,6 +666,8 @@ export function createGrooveDNA(input = {}, {
       snare: lanePlans.snare,
       hat: lanePlans.hat,
       percussion: lanePlans.percussion,
+      protectedSteps: Object.freeze(protectedSpaceSteps),
+      protectedSpaces: Object.freeze(protectedSpaceSteps.map((step) => round(step * beatsPerStep))),
       polyrhythm: Object.freeze({
         cycleSteps: grammar.polyrhythm.percussionSteps,
         pulses: grammar.polyrhythm.pulses,
@@ -572,10 +697,34 @@ export function createGrooveDNA(input = {}, {
       "instrument-mapping",
     ]),
     grammar: Object.freeze({
-      kick: Object.freeze({ base: grammar.base.kick, probability: grammar.probability.kick, locked: grammar.locked.kick }),
-      snare: Object.freeze({ base: grammar.base.snare, probability: grammar.probability.snare, locked: grammar.locked.snare }),
-      hat: Object.freeze({ base: grammar.base.hat, probability: grammar.probability.hat, locked: grammar.locked.hat }),
-      percussion: Object.freeze({ base: grammar.base.percussion, probability: grammar.probability.percussion, locked: grammar.locked.percussion }),
+      kick: Object.freeze({
+        required: grammar.locked.kick,
+        optional: cellPolicy.lanes.kick,
+        protected: cellPolicy.protectedSpaces,
+        base: grammar.base.kick,
+        probability: grammar.probability.kick,
+      }),
+      snare: Object.freeze({
+        required: grammar.locked.snare,
+        optional: cellPolicy.lanes.snare,
+        protected: cellPolicy.protectedSpaces,
+        base: grammar.base.snare,
+        probability: grammar.probability.snare,
+      }),
+      hat: Object.freeze({
+        required: grammar.locked.hat,
+        optional: cellPolicy.lanes.hat,
+        protected: cellPolicy.protectedSpaces,
+        base: grammar.base.hat,
+        probability: grammar.probability.hat,
+      }),
+      percussion: Object.freeze({
+        required: grammar.locked.percussion,
+        optional: cellPolicy.lanes.percussion,
+        protected: cellPolicy.protectedSpaces,
+        base: grammar.base.percussion,
+        probability: grammar.probability.percussion,
+      }),
     }),
     relationships: grammar.relationships,
     humanization: grammar.humanization,
@@ -602,8 +751,10 @@ export function grooveDNAConductorLanes(grooveDNA, bar) {
     leadPulses: plan.relationships.lead.pulses,
     counterPulses: Object.freeze(
       plan.relationships.lead.pulses
-        .map((beat) => round((beat + grooveDNA.beatsPerStep * 2) % grooveDNA.beatsPerBar)),
+        .map((beat) => round((beat + grooveDNA.beatsPerStep * 2) % grooveDNA.beatsPerBar))
+        .filter((beat) => !(plan.protectedSpaces ?? []).some((space) => Math.abs(space - beat) < 1e-6)),
     ),
+    protectedSpaces: Object.freeze([...(plan.protectedSpaces ?? [])]),
   });
 }
 
@@ -619,6 +770,11 @@ export function validateGrooveDNA(grooveDNA) {
     for (const bar of grooveDNA.bars) {
       for (const lane of ["kick", "snare", "hat", "percussion"]) {
         if (!Array.isArray(bar?.[lane]?.steps)) issues.push(`groove-dna:${lane}:steps`);
+        const protectedSpaces = bar?.protectedSpaces ?? [];
+        const collisions = (bar?.[lane]?.steps ?? [])
+          .map((step) => round(step * grooveDNA.beatsPerStep))
+          .filter((beat) => protectedSpaces.some((space) => Math.abs(space - beat) < 1e-6));
+        if (collisions.length) issues.push(`groove-dna:${lane}:protected-space`);
       }
       for (const role of ["bass", "chords", "lead"]) {
         if (!Array.isArray(bar?.relationships?.[role]?.pulses)) issues.push(`groove-dna:${role}:relationship`);
