@@ -20,6 +20,28 @@ export const QUALITY_DIMENSION_GROUPS = Object.freeze({
   production: Object.freeze(["production", "genreAuthenticity"]),
 });
 
+export const PHASE5_DIMENSION_FLOORS = Object.freeze({
+  harmonic: 68,
+  groove: 62,
+  motif: 55,
+  voiceLeading: 68,
+  separation: 72,
+  phraseResolution: 58,
+  production: 68,
+  stageInterlock: 68,
+  genreAuthenticity: 58,
+  storyArc: 58,
+  transitions: 58,
+  orchestration: 58,
+  tensionFollow: 55,
+  drumVariety: 55,
+  registerHealth: 58,
+  density: 52,
+  performance: 55,
+  memory: 50,
+  repetition: 50,
+});
+
 function checkRatio(checks) {
   const values = Object.values(checks ?? {});
   return values.length ? values.filter(Boolean).length / values.length : 1;
@@ -68,6 +90,75 @@ function healthBand(score) {
   return "priority";
 }
 
+function uniqueRatio(values = []) {
+  const normalized = values.map((value) => String(value ?? ""));
+  return round(new Set(normalized).size / Math.max(1, normalized.length), 3);
+}
+
+function onsetPhaseSignature(notes = [], beatsPerBar = 4, pitch = null, limit = 48) {
+  const filtered = pitch == null ? notes : notes.filter((note) => note.pitch === pitch);
+  return filtered
+    .slice(0, limit)
+    .map((note) => {
+      const local = ((finite(note.start, 0) % beatsPerBar) + beatsPerBar) % beatsPerBar;
+      return round(local * 4) / 4;
+    })
+    .join(",");
+}
+
+function melodyContourSignature(notes = [], limit = 24) {
+  const ordered = [...notes].sort((a, b) => finite(a.start, 0) - finite(b.start, 0)).slice(0, limit);
+  const directions = [];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const delta = finite(ordered[index].pitch, 0) - finite(ordered[index - 1].pitch, 0);
+    directions.push(delta > 0 ? "U" : delta < 0 ? "D" : "S");
+  }
+  return directions.join("");
+}
+
+function varietySignaturesFor(song = {}) {
+  const tracks = new Map((song.tracks ?? []).map((track) => [track.id, track.notes ?? []]));
+  const barBeats = Math.max(1, finite(song.meta?.beatsPerBar, 4));
+  return {
+    arrangement: (song.structure ?? []).map((section) => section.name).join(">"),
+    featuredOrder: (song.orchestrationMatrix ?? []).map((entry) => entry.featuredTrack ?? "?").join(">"),
+    compositionRoute: song.compositionRoute?.id ?? "unknown",
+    kickRhythm: onsetPhaseSignature(tracks.get("drums") ?? [], barBeats, 36),
+    bassRhythm: onsetPhaseSignature(tracks.get("bass") ?? [], barBeats),
+    melodyContour: melodyContourSignature(tracks.get("melody") ?? []),
+  };
+}
+
+function minimumDimensionScoresFor(results = []) {
+  const dimensions = new Set(results.flatMap(({ dimensionScores }) => Object.keys(dimensionScores ?? {})));
+  return Object.fromEntries([...dimensions].sort().map((dimension) => [
+    dimension,
+    Math.min(...results.map(({ dimensionScores }) => finite(dimensionScores?.[dimension], 100))),
+  ]));
+}
+
+function phase5FloorBreaches(minimumDimensionScores = {}) {
+  return Object.entries(PHASE5_DIMENSION_FLOORS)
+    .map(([dimension, floor]) => ({
+      dimension,
+      floor,
+      score: finite(minimumDimensionScores?.[dimension], 100),
+    }))
+    .filter(({ score, floor }) => score < floor)
+    .sort((left, right) => (left.score - left.floor) - (right.score - right.floor));
+}
+
+function varietySummaryFor(results = []) {
+  const axes = ["arrangement", "featuredOrder", "compositionRoute", "kickRhythm", "bassRhythm", "melodyContour"];
+  const ratios = Object.fromEntries(axes.map((axis) => [
+    axis,
+    uniqueRatio(results.map((result) => result.varietySignatures?.[axis] ?? "")),
+  ]));
+  const [weakestAxis, weakestRatio] = Object.entries(ratios)
+    .sort((left, right) => left[1] - right[1] || left[0].localeCompare(right[0]))[0] ?? ["unknown", 0];
+  return { ratios, weakestAxis, weakestRatio };
+}
+
 function technicalHealth(song, evaluation, releaseGate) {
   const scaleFit = finite(evaluation?.diagnostics?.scaleFit, 0);
   const masterChecks = checkRatio(song.finalMaster?.checks);
@@ -91,6 +182,9 @@ function summarizeGenre(genre, results) {
   const weakestDimension = weakestEntry(dimensionAverages);
   const weakestGroup = weakestEntry(groupAverages);
   const averageOverallScore = averageOf(genreResults, ({ overallScore }) => overallScore, 1);
+  const minimumDimensionScores = minimumDimensionScoresFor(genreResults);
+  const floorBreaches = phase5FloorBreaches(minimumDimensionScores);
+  const variety = varietySummaryFor(genreResults);
   return {
     genre,
     samples: genreResults.length,
@@ -101,6 +195,10 @@ function summarizeGenre(genre, results) {
     averageCreativeFloor: averageOf(genreResults, ({ creativeFloor }) => creativeFloor, 1),
     releasePassRate: averageOf(genreResults, ({ releasePassed }) => releasePassed ? 1 : 0, 3),
     uniqueFingerprintRatio: round(fingerprints.size / Math.max(1, genreResults.length), 3),
+    minimumDimensionScores,
+    floorBreaches,
+    floorBreachCount: floorBreaches.length,
+    variety,
     arrangementAttemptRate: averageOf(genreResults, ({ arrangementAttempted }) => arrangementAttempted ? 1 : 0, 3),
     arrangementAcceptanceRate: averageOf(genreResults, ({ arrangementAccepted }) => arrangementAccepted ? 1 : 0, 3),
     returnDevelopmentAttemptRate: averageOf(genreResults, ({ returnDevelopmentAttempted }) => returnDevelopmentAttempted ? 1 : 0, 3),
@@ -217,6 +315,7 @@ export function runGenerationBenchmark({
         releasePassed: technical.releasePass === 1,
         releaseScore: releaseGate.totalScore,
         fingerprint: JSON.stringify(song.meta?.ideaFingerprint ?? {}),
+        varietySignatures: varietySignaturesFor(song),
         vocalSpace: song.vocalSpace,
         voiceLeadingStep,
         maskingPairs: song.perceptualMix?.maskingPairs ?? 0,
@@ -276,6 +375,23 @@ export function runGenerationBenchmark({
   const weakestGroup = weakestEntry(groupAverages);
   const averageTechnicalScore = averageOf(results, ({ technicalScore }) => technicalScore);
   const releasePassRate = averageOf(results, ({ releasePassed }) => releasePassed ? 1 : 0, 3);
+  const failureMap = perGenre
+    .filter((entry) => entry.floorBreachCount > 0 || entry.releasePassRate < 1)
+    .map((entry) => ({
+      genre: entry.genre,
+      releasePassRate: entry.releasePassRate,
+      weakestGroup: entry.weakestGroup,
+      weakestDimension: entry.weakestDimension,
+      floorBreaches: entry.floorBreaches,
+      weakestVarietyAxis: entry.variety.weakestAxis,
+      weakestVarietyRatio: entry.variety.weakestRatio,
+    }))
+    .sort((left, right) => (
+      right.floorBreaches.length - left.floorBreaches.length
+      || left.releasePassRate - right.releasePassRate
+      || left.weakestDimension.score - right.weakestDimension.score
+      || left.genre.localeCompare(right.genre)
+    ));
 
   const report = {
     phase: 50,
@@ -320,6 +436,8 @@ export function runGenerationBenchmark({
     groupAverages,
     dimensionAverages,
     perGenre,
+    failureMap,
+    phase5Floors: PHASE5_DIMENSION_FLOORS,
     failures,
     results,
   };
