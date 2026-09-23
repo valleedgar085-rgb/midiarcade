@@ -8,6 +8,7 @@ import {
   validateGrooveDNA,
 } from "../src/core/groove-intelligence.js";
 import { generateNew } from "../src/music-engine.js";
+import { analyzeCompositionCandidate } from "../src/core/composition-candidate-judge.js";
 
 const STRUCTURE = [
   { id: "verse-1", name: "verse", startBar: 0, bars: 2 },
@@ -202,4 +203,24 @@ test("target grammar catalog remains explicit and reviewable", () => {
   ]) {
     assert.ok(ids.includes(expected), `missing structural groove grammar ${expected}`);
   }
+});
+
+
+test("candidate judge recognizes House offbeat bass as correct interlock instead of weak kick lock", () => {
+  const song = generateNew({
+    seed: "house-relationship-judge",
+    genre: "house",
+    bars: 8,
+    candidateCount: 1,
+    humanize: 0,
+  });
+  const analysis = analyzeCompositionCandidate(song, { target: "song" });
+  assert.ok(
+    analysis.groove.kickBass.lock >= 0.6,
+    `House relationship fit was only ${analysis.groove.kickBass.lock}`,
+  );
+  assert.ok(
+    analysis.groove.kickBass.distribution.offbeat > 0,
+    "House should expose offbeat bass relationship events",
+  );
 });
