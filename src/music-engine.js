@@ -4513,7 +4513,21 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
 
   const hit = (pitch, start, velocity, duration = 0.08, metadata = null) => {
     if (notes.some((note) => note.pitch === pitch && Math.abs(note.start - start) < 1e-6)) return false;
-    addNote(notes, pitch, start, duration, velocity, totalBeats, metadata);
+    const exactSubdivisionFeature = Boolean(
+      metadata?.preserveSubdivision
+      || /(?:triplet|roll|burst|ratchet|stutter)/i.test(String(metadata?.rhythmicFeature ?? "")),
+    );
+    addNote(
+      notes,
+      pitch,
+      start,
+      duration,
+      velocity,
+      totalBeats,
+      exactSubdivisionFeature
+        ? { ...(metadata ?? {}), preserveSubdivision: true }
+        : metadata,
+    );
     return true;
   };
 
