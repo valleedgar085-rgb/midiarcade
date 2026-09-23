@@ -14,6 +14,7 @@ import {
   MAX_REPETITION_REFINEMENT_EDITS,
   MAX_REPETITION_REFINEMENT_SHIFT,
   repetitionBalance,
+  repetitionRefinementFamily,
 } from "../src/core/repetition-refinement.js";
 
 function finite(value, fallback = 0) {
@@ -282,4 +283,30 @@ test("fixed RnB Quality Lab seeds improve or retain repetition while preserving 
   const afterAverage = average(rows.map(({ after }) => after));
   console.log("RNB_REPETITION_REFINEMENT", JSON.stringify(rows));
   assert.ok(afterAverage > beforeAverage, `expected RnB repetition average to improve beyond ${beforeAverage}`);
+});
+
+
+test("Phase 5 core genres opt into the bounded signed repetition repair", () => {
+  const families = {
+    hipHop: "hiphop",
+    trap: "trap",
+    pop: "pop",
+    neoSoul: "neo-soul",
+  };
+
+  for (const [genre, family] of Object.entries(families)) {
+    const source = sourceSong({ mode: "over" });
+    source.genre = genre;
+    source.meta.genre = genre;
+    source.songBlueprint.qualityTargets.repetition = GENRE_CRITIC_PROFILES[genre].repetition;
+
+    assert.equal(repetitionRefinementFamily(source), family);
+    const candidates = createRepetitionRefinementCandidates(source, {
+      target: GENRE_CRITIC_PROFILES[genre].repetition,
+    });
+    assert.ok(candidates.length > 0, `${genre} should expose at least one safe repetition candidate`);
+    assert.ok(candidates.every((candidate) => candidate.errorDelta < 0));
+    assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS));
+    assert.ok(candidates.every((candidate) => candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT));
+  }
 });
