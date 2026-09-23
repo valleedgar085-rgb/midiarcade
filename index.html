@@ -42,7 +42,6 @@
               <button class="menu-item" id="menuItemFullscreen" type="button"><span class="menu-icon">⛶</span><b>Toggle fullscreen</b><kbd>F</kbd></button>
               <button class="menu-item" id="menuItemExport" type="button"><span class="menu-icon">💾</span><b>Export .mid file</b><kbd>E</kbd></button>
               <button class="menu-item" id="menuItemGuide" type="button"><span class="menu-icon">?</span><b>Complete Guide</b></button>
-              <button class="menu-item" id="menuItemDebugger" type="button"><span class="menu-icon">&lt;/&gt;</span><b>Generation Debugger</b><kbd>D</kbd></button>
               <a class="menu-item" id="menuItemPrivacy" href="./privacy-policy.html"><span class="menu-icon">◇</span><b>Privacy Policy</b></a>
               <div class="menu-divider"></div>
               <p class="menu-item"><span class="menu-icon">✦</span><b>Created by Edgar Valle</b></p>
@@ -54,7 +53,6 @@
           <button class="icon-button" id="redoButton" type="button" aria-label="Redo" disabled>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10h2"/></svg>
           </button>
-          <button class="icon-button debugger-button" id="debuggerButton" type="button" aria-label="Generation debugger" title="Generation debugger"><span>&lt;/&gt;</span><b>DEBUG</b></button>
           <button class="icon-button guide-button" id="helpButton" type="button" aria-label="Guide"><span>?</span><b>GUIDE</b></button>
           <span class="version-chip">V1.2.2</span>
         </div>
@@ -936,7 +934,6 @@
         <p class="guide-privacy-link"><a href="./privacy-policy.html">Read the MIDI Arcade Privacy Policy</a></p>
       </dialog>
     <dialog class="shortcut-dialog debugger-dialog" id="debuggerDialog" aria-labelledby="debuggerDialogTitle">
-      <button class="dialog-close" id="closeDebugger" type="button" aria-label="Close debugger">x</button>
       <p class="eyebrow">GENERATION DEBUGGER</p>
       <h2 id="debuggerDialogTitle">See what the generator just did</h2>
       <p class="debugger-intro">Read-only diagnostics from the built-in generation flight recorder. This panel never changes notes, scores, quality thresholds, or the selected song.</p>
@@ -948,7 +945,6 @@
       <section class="debugger-flight" aria-labelledby="debuggerFlightTitle">
         <div class="debugger-section-heading">
           <span><small>FLIGHT PATH</small><strong id="debuggerFlightTitle">Plan → compose → diagnose → repair → finalize</strong></span>
-          <button class="small-button" id="refreshDebugger" type="button">Refresh</button>
         </div>
         <p class="debugger-empty" id="debuggerEmpty">No generation run yet. Close this window, generate a new song, then open DEBUG again.</p>
         <ol class="debugger-stage-list" id="debuggerStageList"></ol>
@@ -958,8 +954,6 @@
         <pre id="debuggerRaw">{}</pre>
       </details>
       <div class="debugger-actions">
-        <button class="small-button" id="copyDebuggerReport" type="button">Copy report</button>
-        <button class="small-button" id="clearDebuggerHistory" type="button">Clear history</button>
       </div>
     </dialog>
 
