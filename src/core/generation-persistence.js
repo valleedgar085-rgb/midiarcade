@@ -40,6 +40,14 @@ function collectEvents(track = {}) {
   return [];
 }
 
+function trackMetadata(track = {}) {
+  const copy = cloneValue(track) ?? {};
+  delete copy.events;
+  delete copy.notes;
+  delete copy.musicalEvents;
+  return copy;
+}
+
 export function buildGenerationPersistenceSnapshot({
   runId,
   songId,
@@ -87,7 +95,7 @@ export function buildGenerationPersistenceSnapshot({
       id: makeId(runId, "track", role, index),
       generationRunId: String(runId),
       role,
-      track: cloneValue(track),
+      track: trackMetadata(track),
     };
   });
 

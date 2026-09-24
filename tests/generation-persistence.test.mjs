@@ -52,6 +52,7 @@ test("generation snapshot preserves blueprint and canonical groove authority", (
   assert.equal(snapshot.grooveDna.subdivision, 0.25);
   assert.equal(snapshot.sections[0].sectionId, "intro");
   assert.equal(snapshot.tracks[0].role, "bass");
+  assert.equal(snapshot.tracks[0].track.notes, undefined, "track metadata must not duplicate persisted note events");
   assert.equal(snapshot.musicalEvents[0].pitch, 40);
 });
 
