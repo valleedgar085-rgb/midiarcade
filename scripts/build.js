@@ -111,6 +111,13 @@ await build({
   logLevel: 'warning',
 });
 
+const androidAssetsDir = path.join(projectRoot, 'android', 'app', 'src', 'main', 'assets');
+fs.mkdirSync(androidAssetsDir, { recursive: true });
+copyRecursiveSync(
+  path.join(projectRoot, 'database', 'midi_arcade_schema.sql'),
+  path.join(androidAssetsDir, 'midi_arcade_schema.sql'),
+);
+
 const androidPublicDir = path.join(projectRoot, 'android', 'app', 'src', 'main', 'assets', 'public');
 if (fs.existsSync(androidPublicDir)) {
   copyRecursiveSync(path.join(wwwDir, 'index.html'), path.join(androidPublicDir, 'index.html'));
