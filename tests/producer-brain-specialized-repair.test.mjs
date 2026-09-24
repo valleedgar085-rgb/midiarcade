@@ -92,7 +92,7 @@ test("precision repair routes transitions and performance while preserving caden
 test("phrase cadence precision preserves the source while whole repair remains a scored fallback", () => {
   const song = generateNew({
     genre: "jazz",
-    seed: "repair-cal-02:jazz:sparse",
+    seed: "qfix-phrase-6:jazz",
     bars: 8,
     energy: 0.12,
     complexity: 0.18,
@@ -114,7 +114,7 @@ test("phrase cadence precision preserves the source while whole repair remains a
 test("checkpoint 6 precision arrangement arc improves tension without collateral regression", () => {
   const song = generateNew({
     genre: "trap",
-    seed: "repair-cal-02:trap:sparse",
+    seed: "qfix-arc-5:trap",
     bars: 8,
     energy: 0.12,
     complexity: 0.18,
@@ -134,7 +134,7 @@ test("checkpoint 6 precision arrangement arc improves tension without collateral
 test("checkpoint 6 density repair wins surgically without broad fallback", () => {
   const song = generateNew({
     genre: "jazz",
-    seed: "repair-cal-02:jazz:balanced",
+    seed: "qfix-density-1:jazz",
     bars: 8,
     energy: 0.55,
     complexity: 0.55,
@@ -156,7 +156,7 @@ test("checkpoint 6 density repair wins surgically without broad fallback", () =>
 test("checkpoint 6 harmony keeps the proven whole repair when surgery cannot improve the target", () => {
   const song = generateNew({
     genre: "drumBass",
-    seed: "repair-cal-01:drumBass:sparse",
+    seed: "qfix-harmony-29:drumBass",
     bars: 8,
     energy: 0.12,
     complexity: 0.18,

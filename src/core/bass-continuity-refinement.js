@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_BASS_CONTINUITY_CANDIDATES = 2;
 
@@ -240,6 +241,16 @@ function kickOnsets(song, window) {
 
 function chooseInsertionBeat(song, window) {
   const midpoint = (window.start + window.end) / 2;
+  const groovePulses = trackGroovePulses(
+    song?.grooveConductor,
+    "bass",
+    window.start + 0.05,
+    window.end - 0.08,
+    Math.max(1, finite(song?.meta?.beatsPerBar, 4)),
+  );
+  if (groovePulses.length) {
+    return round([...groovePulses].sort((left, right) => Math.abs(left - midpoint) - Math.abs(right - midpoint) || left - right)[0], 4);
+  }
   const kicks = kickOnsets(song, window);
   if (kicks.length) {
     return round([...kicks].sort((left, right) => Math.abs(left - midpoint) - Math.abs(right - midpoint) || left - right)[0], 4);

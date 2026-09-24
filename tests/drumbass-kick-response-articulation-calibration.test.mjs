@@ -93,8 +93,9 @@ function splitPlan(song) {
 function splitAtResponse(note, target, index) {
   const start = finite(note.start);
   const end = start + finite(note.duration);
+  const sourceDuration = round(end - start);
   const firstDuration = round(target - start);
-  const secondDuration = round(end - target);
+  const secondDuration = round(sourceDuration - firstDuration);
   const sourceId = String(note.id ?? `bass-${start}-${finite(note.pitch)}`);
   return [
     {
