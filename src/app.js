@@ -32,7 +32,7 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
-import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -4966,8 +4966,7 @@ export class PreviewPlayer {
     if (!this.context) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Web Audio is unavailable.");
-      // Allow native hardware sample rate matching to avoid DAC resampling buffer pops on Android/tablets
-      this.context = new AudioContextClass({ latencyHint: "interactive" });
+      this.context = new AudioContextClass({ latencyHint: previewAudioLatencyHint(this.previewRuntime) });
       const createdContext = this.context;
       createdContext.onstatechange = () => this.handleContextStateChange(createdContext);
       if (typeof window !== "undefined") {
