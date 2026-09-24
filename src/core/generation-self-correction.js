@@ -4,6 +4,17 @@ const FOCUS_ROUTES = Object.freeze(new Set([
   "hook-first",
 ]));
 
+const CRITICAL_FIRST_SCORE_GAP = 10;
+const CRITICAL_FIRST_ABSOLUTE_FLOOR = 68;
+const CRITICAL_REPAIR_FOCUS = Object.freeze({
+  harmonic: Object.freeze({ route: "harmony-first", group: "harmony" }),
+  voiceLeading: Object.freeze({ route: "harmony-first", group: "harmony" }),
+  groove: Object.freeze({ route: "groove-first", group: "groove" }),
+  separation: Object.freeze({ route: "hook-first", group: "motif" }),
+  phraseResolution: Object.freeze({ route: "hook-first", group: "motif" }),
+  registerHealth: Object.freeze({ route: "hook-first", group: "motif" }),
+});
+
 function finiteOrNull(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
@@ -24,12 +35,40 @@ function scoreSummary(result) {
   });
 }
 
+function criticalFirstFocus(summary) {
+  const dimension = String(summary?.lowestCriticalDimension ?? "");
+  const mapped = CRITICAL_REPAIR_FOCUS[dimension];
+  const criticalFloor = finiteOrNull(summary?.criticalFloor);
+  const totalScore = finiteOrNull(summary?.totalScore);
+  if (!mapped || criticalFloor == null) return null;
+
+  const scoreGap = totalScore == null ? null : totalScore - criticalFloor;
+  const absoluteRisk = criticalFloor < CRITICAL_FIRST_ABSOLUTE_FLOOR;
+  const aggregateMasking = scoreGap != null && scoreGap >= CRITICAL_FIRST_SCORE_GAP;
+  if (!absoluteRisk && !aggregateMasking) return null;
+
+  return Object.freeze({
+    route: mapped.route,
+    group: mapped.group,
+    dimension,
+    score: criticalFloor,
+    scoreGap,
+    reason: absoluteRisk ? "critical-floor-low" : "critical-floor-masked",
+  });
+}
+
 export function diagnoseGenerationOutcome(kind, result, config = {}) {
   const requestKind = String(kind);
   const details = result?.song?.meta?.scoreDetails;
   const search = details?.candidateSearch;
   const loop = config?.producerBrain?.adaptiveLoop;
-  const focusRoute = FOCUS_ROUTES.has(String(search?.focusRoute)) ? String(search.focusRoute) : null;
+  const summary = scoreSummary(result);
+  const searchFocusRoute = FOCUS_ROUTES.has(String(search?.focusRoute)) ? String(search.focusRoute) : null;
+  const criticalFocus = criticalFirstFocus(summary);
+  const focusRoute = criticalFocus?.route ?? searchFocusRoute;
+  const focusDimension = criticalFocus?.dimension ?? search?.focusDimension ?? null;
+  const focusGroup = criticalFocus?.group ?? search?.focusGroup ?? null;
+  const focusScore = criticalFocus?.score ?? finiteOrNull(search?.focusScore);
   const eligibleKind = requestKind === "new" || requestKind === "similar";
   const explicitRoute = config?.compositionRoute != null && String(config.compositionRoute).length > 0;
   const shouldRetry = Boolean(
@@ -45,7 +84,7 @@ export function diagnoseGenerationOutcome(kind, result, config = {}) {
   return Object.freeze({
     shouldRetry,
     reason: shouldRetry
-      ? "critic-focus-retry"
+      ? criticalFocus ? "critical-focus-retry" : "critic-focus-retry"
       : !eligibleKind
         ? "unsupported-kind"
         : explicitRoute
@@ -62,10 +101,16 @@ export function diagnoseGenerationOutcome(kind, result, config = {}) {
                     ? "self-correction-disabled"
                     : "not-eligible",
     focusRoute,
-    focusDimension: search?.focusDimension ?? null,
-    focusGroup: search?.focusGroup ?? null,
-    focusScore: finiteOrNull(search?.focusScore),
-    ...scoreSummary(result),
+    focusDimension,
+    focusGroup,
+    focusScore,
+    focusSource: criticalFocus ? "critical" : "search",
+    criticalPriority: Boolean(criticalFocus),
+    criticalFloorGap: criticalFocus?.scoreGap ?? null,
+    searchFocusRoute,
+    searchFocusDimension: search?.focusDimension ?? null,
+    searchFocusGroup: search?.focusGroup ?? null,
+    ...summary,
   });
 }
 
@@ -101,6 +146,9 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
   const floorDelta = original.creativeFloor != null && corrected.creativeFloor != null
     ? corrected.creativeFloor - original.creativeFloor
     : null;
+  const criticalFloorDelta = original.criticalFloor != null && corrected.criticalFloor != null
+    ? corrected.criticalFloor - original.criticalFloor
+    : null;
 
   let useCorrected = false;
   let reason = "original-retained";
@@ -112,6 +160,9 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
   } else if (scoreDelta != null && scoreDelta >= 0.5) {
     useCorrected = true;
     reason = "score-improved";
+  } else if (criticalFloorDelta != null && criticalFloorDelta >= 2 && (scoreDelta == null || scoreDelta >= -0.25)) {
+    useCorrected = true;
+    reason = "critical-floor-improved";
   } else if (floorDelta != null && floorDelta >= 2 && (scoreDelta == null || scoreDelta >= -0.25)) {
     useCorrected = true;
     reason = "creative-floor-improved";
@@ -123,6 +174,7 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
     reason,
     scoreDelta,
     creativeFloorDelta: floorDelta,
+    criticalFloorDelta,
     original: Object.freeze(original),
     corrected: Object.freeze(corrected),
   });
