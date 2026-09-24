@@ -35,12 +35,26 @@ test("adaptive target cannot hide a severe critical register weakness behind a h
   const balance = evaluateCandidateBalance(evaluation({ registerHealth: 64 }));
   assert.equal(balance.criticalFloor, 64);
   assert.equal(balance.lowestCriticalDimension, "registerHealth");
+  assert.equal(balance.truthFloor, 64);
+  assert.equal(balance.lowestTruthDimension, "registerHealth");
+  assert.equal(balance.minimumTruthFloor, 65);
   assert.equal(balance.aspirationalCriticalFloor, 68);
+  assert.equal(balance.passed, false);
   assert.equal(balance.aspirational, false);
 });
 
 test("balanced high-quality candidates still qualify for the aspirational target", () => {
   const balance = evaluateCandidateBalance(evaluation());
   assert.ok(balance.criticalFloor >= balance.aspirationalCriticalFloor);
+  assert.ok(balance.truthFloor >= balance.aspirationalCriticalFloor);
+  assert.equal(balance.passed, true);
   assert.equal(balance.aspirational, true);
+});
+
+test("density participates in the truth floor even though it is excluded from the creative floor", () => {
+  const balance = evaluateCandidateBalance(evaluation({ density: 52 }));
+  assert.equal(balance.truthFloor, 52);
+  assert.equal(balance.lowestTruthDimension, "density");
+  assert.equal(balance.passed, false);
+  assert.equal(balance.aspirational, false);
 });
