@@ -161,3 +161,32 @@ test("critic detects rendered parts that stop honoring the ensemble authority", 
     `${disconnectedEvaluation.subscores.stageInterlock} should be below ${connectedEvaluation.subscores.stageInterlock}`,
   );
 });
+
+
+test("critic fails closed when an accepted section loses a required ensemble relationship", () => {
+  const song = generateNew({
+    genre: "hipHop",
+    seed: "ensemble-contract-removal-proof",
+    bars: 12,
+    candidateCount: 1,
+    targetedRepair: false,
+    energy: 0.7,
+    complexity: 0.68,
+  });
+  const intact = evaluateEnsembleCoordinationAuthority(song);
+  const broken = structuredClone(song);
+  const first = broken.generationInterlock.sectionContracts[0];
+  first.coordination.relationships = first.coordination.relationships.filter(
+    (relationship) => relationship.kind !== "cadence-team",
+  );
+
+  const degraded = evaluateEnsembleCoordinationAuthority(broken);
+
+  assert.equal(intact.metrics.contractCoverage, 1);
+  assert.ok(degraded.metrics.contractCoverage < 0.98);
+  assert.equal(degraded.passed, false);
+  assert.ok(
+    degraded.score <= intact.score,
+    `degraded contract score ${degraded.score} must not improve over intact ${intact.score}`,
+  );
+});
