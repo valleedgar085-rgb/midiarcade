@@ -95,6 +95,14 @@ function uniqueRatio(values = []) {
   return round(new Set(normalized).size / Math.max(1, normalized.length), 3);
 }
 
+function reasonCounts(results = [], selector) {
+  return results.reduce((counts, result) => {
+    const reason = String(selector(result) ?? "unknown");
+    counts[reason] = (counts[reason] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
 function onsetPhaseSignature(notes = [], beatsPerBar = 4, pitch = null, limit = 48) {
   const filtered = pitch == null ? notes : notes.filter((note) => note.pitch === pitch);
   return filtered
@@ -185,6 +193,7 @@ function summarizeGenre(genre, results) {
   const minimumDimensionScores = minimumDimensionScoresFor(genreResults);
   const floorBreaches = phase5FloorBreaches(minimumDimensionScores);
   const variety = varietySummaryFor(genreResults);
+  const densityMetrics = reasonCounts(genreResults, ({ densityMetric }) => densityMetric);
   return {
     genre,
     samples: genreResults.length,
@@ -219,7 +228,10 @@ function summarizeGenre(genre, results) {
     groovePocketAttemptRate: averageOf(genreResults, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(genreResults, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(genreResults, ({ groovePocketDelta }) => groovePocketDelta, 2),
+    groovePocketReasons: reasonCounts(genreResults, ({ groovePocketReason }) => groovePocketReason),
     averageNotesPerBar: averageOf(genreResults, ({ notesPerBar }) => notesPerBar, 1),
+    densityMetric: Object.keys(densityMetrics).length === 1 ? Object.keys(densityMetrics)[0] : "mixed",
+    averageDensityObserved: averageOf(genreResults, ({ densityObserved }) => densityObserved, 1),
     averageDensityTarget: averageOf(genreResults, ({ densityTarget }) => densityTarget, 1),
     averageDensityDelta: averageOf(genreResults, ({ densityDelta }) => densityDelta, 1),
     weakestGroup,
@@ -294,7 +306,8 @@ export function runGenerationBenchmark({
       const pitchedNoteCount = (song.tracks ?? []).filter((track) => track.id !== "drums").reduce((sum, track) => sum + (track.notes ?? []).length, 0);
       const notesPerBar = pitchedNoteCount / effectiveBars;
       const densityTarget = finite(evaluation?.diagnostics?.densityTarget, notesPerBar);
-      const densityDelta = notesPerBar - densityTarget;
+      const densityObserved = finite(evaluation?.diagnostics?.densityObserved, notesPerBar);
+      const densityDelta = densityObserved - densityTarget;
       const chords = song.tracks.find((t) => t.id === "chords")?.notes ?? [];
       let totalStepDistance = 0;
       let transitionCount = 0;
@@ -325,8 +338,10 @@ export function runGenerationBenchmark({
         voiceLeadingStep,
         maskingPairs: song.perceptualMix?.maskingPairs ?? 0,
         notesPerBar: round(notesPerBar, 2),
+        densityObserved: round(densityObserved, 2),
         densityTarget: round(densityTarget, 2),
         densityDelta: round(densityDelta, 2),
+        densityMetric: String(evaluation?.diagnostics?.densityMetric ?? "pitched-notes"),
         outputQualitySignature: generationConfig.outputQuality?.seedSignature ?? null,
         arrangementAttempted: Boolean(arrangementDiagnostics?.attempted),
         arrangementAccepted: Boolean(arrangementDiagnostics?.accepted),
@@ -358,6 +373,7 @@ export function runGenerationBenchmark({
         registerHealthRefinementDelta: finite(registerHealthDiagnostics?.registerHealthDelta, 0),
         groovePocketAttempted: Boolean(grooveDiagnostics?.attempted),
         groovePocketAccepted: Boolean(grooveDiagnostics?.accepted),
+        groovePocketReason: String(grooveDiagnostics?.reason ?? (qualityEvolution ? "missing-diagnostics" : "not-evaluated")),
         groovePocketId: grooveDiagnostics?.id ?? null,
         groovePocketDelta: finite(grooveDiagnostics?.grooveDelta, 0),
         groovePocketLockDelta: finite(grooveDiagnostics?.lockDelta, 0),
@@ -438,6 +454,8 @@ export function runGenerationBenchmark({
     averageVoiceLeadingStep: averageOf(results, ({ voiceLeadingStep }) => voiceLeadingStep, 2),
     averageMaskingPairs: averageOf(results, ({ maskingPairs }) => maskingPairs),
     averageNotesPerBar: averageOf(results, ({ notesPerBar }) => notesPerBar, 1),
+    densityMetrics: reasonCounts(results, ({ densityMetric }) => densityMetric),
+    averageDensityObserved: averageOf(results, ({ densityObserved }) => densityObserved, 1),
     averageDensityTarget: averageOf(results, ({ densityTarget }) => densityTarget, 1),
     averageDensityDelta: averageOf(results, ({ densityDelta }) => densityDelta, 1),
     releasePassRate,
@@ -462,6 +480,7 @@ export function runGenerationBenchmark({
     groovePocketAttemptRate: averageOf(results, ({ groovePocketAttempted }) => groovePocketAttempted ? 1 : 0, 3),
     groovePocketAcceptanceRate: averageOf(results, ({ groovePocketAccepted }) => groovePocketAccepted ? 1 : 0, 3),
     averageGroovePocketDelta: averageOf(results, ({ groovePocketDelta }) => groovePocketDelta, 2),
+    groovePocketReasons: reasonCounts(results, ({ groovePocketReason }) => groovePocketReason),
     weakestGenre: perGenre[0] ?? null,
     weakestGroup,
     weakestDimension,
