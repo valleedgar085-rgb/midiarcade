@@ -36,7 +36,9 @@ console.table(report.perGenre.map((genre) => ({
   musical: genre.averageMusicalScore,
   technical: genre.averageTechnicalScore,
   floor: genre.averageCreativeFloor,
-  density: `${genre.averageNotesPerBar}/${genre.averageDensityTarget}`,
+  pitchedPerBar: genre.averageNotesPerBar,
+  densityBasis: genre.densityMetric,
+  densityFit: `${genre.averageDensityObserved}/${genre.averageDensityTarget}`,
   densityDelta: genre.averageDensityDelta,
   densityRefine: `${Math.round(genre.densityRefinementAcceptanceRate * 100)}%/${Math.round(genre.densityRefinementAttemptRate * 100)}%`,
   densityGain: genre.averageDensityRefinementDelta,
@@ -50,6 +52,7 @@ console.table(report.perGenre.map((genre) => ({
   arrangement: `${Math.round(genre.arrangementAcceptanceRate * 100)}%/${Math.round(genre.arrangementAttemptRate * 100)}%`,
   returns: `${Math.round(genre.returnDevelopmentAcceptanceRate * 100)}%/${Math.round(genre.returnDevelopmentAttemptRate * 100)}%`,
   pocket: `${Math.round(genre.groovePocketAcceptanceRate * 100)}%/${Math.round(genre.groovePocketAttemptRate * 100)}%`,
+  pocketGate: Object.entries(genre.groovePocketReasons).map(([reason, count]) => `${reason}:${count}`).join(", "),
   pocketDelta: genre.averageGroovePocketDelta,
   weakestSubsystem: `${genre.weakestGroup.id} ${genre.weakestGroup.score}`,
   weakestDimension: `${genre.weakestDimension.id} ${genre.weakestDimension.score}`,
@@ -66,8 +69,10 @@ console.log(
   + ` · unique ${(report.uniqueFingerprintRatio * 100).toFixed(1)}%`,
 );
 console.log(
-  `Density fit: ${report.averageNotesPerBar}/${report.averageDensityTarget} pitched notes per bar`
-  + ` · signed delta ${report.averageDensityDelta}`,
+  `Density fit: ${report.averageDensityObserved}/${report.averageDensityTarget} average genre-specific critic activity per bar`
+  + ` · signed delta ${report.averageDensityDelta}`
+  + ` · pitched notes ${report.averageNotesPerBar}/bar`
+  + ` · bases ${Object.entries(report.densityMetrics).map(([metric, count]) => `${metric}=${count}`).join(", ")}`,
 );
 console.log(
   `Density refinement: ${Math.round(report.densityRefinementAcceptanceRate * 100)}% accepted`
@@ -102,6 +107,10 @@ console.log(
   `Groove pocket: ${Math.round(report.groovePocketAcceptanceRate * 100)}% accepted`
   + ` of ${Math.round(report.groovePocketAttemptRate * 100)}% attempted candidates`
   + ` · average accepted/selected delta ${report.averageGroovePocketDelta}`,
+);
+console.log(
+  `Groove pocket gate reasons: ${Object.entries(report.groovePocketReasons)
+    .map(([reason, count]) => `${reason}=${count}`).join(" · ") || "none"}`,
 );
 console.log(
   `Weakest genre: ${report.weakestGenre?.genre ?? "n/a"}`
