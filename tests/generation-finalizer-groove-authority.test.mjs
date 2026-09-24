@@ -57,3 +57,61 @@ test("generation finalizer never rewrites Groove DNA rhythm", () => {
   assert.equal(result.diagnostics.snareBounce.reason, "retired-groove-dna-authority");
   assert.equal(result.diagnostics.sectionDrumEvolution.reason, "retired-groove-dna-authority");
 });
+
+
+test("Similar finalization may continue production lineage but cannot rewrite generated rhythm", () => {
+  const source = songFixture();
+  source.id = "source-lineage-song";
+  source.variationSet = {
+    id: "family-fire",
+    element: { id: "fire", label: "Fire", intensity: 0.8 },
+    moodIntent: { id: "lift", label: "Lift" },
+  };
+  for (const track of source.tracks) {
+    track.program = track.id === "drums" ? 0 : 33;
+    track.settings = {
+      program: track.program,
+      volume: 0.7,
+      velocity: 0.8,
+      reverb: 0.3,
+      cutoff: 7000,
+      resonance: 0.2,
+      gate: 0.9,
+    };
+  }
+
+  const candidate = songFixture();
+  candidate.id = "generated-similar-song";
+  candidate.tracks.find((track) => track.id === "bass").notes.push({
+    pitch: 41,
+    start: 5.5,
+    duration: 0.25,
+    velocity: 82,
+    grooveSource: "hip-hop-pocket.bass",
+  });
+  for (const track of candidate.tracks) {
+    track.program = track.id === "drums" ? 8 : 39;
+    track.settings = {
+      program: track.program,
+      volume: 0.62,
+      velocity: 0.74,
+      reverb: 0.2,
+      cutoff: 6200,
+      resonance: 0.15,
+      gate: 0.84,
+    };
+  }
+
+  const sourceBefore = rhythmSignature(source);
+  const generatedBefore = rhythmSignature(candidate);
+  const result = finalizeGeneratedSong(candidate, {
+    kind: "similar",
+    sourceSong: source,
+  });
+
+  assert.deepEqual(rhythmSignature(result.song), generatedBefore);
+  assert.deepEqual(rhythmSignature(source), sourceBefore);
+  assert.equal(result.song.elementLineage.parentSongId, source.id);
+  assert.equal(result.song.elementLineage.element.id, "fire");
+  assert.equal(result.diagnostics.rhythmAuthority, "groove-dna");
+});
