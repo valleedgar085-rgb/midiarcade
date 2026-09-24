@@ -75,8 +75,8 @@ test("generation database record preserves canonical Groove DNA and rendered pit
     },
     song,
     runId: "generation-1",
-    startedAt: 100,
-    completedAt: 250,
+    startedAt: "2026-09-24T02:00:00.000Z",
+    completedAt: "2026-09-24T02:00:00.150Z",
     durationMs: 150,
     stages: [
       { stage: "plan", at: 100, detail: { blueprint: "producer-blueprint-v1" } },
@@ -94,6 +94,9 @@ test("generation database record preserves canonical Groove DNA and rendered pit
   );
   assert.equal(record.musicalEvents[1].section_id, "chorus");
   assert.equal(record.generationRun.candidate_count, 4);
+  assert.equal(record.generationRun.started_at, "2026-09-24T02:00:00.000Z");
+  assert.equal(record.generationRun.completed_at, "2026-09-24T02:00:00.150Z");
+  assert.equal(record.songVersion.version_number, 1);
   assert.equal(record.stages[0].duration_ms, 20);
 });
 
