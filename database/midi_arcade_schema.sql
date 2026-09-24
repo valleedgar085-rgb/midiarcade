@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS song_blueprints (
 
 CREATE TABLE IF NOT EXISTS sections (
     id TEXT PRIMARY KEY,
+    source_section_id TEXT,
     song_id TEXT NOT NULL,
     generation_run_id TEXT,
     name TEXT NOT NULL,
