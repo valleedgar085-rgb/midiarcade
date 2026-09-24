@@ -97,6 +97,8 @@ test("generation database record preserves canonical Groove DNA and rendered pit
   assert.equal(record.generationRun.started_at, "2026-09-24T02:00:00.000Z");
   assert.equal(record.generationRun.completed_at, "2026-09-24T02:00:00.150Z");
   assert.equal(record.songVersion.version_number, 1);
+  assert.equal(record.stages[0].started_at, "2026-09-24T02:00:00.000Z");
+  assert.equal(record.stages[0].completed_at, "2026-09-24T02:00:00.020Z");
   assert.equal(record.stages[0].duration_ms, 20);
 });
 
