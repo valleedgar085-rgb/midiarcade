@@ -1,16 +1,25 @@
 import { continueElementLineage } from "./elemental-lineage.js";
-import { applySectionDrumEvolutionRefinement } from "./section-drum-evolution-refinement.js";
-import { applySnareBounceRefinement } from "./snare-bounce-refinement.js";
+
+function retiredRhythmDiagnostic(id) {
+  return Object.freeze({
+    version: 1,
+    id,
+    attempted: false,
+    accepted: false,
+    changed: false,
+    reason: "retired-groove-dna-authority",
+  });
+}
 
 /**
- * Single authoritative post-generation musical finalizer used by both worker
- * and synchronous fallback paths. It keeps Similar lineage and bounded drum
- * refinements in one ordered contract so the two execution paths cannot drift.
+ * Single authoritative post-generation finalizer used by worker and synchronous
+ * fallback paths. Groove DNA owns rhythmic structure, so finalization may
+ * preserve Similar lineage but must not add, move, delete, or re-time notes.
  */
 export function finalizeGeneratedSong(song, {
   kind = "new",
   sourceSong = null,
-  config = {},
+  config: _config = {},
 } = {}) {
   if (!song || typeof song !== "object") {
     return Object.freeze({
@@ -18,6 +27,7 @@ export function finalizeGeneratedSong(song, {
       diagnostics: Object.freeze({
         snareBounce: null,
         sectionDrumEvolution: null,
+        rhythmAuthority: "groove-dna",
       }),
     });
   }
@@ -25,14 +35,13 @@ export function finalizeGeneratedSong(song, {
   const lineageSong = kind === "similar" && sourceSong
     ? continueElementLineage(sourceSong, song)
     : song;
-  const bounced = applySnareBounceRefinement(lineageSong, config);
-  const evolved = applySectionDrumEvolutionRefinement(bounced.song, config);
 
   return Object.freeze({
-    song: evolved.song,
+    song: lineageSong,
     diagnostics: Object.freeze({
-      snareBounce: bounced.diagnostics ?? null,
-      sectionDrumEvolution: evolved.diagnostics ?? null,
+      snareBounce: retiredRhythmDiagnostic("snare-bounce"),
+      sectionDrumEvolution: retiredRhythmDiagnostic("section-drum-evolution"),
+      rhythmAuthority: "groove-dna",
     }),
   });
 }

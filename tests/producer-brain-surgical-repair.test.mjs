@@ -10,7 +10,11 @@ import {
 function notesOutsideWindow(track, window) {
   return (track?.notes ?? []).filter((note) => (
     note.start < window.startBeat - 1e-6 || note.start >= window.endBeat - 1e-6
-  ));
+  )).map(({ pitch, start, duration, velocity }) => ({ pitch, start, duration, velocity }));
+}
+
+function musicalNoteEvents(track) {
+  return (track?.notes ?? []).map(({ pitch, start, duration, velocity }) => ({ pitch, start, duration, velocity }));
 }
 
 test("Producer Brain chooses a deterministic 2-8 bar surgical repair window", () => {
@@ -74,9 +78,9 @@ test("a winning surgical repair preserves every event outside its diagnosed wind
     assert.ok(sourceTrack, `missing source track ${repairedTrack.id}`);
     if (!surgicalTracks.has(repairedTrack.id)) {
       assert.deepEqual(
-        repairedTrack.notes,
-        sourceTrack.notes,
-        `${repairedTrack.id} must remain completely untouched by a surgical repair`,
+        musicalNoteEvents(repairedTrack),
+        musicalNoteEvents(sourceTrack),
+        `${repairedTrack.id} note pitches, timing, lengths, and volumes must remain untouched by a surgical repair`,
       );
       continue;
     }

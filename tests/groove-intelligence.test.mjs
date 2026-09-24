@@ -34,18 +34,21 @@ function phaseDelta(left, right) {
   return Math.min(difference, 1 - difference);
 }
 
-test("phase 3 groove intelligence is deterministic and leaves bounded genre-native development", () => {
+test("phase 3 groove intelligence is deterministic and develops authored Groove DNA lanes", () => {
   for (const genre of TARGET_GENRES) {
     const options = { genre, seed: `phase3-groove-test:${genre}`, bars: 16, candidateCount: 1 };
     const first = generateNew(options);
     const second = generateNew(options);
     assert.deepEqual(drumSignature(first), drumSignature(second), `${genre} drums must remain deterministic`);
 
+    const plans = first.grooveConductor?.bars ?? [];
     const drums = first.tracks.find((track) => track.id === "drums")?.notes ?? [];
-    const developed = drums.filter((note) => note.rhythmicFeature === "phase3-groove-development");
-    assert.ok(developed.length >= 4, `${genre} should develop multiple bars without flooding the groove`);
-    assert.ok(developed.length <= 20, `${genre} development must remain bounded`);
-    assert.ok(developed.every((note) => note.velocity >= 1 && note.velocity <= 120));
+    assert.equal(plans.length, first.bars, `${genre} needs one shared Groove DNA plan per bar`);
+    assert.ok(plans.every((bar) => bar.grooveDNA?.grammarId), `${genre} must name its active rhythm grammar`);
+    assert.ok(new Set(criticBarSignatures(first).filter(Boolean)).size >= 8, `${genre} must vary its authored bars`);
+    assert.ok(drums.length <= first.bars * 32, `${genre} drum density must stay bounded`);
+    assert.ok(drums.every((note) => note.velocity >= 1 && note.velocity <= 120));
+    assert.ok(drums.some((note) => String(note.grooveSource ?? "").startsWith(`${plans[0].grooveDNA.grammarId}.`)));
   }
 });
 
@@ -64,13 +67,16 @@ test("phase 3 groove memory preserves transition contracts and avoids adjacent c
     const evaluation = evaluateSongCandidate(song);
     const release = evaluateSongReleaseGate(song, evaluation);
     const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
-    const recalls = drums.filter((note) => note.grooveMemoryRecall);
+    const memories = song.songBlueprint?.memoryMap ?? [];
     const signatures = criticBarSignatures(song);
     const adjacentCopies = signatures.slice(1).filter((signature, index) => signature && signatures[index] && signature === signatures[index]);
 
-    assert.ok(recalls.length > 0, `${genre} should retain at least one canonical groove-memory recall`);
-    assert.ok(recalls.every((note) => note.connectionId), `${genre} recalled groove notes must retain target-section interlock metadata`);
-    assert.ok(recalls.every((note) => note.velocity <= 120), `${genre} recalled groove notes must honor the engine velocity ceiling`);
+    assert.ok(memories.length > 0, `${genre} should keep the blueprint's section-memory map`);
+    assert.ok(memories.every((memory) => (
+      song.structure.some((section) => section.id === memory.sectionId)
+      && song.structure.some((section) => section.id === memory.originSectionId)
+    )), `${genre} memory links must point to real source and return sections`);
+    assert.ok(song.grooveConductor.bars.every((bar) => bar.grooveDNA?.grammarId), `${genre} recall must keep Groove DNA as timing authority`);
     assert.equal(adjacentCopies.length, 0, `${genre} must not create adjacent cloned drum bars`);
     assert.deepEqual(song.finalAssembly?.checks, {
       sectionCoverage: true,

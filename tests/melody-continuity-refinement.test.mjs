@@ -270,3 +270,24 @@ test("final continuity stage fails closed when the release gate rejects the conn
   assert.equal(result.diagnostics.reason, "release-gate");
   assert.equal(result.song, source);
 });
+
+test("melody continuity prefers authored leadPulses over midpoint quantization", () => {
+  const source = song();
+  source.grooveConductor = {
+    bars: Array.from({ length: 8 }, (_, bar) => ({
+      bar,
+      sectionId: bar < 2 ? "intro-1" : bar < 4 ? "verse-1" : bar < 6 ? "chorus-1" : "outro-1",
+      leadPulses: [0.75],
+    })),
+  };
+  const candidates = createMelodyContinuityCandidates(source);
+  assert.ok(candidates.length > 0);
+  const additions = candidates[0].song.tracks
+    .find((track) => track.id === "melody").notes
+    .filter((note) => note.continuityRole === "phrase-link");
+  assert.ok(additions.length > 0);
+  for (const note of additions) {
+    const offset = ((note.start % 4) + 4) % 4;
+    assert.ok(Math.abs(offset - 0.75) < 1e-6, `expected lead Groove DNA pulse, got ${note.start}`);
+  }
+});
