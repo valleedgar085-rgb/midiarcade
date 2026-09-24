@@ -705,7 +705,7 @@ test("phases 7, 8, and 9 orchestrate sections, recall musical ideas, and pass a 
   const song = engine.generateNew(config);
   assert.deepEqual(engine.generateNew(config), song, "phase 9 must remain deterministic for a fixed generation");
   assert.equal(song.songBlueprint.version, 6);
-  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 43, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76]);
+  assert.deepEqual(song.generationPhases.map(({ phase }) => phase), [7, 8, 9, 39, 41, 42, 43, 44, 46, 47, 48, 51, 52, 66, 67, 68, 69, 70, 71, 72, 75, 76, 77]);
   assert.ok(song.generationPhases.every(({ status }) => status === "complete" || status === "passed" || status === "best-available"));
 
   assert.equal(song.orchestrationMatrix.length, song.structure.length);

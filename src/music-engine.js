@@ -58,6 +58,10 @@ import {
   createEnsembleCoordinationContract,
   evaluateEnsembleCoordinationAuthority,
 } from "./core/ensemble-coordination-authority.js";
+import {
+  applySectionCompletionAuthority,
+  evaluateSectionCompletionAuthority,
+} from "./core/section-completion-authority.js";
 
 export const PPQ = 480;
 
@@ -10466,6 +10470,7 @@ export function evaluateSongCandidate(song) {
   })).length;
   const collisionRatio = (attackCollisions + dissonantOverlaps) / Math.max(1, counterNotes.length * 2);
   const separation = clamp(Math.round(100 - collisionRatio * 150), 20, 100);
+  const sectionCompletionAuthority = evaluateSectionCompletionAuthority(song);
   const cadence = cadenceScoreForSong(song);
   const transitions = transitionScoreForSong(song);
   const harmonicJourney = harmonicJourneyScoreForSong(song);
@@ -10558,6 +10563,9 @@ export function evaluateSongCandidate(song) {
       motifRepetition: round(repetitionRatio),
       counterpointCollision: round(collisionRatio),
       transitionClarity: round(transitions / 100),
+      sectionCompletionScore: round(sectionCompletionAuthority.score / 100),
+      sectionCompletionPassed: sectionCompletionAuthority.passed,
+      weakestSectionBoundary: sectionCompletionAuthority.weakestBoundary?.id ?? null,
       harmonicJourneyFit: round(harmonicJourney / 100),
       performanceControl: round(performance / 100),
       orchestrationFit: round(orchestration / 100),
@@ -10906,6 +10914,8 @@ function normalizeRecentSongs(value) {
 }
 
 function canonicalNoveltyFingerprint(song) {
+  const stored = song?.meta?.noveltyFingerprint;
+  if (finite(stored?.version, 0) >= 2) return clone(stored);
   const identitySong = normalizedSongForIdentity(song);
   const normalizedRegister = applyDawRegisterPolicy(
     identitySong?.tracks ?? [],
@@ -13207,6 +13217,26 @@ function commitCandidate(candidates, search = {}) {
     releasePassed: committedRegisterRelease.passed,
     releaseFailures: clone(committedRegisterRelease.failures ?? []),
   };
+
+  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
+  // The final audible fingerprint is still written after section completion.
+  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
+
+  // Phase 77 is deliberately post-selection. It may improve the committed
+  // arrangement, but it must never change candidate ranking or repair choice.
+  const committedSectionCompletion = applySectionCompletionAuthority(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.harmony ?? [],
+    selected.song.songBlueprint ?? null,
+    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
+  );
+  selected.song.tracks = committedSectionCompletion.tracks;
+  selected.song.sectionCompletion = committedSectionCompletion.report;
+  selected.song.generationPhases = [
+    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
+    { phase: 77, id: "section-completion-authority", status: "complete" },
+  ];
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
