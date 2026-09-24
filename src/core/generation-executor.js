@@ -271,7 +271,9 @@ export function createGenerationExecutor({
       const shouldPersist = typeof persistGeneration === "function"
         && ["new", "similar"].includes(kind)
         && Boolean(selectedResult?.song);
-      flightRecorder.mark(flightId, "persist", { enabled: shouldPersist });
+      if (shouldPersist) {
+        flightRecorder.mark(flightId, "persist", { enabled: true });
+      }
       flightRecorder.complete(flightId, selectedResult?.song);
 
       if (shouldPersist) {
