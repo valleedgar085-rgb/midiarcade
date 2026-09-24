@@ -21,7 +21,6 @@ import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
-import { createGenerationDatabaseRepository } from "./core/generation-database-repository.js";
 import { acceptCompositionCandidate } from "./core/blueprint-composer.js";
 import { createGenerationOwnership } from "./core/generation-ownership.js";
 import { normalizeCreativeRange } from "./core/creative-range-policy.js";
@@ -3736,18 +3735,28 @@ const generationRunner = createGenerationRunner({
   validate: (song) => Boolean(song && songTracks(song).length),
 });
 
-const generationDatabase = createGenerationDatabaseRepository({
-  onError(error) {
-    console.warn("Generation database warning", error);
-  },
-});
+const nativeGenerationDatabase = globalThis?.Capacitor?.Plugins?.GenerationDatabase ?? null;
+let generationDatabaseRepositoryPromise = null;
+
+async function persistAcceptedGeneration(record) {
+  if (!generationDatabaseRepositoryPromise) {
+    generationDatabaseRepositoryPromise = import("./core/generation-database-repository.js")
+      .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository({
+        onError(error) {
+          console.warn("Generation database warning", error);
+        },
+      }));
+  }
+  const repository = await generationDatabaseRepositoryPromise;
+  return repository.persist(record);
+}
 
 const generationExecutor = createGenerationExecutor({
   timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
   fallback: createAppGenerationFallback({ generationRunner }),
-  persistGeneration: generationDatabase.available
-    ? (record) => generationDatabase.persist(record)
+  persistGeneration: typeof nativeGenerationDatabase?.persistGeneration === "function"
+    ? persistAcceptedGeneration
     : null,
   onPersistenceError(error) {
     console.warn("Generation persistence did not complete", error);
