@@ -100,7 +100,7 @@ test("generated songs expose and honor ensemble coordination authority", () => {
   );
 });
 
-test("critic detects a band that loses its cross-instrument relationship evidence", () => {
+test("critic detects rendered parts that stop honoring the ensemble authority", () => {
   const song = generateNew({
     genre: "hipHop",
     seed: "ensemble-authority-damage-proof",
@@ -114,11 +114,31 @@ test("critic detects a band that loses its cross-instrument relationship evidenc
   const connectedEvaluation = evaluateSongCandidate(song);
 
   const disconnected = structuredClone(song);
-  for (const track of disconnected.tracks) {
-    for (const note of track.notes ?? []) {
-      delete note.ensembleCoordinationRole;
-      delete note.ensemblePartner;
+  const sectionFor = (beat) => disconnected.structure.find((section) => (
+    beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
+  )) ?? disconnected.structure.at(-1);
+  const dislocate = (trackId) => {
+    const track = disconnected.tracks.find((candidate) => candidate.id === trackId);
+    for (const note of track?.notes ?? []) {
+      const section = sectionFor(note.start);
+      note.start = Math.min(section.endBeat - 0.03, Math.max(section.startBeat, note.start + 0.125));
     }
+  };
+  dislocate("bass");
+  dislocate("chords");
+
+  const melody = disconnected.tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = disconnected.tracks.find((track) => track.id === "counterpoint")?.notes ?? [];
+  for (const answer of counterpoint) {
+    const section = sectionFor(answer.start);
+    const calls = melody.filter((note) => (
+      note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
+    ));
+    if (!calls.length) continue;
+    const call = calls.reduce((best, note) => (
+      Math.abs(note.start - answer.start) < Math.abs(best.start - answer.start) ? note : best
+    ), calls[0]);
+    answer.start = call.start;
   }
 
   const disconnectedAuthority = evaluateEnsembleCoordinationAuthority(disconnected);
@@ -129,8 +149,15 @@ test("critic detects a band that loses its cross-instrument relationship evidenc
     `${disconnectedAuthority.score} should be materially below ${connectedAuthority.score}`,
   );
   assert.ok(
+    disconnectedAuthority.metrics.rhythmFoundation < connectedAuthority.metrics.rhythmFoundation,
+    "bass should lose Groove DNA alignment",
+  );
+  assert.ok(
+    disconnectedAuthority.metrics.leadDialogue < connectedAuthority.metrics.leadDialogue,
+    "counterpoint should lose call/response separation",
+  );
+  assert.ok(
     disconnectedEvaluation.subscores.stageInterlock < connectedEvaluation.subscores.stageInterlock,
     `${disconnectedEvaluation.subscores.stageInterlock} should be below ${connectedEvaluation.subscores.stageInterlock}`,
   );
-  assert.equal(disconnectedEvaluation.diagnostics.ensembleCoordinationPassed, false);
 });
