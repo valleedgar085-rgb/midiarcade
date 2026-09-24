@@ -146,6 +146,88 @@ test("Director ensemble intent steers the Composer before scoped notes are accep
   assert.equal(observedInput.ensembleContext.intent.role, "payoff");
 });
 
+test("scoped Composer receives a canonical song-state snapshot and exact Groove DNA", () => {
+  const source = sourceSong();
+  source.grooveConductor = {
+    version: 4,
+    feel: "source-pocket",
+    bars: [
+      { bar: 0, sectionId: "verse-1", anchors: [0, 2], bassPulses: [0, 2.5] },
+      { bar: 1, sectionId: "verse-1", anchors: [0, 2], bassPulses: [0.5, 3] },
+      { bar: 2, sectionId: "chorus-1", anchors: [0, 2], bassPulses: [0, 2.75] },
+      { bar: 3, sectionId: "chorus-1", anchors: [0, 2], bassPulses: [0.25, 3.25] },
+    ],
+  };
+
+  let observedInput = null;
+  const observingComposer = (song, input) => {
+    observedInput = structuredClone(input);
+    return composerStub(song, input);
+  };
+
+  const transaction = createCompositionCandidate(
+    source,
+    { target: "track", sectionId: "chorus-1", trackId: "bass" },
+    { seed: "canonical-authority-input" },
+    { composer: observingComposer },
+  );
+
+  assert.equal(transaction.validation.valid, true);
+  assert.equal(observedInput.canonicalSongState.version, 1);
+  assert.equal(observedInput.canonicalSongState.sourceSongId, source.id);
+  assert.equal(observedInput.canonicalSongState.sourceSeed, source.seed);
+  assert.deepEqual(observedInput.canonicalSongState.structure, source.structure);
+  assert.deepEqual(observedInput.canonicalSongState.harmony, source.harmony);
+  assert.deepEqual(observedInput.canonicalSongState.grooveConductor, source.grooveConductor);
+  assert.deepEqual(observedInput.grooveConductor, source.grooveConductor);
+});
+
+test("scoped regeneration rejects notes composed against divergent musical authorities", () => {
+  const source = sourceSong();
+  source.grooveConductor = {
+    version: 4,
+    feel: "source-pocket",
+    bars: [
+      { bar: 0, sectionId: "verse-1", anchors: [0, 2], bassPulses: [0, 2.5] },
+      { bar: 1, sectionId: "verse-1", anchors: [0, 2], bassPulses: [0.5, 3] },
+      { bar: 2, sectionId: "chorus-1", anchors: [0, 2], bassPulses: [0, 2.75] },
+      { bar: 3, sectionId: "chorus-1", anchors: [0, 2], bassPulses: [0.25, 3.25] },
+    ],
+  };
+
+  const cases = [
+    ["structure", (candidate) => { candidate.structure[1].name = "Wrong Chorus"; }],
+    ["harmony", (candidate) => { candidate.harmony[1].rootPc = 6; }],
+    ["songBlueprint", (candidate) => { candidate.songBlueprint.version = 999; }],
+    ["grooveConductor", (candidate) => { candidate.grooveConductor.feel = "different-pocket"; }],
+  ];
+
+  for (const [authority, mutate] of cases) {
+    const divergentComposer = (song, input) => {
+      const candidate = composerStub(song, input);
+      mutate(candidate);
+      return candidate;
+    };
+    const transaction = createCompositionCandidate(
+      source,
+      { target: "track", sectionId: "chorus-1", trackId: "bass" },
+      { seed: `divergent-${authority}` },
+      { composer: divergentComposer },
+    );
+
+    assert.equal(transaction.validation.valid, false, authority);
+    assert.ok(
+      transaction.validation.issues.includes(`composer-authority-diverged:${authority}`),
+      `${authority} divergence must be explicit`,
+    );
+    assert.deepEqual(transaction.after.grooveConductor, source.grooveConductor);
+    assert.throws(
+      () => acceptCompositionCandidate(transaction),
+      new RegExp(`composer-authority-diverged:${authority}`),
+    );
+  }
+});
+
 
 test("Chorus 1 → Bass changes only contained chorus bass notes and preserves boundary-crossing notes", () => {
   const source = sourceSong();
