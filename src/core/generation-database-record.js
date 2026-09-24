@@ -114,16 +114,24 @@ function qualityRows(runId, song) {
   return [row];
 }
 
-function stageRows(runId, stages = []) {
-  return (Array.isArray(stages) ? stages : []).map((stage, index) => {
+function stageRows(runId, stages = [], runStartedAt = null) {
+  const list = Array.isArray(stages) ? stages : [];
+  const firstAt = finite(list[0]?.at, null);
+  const wallClockStart = runStartedAt == null ? null : Date.parse(String(runStartedAt));
+  const stageTimestamp = (value) => {
+    const at = finite(value, null);
+    if (at == null || firstAt == null || !Number.isFinite(wallClockStart)) return null;
+    return new Date(wallClockStart + Math.max(0, at - firstAt)).toISOString();
+  };
+  return list.map((stage, index) => {
     const at = finite(stage?.at, null);
-    const nextAt = finite(stages[index + 1]?.at, null);
+    const nextAt = finite(list[index + 1]?.at, null);
     return {
       generation_run_id: runId,
       stage: text(stage?.stage, "unknown"),
       stage_order: index,
-      started_at: at,
-      completed_at: nextAt,
+      started_at: stageTimestamp(at),
+      completed_at: stageTimestamp(nextAt),
       duration_ms: at != null && nextAt != null ? Math.max(0, Math.round(nextAt - at)) : null,
       status: text(stage?.status, "complete"),
       details_json: safeJson(stage?.detail ?? {}),
@@ -194,7 +202,7 @@ export function createGenerationDatabaseRecord({
     ? song.structure
     : Array.isArray(song?.sections) ? song.sections : [];
 
-  const completedStamp = text(completedAt, new Date().toISOString());
+  const completedStamp = text(completedAt, null);
   const startedStamp = text(startedAt, completedStamp);
   const sectionRows = structure.map((section, index) => {
     const bounds = deriveSectionBounds(section, beatsPerBar);
@@ -359,7 +367,7 @@ export function createGenerationDatabaseRecord({
     sections: Object.freeze(cleanSections),
     tracks: Object.freeze(trackRows),
     musicalEvents: Object.freeze(musicalEvents),
-    stages: Object.freeze(stageRows(generationRunId, stages)),
+    stages: Object.freeze(stageRows(generationRunId, stages, startedStamp)),
     qualityEvaluations: Object.freeze(qualityRows(generationRunId, song)),
     candidateResults: Object.freeze(candidateRows(generationRunId, song)),
     repairActions: Object.freeze(repairRows(generationRunId, song)),
