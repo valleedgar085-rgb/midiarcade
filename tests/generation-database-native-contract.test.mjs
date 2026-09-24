@@ -45,8 +45,8 @@ test("app enables persistence only when the native database plugin is available"
     read("src/core/generation-executor.js"),
   ]);
 
-  assert.match(app, /createGenerationDatabaseRepository/);
-  assert.match(app, /persistGeneration:\s*generationDatabase\.available/);
+  assert.match(app, /import\("\.\/core\/generation-database-repository\.js"\)/);
+  assert.match(app, /persistGeneration:\s*typeof nativeGenerationDatabase\?\.persistGeneration === "function"/);
   assert.match(repository, /Capacitor\?\.Plugins\?\.GenerationDatabase/);
   assert.match(executor, /await import\("\.\/generation-database-record\.js"\)/);
   assert.doesNotMatch(executor, /^import .*generation-database-record/m, "database serializer must stay out of the default app bundle");
