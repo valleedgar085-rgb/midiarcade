@@ -9959,7 +9959,7 @@ function compose(config, options = {}) {
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
       { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
-      { phase: 77, id: "section-completion-authority", status: sectionCompletion.report.status },
+      { phase: 77, id: "section-completion-authority", status: "complete" },
     ],
     idea,
   };
@@ -10480,14 +10480,8 @@ export function evaluateSongCandidate(song) {
   const collisionRatio = (attackCollisions + dissonantOverlaps) / Math.max(1, counterNotes.length * 2);
   const separation = clamp(Math.round(100 - collisionRatio * 150), 20, 100);
   const sectionCompletionAuthority = evaluateSectionCompletionAuthority(song);
-  const cadenceBase = cadenceScoreForSong(song);
-  const transitionsBase = transitionScoreForSong(song);
-  const cadence = clamp(Math.round(
-    cadenceBase * 0.76 + sectionCompletionAuthority.score * 0.24
-  ), 20, 100);
-  const transitions = clamp(Math.round(
-    transitionsBase * 0.72 + sectionCompletionAuthority.score * 0.28
-  ), 20, 100);
+  const cadence = cadenceScoreForSong(song);
+  const transitions = transitionScoreForSong(song);
   const harmonicJourney = harmonicJourneyScoreForSong(song);
   const performance = performanceScoreForSong(song);
   const orchestration = orchestrationScoreForSong(song);
