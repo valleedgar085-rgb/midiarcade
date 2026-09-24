@@ -11497,7 +11497,12 @@ const CRITICAL_FLOOR_DIMENSIONS = Object.freeze([
   "stageInterlock",
   "genreAuthenticity",
 ]);
+const MINIMUM_TRUTH_FLOOR = 65;
 const ASPIRATIONAL_CRITICAL_FLOOR = 68;
+const TRUTH_FLOOR_DIMENSIONS = Object.freeze([
+  ...CRITICAL_FLOOR_DIMENSIONS,
+  "density",
+]);
 const TARGETED_REPAIR_GROUPS = deepFreeze([
   {
     id: "harmony",
@@ -11547,6 +11552,10 @@ export function evaluateCandidateBalance(evaluation = {}) {
     name,
     score: clamp(finite(subscores[name], 70), 0, 100),
   }));
+  const truthScores = TRUTH_FLOOR_DIMENSIONS.map((name) => ({
+    name,
+    score: clamp(finite(subscores[name], 70), 0, 100),
+  }));
   const sorted = [...scores].sort((left, right) => left - right);
   const lowerBand = sorted.slice(0, Math.max(3, Math.ceil(sorted.length * 0.3)));
   const mean = average(scores, 0);
@@ -11555,6 +11564,8 @@ export function evaluateCandidateBalance(evaluation = {}) {
   const creativeFloor = Math.round(Math.min(...creativeScores));
   const weakestCritical = [...criticalScores].sort((left, right) => left.score - right.score || left.name.localeCompare(right.name))[0];
   const criticalFloor = Math.round(weakestCritical?.score ?? 70);
+  const weakestTruth = [...truthScores].sort((left, right) => left.score - right.score || left.name.localeCompare(right.name))[0];
+  const truthFloor = Math.round(weakestTruth?.score ?? 70);
   const scaleSafe = finite(evaluation?.diagnostics?.scaleFit, 0) >= 1 - 1e-9;
   const totalScore = finite(evaluation?.score, 0);
   return {
@@ -11563,9 +11574,16 @@ export function evaluateCandidateBalance(evaluation = {}) {
     creativeFloor,
     criticalFloor,
     lowestCriticalDimension: weakestCritical?.name ?? null,
+    truthFloor,
+    lowestTruthDimension: weakestTruth?.name ?? null,
+    minimumTruthFloor: MINIMUM_TRUTH_FLOOR,
     aspirationalCriticalFloor: ASPIRATIONAL_CRITICAL_FLOOR,
     spread: round(spread),
-    passed: scaleSafe && totalScore >= 82 && balanceScore >= 68 && creativeFloor >= 64,
+    passed: scaleSafe
+      && totalScore >= 82
+      && balanceScore >= 68
+      && creativeFloor >= 64
+      && truthFloor >= MINIMUM_TRUTH_FLOOR,
     // A studio-ready draft may land around 92, but adaptive generation keeps
     // listening until it finds a more balanced 95-point candidate or exhausts
     // its strict CPU budget. Scores near 98 remain exceptional rather than a
@@ -11574,7 +11592,8 @@ export function evaluateCandidateBalance(evaluation = {}) {
       && totalScore >= 95
       && balanceScore >= 82
       && creativeFloor >= 75
-      && criticalFloor >= ASPIRATIONAL_CRITICAL_FLOOR,
+      && criticalFloor >= ASPIRATIONAL_CRITICAL_FLOOR
+      && truthFloor >= ASPIRATIONAL_CRITICAL_FLOOR,
   };
 }
 
