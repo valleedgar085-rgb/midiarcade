@@ -32,7 +32,7 @@ function randomUnit(seed) {
 }
 
 function uniqueSorted(values = []) {
-  return [...new Set(values.map((value) => round(value, 4)))].sort((a, b) => a - b);
+  return [...new Set(values.map((value) => round(value, 6)))].sort((a, b) => a - b);
 }
 
 function rotateSteps(steps, amount, gridSteps) {
@@ -87,6 +87,8 @@ function genreId(value) {
     neosoul: "neoSoul",
     rnb: "neoSoul",
     rnbsoul: "neoSoul",
+    reggaeton: "reggaeton",
+    afrobeats: "afrobeats",
     jazz: "jazz",
     rock: "rock",
   };
@@ -212,6 +214,54 @@ export const GENRE_GROOVE_GRAMMARS = Object.freeze({
       lead: Object.freeze({ source: "snare", mode: "behind-beat-conversation", offsetBeats: 0.25, syncopation: 0.58 }),
     }),
     humanization: Object.freeze({ timing: 0.05, velocity: 0.15, swing: 0.28, laidBackBeats: 0.016 }),
+    polyrhythm: Object.freeze({ percussionSteps: 12, pulses: 5 }),
+  }),
+  reggaeton: Object.freeze({
+    id: "reggaeton-dembow-pocket",
+    philosophy: "dembow-kick-snare-lock-with-offbeat-bass-response",
+    base: Object.freeze({
+      kick: Object.freeze([0, 6, 10, 14]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([3, 7, 11, 15]),
+    }),
+    probability: Object.freeze({ kick: 0.94, snare: 1, hat: 0.88, percussion: 0.58 }),
+    locked: Object.freeze({ kick: Object.freeze([0, 10]), snare: Object.freeze([4, 12]), hat: Object.freeze([]), percussion: Object.freeze([]) }),
+    density: Object.freeze({ kick: 0.94, snare: 1, hat: 0.9, percussion: 0.72 }),
+    transforms: Object.freeze([
+      Object.freeze({ lane: "hat", type: "dropEvery", every: 4, chance: 0.3 }),
+      Object.freeze({ lane: "percussion", type: "rotateEvery", every: 2, amount: 1, chance: 0.32 }),
+    ]),
+    relationships: Object.freeze({
+      bass: Object.freeze({ source: "kick", mode: "dembow-lock-and-answer", lock: 0.68, answerDelayBeats: 0.5, syncopation: 0.55 }),
+      chords: Object.freeze({ source: "snare", mode: "offbeat-stabs", offsetBeats: -0.25, syncopation: 0.52 }),
+      lead: Object.freeze({ source: "snare", mode: "vocal-pocket", offsetBeats: 0.25, syncopation: 0.5 }),
+    }),
+    humanization: Object.freeze({ timing: 0.018, velocity: 0.11, swing: 0.06, laidBackBeats: 0 }),
+    polyrhythm: Object.freeze({ percussionSteps: 12, pulses: 5 }),
+  }),
+  afrobeats: Object.freeze({
+    id: "afrobeats-cross-rhythm",
+    philosophy: "syncopated-kick-cross-rhythm-and-conversational-percussion",
+    base: Object.freeze({
+      kick: Object.freeze([0, 3, 7, 10, 14]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([2, 7, 11, 14]),
+    }),
+    probability: Object.freeze({ kick: 0.86, snare: 0.94, hat: 0.9, percussion: 0.82 }),
+    locked: Object.freeze({ kick: Object.freeze([0]), snare: Object.freeze([4, 12]), hat: Object.freeze([]), percussion: Object.freeze([]) }),
+    density: Object.freeze({ kick: 0.9, snare: 0.92, hat: 0.98, percussion: 1.02 }),
+    transforms: Object.freeze([
+      Object.freeze({ lane: "percussion", type: "rotateEvery", every: 2, amount: 1, chance: 0.42 }),
+      Object.freeze({ lane: "hat", type: "dropEvery", every: 3, chance: 0.26 }),
+    ]),
+    relationships: Object.freeze({
+      bass: Object.freeze({ source: "kick", mode: "cross-rhythm-response", lock: 0.62, answerDelayBeats: 0.5, syncopation: 0.68 }),
+      chords: Object.freeze({ source: "percussion", mode: "syncopated-chord-pockets", offsetBeats: -0.25, syncopation: 0.58 }),
+      lead: Object.freeze({ source: "percussion", mode: "melodic-cross-rhythm", offsetBeats: 0.25, syncopation: 0.64 }),
+    }),
+    humanization: Object.freeze({ timing: 0.026, velocity: 0.14, swing: 0.12, laidBackBeats: 0.004 }),
     polyrhythm: Object.freeze({ percussionSteps: 12, pulses: 5 }),
   }),
   jazz: Object.freeze({
@@ -351,6 +401,24 @@ const GROOVE_CELL_POLICIES = Object.freeze({
       snare: Object.freeze([7, 8, 10, 15]),
       hat: Object.freeze([0, 1, 2, 3, 4, 6, 7, 8, 10, 11, 12, 13, 14, 15]),
       percussion: Object.freeze([3, 7, 11, 13, 15]),
+    }),
+  }),
+  reggaeton: Object.freeze({
+    protectedSpaces: Object.freeze([5, 9]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([3, 7, 11, 15]),
+    }),
+  }),
+  afrobeats: Object.freeze({
+    protectedSpaces: Object.freeze([5, 13]),
+    lanes: Object.freeze({
+      kick: Object.freeze([0, 2, 3, 6, 7, 10, 11, 14, 15]),
+      snare: Object.freeze([4, 5, 11, 12, 13]),
+      hat: Object.freeze([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15]),
+      percussion: Object.freeze([2, 3, 7, 9, 11, 14, 15]),
     }),
   }),
   pop: Object.freeze({
@@ -509,7 +577,7 @@ function applyTransforms(steps, transforms, {
   for (const transform of transforms ?? []) {
     if (transform.lane !== lane) continue;
     const requestedTripletChance = ["tripletTurn", "burstEvery"].includes(transform.type)
-      ? Math.max(finite(transform.chance, 1), clamp(tripletAmount, 0, 1))
+      ? finite(transform.chance, 1) * clamp(tripletAmount, 0, 1)
       : finite(transform.chance, 1);
     const chance = clamp(requestedTripletChance, 0, 1);
     const enabled = randomUnit(`${seed}:transform:${transform.type}:${bar}`) <= chance;
@@ -582,6 +650,11 @@ function sourcePulseLane(lanes, source) {
 }
 
 function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed) {
+  if (relationship.mode === "riff-lock") {
+    // Rock's chord lane is a guitar strum/riff clock, so give it a steady
+    // quarter-note frame while the kick lane supplies accents and pickups.
+    return uniqueSorted(Array.from({ length: Math.ceil(gridSteps / 4) }, (_, index) => index * 4));
+  }
   const source = sourcePulseLane(lanes, relationship.source);
   if (!source.length) return [];
   const offsetSteps = finite(relationship.offsetBeats, 0) / beatsPerStep;
@@ -816,7 +889,7 @@ export function grooveDNAForBar(grooveDNA, bar) {
 export function grooveDNAConductorLanes(grooveDNA, bar) {
   const plan = grooveDNAForBar(grooveDNA, bar);
   if (!plan) return null;
-  const pulses = (lane) => Object.freeze((plan?.[lane]?.steps ?? []).map((step) => round(step * grooveDNA.beatsPerStep)));
+  const pulses = (lane) => Object.freeze((plan?.[lane]?.steps ?? []).map((step) => round(step * grooveDNA.beatsPerStep, 6)));
   return Object.freeze({
     anchors: pulses("kick"),
     snarePulses: pulses("snare"),
@@ -827,7 +900,7 @@ export function grooveDNAConductorLanes(grooveDNA, bar) {
     leadPulses: plan.relationships.lead.pulses,
     counterPulses: Object.freeze(
       plan.relationships.lead.pulses
-        .map((beat) => round((beat + grooveDNA.beatsPerStep * 2) % grooveDNA.beatsPerBar))
+        .map((beat) => round((beat + grooveDNA.beatsPerStep * 2) % grooveDNA.beatsPerBar, 6))
         .filter((beat) => !(plan.protectedSpaces ?? []).some((space) => Math.abs(space - beat) < 1e-6)),
     ),
     protectedSpaces: Object.freeze([...(plan.protectedSpaces ?? [])]),

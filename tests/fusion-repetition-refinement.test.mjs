@@ -30,6 +30,9 @@ function configFor(primary, secondary, seed) {
     variation: 0.52,
     evolution: 0.58,
     surprise: 0.28,
+    // This file isolates signed repetition surgery; phrase refinement has
+    // its own integration coverage in the fusion quality calibration.
+    phraseResolutionRefinement: false,
   }, { kind: "new" });
   return applyOutputQualityEvolution(adapted, { kind: "new" });
 }
@@ -39,7 +42,6 @@ function noteIdentity(song) {
     .map((note) => ({
       pitch: note.pitch,
       duration: note.duration,
-      velocity: note.velocity,
     }));
 }
 

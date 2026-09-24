@@ -1,5 +1,6 @@
 import {
   createSongFingerprint,
+  evaluateCandidateBalance,
   evaluateSongCandidate,
   evaluateSongReleaseGate,
   GENRE_CRITIC_PROFILES,
@@ -110,6 +111,8 @@ function acceptedMetadata(song, evaluation, releaseGate, stageKey, diagnostics) 
       ...scoreDetails,
       totalScore: round(evaluation.score),
       subscores: { ...(evaluation.subscores ?? {}) },
+      diagnostics: { ...(evaluation.diagnostics ?? {}) },
+      balance: evaluateCandidateBalance(evaluation),
       releaseGate,
       outputQualityPostprocess: {
         ...(scoreDetails.outputQualityPostprocess ?? {}),
@@ -1023,14 +1026,21 @@ export function applySongOutputQualityPipeline(song, config = {}, {
   const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
   const evaluate = evaluators.evaluateCandidate;
   const release = evaluators.evaluateReleaseGate;
+  const fusionRequest = config.isFusion === true || Boolean(config.secondaryGenre);
+  const phraseConfig = config.phraseResolutionRefinement == null && fusionRequest
+    ? { ...config, phraseResolutionRefinement: true }
+    : config;
+  const registerConfig = config.registerHealthRefinement == null && fusionRequest
+    ? { ...config, registerHealthRefinement: true }
+    : config;
   const sequence = runQualityStageSequence(song, [
     { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
     { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
     { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
     { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
-    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
+    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, phraseConfig, evaluate, release) },
     { id: "repetitionRefinement", run: (current) => applyRepetitionRefinement(current, config, evaluate, release) },
-    { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, config, evaluate, release) },
+    { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, registerConfig, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },

@@ -3093,6 +3093,7 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   const melodyGrammar = GENRE_MELODY_GRAMMARS[config.genre] ?? GENRE_MELODY_GRAMMARS.pop;
   const rhythmIdentity = style.rhythmIdentity
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
+  const grammarCycle = clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4);
   const motifBars = clamp(Math.round(finite(rhythmIdentity.motifBars, 2)), 1, config.bars >= 8 ? 3 : 2);
   const lengthBeats = Math.min(config.bars * barBeats, barBeats * motifBars);
   const fine = config.complexity > 0.58;
@@ -4105,7 +4106,7 @@ function applyGradualEvolution(notes, trackId, config, structure, rng) {
 
 function uniqueGrooveOffsets(values, barBeats) {
   return [...new Set((values ?? [])
-    .map((value) => round(value))
+    .map((value) => round(value, 6))
     .filter((value) => value >= 0 && value < barBeats - 0.01))]
     .sort((a, b) => a - b);
 }
@@ -4118,6 +4119,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   const barBeats = beatsPerBar(config);
   const rhythmIdentity = style.rhythmIdentity
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
+  const grammarCycle = clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4);
   const humanGroovePrior = humanGroovePriorForGenre(config.genre);
   const humanGroovePriorInfluence = humanGrooveInfluence(config, humanGroovePrior);
   const grooveDNA = createGrooveDNA({
@@ -4129,6 +4131,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     variation: config.variation,
     tripletAmount: config.tripletAmount,
   }, { structure });
+  const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
   const bars = [];
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
@@ -4137,7 +4140,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     // ID remains unique for arrangement bookkeeping, but no longer randomizes
     // the rhythmic foundation of a musical return.
     const sectionFamilyId = `${section.name}:${assignment?.motifId ?? "A"}`;
-    const grammarCycle = clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4);
     const phrasePosition = mod(bar - section.startBar, grammarCycle);
     const role = phrasePosition === 0 ? "statement"
       : phrasePosition === grammarCycle - 1 ? "turnaround"
@@ -4187,7 +4189,9 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       sectionId: section.id,
       sectionFamilyId,
       motifId: assignment?.motifId ?? "A",
-      genrePhrase: grooveDNA.grammarId,
+      // Keep the familiar producer-facing phrase label as metadata; all lane
+      // timing and note placement still comes exclusively from Groove DNA.
+      genrePhrase,
       phrasePosition,
       role,
       anchors,
@@ -4341,7 +4345,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           genrePhrase: groovePlan.genrePhrase,
           grooveSource: `${groovePlan.grooveDNA.grammarId}.kick`,
           grammarRole: index === 0 ? "anchor" : "optional",
-          ...(fourFloorGhost ? { rhythmicFeature: "ghost-kick" } : {}),
+          ...(fourFloorGhost ? { rhythmicFeature: "dna-syncopated-kick" } : {}),
         },
       );
     }
@@ -4824,7 +4828,7 @@ function applyCharacteristicVoice(sourceTracks, structure, config) {
  * bass approaches the next harmony inside the same final beat, so section
  * boundaries feel composed instead of assembled from independent lanes.
  */
-function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config) {
+function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config, grooveConductor = null) {
   const tracks = Object.fromEntries(
     Object.entries(sourceTracks).map(([id, notes]) => [id, notes.map((note) => ({ ...note }))]),
   );
@@ -4842,6 +4846,7 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
   }
 
   let bassAnswers = 0;
+  const assignedBassAnswers = new Set();
   for (const fill of fills.values()) {
     const boundary = Math.min(totalBeats, (fill.bar + 1) * barBeats);
     const fillStart = Math.min(...fill.notes.map((note) => note.start));
@@ -4857,11 +4862,14 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
       : config.tracks.bass.octave;
     const destination = rootMidi(nextChord, bassOctave);
     const candidates = bass
-      .filter((note) => note.start >= boundary - 1.0 && note.start < boundary - 0.04)
+      .filter((note) => !assignedBassAnswers.has(note) && note.start >= boundary - 1.0 && note.start < boundary - 0.04)
       .sort((left, right) => right.start - left.start);
     let answer = candidates[0];
     if (!answer) {
       const pickupStart = round(Math.max(fillStart, boundary - 0.75), 2);
+      const barPlan = grooveBar(grooveConductor, fill.bar);
+      const localPickup = pickupStart - fill.bar * barBeats;
+      if ((barPlan?.spaces ?? []).some((space) => Math.abs(space - localPickup) <= 0.01)) continue;
       answer = {
         pitch: destination,
         start: pickupStart,
@@ -4871,6 +4879,7 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config)
       };
       bass.push(answer);
     }
+    assignedBassAnswers.add(answer);
     const pitchClassDistance = mod(destination - answer.pitch, 12);
     const direction = pitchClassDistance === 0
       ? (hashSeed(`${config.seed}|${fill.id}|bass-answer`) % 2 ? 1 : -1)
@@ -6863,7 +6872,12 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
         start: note.start,
         exactSubdivision,
       }) * settings.feel * (0.6 + clamp(config.humanize, 0, 1) * 0.4);
-    const start = clamp(note.start + swingDelay + pocketOffset + laidbackOffset + microOffset + jitter, 0, Math.max(0, totalBeats - 0.02));
+    const performedStart = clamp(note.start + swingDelay + pocketOffset + laidbackOffset + microOffset + jitter, 0, Math.max(0, totalBeats - 0.02));
+    const tripletGrid = note.rhythmicFeature === "triplet-sixteenth" ? 6
+      : String(note.rhythmicFeature ?? "").startsWith("triplet-") ? 3 : 0;
+    const start = tripletGrid
+      ? Math.round(performedStart * tripletGrid) / tripletGrid
+      : performedStart;
     const durationJitter = exactSubdivision ? 1 : 1 + (rng.float() * 2 - 1) * jitterRange * settings.humanize;
     const duration = clamp(note.duration * settings.gate * durationJitter, 0.02, Math.max(0.02, totalBeats - start));
     const velocityRange = finite(
@@ -6873,7 +6887,9 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
     const velocity = clamp(Math.round(note.velocity + (rng.float() * 2 - 1) * velocityRange * settings.humanize), 1, 127);
     felt.push({
       pitch: trackId === "drums" ? note.pitch : nearestScalePitch(note.pitch, config, 0, allowedScale),
-      start: round(start),
+      // Keep six-decimal timing for authored triplet/subdivision notes. The
+      // standard four-decimal rounding moves them off their intended grid.
+      start: exactSubdivision ? round(start, 6) : round(start),
       duration: round(duration),
       velocity,
       ...(note.rhythmicFeature ? { rhythmicFeature: note.rhythmicFeature } : {}),
@@ -9063,6 +9079,58 @@ function applyPhraseResolutions(
   return result;
 }
 
+function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, config, songBlueprint) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) return tracks;
+  const barBeats = beatsPerBar(config);
+  const scenes = songBlueprint?.producerIntent?.scenes ?? [];
+
+  for (const section of structure) {
+    const scene = scenes.find((entry) => entry.sectionId === section.id);
+    if (scene?.foregroundTrack !== "melody") continue;
+    const end = finite(section.endBeat);
+    const windowStart = end - barBeats * 1.25;
+    const hasEndingNote = melody.notes.some((note) => note.start >= windowStart && note.start < end - 0.01);
+    if (hasEndingNote) continue;
+
+    const recent = melody.notes
+      .filter((note) => note.start >= Math.max(finite(section.startBeat), end - barBeats * 2) && note.start < windowStart)
+      .sort((left, right) => left.start - right.start);
+    if (!recent.length) continue;
+    const start = round(end - 1.5, 2);
+    if (melody.notes.some((note) => Math.abs(note.start - start) < 0.08)) continue;
+
+    const source = recent.at(-1);
+    const chord = harmonyAt(harmony, Math.max(finite(section.startBeat), end - 0.05));
+    if (!chord?.tones?.length) continue;
+    const plan = blueprintPlanForSection(songBlueprint, section);
+    const shouldLandOnTonic = plan?.cadence === "resolve" || end >= config.bars * barBeats - 0.05;
+    const targetChord = shouldLandOnTonic && chord.tones.includes(config.keyPc)
+      ? { ...chord, tones: [config.keyPc] }
+      : chord;
+    const direction = Math.sign(source.pitch - recent.at(-2)?.pitch || 0);
+    const pitch = nearestScalePitch(nearestChordTone(source.pitch, targetChord, direction), config, direction);
+    melody.notes.push({
+      pitch,
+      start,
+      duration: Math.min(1.4, Math.max(0.08, end - start - 0.02)),
+      velocity: clamp(Math.round(source.velocity + 4), 1, 108),
+      resolutionRole: shouldLandOnTonic ? "tonic-landing" : "chord-landing",
+      phraseCadenceRole: "section-answer",
+      phraseBoundary: round(end),
+      articulationIntent: "held-resolution",
+      preserveTiming: true,
+    });
+  }
+
+  melody.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return tracks;
+}
+
 function notesInWindow(track, startBeat, endBeat) {
   return (track?.notes ?? []).filter((note) => (
     note.start >= startBeat - 1e-6 && note.start < endBeat - 1e-6
@@ -9488,7 +9556,12 @@ function compose(config, options = {}) {
     harmony,
     rootRng.fork("arrangement-layers"),
   );
-  const rhythmTurnaround = applyRhythmSectionTurnaroundConversation(arrangementLayering.tracks, harmony, config);
+  const rhythmTurnaround = applyRhythmSectionTurnaroundConversation(
+    arrangementLayering.tracks,
+    harmony,
+    config,
+    grooveConductor,
+  );
   const ensembleCoordination = runDirectorEnsembleCoordination(
     rhythmTurnaround.tracks,
     structure,
@@ -9644,7 +9717,14 @@ function compose(config, options = {}) {
     songBlueprint,
   );
   const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
-  const finalScaleSafety = enforceScaleSafety(finalMaster.tracks, config);
+  const withSectionLandings = ensureFinalMelodicSectionLandings(
+    finalMaster.tracks,
+    structure,
+    harmony,
+    config,
+    songBlueprint,
+  );
+  const finalScaleSafety = enforceScaleSafety(withSectionLandings, config);
   const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
   const producerIntentAudit = auditProducerIntentContract(
     characteristicVoice.tracks,
@@ -10288,9 +10368,13 @@ export function evaluateSongCandidate(song) {
   }).length / Math.max(1, strongMelody.length);
   const harmonic = clamp(Math.round(scaleFit * 62 + chordAnchors * 38), 20, 100);
 
-  const downbeatCoverage = kicks.length
-    ? new Set(kicks.filter((note) => Math.abs(mod(note.start, barBeats)) < 0.08).map((note) => Math.floor(note.start / barBeats))).size / bars
-    : 0;
+  const downbeatBars = new Set();
+  for (const note of kicks) {
+    const nearestBar = Math.round(note.start / barBeats);
+    const distance = Math.abs(note.start - nearestBar * barBeats);
+    if (nearestBar >= 0 && nearestBar < bars && distance < 0.08) downbeatBars.add(nearestBar);
+  }
+  const downbeatCoverage = kicks.length ? downbeatBars.size / bars : 0;
   const expectedBackbeats = bars * criticProfile.backbeats;
   const backbeatCoverage = clamp(snares.length / Math.max(1, expectedBackbeats), 0, 1);
   const grooveOffsets = song.genre === "house"
@@ -12244,16 +12328,10 @@ function applySurgicalRepairWindow(sourceSong, repairedSong, config, diagnosis, 
     config,
     { adjustVelocity: false },
   );
-  const surgicalTrackSet = new Set(trackIds);
   song.tracks = preInterlockTracks.map((track) => {
-    if (!surgicalTrackSet.has(track.id)) return track;
     return {
       ...track,
-      notes: spliceNotesInSurgicalWindow(
-        track.notes ?? [],
-        reconnected[track.id] ?? track.notes ?? [],
-        window,
-      ),
+      notes: reconnected[track.id] ?? track.notes ?? [],
     };
   });
   song.meta = { ...sourceSong.meta, ideaFingerprint: null };
@@ -13690,7 +13768,11 @@ export function generateSimilar(current, input = {}) {
       targetTrack,
       contextTracks: targetContextTracks,
       ensembleContext: input.ensembleContext ?? input.directorDirective?.ensembleContext ?? null,
-      grooveConductor: input.grooveConductor ?? input.directorDirective?.grooveConductor ?? null,
+      grooveConductor: input.grooveConductor
+        ?? input.directorDirective?.grooveConductor
+        // A one-track reroll keeps the retained song's actual Groove DNA so
+        // the regenerated voice stays in the same shared rhythmic pocket.
+        ?? (targetTrack ? current.grooveConductor ?? null : null),
     });
 
     const identitySong = normalizedSongForIdentity(candidateSong);
