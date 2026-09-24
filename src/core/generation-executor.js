@@ -1,5 +1,6 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
+import { createGenerationDatabaseRecord } from "./generation-database-record.js";
 import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import {
@@ -32,6 +33,7 @@ export function createGenerationExecutor({
   workerFactory = null,
   timeoutMs = 60000,
   recorder = null,
+  persistGeneration = null,
   now = () => Date.now(),
   workerRetryBaseMs = 1000,
   workerRetryMaxMs = 30000,
@@ -264,7 +266,32 @@ export function createGenerationExecutor({
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
+
+      const shouldPersist = typeof persistGeneration === "function"
+        && ["new", "similar"].includes(kind)
+        && Boolean(selectedResult?.song);
+      flightRecorder.mark(flightId, "persist", { enabled: shouldPersist });
       flightRecorder.complete(flightId, selectedResult?.song);
+
+      if (shouldPersist) {
+        const completedRun = flightRecorder.snapshot().find((entry) => entry.id === flightId) ?? null;
+        const databaseRecord = createGenerationDatabaseRecord({
+          kind,
+          config,
+          sourceSong: adaptedPayload?.sourceSong ?? null,
+          result: selectedResult,
+          song: selectedResult.song,
+          runId: flightId,
+          startedAt: completedRun?.startedAt ?? null,
+          completedAt: completedRun?.endedAt ?? null,
+          durationMs: completedRun?.durationMs ?? null,
+          stages: completedRun?.stages ?? [],
+          outcome: completedRun?.status ?? selectedResult?.status ?? "committed",
+          engineVersion: selectedResult?.song?.schema ?? null,
+        });
+        await Promise.resolve(persistGeneration(databaseRecord));
+      }
+
       return selectedResult;
     } catch (error) {
       flightRecorder.fail(flightId, error);
