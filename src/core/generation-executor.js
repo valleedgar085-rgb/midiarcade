@@ -32,6 +32,8 @@ export function createGenerationExecutor({
   workerFactory = null,
   timeoutMs = 60000,
   recorder = null,
+  persistGeneration = null,
+  onPersistenceError = null,
   now = () => Date.now(),
   workerRetryBaseMs = 1000,
   workerRetryMaxMs = 30000,
@@ -169,6 +171,9 @@ export function createGenerationExecutor({
 
   async function run(kind, payload = {}) {
     const expectedLifecycle = lifecycle;
+    const databaseStartedAt = typeof persistGeneration === "function"
+      ? new Date(Number(now())).toISOString()
+      : null;
     const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
@@ -264,7 +269,41 @@ export function createGenerationExecutor({
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
+
+      const shouldPersist = typeof persistGeneration === "function"
+        && ["new", "similar"].includes(kind)
+        && Boolean(selectedResult?.song);
+      if (shouldPersist) {
+        flightRecorder.mark(flightId, "persist", { enabled: true });
+      }
       flightRecorder.complete(flightId, selectedResult?.song);
+
+      if (shouldPersist) {
+        try {
+          const { createGenerationDatabaseRecord } = await import("./generation-database-record.js");
+          const completedRun = flightRecorder.snapshot().find((entry) => entry.id === flightId) ?? null;
+          const databaseRecord = createGenerationDatabaseRecord({
+            kind,
+            config,
+            sourceSong: adaptedPayload?.sourceSong ?? null,
+            result: selectedResult,
+            song: selectedResult.song,
+            runId: flightId,
+            startedAt: databaseStartedAt,
+            completedAt: new Date(Number(now())).toISOString(),
+            durationMs: completedRun?.durationMs ?? null,
+            stages: completedRun?.stages ?? [],
+            outcome: completedRun?.status ?? selectedResult?.status ?? "committed",
+            engineVersion: selectedResult?.song?.schema ?? null,
+          });
+          await Promise.resolve(persistGeneration(databaseRecord));
+        } catch (error) {
+          if (typeof onPersistenceError === "function") {
+            try { onPersistenceError(error); } catch { /* error reporting cannot invalidate accepted music */ }
+          }
+        }
+      }
+
       return selectedResult;
     } catch (error) {
       flightRecorder.fail(flightId, error);

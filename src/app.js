@@ -3735,10 +3735,32 @@ const generationRunner = createGenerationRunner({
   validate: (song) => Boolean(song && songTracks(song).length),
 });
 
+const nativeGenerationDatabase = globalThis?.Capacitor?.Plugins?.GenerationDatabase ?? null;
+let generationDatabaseRepositoryPromise = null;
+
+async function persistAcceptedGeneration(record) {
+  if (!generationDatabaseRepositoryPromise) {
+    generationDatabaseRepositoryPromise = import("./core/generation-database-repository.js")
+      .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository({
+        onError(error) {
+          console.warn("Generation database warning", error);
+        },
+      }));
+  }
+  const repository = await generationDatabaseRepositoryPromise;
+  return repository.persist(record);
+}
+
 const generationExecutor = createGenerationExecutor({
   timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
   fallback: createAppGenerationFallback({ generationRunner }),
+  persistGeneration: typeof nativeGenerationDatabase?.persistGeneration === "function"
+    ? persistAcceptedGeneration
+    : null,
+  onPersistenceError(error) {
+    console.warn("Generation persistence did not complete", error);
+  },
 });
 
 function generationDebuggerDetailText(detail = {}) {

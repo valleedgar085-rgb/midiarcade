@@ -12,6 +12,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MidiInputPlugin.class);
+        registerPlugin(GenerationDatabasePlugin.class);
         super.onCreate(savedInstanceState);
         enableImmersiveStickyMode();
     }
