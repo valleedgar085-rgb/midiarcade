@@ -76,3 +76,38 @@ test("non-canonical audition requests do not overwrite the generation database",
   await executor.run("compositionCandidate", { sourceSong });
   assert.equal(writes, 0);
 });
+
+
+test("persistence failure cannot discard an accepted generated song", async () => {
+  const errors = [];
+  const song = {
+    id: "accepted-despite-storage",
+    schema: "midi-arcade/song@1",
+    title: "Still Accepted",
+    seed: "storage-failure",
+    genre: "pop",
+    bars: 1,
+    meta: { key: "C", scale: "major", tempo: 120, beatsPerBar: 4 },
+    structure: [{ id: "verse", name: "Verse", startBar: 0, bars: 1 }],
+    tracks: [{ id: "melody", notes: [{ start: 0, duration: 1, pitch: 60, velocity: 90 }] }],
+  };
+
+  const executor = createGenerationExecutor({
+    workerFactory: null,
+    fallback: () => ({ status: "committed", song }),
+    persistGeneration() {
+      throw new Error("disk unavailable");
+    },
+    onPersistenceError(error) {
+      errors.push(error.message);
+    },
+  });
+
+  const result = await executor.run("new", {
+    config: { seed: "storage-failure", genre: "pop", bars: 1 },
+  });
+
+  assert.equal(result.status, "committed");
+  assert.equal(result.song, song);
+  assert.deepEqual(errors, ["disk unavailable"]);
+});
