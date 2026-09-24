@@ -9,9 +9,18 @@ export const PREVIEW_TRANSITION = Object.freeze({
   // Keep these fades short enough to preserve timing while spanning multiple
   // hardware buffers on typical 44.1/48 kHz mobile devices.
   startSeconds: 0.01,
+  // A few bright synth voices otherwise rise from silence in only 2 ms,
+  // which can produce an audible tick on phone speakers.
+  minimumNoteAttackSeconds: 0.006,
   stopSeconds: 0.04,
   sourceTailSeconds: 0.024,
 });
+
+export function previewNoteAttack(attackSeconds) {
+ const requested=Number(attackSeconds);
+ const safeAttack=Number.isFinite(requested)&&requested>0?requested:0;
+ return Math.max(PREVIEW_TRANSITION.minimumNoteAttackSeconds,safeAttack);
+}
 
 const NOTE_ENVELOPE_LIMITS = Object.freeze({
   bass: Object.freeze({ maxDuration: 3.2, maxRelease: 0.55, reverbTail: 0.3 }),

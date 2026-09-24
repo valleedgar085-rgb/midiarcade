@@ -69,6 +69,12 @@ export function previewGraphBudget(profile = FULL_PROFILE) {
     : { ...FULL_GRAPH_BUDGET };
 }
 
+export function previewAudioLatencyHint(profile = FULL_PROFILE) {
+  // Favor steadier output on Android and other constrained devices. Preview is
+  // song playback, so reliable buffers matter more than instrument-like response.
+  return profile?.mode === "constrained" ? "balanced" : "interactive";
+}
+
 export function previewVoiceFeatures(trackId, profile = FULL_PROFILE) {
   const constrained = profile?.mode === "constrained";
   if (!constrained) {

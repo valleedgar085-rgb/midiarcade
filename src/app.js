@@ -32,7 +32,7 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
-import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -48,6 +48,7 @@ import {
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  previewNoteAttack,
   rampAudioParamValue,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
@@ -4965,8 +4966,7 @@ export class PreviewPlayer {
     if (!this.context) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Web Audio is unavailable.");
-      // Allow native hardware sample rate matching to avoid DAC resampling buffer pops on Android/tablets
-      this.context = new AudioContextClass({ latencyHint: "interactive" });
+      this.context = new AudioContextClass({ latencyHint: previewAudioLatencyHint(this.previewRuntime) });
       const createdContext = this.context;
       createdContext.onstatechange = () => this.handleContextStateChange(createdContext);
       if (typeof window !== "undefined") {
@@ -5634,7 +5634,9 @@ export class PreviewPlayer {
     filter.frequency.value = filterBase;
     filter.Q.value = clamp(voice.q * resonanceScale, 0.1, 18);
     const articulation = String(event.articulation || "natural");
-    const attack = voice.attack * (articulation === "accent" ? 0.55 : articulation === "legato" || articulation === "glide" ? 1.35 : 1);
+    const attack = previewNoteAttack(
+      voice.attack * (articulation === "accent" ? 0.55 : articulation === "legato" || articulation === "glide" ? 1.35 : 1),
+    );
     const { duration, release } = previewNoteEnvelope({
       trackId: event.id,
       duration: event.duration,

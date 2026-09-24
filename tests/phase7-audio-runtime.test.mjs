@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures } from "../src/core/preview-performance.js";
+import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures } from "../src/core/preview-performance.js";
 import { PREVIEW_TRANSITION } from "../src/core/preview-audio.js";
 
 test("Phase 7 keeps Android playback inside a cheaper DSP graph", () => {
@@ -10,6 +10,8 @@ test("Phase 7 keeps Android playback inside a cheaper DSP graph", () => {
   const androidBudget = previewGraphBudget(android);
   const desktopBudget = previewGraphBudget(desktop);
   assert.equal(androidBudget.saturation, false);
+  assert.equal(previewAudioLatencyHint(android), "balanced");
+  assert.equal(previewAudioLatencyHint(desktop), "interactive");
   assert.ok(android.maxScheduledVoices <= 32);
   assert.ok(androidBudget.reverbSeconds <= 0.9);
   assert.ok(androidBudget.reverbSeconds < desktopBudget.reverbSeconds);
@@ -47,6 +49,7 @@ test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android 
 });
 
 test("Phase 7 uses longer click-safe release windows", () => {
+  assert.ok(PREVIEW_TRANSITION.minimumNoteAttackSeconds >= 0.005);
   assert.ok(PREVIEW_TRANSITION.stopSeconds >= 0.025);
   assert.ok(PREVIEW_TRANSITION.sourceTailSeconds >= 0.01);
 });
