@@ -1,6 +1,5 @@
 import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
-import { createGenerationDatabaseRecord } from "./generation-database-record.js";
 import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import {
@@ -279,6 +278,7 @@ export function createGenerationExecutor({
       flightRecorder.complete(flightId, selectedResult?.song);
 
       if (shouldPersist) {
+        const { createGenerationDatabaseRecord } = await import("./generation-database-record.js");
         const completedRun = flightRecorder.snapshot().find((entry) => entry.id === flightId) ?? null;
         const databaseRecord = createGenerationDatabaseRecord({
           kind,
