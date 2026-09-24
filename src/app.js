@@ -3748,6 +3748,9 @@ const generationExecutor = createGenerationExecutor({
   persistGeneration: generationDatabase.available
     ? (record) => generationDatabase.persist(record)
     : null,
+  onPersistenceError(error) {
+    console.warn("Generation persistence did not complete", error);
+  },
 });
 
 function generationDebuggerDetailText(detail = {}) {
