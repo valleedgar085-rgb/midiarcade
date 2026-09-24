@@ -92,7 +92,8 @@ test("generation database record preserves canonical Groove DNA and rendered pit
     [33, 36, 69],
     "database pitch must be the exact rendered pitch used by preview/export",
   );
-  assert.equal(record.musicalEvents[1].section_id, "chorus");
+  assert.equal(record.musicalEvents[1].section_id, "generation-1:section:chorus");
+  assert.equal(record.sections[1].source_section_id, "chorus");
   assert.equal(record.generationRun.candidate_count, 4);
   assert.equal(record.generationRun.started_at, "2026-09-24T02:00:00.000Z");
   assert.equal(record.generationRun.completed_at, "2026-09-24T02:00:00.150Z");
