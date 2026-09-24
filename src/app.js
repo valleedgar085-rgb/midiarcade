@@ -18,6 +18,7 @@ import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
+import { loadGenerationDebuggerEvents } from "./core/generation-debugger-history.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
@@ -3753,21 +3754,13 @@ async function persistAcceptedGeneration(record) {
 }
 
 async function loadPersistedGenerationDebuggerEvents() {
-  try {
+  persistedGenerationDebuggerEvents = await loadGenerationDebuggerEvents(async () => {
     if (!generationDatabaseRepositoryPromise) {
       generationDatabaseRepositoryPromise = import("./core/generation-database-repository.js")
-        .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository({
-          onError(error) {
-            console.warn("Generation database warning", error);
-          },
-        }));
+        .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository());
     }
-    const repository = await generationDatabaseRepositoryPromise;
-    persistedGenerationDebuggerEvents = await repository.recentDebuggerEvents(64);
-  } catch (error) {
-    console.warn("Could not load persisted generation debugger history", error);
-    persistedGenerationDebuggerEvents = [];
-  }
+    return generationDatabaseRepositoryPromise;
+  });
   return persistedGenerationDebuggerEvents;
 }
 
