@@ -18,7 +18,6 @@ import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
-import { loadGenerationDebuggerEvents } from "./core/generation-debugger-history.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
@@ -3738,7 +3737,6 @@ const generationRunner = createGenerationRunner({
 
 const nativeGenerationDatabase = globalThis?.Capacitor?.Plugins?.GenerationDatabase ?? null;
 let generationDatabaseRepositoryPromise = null;
-let persistedGenerationDebuggerEvents = [];
 
 async function persistAcceptedGeneration(record) {
   if (!generationDatabaseRepositoryPromise) {
@@ -3751,17 +3749,6 @@ async function persistAcceptedGeneration(record) {
   }
   const repository = await generationDatabaseRepositoryPromise;
   return repository.persist(record);
-}
-
-async function loadPersistedGenerationDebuggerEvents() {
-  persistedGenerationDebuggerEvents = await loadGenerationDebuggerEvents(async () => {
-    if (!generationDatabaseRepositoryPromise) {
-      generationDatabaseRepositoryPromise = import("./core/generation-database-repository.js")
-        .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository());
-    }
-    return generationDatabaseRepositoryPromise;
-  });
-  return persistedGenerationDebuggerEvents;
 }
 
 const generationExecutor = createGenerationExecutor({
@@ -3849,7 +3836,6 @@ function ensureGenerationDebuggerControls() {
 
 function renderGenerationDebugger() {
   const runs = generationExecutor.diagnosticsSnapshot();
-  const persistedEvents = persistedGenerationDebuggerEvents;
   const latest = runs.at(-1) ?? null;
   const stages = latest?.stages ?? [];
   const summary = latest?.song ?? {};
@@ -3859,47 +3845,26 @@ function renderGenerationDebugger() {
     if (element) element.textContent = value;
   };
 
-  setText("#debuggerRunStatus", latest
-    ? String(latest.status ?? "unknown").toUpperCase()
-    : persistedEvents.length ? "PERSISTED HISTORY" : "NO RUN YET");
+  setText("#debuggerRunStatus", latest ? String(latest.status ?? "unknown").toUpperCase() : "NO RUN YET");
   setText("#debuggerRunMeta", latest
     ? String(latest.kind ?? "generation") + " · " + Math.round(Number(latest.durationMs) || 0) + " ms"
-    : persistedEvents.length
-      ? "Recovered from the on-device generation database."
-      : "Generate a song, then refresh this panel.");
+    : "Generate a song, then refresh this panel.");
   setText("#debuggerSongSummary", latest
     ? (summary.title || "Untitled") + " · " + (latest.config?.genre || "unknown genre") + " · " + (latest.config?.bars ?? "?") + " bars"
-    : persistedEvents.length
-      ? "Showing durable diagnostics from earlier accepted generations."
-      : "No completed generation has been recorded.");
+    : "No completed generation has been recorded.");
   setText("#debuggerScoreSummary", latest
     ? "Producer score " + (summary.score ?? "—") + " · seed " + (latest.config?.seed ?? summary.seed ?? "—")
-    : persistedEvents.length
-      ? "Open Raw diagnostic JSON for persisted run IDs and event details."
-      : "Score and seed will appear after generation.");
-  const historyLabel = runs.length
-    ? String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s")
-    : String(persistedEvents.length) + " persisted event" + (persistedEvents.length === 1 ? "" : "s");
-  setText("#debuggerHistoryCount", historyLabel);
+    : "Score and seed will appear after generation.");
+  setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
 
   const empty = $("#debuggerEmpty");
-  if (empty) empty.hidden = Boolean(latest || persistedEvents.length);
+  if (empty) empty.hidden = Boolean(latest);
 
   const list = $("#debuggerStageList");
   if (list) {
     list.replaceChildren();
-    const visibleStages = stages.length
-      ? stages
-      : persistedEvents.slice().reverse().map((event) => ({
-        stage: String(event.code ?? "").replace(/^stage-/, "") || event.subsystem || "persisted",
-        detail: {
-          message: event.message,
-          severity: event.severity,
-          occurredAt: event.occurred_at,
-        },
-      }));
-    for (const [index, stage] of visibleStages.entries()) {
+    for (const [index, stage] of stages.entries()) {
       const item = document.createElement("li");
       item.className = "debugger-stage";
       const number = document.createElement("b");
@@ -3921,12 +3886,10 @@ function renderGenerationDebugger() {
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
     latest,
-    persistedEvents,
   }, null, 2);
 }
 
-async function openGenerationDebugger() {
-  await loadPersistedGenerationDebuggerEvents();
+function openGenerationDebugger() {
   renderGenerationDebugger();
   const dialog = $("#debuggerDialog");
   if (dialog && !dialog.open) dialog.showModal();
@@ -3940,10 +3903,7 @@ function clearGenerationDebugger() {
 
 async function copyGenerationDebuggerReport() {
   const runs = generationExecutor.diagnosticsSnapshot();
-  if (!runs.length && !persistedGenerationDebuggerEvents.length) {
-    await loadPersistedGenerationDebuggerEvents();
-  }
-  if (!runs.length && !persistedGenerationDebuggerEvents.length) {
+  if (!runs.length) {
     showToast("Generate a song first so the debugger has a run to copy.");
     return;
   }
@@ -3953,7 +3913,6 @@ async function copyGenerationDebuggerReport() {
     capturedAt: new Date().toISOString(),
     workerActive: generationExecutor.usingWorker,
     runs,
-    persistedEvents: persistedGenerationDebuggerEvents,
   }, null, 2);
   try {
     if (navigator.clipboard?.writeText) {
