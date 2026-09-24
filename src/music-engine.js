@@ -278,7 +278,7 @@ export const GENRE_PROFILES = deepFreeze({
     swing: 0.06, syncopation: 0.66, humanize: 0.14, chordExtensions: 0.28, harmonicRhythm: 0.2,
     instrumentPrograms: { drums: [25, 24], bass: [38, 39, 33], chords: [0, 4, 48, 89], melody: [80, 81, 82, 85], counterpoint: [48, 73, 80, 85], pad: [88, 89, 90, 92] },
     tripletChance: 0.76, snareRollChance: 0.68, halfTime: true,
-    arrangement: { form: "half-time", chorusLift: 0.22, fillFrequency: 0.72, phraseBars: 4 },
+    arrangement: { form: "trap-song", chorusLift: 0.22, fillFrequency: 0.72, phraseBars: 4 },
   },
   house: {
     id: "house", label: "House", bpm: { min: 115, max: 130, default: 124 },
@@ -1367,7 +1367,90 @@ function allocateBars(items, bars) {
   return result;
 }
 
+ // Keep major sections on a phrase-sized grid when the song is long enough to
+ // support a real song form. Transition sections may be two bars; verse and
+ // hook sections get four-bar minimum cells and grow in four-bar increments.
+ function allocatePhraseGridBars(items, bars, genre) {
+   const transitionNames = new Set(["intro", "prechorus", "build", "bridge", "breakdown", "outro"]);
+   const minimum = items.map((item) => transitionNames.has(item.name) ? 2 : 4);
+   const minimumTotal = minimum.reduce((sum, value) => sum + value, 0);
+   const remaining = bars - minimumTotal;
+   if (remaining < 0 || remaining % 2 !== 0) return allocateBars(items, bars);
+
+   const result = [...minimum];
+   const increments = Math.floor(remaining / 4);
+   if (!increments && remaining % 4 === 0) return result;
+
+   if (bars === 32) {
+     const rank = (name) => ({ chorus: 4, verse: 3, bridge: 2, prechorus: 1 }[name] ?? 0);
+     const phraseOrder = items
+       .map((item, index) => ({ index, name: item.name }))
+       .sort((left, right) => {
+         if (genre === "trap") {
+           const trapOrder = [4, 5, 3, 6, 1];
+           return (trapOrder.indexOf(left.index) < 0 ? 99 : trapOrder.indexOf(left.index))
+             - (trapOrder.indexOf(right.index) < 0 ? 99 : trapOrder.indexOf(right.index));
+         }
+         if (genre === "neoSoul") {
+           const neoSoulOrder = [3, 5, 6, 1, 4];
+           return (neoSoulOrder.indexOf(left.index) < 0 ? 99 : neoSoulOrder.indexOf(left.index))
+             - (neoSoulOrder.indexOf(right.index) < 0 ? 99 : neoSoulOrder.indexOf(right.index));
+         }
+         return rank(right.name) - rank(left.name) || left.index - right.index;
+       });
+     for (let index = 0; index < increments; index += 1) {
+       result[phraseOrder[index % phraseOrder.length].index] += 4;
+     }
+     if (remaining % 4 === 2) {
+       const transitionIndex = items
+         .map((item, index) => ({ index, weight: item.weight, transition: transitionNames.has(item.name) }))
+         .filter((item) => item.transition)
+         .sort((a, b) => b.weight - a.weight || a.index - b.index)[0]?.index;
+       if (transitionIndex === undefined) return allocateBars(items, bars);
+       result[transitionIndex] += 2;
+     }
+     return result;
+   }
+
+   const weightTotal = items.reduce((sum, item) => sum + item.weight, 0);
+   const exact = items.map((item) => (increments * item.weight) / Math.max(0.001, weightTotal));
+   const whole = exact.map((value) => Math.floor(value));
+   const order = exact
+     .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+     .sort((a, b) => b.fraction - a.fraction || a.index - b.index);
+   const unassigned = increments - whole.reduce((sum, value) => sum + value, 0);
+   for (let index = 0; index < unassigned; index += 1) whole[order[index % order.length].index] += 1;
+   for (let index = 0; index < result.length; index += 1) result[index] += whole[index] * 4;
+   if (remaining % 4 === 2) {
+     const transitionIndex = items
+       .map((item, index) => ({ index, weight: item.weight, transition: transitionNames.has(item.name) }))
+       .filter((item) => item.transition)
+       .sort((a, b) => b.weight - a.weight || a.index - b.index)[0]?.index;
+     if (transitionIndex === undefined) return allocateBars(items, bars);
+     result[transitionIndex] += 2;
+   }
+   return result;
+ }
+
 const SPECIAL_FORM_LAYOUTS = deepFreeze({
+  "trap-song": {
+    short: [{ name: "verse", weight: 1 }, { name: "chorus", weight: 1.2 }],
+    compact: [
+      { name: "intro", weight: 0.6 }, { name: "verse", weight: 1.8 },
+      { name: "chorus", weight: 1.8 }, { name: "outro", weight: 0.6 },
+    ],
+    medium: [
+      { name: "intro", weight: 0.6 }, { name: "chorus", weight: 1.2 },
+      { name: "verse", weight: 1.6 }, { name: "chorus", weight: 1.2 },
+      { name: "outro", weight: 0.5 },
+    ],
+    full: [
+      { name: "intro", weight: 0.6 }, { name: "verse", weight: 2.4 },
+      { name: "prechorus", weight: 0.7 }, { name: "chorus", weight: 2.4 },
+      { name: "verse", weight: 1.8 }, { name: "bridge", weight: 0.8 },
+      { name: "chorus", weight: 2.2 }, { name: "outro", weight: 0.6 },
+    ],
+  },
   "half-time": {
     short: [{ name: "chorus", weight: 1.2 }, { name: "verse", weight: 1 }],
     medium: [
@@ -1471,7 +1554,8 @@ const SPECIAL_FORM_LAYOUTS = deepFreeze({
 function specialFormLayout(form, bars) {
   const template = SPECIAL_FORM_LAYOUTS[form];
   if (!template || bars <= 4) return null;
-  return clone(bars <= 7 ? template.short : bars <= 16 ? template.medium : template.full);
+  const shortLimit = form === "trap-song" ? 8 : 7;
+  return clone(bars <= shortLimit ? template.short : bars <= 12 && template.compact ? template.compact : bars <= 16 ? template.medium : template.full);
 }
 
 function shouldUseExtendedUrbanIntro(config) {
@@ -1509,10 +1593,13 @@ function extendUrbanIntro(layout, sizes, config) {
 
 function createStructure(config, rng) {
   const bars = config.bars;
-  const form = GENRE_PROFILES[config.genre].arrangement.form;
+  const form = config.genre === "trap" && bars !== 32
+    ? "half-time"
+    : GENRE_PROFILES[config.genre].arrangement.form;
   // Reggaeton also has a club-ready profile, but its verse/chorus form must not
   // be mistaken for a House/Techno build-drop arrangement.
   const electronic = ["house", "techno", "drumBass"].includes(config.genre);
+  const phraseGridGenre = ["hipHop", "pop", "neoSoul"].includes(config.genre);
   let layout = specialFormLayout(form, bars);
   if (layout) {
     // The selected form is scaled below by allocateBars().
@@ -1572,7 +1659,10 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const sizes = extendUrbanIntro(layout, allocateBars(layout, bars), config);
+  const allocatedSizes = bars === 32 && !electronic && phraseGridGenre
+    ? allocatePhraseGridBars(layout, bars, config.genre)
+    : allocateBars(layout, bars);
+  const sizes = extendUrbanIntro(layout, allocatedSizes, config);
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
@@ -1910,7 +2000,9 @@ function createProducerIntentContract(
   const scenes = structure.map((section, index) => {
     const plan = sectionPlans[index];
     const matrix = matrixBySection.get(section.id);
-    const foregroundTrack = matrix?.featuredTrack ?? "melody";
+    const foregroundTrack = config.bars >= 24 && plan.role === "peak" && ["chorus", "drop"].includes(section.name)
+      ? "melody"
+      : matrix?.featuredTrack ?? "melody";
     const answerTrack = answerTrackForForeground(foregroundTrack, section, config);
     const purpose = PRODUCER_PURPOSES[section.name]
       ?? (plan.role === "peak" ? "payoff" : plan.role === "release" ? "resolve" : "develop");
