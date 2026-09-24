@@ -318,3 +318,44 @@ test("pad continuity uses canonical pad to chordPulses mapping", () => {
   const offset = ((padLink.start % 4) + 4) % 4;
   assert.ok(Math.abs(offset - 0.5) < 1e-6, `expected pad chordPulse, got ${padLink.start}`);
 });
+
+
+test("ensemble continuity keeps the safer shallow repair when a deeper repair improves continuity but regresses a protected dimension", () => {
+  const source = longEnsembleDropoutSong();
+  const result = applyEnsembleContinuityRefinement(
+    source,
+    { ensembleContinuityRefinement: true },
+    (candidateSong) => {
+      const links = candidateSong.tracks.reduce((sum, track) => (
+        sum + (track.notes ?? []).filter((note) => String(note.continuityRole ?? "").includes("continuity-link")).length
+      ), 0);
+      return {
+        score: 94,
+        subscores: {
+          density: 84,
+          groove: 88,
+          performance: 86,
+          motif: 87,
+          repetition: 86,
+          memory: 88,
+          registerHealth: 90,
+          separation: links >= 6 ? 84 : 89,
+          phraseResolution: 85,
+          stageInterlock: links >= 6 ? 91 : 92,
+          genreAuthenticity: 89,
+        },
+        diagnostics: { scaleFit: 1 },
+      };
+    },
+    () => ({ passed: true, totalScore: 94 }),
+  );
+
+  assert.equal(result.diagnostics.accepted, true);
+  assert.notEqual(result.diagnostics.id, "deep-ensemble-links");
+  const deep = result.diagnostics.candidateSummaries.find((candidate) => candidate.id === "deep-ensemble-links");
+  assert.ok(deep);
+  assert.equal(deep.accepted, false);
+  assert.equal(deep.reason, "protected-dimension-regression");
+  assert.ok(deep.continuityErrorDelta < 0);
+  assert.strictEqual(result.song === source, false);
+});
