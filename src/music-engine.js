@@ -58,6 +58,10 @@ import {
   createEnsembleCoordinationContract,
   evaluateEnsembleCoordinationAuthority,
 } from "./core/ensemble-coordination-authority.js";
+import {
+  applySectionCompletionAuthority,
+  evaluateSectionCompletionAuthority,
+} from "./core/section-completion-authority.js";
 
 export const PPQ = 480;
 
@@ -9813,7 +9817,14 @@ function compose(config, options = {}) {
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
   produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
   produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
-  let tracks = tonalIntegrity.tracks;
+  const sectionCompletion = applySectionCompletionAuthority(
+    tonalIntegrity.tracks,
+    structure,
+    harmony,
+    songBlueprint,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  let tracks = sectionCompletion.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -9898,6 +9909,7 @@ function compose(config, options = {}) {
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
+    sectionCompletion: sectionCompletion.report,
     counterpointCoverage: { phase: 51.5, added: counterCoverage.added },
     sectionContrast,
     drumFillVocabulary,
@@ -9947,6 +9959,7 @@ function compose(config, options = {}) {
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
       { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
+      { phase: 77, id: "section-completion-authority", status: sectionCompletion.report.status },
     ],
     idea,
   };
@@ -10466,8 +10479,15 @@ export function evaluateSongCandidate(song) {
   })).length;
   const collisionRatio = (attackCollisions + dissonantOverlaps) / Math.max(1, counterNotes.length * 2);
   const separation = clamp(Math.round(100 - collisionRatio * 150), 20, 100);
-  const cadence = cadenceScoreForSong(song);
-  const transitions = transitionScoreForSong(song);
+  const sectionCompletionAuthority = evaluateSectionCompletionAuthority(song);
+  const cadenceBase = cadenceScoreForSong(song);
+  const transitionsBase = transitionScoreForSong(song);
+  const cadence = clamp(Math.round(
+    cadenceBase * 0.76 + sectionCompletionAuthority.score * 0.24
+  ), 20, 100);
+  const transitions = clamp(Math.round(
+    transitionsBase * 0.72 + sectionCompletionAuthority.score * 0.28
+  ), 20, 100);
   const harmonicJourney = harmonicJourneyScoreForSong(song);
   const performance = performanceScoreForSong(song);
   const orchestration = orchestrationScoreForSong(song);
@@ -10558,6 +10578,9 @@ export function evaluateSongCandidate(song) {
       motifRepetition: round(repetitionRatio),
       counterpointCollision: round(collisionRatio),
       transitionClarity: round(transitions / 100),
+      sectionCompletionScore: round(sectionCompletionAuthority.score / 100),
+      sectionCompletionPassed: sectionCompletionAuthority.passed,
+      weakestSectionBoundary: sectionCompletionAuthority.weakestBoundary?.id ?? null,
       harmonicJourneyFit: round(harmonicJourney / 100),
       performanceControl: round(performance / 100),
       orchestrationFit: round(orchestration / 100),
@@ -12566,6 +12589,15 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
+  const repairedSectionCompletion = applySectionCompletionAuthority(
+    song.tracks,
+    song.structure,
+    song.harmony,
+    song.songBlueprint,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  song.tracks = repairedSectionCompletion.tracks;
+  song.sectionCompletion = repairedSectionCompletion.report;
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
   song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
