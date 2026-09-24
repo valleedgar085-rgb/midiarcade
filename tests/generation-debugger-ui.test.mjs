@@ -15,6 +15,9 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(app, /copy\.id = "copyDebuggerReport"/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
   assert.match(app, /generationExecutor\.clearDiagnostics\(\)/);
+  assert.match(app, /loadPersistedGenerationDebuggerEvents\(\)/);
+  assert.match(app, /persistedGenerationDebuggerEvents/);
+  assert.match(app, /PERSISTED HISTORY/);
   assert.match(app, /function openGenerationDebugger\(\)/);
   assert.match(css, /\.debugger-dialog/);
   assert.match(css, /\.debugger-stage-list/);

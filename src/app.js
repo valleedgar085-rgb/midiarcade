@@ -3866,16 +3866,24 @@ function renderGenerationDebugger() {
     if (element) element.textContent = value;
   };
 
-  setText("#debuggerRunStatus", latest ? String(latest.status ?? "unknown").toUpperCase() : "NO RUN YET");
+  setText("#debuggerRunStatus", latest
+    ? String(latest.status ?? "unknown").toUpperCase()
+    : persistedEvents.length ? "PERSISTED HISTORY" : "NO RUN YET");
   setText("#debuggerRunMeta", latest
     ? String(latest.kind ?? "generation") + " · " + Math.round(Number(latest.durationMs) || 0) + " ms"
-    : "Generate a song, then refresh this panel.");
+    : persistedEvents.length
+      ? "Recovered from the on-device generation database."
+      : "Generate a song, then refresh this panel.");
   setText("#debuggerSongSummary", latest
     ? (summary.title || "Untitled") + " · " + (latest.config?.genre || "unknown genre") + " · " + (latest.config?.bars ?? "?") + " bars"
-    : "No completed generation has been recorded.");
+    : persistedEvents.length
+      ? "Showing durable diagnostics from earlier accepted generations."
+      : "No completed generation has been recorded.");
   setText("#debuggerScoreSummary", latest
     ? "Producer score " + (summary.score ?? "—") + " · seed " + (latest.config?.seed ?? summary.seed ?? "—")
-    : "Score and seed will appear after generation.");
+    : persistedEvents.length
+      ? "Open Raw diagnostic JSON for persisted run IDs and event details."
+      : "Score and seed will appear after generation.");
   const historyLabel = runs.length
     ? String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s")
     : String(persistedEvents.length) + " persisted event" + (persistedEvents.length === 1 ? "" : "s");
@@ -3883,7 +3891,7 @@ function renderGenerationDebugger() {
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
 
   const empty = $("#debuggerEmpty");
-  if (empty) empty.hidden = Boolean(latest);
+  if (empty) empty.hidden = Boolean(latest || persistedEvents.length);
 
   const list = $("#debuggerStageList");
   if (list) {
@@ -3939,7 +3947,10 @@ function clearGenerationDebugger() {
 
 async function copyGenerationDebuggerReport() {
   const runs = generationExecutor.diagnosticsSnapshot();
-  if (!runs.length) {
+  if (!runs.length && !persistedGenerationDebuggerEvents.length) {
+    await loadPersistedGenerationDebuggerEvents();
+  }
+  if (!runs.length && !persistedGenerationDebuggerEvents.length) {
     showToast("Generate a song first so the debugger has a run to copy.");
     return;
   }
@@ -3949,6 +3960,7 @@ async function copyGenerationDebuggerReport() {
     capturedAt: new Date().toISOString(),
     workerActive: generationExecutor.usingWorker,
     runs,
+    persistedEvents: persistedGenerationDebuggerEvents,
   }, null, 2);
   try {
     if (navigator.clipboard?.writeText) {
