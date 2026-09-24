@@ -747,18 +747,35 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
 
     assert.equal(contract.version, 1);
     assert.equal(contract.scenes.length, song.structure.length);
+    assert.equal(contract.rules.maxForegroundVoices, 1);
+    assert.equal(contract.rules.maxAnswerVoices, 1);
+    assert.equal(contract.rules.maxActiveTracksPerScene, 5);
+    assert.equal(contract.rules.maxNonFoundationVoices, 3);
+    assert.equal(contract.rules.qualityOverQuantity, true);
+    assert.equal(contract.rules.restBeforeRedundantSupport, true);
     assert.equal(report.phase, 76);
     assert.equal(report.status, "complete");
     assert.equal(report.metrics.sceneCount, song.structure.length);
     assert.ok(report.metrics.foregroundCoverage >= 0.9);
     assert.ok(report.metrics.answerCollisionRate <= 0.28);
     assert.ok(report.metrics.restSections > 0, `${genre} should reserve deliberate negative space`);
+    assert.ok(report.metrics.maxActiveTracks <= 5, `${genre} should never turn every instrument on at once`);
+    assert.ok(report.metrics.maxNonFoundationVoices <= 3, `${genre} should keep upper voices inside the teamwork budget`);
     assert.ok(Object.values(report.checks).every(Boolean));
 
     for (const scene of contract.scenes) {
       assert.equal(Object.values(scene.roles).filter((role) => role === "foreground").length, 1);
+      assert.ok(Object.values(scene.roles).filter((role) => role === "answer").length <= 1);
       assert.deepEqual(Object.keys(scene.roles), song.tracks.map((track) => track.id));
       assert.ok(scene.silenceBudget >= 0.05 && scene.silenceBudget <= 0.4);
+      assert.equal(scene.voiceBudget.qualityOverQuantity, true);
+      const activeTrackIds = Object.entries(scene.roles).filter(([, role]) => role !== "rest").map(([id]) => id);
+      const activeNonFoundationIds = activeTrackIds.filter((id) => !["drums", "bass"].includes(id));
+      assert.ok(activeTrackIds.length <= 5, `${genre} ${scene.sectionId} should leave at least one lane out`);
+      assert.ok(
+        activeNonFoundationIds.length <= scene.voiceBudget.maxNonFoundationVoices,
+        `${genre} ${scene.sectionId} should obey its non-foundation voice budget`,
+      );
       const section = song.structure.find((candidate) => candidate.id === scene.sectionId);
       const foreground = song.tracks.find((track) => track.id === scene.foregroundTrack).notes.filter((note) => (
         note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
