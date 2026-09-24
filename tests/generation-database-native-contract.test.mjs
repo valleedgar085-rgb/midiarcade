@@ -20,6 +20,7 @@ test("Android registers an offline generation database without adding runtime pe
   assert.match(plugin, /persistGeneration\(PluginCall call\)/);
   assert.match(plugin, /recentRuns\(PluginCall call\)/);
   assert.match(plugin, /recentDebuggerEvents\(PluginCall call\)/);
+  assert.match(plugin, /recentRepairActions\(PluginCall call\)/);
   assert.match(plugin, /"debugger_events"/);
   assert.match(plugin, /SCHEMA_ASSET\s*=\s*"midi_arcade_schema\.sql"/);
   assert.doesNotMatch(manifest, /INTERNET|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_AUDIO/);
@@ -51,6 +52,7 @@ test("app enables persistence only when the native database plugin is available"
   assert.match(app, /persistGeneration:\s*typeof nativeGenerationDatabase\?\.persistGeneration === "function"/);
   assert.match(repository, /Capacitor\?\.Plugins\?\.GenerationDatabase/);
   assert.match(repository, /recentDebuggerEvents/);
+  assert.match(repository, /repairEffectiveness/);
   assert.match(executor, /await import\("\.\/generation-database-record\.js"\)/);
   assert.doesNotMatch(executor, /^import .*generation-database-record/m, "database serializer must stay out of the default app bundle");
 });
