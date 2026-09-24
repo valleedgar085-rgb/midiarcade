@@ -33,6 +33,8 @@ jobs:
         run: node --test tests/blueprint-composer.test.mjs
       - name: Run ensemble coordination authority regression tests
         run: node --test tests/ensemble-coordination-authority.test.mjs
+      - name: Run section completion authority regression tests
+        run: node --test tests/section-completion-authority.test.mjs
       - name: Run 4-seed all-genre quality gauntlet
         id: gauntlet
         continue-on-error: true
