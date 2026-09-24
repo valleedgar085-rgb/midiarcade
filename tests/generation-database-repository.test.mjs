@@ -14,6 +14,7 @@ test("generation database repository fails closed when native SQLite is unavaila
   assert.equal(repository.available, false);
   assert.deepEqual(await repository.persist(RECORD), { ok: false, reason: "unavailable" });
   assert.deepEqual(await repository.recentRuns(), []);
+  assert.deepEqual(await repository.recentDebuggerEvents(), []);
 });
 
 test("generation database repository persists canonical records through the native plugin", async () => {
@@ -27,6 +28,9 @@ test("generation database repository persists canonical records through the nati
       async recentRuns({ limit }) {
         return { runs: [{ id: "run-1", limit }] };
       },
+      async recentDebuggerEvents({ limit }) {
+        return { events: [{ id: 1, generation_run_id: "run-1", limit }] };
+      },
     }),
   });
   assert.equal(repository.available, true);
@@ -38,6 +42,9 @@ test("generation database repository persists canonical records through the nati
   });
   assert.deepEqual(calls, [{ record: RECORD }]);
   assert.deepEqual(await repository.recentRuns(999), [{ id: "run-1", limit: 100 }]);
+  assert.deepEqual(await repository.recentDebuggerEvents(999), [
+    { id: 1, generation_run_id: "run-1", limit: 100 },
+  ]);
 });
 
 test("native persistence failures are reported without throwing away the accepted song", async () => {

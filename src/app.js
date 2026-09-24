@@ -3737,6 +3737,7 @@ const generationRunner = createGenerationRunner({
 
 const nativeGenerationDatabase = globalThis?.Capacitor?.Plugins?.GenerationDatabase ?? null;
 let generationDatabaseRepositoryPromise = null;
+let persistedGenerationDebuggerEvents = [];
 
 async function persistAcceptedGeneration(record) {
   if (!generationDatabaseRepositoryPromise) {
@@ -3749,6 +3750,25 @@ async function persistAcceptedGeneration(record) {
   }
   const repository = await generationDatabaseRepositoryPromise;
   return repository.persist(record);
+}
+
+async function loadPersistedGenerationDebuggerEvents() {
+  try {
+    if (!generationDatabaseRepositoryPromise) {
+      generationDatabaseRepositoryPromise = import("./core/generation-database-repository.js")
+        .then(({ createGenerationDatabaseRepository }) => createGenerationDatabaseRepository({
+          onError(error) {
+            console.warn("Generation database warning", error);
+          },
+        }));
+    }
+    const repository = await generationDatabaseRepositoryPromise;
+    persistedGenerationDebuggerEvents = await repository.recentDebuggerEvents(64);
+  } catch (error) {
+    console.warn("Could not load persisted generation debugger history", error);
+    persistedGenerationDebuggerEvents = [];
+  }
+  return persistedGenerationDebuggerEvents;
 }
 
 const generationExecutor = createGenerationExecutor({
@@ -3836,6 +3856,7 @@ function ensureGenerationDebuggerControls() {
 
 function renderGenerationDebugger() {
   const runs = generationExecutor.diagnosticsSnapshot();
+  const persistedEvents = persistedGenerationDebuggerEvents;
   const latest = runs.at(-1) ?? null;
   const stages = latest?.stages ?? [];
   const summary = latest?.song ?? {};
@@ -3855,7 +3876,10 @@ function renderGenerationDebugger() {
   setText("#debuggerScoreSummary", latest
     ? "Producer score " + (summary.score ?? "—") + " · seed " + (latest.config?.seed ?? summary.seed ?? "—")
     : "Score and seed will appear after generation.");
-  setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
+  const historyLabel = runs.length
+    ? String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s")
+    : String(persistedEvents.length) + " persisted event" + (persistedEvents.length === 1 ? "" : "s");
+  setText("#debuggerHistoryCount", historyLabel);
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
 
   const empty = $("#debuggerEmpty");
@@ -3864,7 +3888,17 @@ function renderGenerationDebugger() {
   const list = $("#debuggerStageList");
   if (list) {
     list.replaceChildren();
-    for (const [index, stage] of stages.entries()) {
+    const visibleStages = stages.length
+      ? stages
+      : persistedEvents.slice().reverse().map((event) => ({
+        stage: String(event.code ?? "").replace(/^stage-/, "") || event.subsystem || "persisted",
+        detail: {
+          message: event.message,
+          severity: event.severity,
+          occurredAt: event.occurred_at,
+        },
+      }));
+    for (const [index, stage] of visibleStages.entries()) {
       const item = document.createElement("li");
       item.className = "debugger-stage";
       const number = document.createElement("b");
@@ -3886,10 +3920,12 @@ function renderGenerationDebugger() {
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
     latest,
+    persistedEvents,
   }, null, 2);
 }
 
-function openGenerationDebugger() {
+async function openGenerationDebugger() {
+  await loadPersistedGenerationDebuggerEvents();
   renderGenerationDebugger();
   const dialog = $("#debuggerDialog");
   if (dialog && !dialog.open) dialog.showModal();

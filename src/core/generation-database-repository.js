@@ -60,6 +60,18 @@ export function createGenerationDatabaseRepository({
     }
   }
 
+  async function recentDebuggerEvents(limit = 64) {
+    const native = plugin();
+    if (typeof native?.recentDebuggerEvents !== "function") return [];
+    try {
+      const result = await native.recentDebuggerEvents({ limit: normalizeLimit(limit) });
+      return Array.isArray(result?.events) ? result.events : [];
+    } catch (error) {
+      report(error);
+      return [];
+    }
+  }
+
   async function recentRuns(limit = 12) {
     const native = plugin();
     if (typeof native?.recentRuns !== "function") return [];
@@ -75,6 +87,7 @@ export function createGenerationDatabaseRepository({
   return Object.freeze({
     persist,
     recentRuns,
+    recentDebuggerEvents,
     get available() {
       return typeof plugin()?.persistGeneration === "function";
     },

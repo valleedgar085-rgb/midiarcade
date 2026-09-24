@@ -64,6 +64,19 @@ public class GenerationDatabasePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void recentDebuggerEvents(PluginCall call) {
+        Integer requested = call.getInt("limit");
+        int limit = Math.max(1, Math.min(100, requested == null ? 64 : requested));
+        try {
+            JSObject result = new JSObject();
+            result.put("events", database.recentDebuggerEvents(limit));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Could not read generation debugger history.", error);
+        }
+    }
+
+    @PluginMethod
     public void recentRuns(PluginCall call) {
         Integer requested = call.getInt("limit");
         int limit = Math.max(1, Math.min(100, requested == null ? 12 : requested));
@@ -213,6 +226,10 @@ public class GenerationDatabasePlugin extends Plugin {
                     "generation_run_id", "stage", "stage_order", "started_at", "completed_at",
                     "duration_ms", "status", "details_json");
 
+                insertArray(db, "debugger_events", record.optJSONArray("debuggerEvents"),
+                    "generation_run_id", "song_id", "severity", "subsystem", "code",
+                    "message", "context_json", "occurred_at");
+
                 upsertArray(db, "quality_evaluations", record.optJSONArray("qualityEvaluations"),
                     "id", "generation_run_id", "evaluation_phase", "overall_score", "harmony_score",
                     "groove_score", "structure_score", "density_score", "register_score", "melody_score",
@@ -232,6 +249,30 @@ public class GenerationDatabasePlugin extends Plugin {
             } finally {
                 db.endTransaction();
             }
+        }
+
+        JSArray recentDebuggerEvents(int limit) {
+            JSArray rows = new JSArray();
+            SQLiteDatabase db = getReadableDatabase();
+            String sql = "SELECT id, generation_run_id, song_id, severity, subsystem, code, " +
+                "message, context_json, occurred_at FROM debugger_events " +
+                "ORDER BY occurred_at DESC, id DESC LIMIT ?";
+            try (Cursor cursor = db.rawQuery(sql, new String[] { String.valueOf(limit) })) {
+                while (cursor.moveToNext()) {
+                    JSObject row = new JSObject();
+                    putCursor(row, cursor, "id");
+                    putCursor(row, cursor, "generation_run_id");
+                    putCursor(row, cursor, "song_id");
+                    putCursor(row, cursor, "severity");
+                    putCursor(row, cursor, "subsystem");
+                    putCursor(row, cursor, "code");
+                    putCursor(row, cursor, "message");
+                    putCursor(row, cursor, "context_json");
+                    putCursor(row, cursor, "occurred_at");
+                    rows.put(row);
+                }
+            }
+            return rows;
         }
 
         JSArray recentRuns(int limit) {

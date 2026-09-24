@@ -101,6 +101,11 @@ test("generation database record preserves canonical Groove DNA and rendered pit
   assert.equal(record.stages[0].started_at, "2026-09-24T02:00:00.000Z");
   assert.equal(record.stages[0].completed_at, "2026-09-24T02:00:00.020Z");
   assert.equal(record.stages[0].duration_ms, 20);
+  assert.equal(record.debuggerEvents.length, 3);
+  assert.equal(record.debuggerEvents[0].generation_run_id, "generation-1");
+  assert.equal(record.debuggerEvents[0].song_id, "song-1");
+  assert.equal(record.debuggerEvents[0].code, "stage-plan");
+  assert.equal(record.debuggerEvents[0].occurred_at, "2026-09-24T02:00:00.000Z");
 });
 
 test("generation database record snapshots accepted song without mutating it", () => {
