@@ -171,7 +171,9 @@ export function createGenerationExecutor({
 
   async function run(kind, payload = {}) {
     const expectedLifecycle = lifecycle;
-    const databaseStartedAt = new Date(Number(now())).toISOString();
+    const databaseStartedAt = typeof persistGeneration === "function"
+      ? new Date(Number(now())).toISOString()
+      : null;
     const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
