@@ -9911,14 +9911,16 @@ function compose(config, options = {}) {
     motifs.hookDistinctiveness = finalHookRefinement.report;
     motifs.creativeGenomeMutation = creativeGenomeMutation.report;
   }
-  const grooveConductor = createGrooveConductor(
-    config,
-    structure,
-    style,
-    motifs,
-    rootRng.fork("groove-conductor"),
-    route,
-  );
+  const grooveConductor = options.grooveConductor
+    ? clone(options.grooveConductor)
+    : createGrooveConductor(
+      config,
+      structure,
+      style,
+      motifs,
+      rootRng.fork("groove-conductor"),
+      route,
+    );
   // The ensemble contract is planned before any instrument writes notes.
   // Track generators and every later repair now share one authoritative
   // section/phrase/groove picture instead of discovering it after the fact.
@@ -14280,6 +14282,7 @@ export function generateSimilar(current, input = {}) {
       targetTrack,
       contextTracks: targetContextTracks,
       ensembleContext: input.ensembleContext ?? input.directorDirective?.ensembleContext ?? null,
+      grooveConductor: input.grooveAuthority ?? null,
     });
 
     const identitySong = normalizedSongForIdentity(candidateSong);
