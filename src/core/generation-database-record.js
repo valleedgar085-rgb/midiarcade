@@ -139,6 +139,20 @@ function stageRows(runId, stages = [], runStartedAt = null) {
   });
 }
 
+function debuggerRows(runId, songId, stages = []) {
+  return stages.map((stage, index) => ({
+    generation_run_id: runId,
+    song_id: songId,
+    severity: stage?.status === "failed" ? "error" : "info",
+    subsystem: "generation",
+    code: `stage-${stage?.stage ?? "unknown"}`,
+    message: `${String(stage?.stage ?? "generation").toUpperCase()} stage ${stage?.status ?? "complete"}`,
+    context_json: stage?.details_json ?? safeJson({}),
+    occurred_at: stage?.started_at ?? stage?.completed_at ?? null,
+    stage_order: index,
+  }));
+}
+
 function candidateRows(runId, song) {
   const search = song?.meta?.scoreDetails?.candidateSearch;
   const candidates = search?.candidates ?? search?.results ?? [];
@@ -276,6 +290,8 @@ export function createGenerationDatabaseRecord({
   const scoreSearch = song?.meta?.scoreDetails?.candidateSearch ?? {};
 
   const songVersionId = `${songId}:version:${generationRunId}`;
+  const persistedStages = stageRows(generationRunId, stages, startedStamp);
+  const debuggerEvents = debuggerRows(generationRunId, songId, persistedStages);
 
   return Object.freeze({
     schema: DB_RECORD_SCHEMA,
@@ -369,7 +385,8 @@ export function createGenerationDatabaseRecord({
     sections: Object.freeze(cleanSections),
     tracks: Object.freeze(trackRows),
     musicalEvents: Object.freeze(musicalEvents),
-    stages: Object.freeze(stageRows(generationRunId, stages, startedStamp)),
+    stages: Object.freeze(persistedStages),
+    debuggerEvents: Object.freeze(debuggerEvents),
     qualityEvaluations: Object.freeze(qualityRows(generationRunId, song)),
     candidateResults: Object.freeze(candidateRows(generationRunId, song)),
     repairActions: Object.freeze(repairRows(generationRunId, song)),
