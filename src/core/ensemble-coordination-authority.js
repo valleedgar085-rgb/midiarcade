@@ -24,6 +24,10 @@ function round(value, places = 4) {
   return Math.round((value + Number.EPSILON) * power) / power;
 }
 
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
 function sectionRange(song, section) {
   const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
   const startBeat = finite(section?.startBeat, finite(section?.startBar, 0) * beatsPerBar);
@@ -41,6 +45,32 @@ function notesInRange(track, range) {
 
 function relationshipKinds(coordination) {
   return new Set((coordination?.relationships ?? []).map((relationship) => relationship.kind));
+}
+
+function groovePulsesForSection(song, sectionId, lane, beatsPerBar) {
+  return (song?.grooveConductor?.bars ?? [])
+    .filter((bar) => String(bar?.sectionId ?? "") === String(sectionId ?? ""))
+    .flatMap((bar) => (bar?.[lane] ?? []).map((offset) => (
+      finite(bar?.bar, 0) * beatsPerBar + finite(offset, 0)
+    )));
+}
+
+function onsetLaneFit(notes, pulses, tolerance = 0.095, fallback = 0.72) {
+  if (!notes.length) return fallback;
+  if (!pulses.length) return 0.45;
+  const aligned = notes.filter((note) => (
+    pulses.some((pulse) => Math.abs(finite(note?.start) - pulse) <= tolerance)
+  )).length;
+  return clamp(aligned / notes.length);
+}
+
+function uniqueOnsets(notes) {
+  const values = [];
+  for (const note of notes) {
+    const start = round(finite(note?.start), 4);
+    if (!values.some((value) => Math.abs(value - start) <= 0.015)) values.push(start);
+  }
+  return values;
 }
 
 export function createEnsembleCoordinationContract({
@@ -62,7 +92,6 @@ export function createEnsembleCoordinationContract({
     : leadLeader === "melody" ? "counterpoint" : "melody";
   const supportTracks = ["chords", "pad", "melody", "counterpoint"]
     .filter((trackId) => trackId !== foreground);
-  const cadenceLeaders = ["melody", "counterpoint", "bass"];
 
   return {
     version: 1,
@@ -114,7 +143,7 @@ export function createEnsembleCoordinationContract({
       {
         id: `ensemble:${sectionId}:cadence-team`,
         kind: "cadence-team",
-        leaders: cadenceLeaders,
+        leaders: ["melody", "counterpoint", "bass"],
         responders: ["chords", "pad"],
         authority: "harmony",
         policy: "shared-resolution",
@@ -131,7 +160,7 @@ export function evaluateEnsembleCoordinationAuthority(song) {
 
   if (!sections.length || !contracts.length) {
     return {
-      version: 1,
+      version: 2,
       passed: false,
       reason: "missing-ensemble-contracts",
       score: 55,
@@ -141,6 +170,7 @@ export function evaluateEnsembleCoordinationAuthority(song) {
         leadDialogue: 0.55,
         harmonicSupport: 0.55,
         roleHierarchy: 0.55,
+        cadenceTeam: 0.55,
         collisionControl: 0.55,
       },
       sections: [],
@@ -160,62 +190,70 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       / ENSEMBLE_RELATIONSHIP_KINDS.length;
 
     const bass = notesInRange(tracks.get("bass"), range);
-    const bassTagged = bass.filter((note) => (
-      note?.ensemblePartner === "groove-dna"
-      || String(note?.ensembleCoordinationRole ?? "").includes("groove-dna")
-    )).length;
-    const rhythmFoundation = !bass.length
-      ? 0.75
-      : bassTagged
-        ? clamp(0.25 + (bassTagged / bass.length) * 1.15)
-        : 0.2;
+    const bassPulses = groovePulsesForSection(
+      song,
+      section.id,
+      "bassPulses",
+      range.beatsPerBar,
+    );
+    const rhythmFoundation = onsetLaneFit(bass, bassPulses, 0.095, 0.75);
 
     const melody = notesInRange(tracks.get("melody"), range);
     const counterpoint = notesInRange(tracks.get("counterpoint"), range);
-    const dialogueNotes = [
-      ...melody.map((note) => ({ ...note, _trackId: "melody" })),
-      ...counterpoint.map((note) => ({ ...note, _trackId: "counterpoint" })),
-    ];
-    const dialogueTagged = dialogueNotes.filter((note) => (
-      (note._trackId === "melody" && note?.ensemblePartner === "counterpoint")
-      || (note._trackId === "counterpoint" && note?.ensemblePartner === "melody")
-      || ["lead-call", "counter-answer", "counter-answer-moved", "featured-answer"]
-        .some((role) => String(note?.ensembleCoordinationRole ?? "").includes(role))
-    )).length;
-    const leadDialogue = melody.length && counterpoint.length
-      ? clamp((dialogueTagged / Math.max(1, dialogueNotes.length)) * 1.18)
-      : dialogueNotes.length
-        ? 0.65
-        : 0.75;
-
+    const counterPulses = groovePulsesForSection(
+      song,
+      section.id,
+      "counterPulses",
+      range.beatsPerBar,
+    );
+    const counterLaneFit = onsetLaneFit(counterpoint, counterPulses, 0.105, melody.length ? 0.66 : 0.75);
     let collisions = 0;
     for (const answer of counterpoint) {
       if (melody.some((lead) => Math.abs(finite(lead.start) - finite(answer.start)) < 0.105)) collisions += 1;
     }
     const collisionControl = counterpoint.length
       ? clamp(1 - (collisions / counterpoint.length) * 1.45)
-      : 0.78;
+      : melody.length ? 0.72 : 0.8;
+    const leadDialogue = melody.length && counterpoint.length
+      ? clamp(counterLaneFit * 0.58 + collisionControl * 0.42)
+      : melody.length || counterpoint.length
+        ? 0.68
+        : 0.76;
 
-    const harmonicNotes = [
-      ...notesInRange(tracks.get("chords"), range),
-      ...notesInRange(tracks.get("pad"), range),
-    ];
-    const harmonicTagged = harmonicNotes.filter((note) => (
-      note?.ensemblePartner === "rhythm-section"
-      || ["harmonic-pocket", "harmonic-bed-yield", "negative-space-yield"]
-        .some((role) => String(note?.ensembleCoordinationRole ?? "").includes(role))
+    const chords = notesInRange(tracks.get("chords"), range);
+    const pads = notesInRange(tracks.get("pad"), range);
+    const harmonicNotes = [...chords, ...pads];
+    const chordPulses = groovePulsesForSection(
+      song,
+      section.id,
+      "chordPulses",
+      range.beatsPerBar,
+    );
+    const chordLaneFit = onsetLaneFit(chords, chordPulses, 0.105, harmonicNotes.length ? 0.68 : 0.8);
+    const kickOnsets = notesInRange(tracks.get("drums"), range)
+      .filter((note) => [35, 36].includes(Math.round(finite(note?.pitch, -1))))
+      .map((note) => finite(note.start));
+    const bassOnsets = bass.map((note) => finite(note.start));
+    const chordOnsets = uniqueOnsets(chords);
+    const overloaded = chordOnsets.filter((start) => (
+      kickOnsets.some((kick) => Math.abs(kick - start) <= 0.08)
+      && bassOnsets.some((bassStart) => Math.abs(bassStart - start) <= 0.1)
     )).length;
-    const harmonicSupport = !harmonicNotes.length
-      ? 0.8
-      : harmonicTagged
-        ? clamp(0.72 + (harmonicTagged / harmonicNotes.length) * 0.28)
-        : 0.72;
+    const foundationYield = chordOnsets.length
+      ? clamp(1 - (overloaded / chordOnsets.length) * 0.75)
+      : 0.82;
+    const harmonicSupport = harmonicNotes.length
+      ? clamp(chordLaneFit * 0.72 + foundationYield * 0.28)
+      : 0.82;
 
     const roles = coordination?.roles ?? contract?.ensembleRoles ?? {};
+    const featuredTrack = String(coordination?.featuredTrack ?? contract?.featuredTrack ?? "melody");
+    const featuredNotes = notesInRange(tracks.get(featuredTrack), range);
+    const featurePresence = featuredNotes.length ? 1 : 0.5;
     const restingTracks = Object.entries(roles)
       .filter(([, role]) => role === "rest")
       .map(([trackId]) => trackId);
-    const roleHierarchy = restingTracks.length
+    const restCompliance = restingTracks.length
       ? average(restingTracks.map((trackId) => {
         const notes = notesInRange(tracks.get(trackId), range);
         if (notes.length <= range.bars) return 1;
@@ -223,14 +261,32 @@ export function evaluateEnsembleCoordinationAuthority(song) {
         return 0.35;
       }), 0.7)
       : 1;
+    const roleHierarchy = clamp(featurePresence * 0.58 + restCompliance * 0.42);
+
+    const cadenceStart = Math.max(
+      range.startBeat,
+      range.endBeat - range.beatsPerBar * 1.25,
+    );
+    const cadenceTracks = ["melody", "counterpoint", "bass"];
+    const goals = new Set((contract?.harmonicGoalPitchClasses ?? []).map((pitch) => mod(Math.round(pitch), 12)));
+    const landings = cadenceTracks.map((trackId) => {
+      const notes = notesInRange(tracks.get(trackId), range)
+        .filter((note) => finite(note.start) >= cadenceStart - 1e-6)
+        .sort((left, right) => finite(left.start) - finite(right.start));
+      return notes.at(-1) ?? null;
+    }).filter(Boolean);
+    const cadenceGoalFit = landings.length && goals.size
+      ? landings.filter((note) => goals.has(mod(Math.round(finite(note.pitch)), 12))).length / landings.length
+      : 0.55;
+    const cadenceTeam = clamp(0.45 + cadenceGoalFit * 0.55);
 
     const score = clamp(
-      contractCoverage * 0.2
+      contractCoverage * 0.18
       + rhythmFoundation * 0.22
       + leadDialogue * 0.22
-      + harmonicSupport * 0.12
+      + harmonicSupport * 0.13
       + roleHierarchy * 0.12
-      + collisionControl * 0.12,
+      + cadenceTeam * 0.13,
       0,
       1,
     );
@@ -243,6 +299,7 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       leadDialogue: round(leadDialogue),
       harmonicSupport: round(harmonicSupport),
       roleHierarchy: round(roleHierarchy),
+      cadenceTeam: round(cadenceTeam),
       collisionControl: round(collisionControl),
     });
   }
@@ -253,18 +310,20 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     leadDialogue: round(average(sectionReports.map((entry) => entry.leadDialogue), 0.55)),
     harmonicSupport: round(average(sectionReports.map((entry) => entry.harmonicSupport), 0.55)),
     roleHierarchy: round(average(sectionReports.map((entry) => entry.roleHierarchy), 0.55)),
+    cadenceTeam: round(average(sectionReports.map((entry) => entry.cadenceTeam), 0.55)),
     collisionControl: round(average(sectionReports.map((entry) => entry.collisionControl), 0.55)),
   };
   const score = Math.round(average(sectionReports.map((entry) => entry.score), 55));
   const passed = score >= 70
     && metrics.contractCoverage >= 0.98
     && metrics.rhythmFoundation >= 0.45
-    && metrics.leadDialogue >= 0.6;
+    && metrics.leadDialogue >= 0.55
+    && metrics.cadenceTeam >= 0.5;
 
   const weakestSection = [...sectionReports].sort((left, right) => left.score - right.score)[0] ?? null;
 
   return {
-    version: 1,
+    version: 2,
     passed,
     reason: passed ? "ensemble-contract-honored" : "ensemble-contract-weak",
     score,
