@@ -1,5 +1,10 @@
 import { cloneValue } from "./clone-value.js";
 import {
+  CANONICAL_SONG_AUTHORITY_KEYS,
+  SCOPED_COMPOSER_AUTHORITY_KEYS,
+  createCanonicalSongState,
+} from "./canonical-song-state.js";
+import {
   deepEqual,
   fullyInside,
   notesOutsideRange,
@@ -72,7 +77,8 @@ function createEnsembleContext(song, selection, sectionPlan, orchestration, inte
 export function createDirectorDirective(song, selection = {}) {
   if (!song || typeof song !== "object") throw new TypeError("createDirectorDirective requires a source song");
   const normalized = normalizeCompositionSelection(selection, song);
-  const songPlan = song.songPlan ?? song.songBlueprint ?? null;
+  const songState = createCanonicalSongState(song);
+  const songPlan = songState.songPlan ?? songState.songBlueprint ?? null;
   const sectionPlan = normalized.sectionId == null
     ? null
     : (songPlan?.sections ?? songPlan?.sectionPlans ?? []).find(
@@ -97,8 +103,9 @@ export function createDirectorDirective(song, selection = {}) {
     sectionPlan: cloneValue(sectionPlan),
     orchestration: cloneValue(orchestration),
     interlock: cloneValue(interlock),
-    harmony: cloneValue(song?.harmony ?? []),
-    grooveConductor: cloneValue(song?.grooveConductor ?? null),
+    harmony: cloneValue(songState.harmony ?? []),
+    grooveConductor: cloneValue(songState.grooveConductor ?? null),
+    songState,
     jazzGrammar: cloneValue(jazzGrammar),
     ensembleContext: cloneValue(createEnsembleContext(song, normalized, sectionPlan, orchestration, interlock)),
     sourceSongId: song?.id ?? null,
@@ -157,6 +164,7 @@ function candidateInput(sourceSong, directive, input) {
     jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
     ensembleContext: directive?.ensembleContext ?? null,
+    canonicalSongState: directive?.songState ?? null,
     grooveConductor: directive?.grooveConductor ?? null,
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
@@ -211,12 +219,18 @@ function scopeChanged(before, after, selection) {
   });
 }
 
-function validateScopeIntegrity(before, after, selection, issues) {
+function validateScopeIntegrity(before, after, generated, selection, issues) {
   if (selection.target === "song") return;
 
-  for (const authority of ["structure", "sections", "harmony", "songBlueprint", "songPlan"]) {
+  for (const authority of CANONICAL_SONG_AUTHORITY_KEYS) {
     if (before?.[authority] !== undefined && !deepEqual(before[authority], after?.[authority])) {
       issues.push(`authority-changed:${authority}`);
+    }
+  }
+
+  for (const authority of SCOPED_COMPOSER_AUTHORITY_KEYS) {
+    if (before?.[authority] !== undefined && !deepEqual(before[authority], generated?.[authority])) {
+      issues.push(`composer-authority-diverged:${authority}`);
     }
   }
 
@@ -276,7 +290,13 @@ export function validateCompositionCandidate(transaction) {
   if (!transaction || transaction.status !== "candidate") {
     return { valid: false, issues: ["invalid-transaction"], judge: null };
   }
-  validateScopeIntegrity(transaction.before, transaction.after, transaction.selection, issues);
+  validateScopeIntegrity(
+    transaction.before,
+    transaction.after,
+    transaction.generated,
+    transaction.selection,
+    issues,
+  );
   validateScaleSafety(transaction.after, transaction.selection, issues);
   const judge = judgeCompositionCandidate(
     transaction.before,
