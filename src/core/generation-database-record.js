@@ -206,8 +206,10 @@ export function createGenerationDatabaseRecord({
   const startedStamp = text(startedAt, completedStamp);
   const sectionRows = structure.map((section, index) => {
     const bounds = deriveSectionBounds(section, beatsPerBar);
+    const sourceSectionId = text(section?.id, `section-${index}`);
     return {
-      id: text(section?.id, `${songId}:section:${index}`),
+      id: `${generationRunId}:section:${sourceSectionId}`,
+      source_section_id: sourceSectionId,
       song_id: songId,
       generation_run_id: generationRunId,
       name: text(section?.name, `Section ${index + 1}`),
