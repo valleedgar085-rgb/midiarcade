@@ -153,6 +153,9 @@ function candidateInput(sourceSong, directive, input) {
     jazzGrammar: directive?.jazzGrammar ?? null,
     directorDirective: directive,
     ensembleContext: directive?.ensembleContext ?? null,
+    ...(normalized.target !== "song" && sourceSong?.grooveConductor
+      ? { grooveAuthority: cloneValue(sourceSong.grooveConductor) }
+      : {}),
     ...(normalized.target === "track" || normalized.target === "section-track"
       ? { targetTrack: normalized.trackId }
       : {}),
