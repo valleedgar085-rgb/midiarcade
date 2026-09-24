@@ -287,3 +287,33 @@ test("phrase-resolution candidate budget remains capped at the original three ca
     assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_PHRASE_RESOLUTION_EDITS));
   }
 });
+
+
+test("phrase-resolution reports no cadence opportunity as a true no-op", () => {
+  const source = sourceSong();
+  track(source, "melody").notes = [];
+  const before = structuredClone(source);
+
+  const processed = applySongOutputQualityPipeline(source, {
+    arrangementEvolution: false,
+    returnDevelopment: false,
+    densityRefinement: false,
+    groovePocketRefinement: false,
+    phraseResolutionRefinement: true,
+  }, {
+    evaluateCandidate(song) {
+      return evaluator(song, 78);
+    },
+    evaluateReleaseGate: releaseGate,
+  });
+
+  assert.deepEqual(source, before);
+  assert.strictEqual(processed.song, source);
+  assert.equal(processed.phraseResolutionDiagnostics.attempted, true);
+  assert.equal(processed.phraseResolutionDiagnostics.accepted, false);
+  assert.equal(processed.phraseResolutionDiagnostics.changed, false);
+  assert.equal(processed.phraseResolutionDiagnostics.reason, "no-cadence-opportunity");
+  assert.equal(processed.phraseResolutionDiagnostics.beforePhraseResolution, 78);
+  assert.equal(processed.phraseResolutionDiagnostics.candidatesEvaluated, 0);
+  assert.deepEqual(processed.phraseResolutionDiagnostics.candidateIds, []);
+});

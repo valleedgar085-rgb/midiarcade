@@ -199,7 +199,7 @@ test("scoped regeneration rejects notes composed against divergent musical autho
     ["structure", (candidate) => { candidate.structure[1].name = "Wrong Chorus"; }],
     ["harmony", (candidate) => { candidate.harmony[1].rootPc = 6; }],
     ["songBlueprint", (candidate) => { candidate.songBlueprint.version = 999; }],
-    ["grooveConductor", (candidate) => { candidate.grooveConductor.feel = "different-pocket"; }],
+    ["grooveConductor", (candidate) => { candidate.grooveConductor.bars[2].bassPulses[0] = 1.25; }],
   ];
 
   for (const [authority, mutate] of cases) {
@@ -378,6 +378,8 @@ test("Director carries source Groove Conductor and publishes complete specialist
   });
   assert.deepEqual(directive.grooveConductor, source.grooveConductor);
   assert.notStrictEqual(directive.grooveConductor, source.grooveConductor);
+  assert.notStrictEqual(directive.grooveConductor.bars[2], source.grooveConductor.bars[2]);
+  assert.notStrictEqual(directive.grooveConductor.bars[2].bassPulses, source.grooveConductor.bars[2].bassPulses);
   assert.deepEqual(directive.ensembleContext.groove.bars[0].bassPulses, [0.5, 2.5]);
   assert.deepEqual(directive.ensembleContext.groove.bars[0].leadPulses, [0.75, 2.75]);
   assert.deepEqual(directive.ensembleContext.groove.bars[0].spaces, [2.25]);
