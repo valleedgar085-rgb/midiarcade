@@ -15,6 +15,7 @@ test("generation database repository fails closed when native SQLite is unavaila
   assert.deepEqual(await repository.persist(RECORD), { ok: false, reason: "unavailable" });
   assert.deepEqual(await repository.recentRuns(), []);
   assert.deepEqual(await repository.recentDebuggerEvents(), []);
+  assert.equal((await repository.repairEffectiveness()).repairCount, 0);
 });
 
 test("generation database repository persists canonical records through the native plugin", async () => {
@@ -31,6 +32,22 @@ test("generation database repository persists canonical records through the nati
       async recentDebuggerEvents({ limit }) {
         return { events: [{ id: 1, generation_run_id: "run-1", limit }] };
       },
+      async recentRepairActions({ limit }) {
+        return {
+          repairs: [{
+            id: "repair-1",
+            generation_run_id: "run-1",
+            genre: "hipHop",
+            repair_type: "register-health",
+            target_scope: "track",
+            target_id: "melody",
+            before_metrics_json: JSON.stringify({ registerHealth: 64 }),
+            after_metrics_json: JSON.stringify({ registerHealth: 92 }),
+            accepted: 1,
+            limit,
+          }],
+        };
+      },
     }),
   });
   assert.equal(repository.available, true);
@@ -45,6 +62,9 @@ test("generation database repository persists canonical records through the nati
   assert.deepEqual(await repository.recentDebuggerEvents(999), [
     { id: 1, generation_run_id: "run-1", limit: 100 },
   ]);
+  const repairSummary = await repository.repairEffectiveness(999);
+  assert.equal(repairSummary.repairCount, 1);
+  assert.equal(repairSummary.groups[0].averageDeltas.registerHealth, 28);
 });
 
 test("native persistence failures are reported without throwing away the accepted song", async () => {

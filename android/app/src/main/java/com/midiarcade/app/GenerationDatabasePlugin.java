@@ -77,6 +77,19 @@ public class GenerationDatabasePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void recentRepairActions(PluginCall call) {
+        Integer requested = call.getInt("limit");
+        int limit = Math.max(1, Math.min(100, requested == null ? 100 : requested));
+        try {
+            JSObject result = new JSObject();
+            result.put("repairs", database.recentRepairActions(limit));
+            call.resolve(result);
+        } catch (Exception error) {
+            call.reject("Could not read repair effectiveness history.", error);
+        }
+    }
+
+    @PluginMethod
     public void recentRuns(PluginCall call) {
         Integer requested = call.getInt("limit");
         int limit = Math.max(1, Math.min(100, requested == null ? 12 : requested));
@@ -269,6 +282,31 @@ public class GenerationDatabasePlugin extends Plugin {
                     putCursor(row, cursor, "message");
                     putCursor(row, cursor, "context_json");
                     putCursor(row, cursor, "occurred_at");
+                    rows.put(row);
+                }
+            }
+            return rows;
+        }
+
+        JSArray recentRepairActions(int limit) {
+            JSArray rows = new JSArray();
+            SQLiteDatabase db = getReadableDatabase();
+            String sql = "SELECT ra.id, ra.generation_run_id, gr.genre, ra.target_scope, ra.target_id, " +
+                "ra.repair_type, ra.before_metrics_json, ra.after_metrics_json, ra.accepted " +
+                "FROM repair_actions ra JOIN generation_runs gr ON gr.id = ra.generation_run_id " +
+                "ORDER BY ra.created_at DESC LIMIT ?";
+            try (Cursor cursor = db.rawQuery(sql, new String[] { String.valueOf(limit) })) {
+                while (cursor.moveToNext()) {
+                    JSObject row = new JSObject();
+                    putCursor(row, cursor, "id");
+                    putCursor(row, cursor, "generation_run_id");
+                    putCursor(row, cursor, "genre");
+                    putCursor(row, cursor, "target_scope");
+                    putCursor(row, cursor, "target_id");
+                    putCursor(row, cursor, "repair_type");
+                    putCursor(row, cursor, "before_metrics_json");
+                    putCursor(row, cursor, "after_metrics_json");
+                    putCursor(row, cursor, "accepted");
                     rows.put(row);
                 }
             }

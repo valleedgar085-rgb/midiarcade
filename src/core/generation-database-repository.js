@@ -72,6 +72,24 @@ export function createGenerationDatabaseRepository({
     }
   }
 
+  async function repairEffectiveness(limit = 100) {
+    const native = plugin();
+    if (typeof native?.recentRepairActions !== "function") {
+      return import("./repair-effectiveness-analytics.js")
+        .then(({ summarizeRepairEffectiveness }) => summarizeRepairEffectiveness([]));
+    }
+    try {
+      const result = await native.recentRepairActions({ limit: normalizeLimit(limit) });
+      const rows = Array.isArray(result?.repairs) ? result.repairs : [];
+      const { summarizeRepairEffectiveness } = await import("./repair-effectiveness-analytics.js");
+      return summarizeRepairEffectiveness(rows);
+    } catch (error) {
+      report(error);
+      const { summarizeRepairEffectiveness } = await import("./repair-effectiveness-analytics.js");
+      return summarizeRepairEffectiveness([]);
+    }
+  }
+
   async function recentRuns(limit = 12) {
     const native = plugin();
     if (typeof native?.recentRuns !== "function") return [];
@@ -88,6 +106,7 @@ export function createGenerationDatabaseRepository({
     persist,
     recentRuns,
     recentDebuggerEvents,
+    repairEffectiveness,
     get available() {
       return typeof plugin()?.persistGeneration === "function";
     },
