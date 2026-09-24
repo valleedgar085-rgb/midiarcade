@@ -48,6 +48,7 @@ import {
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  previewNoteAttack,
   rampAudioParamValue,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
@@ -5634,7 +5635,9 @@ export class PreviewPlayer {
     filter.frequency.value = filterBase;
     filter.Q.value = clamp(voice.q * resonanceScale, 0.1, 18);
     const articulation = String(event.articulation || "natural");
-    const attack = voice.attack * (articulation === "accent" ? 0.55 : articulation === "legato" || articulation === "glide" ? 1.35 : 1);
+    const attack = previewNoteAttack(
+      voice.attack * (articulation === "accent" ? 0.55 : articulation === "legato" || articulation === "glide" ? 1.35 : 1),
+    );
     const { duration, release } = previewNoteEnvelope({
       trackId: event.id,
       duration: event.duration,

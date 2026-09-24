@@ -3,8 +3,16 @@ import test from "node:test";
 
 import {
   holdAudioParamValue,
+  previewNoteAttack,
   rampAudioParamValue,
 } from "../src/core/preview-audio.js";
+
+test("pitched preview notes use a short anti-click attack floor without slowing expressive attacks", () => {
+  assert.equal(previewNoteAttack(0.002), 0.006);
+  assert.equal(previewNoteAttack(0.0011), 0.006);
+  assert.equal(previewNoteAttack(0.018), 0.018);
+  assert.equal(previewNoteAttack(Number.NaN), 0.006);
+});
 
 function parameter({ value = 0.42, nativeHold = true } = {}) {
   const calls = [];

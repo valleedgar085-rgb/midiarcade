@@ -47,6 +47,7 @@ test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android 
 });
 
 test("Phase 7 uses longer click-safe release windows", () => {
+  assert.ok(PREVIEW_TRANSITION.minimumNoteAttackSeconds >= 0.005);
   assert.ok(PREVIEW_TRANSITION.stopSeconds >= 0.025);
   assert.ok(PREVIEW_TRANSITION.sourceTailSeconds >= 0.01);
 });
