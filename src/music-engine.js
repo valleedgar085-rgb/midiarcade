@@ -9817,14 +9817,7 @@ function compose(config, options = {}) {
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
   produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
   produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
-  const sectionCompletion = applySectionCompletionAuthority(
-    tonalIntegrity.tracks,
-    structure,
-    harmony,
-    songBlueprint,
-    { beatsPerBar: beatsPerBar(config) },
-  );
-  let tracks = sectionCompletion.tracks;
+  let tracks = tonalIntegrity.tracks;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
@@ -9909,7 +9902,6 @@ function compose(config, options = {}) {
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
-    sectionCompletion: sectionCompletion.report,
     counterpointCoverage: { phase: 51.5, added: counterCoverage.added },
     sectionContrast,
     drumFillVocabulary,
@@ -9959,7 +9951,6 @@ function compose(config, options = {}) {
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
       { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
-      { phase: 77, id: "section-completion-authority", status: "complete" },
     ],
     idea,
   };
@@ -12583,15 +12574,6 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
-  const repairedSectionCompletion = applySectionCompletionAuthority(
-    song.tracks,
-    song.structure,
-    song.harmony,
-    song.songBlueprint,
-    { beatsPerBar: beatsPerBar(config) },
-  );
-  song.tracks = repairedSectionCompletion.tracks;
-  song.sectionCompletion = repairedSectionCompletion.report;
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
   song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
   song.finalAssembly = createFinalAssemblyReport(
@@ -13233,6 +13215,22 @@ function commitCandidate(candidates, search = {}) {
     releasePassed: committedRegisterRelease.passed,
     releaseFailures: clone(committedRegisterRelease.failures ?? []),
   };
+
+  // Phase 77 is deliberately post-selection. It may improve the committed
+  // arrangement, but it must never change candidate ranking or repair choice.
+  const committedSectionCompletion = applySectionCompletionAuthority(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.harmony ?? [],
+    selected.song.songBlueprint ?? null,
+    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
+  );
+  selected.song.tracks = committedSectionCompletion.tracks;
+  selected.song.sectionCompletion = committedSectionCompletion.report;
+  selected.song.generationPhases = [
+    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
+    { phase: 77, id: "section-completion-authority", status: "complete" },
+  ];
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
