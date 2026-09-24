@@ -33,6 +33,7 @@ export function createGenerationExecutor({
   timeoutMs = 60000,
   recorder = null,
   persistGeneration = null,
+  onPersistenceError = null,
   now = () => Date.now(),
   workerRetryBaseMs = 1000,
   workerRetryMaxMs = 30000,
@@ -278,23 +279,29 @@ export function createGenerationExecutor({
       flightRecorder.complete(flightId, selectedResult?.song);
 
       if (shouldPersist) {
-        const { createGenerationDatabaseRecord } = await import("./generation-database-record.js");
-        const completedRun = flightRecorder.snapshot().find((entry) => entry.id === flightId) ?? null;
-        const databaseRecord = createGenerationDatabaseRecord({
-          kind,
-          config,
-          sourceSong: adaptedPayload?.sourceSong ?? null,
-          result: selectedResult,
-          song: selectedResult.song,
-          runId: flightId,
-          startedAt: databaseStartedAt,
-          completedAt: new Date(Number(now())).toISOString(),
-          durationMs: completedRun?.durationMs ?? null,
-          stages: completedRun?.stages ?? [],
-          outcome: completedRun?.status ?? selectedResult?.status ?? "committed",
-          engineVersion: selectedResult?.song?.schema ?? null,
-        });
-        await Promise.resolve(persistGeneration(databaseRecord));
+        try {
+          const { createGenerationDatabaseRecord } = await import("./generation-database-record.js");
+          const completedRun = flightRecorder.snapshot().find((entry) => entry.id === flightId) ?? null;
+          const databaseRecord = createGenerationDatabaseRecord({
+            kind,
+            config,
+            sourceSong: adaptedPayload?.sourceSong ?? null,
+            result: selectedResult,
+            song: selectedResult.song,
+            runId: flightId,
+            startedAt: databaseStartedAt,
+            completedAt: new Date(Number(now())).toISOString(),
+            durationMs: completedRun?.durationMs ?? null,
+            stages: completedRun?.stages ?? [],
+            outcome: completedRun?.status ?? selectedResult?.status ?? "committed",
+            engineVersion: selectedResult?.song?.schema ?? null,
+          });
+          await Promise.resolve(persistGeneration(databaseRecord));
+        } catch (error) {
+          if (typeof onPersistenceError === "function") {
+            try { onPersistenceError(error); } catch { /* error reporting cannot invalidate accepted music */ }
+          }
+        }
       }
 
       return selectedResult;
