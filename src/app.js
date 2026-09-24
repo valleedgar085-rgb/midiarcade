@@ -18,6 +18,8 @@ import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
+import { createGenerationPersistenceService } from "./core/generation-persistence-service.js";
+import { createIndexedDbGenerationStore } from "./core/indexeddb-generation-store.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
@@ -3741,6 +3743,23 @@ const generationExecutor = createGenerationExecutor({
   fallback: createAppGenerationFallback({ generationRunner }),
 });
 
+const generationPersistence = createGenerationPersistenceService({
+  store: createIndexedDbGenerationStore(),
+  engineVersion: "1.2.2",
+  onError(error, context) {
+    console.warn("Generation history persistence failed.", context, error);
+  },
+});
+
+function queueCommittedGenerationPersistence(kind, config, song) {
+  void generationPersistence.saveCommitted({ kind, config, song }).then((result) => {
+    if (!result?.ok && result?.reason !== "write-failed") {
+      console.warn("Generation history was not saved.", result);
+    }
+  });
+}
+
+
 function generationDebuggerDetailText(detail = {}) {
   const entries = Object.entries(detail ?? {});
   if (!entries.length) return "No extra detail recorded.";
@@ -4005,6 +4024,7 @@ async function runGeneration(kind, options = {}) {
     applyTrackSettingsToSong(state.song);
     syncControlsFromSong();
     captureAppliedGenerationSettings();
+    queueCommittedGenerationPersistence(kind, config, state.song);
     renderAll();
     scheduleSessionSave();
     try { if (player.playing) player.restart(); } catch (_) { /* ignore */ }

@@ -34,7 +34,7 @@ export function createGenerationPersistenceService({
       if (!song) return { ok: false, reason: "missing-song" };
       const seed = safeToken(config.seed ?? song.seed, "unseeded");
       const songId = safeToken(song.id ?? song.songId ?? `song-${seed}`, `song-${seed}`);
-      const runId = `run-${seed}-${++sequence}`;
+      const runId = `run-${seed}-${Number(clock())}-${++sequence}`;
       try {
         const snapshot = buildGenerationPersistenceSnapshot({
           runId,
