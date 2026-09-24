@@ -171,6 +171,7 @@ export function createGenerationExecutor({
 
   async function run(kind, payload = {}) {
     const expectedLifecycle = lifecycle;
+    const databaseStartedAt = new Date(Number(now())).toISOString();
     const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
     const config = adaptedPayload?.config ?? {};
     const flightId = flightRecorder.begin(kind, {
@@ -282,8 +283,8 @@ export function createGenerationExecutor({
           result: selectedResult,
           song: selectedResult.song,
           runId: flightId,
-          startedAt: completedRun?.startedAt ?? null,
-          completedAt: completedRun?.endedAt ?? null,
+          startedAt: databaseStartedAt,
+          completedAt: new Date(Number(now())).toISOString(),
           durationMs: completedRun?.durationMs ?? null,
           stages: completedRun?.stages ?? [],
           outcome: completedRun?.status ?? selectedResult?.status ?? "committed",
