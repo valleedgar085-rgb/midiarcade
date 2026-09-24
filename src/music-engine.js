@@ -53,6 +53,11 @@ import {
   nearestGroovePulse,
   trackGroovePulses,
 } from "./core/groove-contract.js";
+import {
+  ENSEMBLE_RELATIONSHIP_KINDS,
+  createEnsembleCoordinationContract,
+  evaluateEnsembleCoordinationAuthority,
+} from "./core/ensemble-coordination-authority.js";
 
 export const PPQ = 480;
 
@@ -5170,6 +5175,16 @@ function runDirectorEnsembleCoordination(
       supportSpaceYields,
       restingRoleNotesRemoved,
       sharedIntentSections: generationInterlock?.sectionContracts?.length ?? 0,
+      authorityVersion: generationInterlock?.ensembleAuthority?.version ?? 1,
+      relationshipContracts: (generationInterlock?.sectionContracts ?? []).reduce(
+        (sum, contract) => sum + (contract?.coordination?.relationships?.length ?? 0),
+        0,
+      ),
+      relationshipKinds: [...new Set(
+        (generationInterlock?.sectionContracts ?? [])
+          .flatMap((contract) => contract?.coordination?.relationships ?? [])
+          .map((relationship) => relationship.kind),
+      )],
     },
   };
 }
@@ -8799,6 +8814,18 @@ function createGenerationInterlockPlan(
               : id === "pad" ? "texture"
                 : "support"),
     ]));
+    const featuredTrack = orchestration.get(section.id)?.featuredTrack ?? "melody";
+    const answerTrack = producerScene?.answerTrack ?? null;
+    const sectionCadence = plan?.cadence ?? section.intent?.cadence ?? "open";
+    const silenceBudget = round(clamp(finite(producerScene?.silenceBudget, 0.13), 0.05, 0.4));
+    const coordination = createEnsembleCoordinationContract({
+      sectionId: section.id,
+      featuredTrack,
+      answerTrack,
+      ensembleRoles,
+      cadence: sectionCadence,
+      silenceBudget,
+    });
     const bars = (grooveConductor?.bars ?? [])
       .filter((bar) => bar.sectionId === section.id)
       .map((bar) => ({
@@ -8817,16 +8844,17 @@ function createGenerationInterlockPlan(
       id: `interlock:${section.id}`,
       sectionId: section.id,
       role: plan?.role ?? section.intent?.role ?? "development",
-      cadence: plan?.cadence ?? section.intent?.cadence ?? "open",
+      cadence: sectionCadence,
       energy: round(clamp(finite(plan?.energy, section.intensity / 1.18), 0, 1)),
       tension: round(clamp(finite(plan?.tension, section.intent?.tension), 0, 1)),
       motifId: assignments.get(section.id)?.motifId ?? "A",
       harmonicGoalDegree: harmonicGoal?.degree ?? plan?.harmonicGoalDegree ?? 0,
       harmonicGoalPitchClasses: [...new Set(harmonicGoal?.tones ?? [config.keyPc])],
-      featuredTrack: orchestration.get(section.id)?.featuredTrack ?? "melody",
-      answerTrack: producerScene?.answerTrack ?? null,
+      featuredTrack,
+      answerTrack,
       ensembleRoles,
-      silenceBudget: round(clamp(finite(producerScene?.silenceBudget, 0.13), 0.05, 0.4)),
+      coordination,
+      silenceBudget,
       densityCeiling: round(clamp(finite(producerScene?.densityCeiling, 0.82), 0.5, 0.98)),
       scenePurpose: producerScene?.purpose ?? "develop",
       performanceFeel: performanceProfile?.feel?.id ?? "balanced",
@@ -8839,6 +8867,16 @@ function createGenerationInterlockPlan(
     version: 1,
     phase: 39,
     routeId: route?.id ?? "harmony-first",
+    ensembleAuthority: {
+      version: 1,
+      id: "ensemble-coordination-v1",
+      requiredRelationshipKinds: [...ENSEMBLE_RELATIONSHIP_KINDS],
+      sectionCount: sectionContracts.length,
+      relationshipCount: sectionContracts.reduce(
+        (sum, contract) => sum + (contract?.coordination?.relationships?.length ?? 0),
+        0,
+      ),
+    },
     stages: [
       { id: "intent", receives: ["settings"], publishes: ["structure", "style", "songBlueprint"] },
       { id: "harmony", receives: ["structure", "songBlueprint"], publishes: ["harmony"] },
@@ -10249,7 +10287,7 @@ function registerFatigueScoreForSong(melodyNotes) {
   return clamp(Math.round(38 + runFit * 38 + spanFit * 24), 30, 100);
 }
 
-function generationInterlockScoreForSong(song) {
+function generationInterlockScoreForSong(song, ensembleAuthority = evaluateEnsembleCoordinationAuthority(song)) {
   const interlock = song.generationInterlock;
   const contracts = interlock?.sectionContracts ?? [];
   const stages = interlock?.stages ?? [];
@@ -10299,11 +10337,12 @@ function generationInterlockScoreForSong(song) {
     : 0.45;
 
   return clamp(Math.round(
-    taggedCoverage * 28
-    + sectionCoverage * 24
-    + accentCooperation * 18
-    + landingFit * 20
+    taggedCoverage * 24
+    + sectionCoverage * 20
+    + accentCooperation * 14
+    + landingFit * 17
     + stageContract * 10
+    + clamp(finite(ensembleAuthority?.score, 55) / 100, 0, 1) * 15
   ), 20, 100);
 }
 
@@ -10438,7 +10477,8 @@ export function evaluateSongCandidate(song) {
   const tensionFollow = tensionFollowScoreForSong(song);
   const drumVariety = drumVarietyScoreForSong(song, drumNotes);
   const registerHealth = registerFatigueScoreForSong(melodyNotes);
-  const stageInterlock = generationInterlockScoreForSong(song);
+  const ensembleAuthority = evaluateEnsembleCoordinationAuthority(song);
+  const stageInterlock = generationInterlockScoreForSong(song, ensembleAuthority);
   const rhythmicNotes = [...drumNotes, ...bassNotes, ...melodyNotes];
   const measuredSyncopation = rhythmicNotes.length
     ? rhythmicNotes.filter((note) => Math.abs(note.start - Math.round(note.start)) > 0.08).length / rhythmicNotes.length
@@ -10532,6 +10572,14 @@ export function evaluateSongCandidate(song) {
       drumVariation: round(drumVariety / 100),
       registerHealth: round(registerHealth / 100),
       stageInterlock: round(stageInterlock / 100),
+      ensembleCoordination: round(ensembleAuthority.score / 100),
+      ensembleCoordinationPassed: ensembleAuthority.passed,
+      ensembleCoordinationContractCoverage: ensembleAuthority.metrics.contractCoverage,
+      ensembleRhythmFoundation: ensembleAuthority.metrics.rhythmFoundation,
+      ensembleLeadDialogue: ensembleAuthority.metrics.leadDialogue,
+      ensembleHarmonicSupport: ensembleAuthority.metrics.harmonicSupport,
+      ensembleRoleHierarchy: ensembleAuthority.metrics.roleHierarchy,
+      ensembleCollisionControl: ensembleAuthority.metrics.collisionControl,
       genreProfile: song.genre,
       densityTarget,
       densityObserved: round(densityObserved),
