@@ -10914,6 +10914,8 @@ function normalizeRecentSongs(value) {
 }
 
 function canonicalNoveltyFingerprint(song) {
+  const stored = song?.meta?.noveltyFingerprint;
+  if (finite(stored?.version, 0) >= 2) return clone(stored);
   const identitySong = normalizedSongForIdentity(song);
   const normalizedRegister = applyDawRegisterPolicy(
     identitySong?.tracks ?? [],
@@ -13215,6 +13217,10 @@ function commitCandidate(candidates, search = {}) {
     releasePassed: committedRegisterRelease.passed,
     releaseFailures: clone(committedRegisterRelease.failures ?? []),
   };
+
+  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
+  // The final audible fingerprint is still written after section completion.
+  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
 
   // Phase 77 is deliberately post-selection. It may improve the committed
   // arrangement, but it must never change candidate ranking or repair choice.
