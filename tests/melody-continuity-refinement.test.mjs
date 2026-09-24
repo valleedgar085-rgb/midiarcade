@@ -291,3 +291,67 @@ test("melody continuity prefers authored leadPulses over midpoint quantization",
     assert.ok(Math.abs(offset - 0.75) < 1e-6, `expected lead Groove DNA pulse, got ${note.start}`);
   }
 });
+
+
+test("larger melody continuity repairs keep truthful score accounting inside the bounded cost budget", () => {
+  const source = song();
+  source.meta.bars = 32;
+  source.meta.totalBeats = 128;
+  source.structure = [
+    { id: "intro-1", name: "intro", startBeat: 0, endBeat: 8, bars: 2 },
+    { id: "verse-1", name: "verse", startBeat: 8, endBeat: 56, bars: 12 },
+    { id: "chorus-1", name: "chorus", startBeat: 56, endBeat: 104, bars: 12 },
+    { id: "outro-1", name: "outro", startBeat: 104, endBeat: 128, bars: 6 },
+  ];
+  source.tracks.find((track) => track.id === "melody").notes = [
+    { id: "i1", start: 1, pitch: 72, duration: 0.5, velocity: 80 },
+    { id: "i2", start: 6, pitch: 74, duration: 0.5, velocity: 82 },
+    { id: "v1", start: 8.5, pitch: 72, duration: 0.5, velocity: 88 },
+    { id: "v2", start: 54.5, pitch: 76, duration: 0.5, velocity: 90 },
+    { id: "c1", start: 56.5, pitch: 79, duration: 0.5, velocity: 96 },
+    { id: "c2", start: 102.5, pitch: 81, duration: 0.5, velocity: 98 },
+    { id: "o1", start: 105, pitch: 72, duration: 0.5, velocity: 76 },
+    { id: "o2", start: 126, pitch: 72, duration: 0.5, velocity: 74 },
+  ];
+
+  const candidates = createMelodyContinuityCandidates(source);
+  const balanced = candidates.find((candidate) => candidate.id === "balanced-links");
+  assert.ok(balanced);
+  assert.ok(balanced.changedNotes >= 9, `expected a substantial repair, got ${balanced.changedNotes}`);
+
+  const result = applyMelodyContinuityRefinement(
+    source,
+    { melodyContinuityRefinement: true },
+    (candidateSong) => {
+      const links = candidateSong.tracks
+        .find((track) => track.id === "melody").notes
+        .filter((note) => note.continuityRole === "phrase-link").length;
+      return {
+        score: links >= 9 ? 93 : 94,
+        subscores: {
+          density: 80,
+          motif: 90,
+          repetition: 90,
+          memory: 90,
+          registerHealth: 90,
+          groove: 90,
+          performance: 90,
+          separation: 90,
+          phraseResolution: 84,
+          genreAuthenticity: 90,
+        },
+        diagnostics: { scaleFit: 1 },
+      };
+    },
+    () => ({ passed: true, totalScore: 94 }),
+  );
+
+  assert.equal(result.diagnostics.accepted, true);
+  assert.equal(result.diagnostics.id, "balanced-links");
+  assert.ok(result.diagnostics.changedNotes >= 9);
+  assert.equal(result.diagnostics.afterScore, 93);
+  assert.equal(result.diagnostics.criticViewScore, 94);
+  assert.equal(result.diagnostics.scoreDelta, -1);
+  assert.ok(result.diagnostics.maxScoreCost >= 3);
+  assert.ok(result.diagnostics.scoreDelta >= -result.diagnostics.maxScoreCost);
+});
