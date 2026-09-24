@@ -107,7 +107,7 @@ function qualityRows(runId, song) {
     novelty_score: finite(subscores.novelty, null),
     genre_authenticity_score: finite(subscores.genreAuthenticity ?? subscores.genre, null),
     preview_export_parity_score: finite(subscores.previewExportParity ?? details.previewExportParity, null),
-    passed: boolInt(release?.passed ?? details?.passed ?? (score != null && score >= 0), 0),
+    passed: boolInt(release?.passed ?? details?.passed ?? false, 0),
     weaknesses_json: safeJson(details?.weaknesses ?? release?.weaknesses ?? []),
     evaluation_json: safeJson({ evaluation, release, scoreDetails: details }),
   };
@@ -194,6 +194,8 @@ export function createGenerationDatabaseRecord({
     ? song.structure
     : Array.isArray(song?.sections) ? song.sections : [];
 
+  const completedStamp = text(completedAt, new Date().toISOString());
+  const startedStamp = text(startedAt, completedStamp);
   const sectionRows = structure.map((section, index) => {
     const bounds = deriveSectionBounds(section, beatsPerBar);
     return {
@@ -263,6 +265,8 @@ export function createGenerationDatabaseRecord({
   const blueprint = clone(song?.songBlueprint ?? song?.songPlan ?? null);
   const scoreSearch = song?.meta?.scoreDetails?.candidateSearch ?? {};
 
+  const songVersionId = `${songId}:version:${generationRunId}`;
+
   return Object.freeze({
     schema: DB_RECORD_SCHEMA,
     song: Object.freeze({
@@ -278,12 +282,14 @@ export function createGenerationDatabaseRecord({
       bars: integer(song?.bars ?? song?.meta?.bars ?? config?.bars, 0),
       seed: text(song?.seed ?? config?.seed, null),
       status: "accepted",
+      selected_version_id: songVersionId,
       snapshot_json: safeJson(song),
     }),
     songVersion: Object.freeze({
-      id: `${songId}:version:${generationRunId}`,
+      id: songVersionId,
       song_id: songId,
-      source_song_id: text(sourceSong?.id, null),
+      version_number: Math.max(1, integer(song?.revision, 0) + 1),
+      source_version_id: text(sourceSong?.selectedVersionId ?? sourceSong?.selected_version_id, null),
       change_reason: kind,
       snapshot_json: safeJson(song),
     }),
@@ -303,8 +309,8 @@ export function createGenerationDatabaseRecord({
       seed: text(config?.seed ?? song?.seed, null),
       genre: text(config?.genre ?? song?.genre, null),
       requested_bars: integer(config?.bars ?? song?.bars, null),
-      started_at: startedAt,
-      completed_at: completedAt,
+      started_at: startedStamp,
+      completed_at: completedStamp,
       runtime_ms: integer(durationMs, null),
       outcome: text(outcome, "committed"),
       config_json: safeJson(config),
