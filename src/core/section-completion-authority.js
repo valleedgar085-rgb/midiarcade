@@ -184,7 +184,9 @@ function retuneBoundaryLanding(trackId, note, goal, contract) {
     : trackId === "melody"
       ? [52, 92]
       : [45, 96];
-  const targetClasses = trackId === "bass" && rootPc != null ? [rootPc] : tones;
+  const targetClasses = (trackId === "bass" || contract.cadence === "resolve") && rootPc != null
+    ? [rootPc]
+    : tones;
   const target = nearestPitchClass(note.pitch, targetClasses, bounds[0], bounds[1]);
   if (target === note.pitch) return false;
   note.pitch = target;
@@ -192,14 +194,23 @@ function retuneBoundaryLanding(trackId, note, goal, contract) {
   return true;
 }
 
-function shapeLandingDuration(note, boundary, maximumHold = 1) {
+function shapeLandingDuration(
+  note,
+  boundary,
+  maximumHold = 1,
+  { seamOffset = 0.025, allowExtend = true } = {},
+) {
   if (!note) return false;
-  const desiredEnd = boundary - 0.025;
+  const desiredEnd = boundary - seamOffset;
   const currentEnd = noteEnd(note);
   let nextDuration = finite(note.duration, 0.25);
-  if (currentEnd > boundary - 0.005) {
+  if (currentEnd > desiredEnd + 0.02) {
     nextDuration = Math.max(0.04, desiredEnd - finite(note.start));
-  } else if (desiredEnd - currentEnd <= 0.55 && desiredEnd > currentEnd + 0.04) {
+  } else if (
+    allowExtend
+    && desiredEnd - currentEnd <= 0.55
+    && desiredEnd > currentEnd + 0.04
+  ) {
     nextDuration = Math.min(
       maximumHold,
       Math.max(nextDuration, desiredEnd - finite(note.start)),
@@ -228,13 +239,30 @@ function clearBreathWindow(track, breathStart, boundary, contract) {
   if (!(contract.breathBeats > 0) || !track) return { removed: 0, trimmed: 0 };
   let removed = 0;
   let trimmed = 0;
+  const protectedAnswer = (note) => Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.counterResponseRole === "final-section-coverage-answer"
+    || note?.motifHandoffRole
+    || note?.memoryRole
+  );
   track.notes = (track.notes ?? []).filter((note) => {
     const start = finite(note?.start, -1);
     if (start >= breathStart - 1e-6 && start < boundary - 0.04) {
+      if (protectedAnswer(note)) {
+        note.sectionCompletionRole = note.sectionCompletionRole ?? "protected-answer-in-breath";
+        return true;
+      }
       removed += 1;
       return false;
     }
-    if (start < breathStart - 1e-6 && noteEnd(note) > breathStart + 1e-6) {
+    if (
+      start < breathStart - 1e-6
+      && noteEnd(note) > breathStart + 1e-6
+      && !protectedAnswer(note)
+    ) {
       note.duration = round(Math.max(0.03, breathStart - start));
       note.sectionCompletionRole = "pre-payoff-breath";
       trimmed += 1;
@@ -275,7 +303,21 @@ export function applySectionCompletionAuthority(
       const landing = lastSectionNote(track, from, beatsPerBar);
       if (!landing) continue;
       if (retuneBoundaryLanding(trackId, landing, goal, contract)) notesRetuned += 1;
-      if (shapeLandingDuration(landing, contract.boundaryBeat, trackId === "bass" ? 1.25 : 1)) {
+      const protectedLanding = Boolean(
+        landing.ensembleCadenceRole
+        || landing.resolutionRole
+        || Number.isFinite(landing.phraseBoundary)
+        || landing.transitionHandoffRole
+      );
+      if (shapeLandingDuration(
+        landing,
+        contract.boundaryBeat,
+        trackId === "bass" ? 1.25 : 1,
+        {
+          seamOffset: contract.requiresSeamClear ? 0.04 : 0.025,
+          allowExtend: !protectedLanding,
+        },
+      )) {
         durationsShaped += 1;
       }
       landing.sectionCompletionRole = contract.isFinal
@@ -310,7 +352,14 @@ export function applySectionCompletionAuthority(
       }
     }
 
-    if (to && contract.requiresArrivalAnchor) {
+    const handoffId = to ? `${contract.fromSectionId}->${contract.toSectionId}` : null;
+    const phase67OwnsArrival = Boolean(handoffId && tracks.some((track) => (
+      (track.notes ?? []).some((note) => (
+        note.transitionHandoffId === handoffId
+        && String(note.transitionHandoffRole ?? "").endsWith("-arrival")
+      ))
+    )));
+    if (to && contract.requiresArrivalAnchor && !phase67OwnsArrival) {
       const bassArrival = firstArrival(byId.get("bass"), contract.boundaryBeat, 0.24);
       const chordArrival = firstArrival(byId.get("chords"), contract.boundaryBeat, 0.24);
       const kickArrival = firstArrival(
@@ -340,7 +389,19 @@ export function applySectionCompletionAuthority(
       for (const trackId of ["chords", "pad"]) {
         const finalNote = lastSectionNote(byId.get(trackId), from, beatsPerBar);
         if (!finalNote) continue;
-        if (shapeLandingDuration(finalNote, contract.boundaryBeat, 1.35)) durationsShaped += 1;
+        if (shapeLandingDuration(
+          finalNote,
+          contract.boundaryBeat,
+          1.35,
+          {
+            seamOffset: 0.025,
+            allowExtend: !(
+              finalNote.ensembleCadenceRole
+              || finalNote.resolutionRole
+              || Number.isFinite(finalNote.phraseBoundary)
+            ),
+          },
+        )) durationsShaped += 1;
         finalNote.sectionCompletionRole = "final-harmonic-release";
         finalNote.sectionCompletionId = contract.id;
       }
@@ -404,7 +465,9 @@ export function evaluateSectionCompletionAuthority(song) {
       : Number(mod(Math.round(finite(bassLanding.pitch)), 12) === rootPc);
     const melodyPitchFit = !contract.requiresCadenceLanding || !melodyLanding || !goalTones.size
       ? 0.8
-      : Number(goalTones.has(mod(Math.round(finite(melodyLanding.pitch)), 12)));
+      : contract.cadence === "resolve" && rootPc != null
+        ? Number(mod(Math.round(finite(melodyLanding.pitch)), 12) === rootPc)
+        : Number(goalTones.has(mod(Math.round(finite(melodyLanding.pitch)), 12)));
 
     const endDistances = [bassLanding, melodyLanding]
       .filter(Boolean)
