@@ -1037,7 +1037,9 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
-  ]);
+  ], {
+    repairAuthority: config?.generationRepairAuthority ?? null,
+  });
   const diagnostics = sequence.diagnostics;
   return {
     song: sequence.song,
