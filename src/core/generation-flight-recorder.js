@@ -115,13 +115,16 @@ export function createGenerationFlightRecorder({
       if (!run) return false;
       active.delete(id);
       const endedAt = Number(clock());
+      // Keep the legacy complete(id, song) call shape while allowing the
+      // executor to record the actual result contract for variations and
+      // rejected composition candidates.
       publish({
         ...run,
         status: result?.status ?? "committed",
         endedAt,
         durationMs: Math.max(0, endedAt - run.startedAt),
         song: result?.song ? summarizeSong(result.song) : result?.status ? null : summarizeSong(result),
-        variationCount: result?.variations?.length ?? null,
+        ...(Array.isArray(result?.variations) ? { variationCount: result.variations.length } : {}),
         stages: Object.freeze([...run.stages]),
       });
       return true;
