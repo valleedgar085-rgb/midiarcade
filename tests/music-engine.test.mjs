@@ -3337,6 +3337,12 @@ test("Track B outcome logic keeps Producer Brain status aligned with release, qu
   assert.equal(outcome.registerOutcomePassed, song.meta.registerOutcome.passed);
   assert.equal(song.producerPass.status, outcome.passed ? "passed" : "best-available");
   assert.deepEqual(song.producerPass.outputOutcome, outcome);
+  assert.equal(
+    song.producerPass.committedStatus,
+    details.committed.outputOutcome.passed ? "passed" : "best-available",
+  );
+  assert.deepEqual(song.producerPass.committedOutputOutcome, details.committed.outputOutcome);
+  assert.deepEqual(song.producerPass.committedQualityGate, details.committed.qualityGate);
 });
 
 test("Track B candidate diagnostics expose one coherent outcome for every auditioned candidate", () => {
