@@ -247,3 +247,18 @@ test("kick-bass cloning is penalized without requiring bass to ignore the groove
   assert.ok(report.metrics.kickBassCloneRatio >= 0.68, JSON.stringify(report.metrics));
   assert.ok(report.metrics.bassIndependence < 1, JSON.stringify(report.metrics));
 });
+
+
+test("ensemble critic publishes section-role evolution and breathing-room diagnostics", () => {
+  const song = generateNew({
+    genre: "pop", seed: "ensemble-role-evolution-proof", bars: 24,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const before = structuredClone(song);
+  const report = evaluateEnsembleCoordinationAuthority(song);
+  assert.deepEqual(song, before, "role-evolution analysis must remain read-only");
+  assert.equal(report.roleEvolution.length, song.structure.length);
+  assert.ok(Number.isFinite(report.metrics.sectionRoleEvolution));
+  assert.ok(Number.isFinite(report.metrics.arrangementBreathingRoom));
+  assert.equal(typeof report.metrics.allLayersAlwaysOn, "boolean");
+});
