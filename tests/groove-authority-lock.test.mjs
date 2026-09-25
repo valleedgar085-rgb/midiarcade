@@ -47,6 +47,13 @@ test("Groove DNA final lock is read-only and reports intact authored timing", ()
   assert.equal(report.timingViolations, 0);
   assert.equal(report.protectedSpaceViolations, 0);
   assert.equal(report.adherence, 1);
+  assert.equal(report.version, 2);
+  assert.equal(report.checks.kickAnchors, true);
+  assert.equal(report.checks.snareAnchors, true);
+  assert.equal(report.checks.bassPulses, true);
+  assert.equal(report.checks.protectedNegativeSpace, true);
+  assert.equal(report.checks.postCompositionTimingStable, true);
+  assert.equal(report.postCompositionTimingMutations, 0);
 });
 
 test("Groove DNA final lock exposes late timing and negative-space violations without repairing them", () => {
@@ -67,5 +74,9 @@ test("Groove DNA final lock exposes late timing and negative-space violations wi
   assert.equal(report.status, "best-available");
   assert.equal(report.timingViolations, 1);
   assert.equal(report.protectedSpaceViolations, 1);
+  assert.equal(report.postCompositionTimingMutations, 1);
+  assert.equal(report.checks.bassPulses, false);
+  assert.equal(report.checks.protectedNegativeSpace, false);
+  assert.equal(report.checks.postCompositionTimingStable, false);
   assert.equal(report.repairs, 0);
 });
