@@ -61,11 +61,17 @@ function evaluation(score, arrangementScore) {
   };
 }
 
-test("genre sequence scoring prefers musically ordered Pop, Techno, and Rock payoffs", () => {
+test("genre sequence scoring prefers musically ordered Pop, Hip-Hop, Techno, and Rock payoffs", () => {
   assert.ok(
     genreSequenceFitScore(["intro", "verse", "prechorus", "chorus", "bridge", "prechorus", "chorus", "outro"], "pop")
       > genreSequenceFitScore(["intro", "verse", "chorus", "prechorus", "bridge", "chorus", "verse", "outro"], "pop"),
     "Pop should prefer a setup immediately before the final chorus",
+  );
+
+  assert.ok(
+    genreSequenceFitScore(["intro", "verse", "chorus", "verse", "bridge", "chorus", "outro"], "hipHop")
+      > genreSequenceFitScore(["intro", "chorus", "verse", "chorus", "verse", "outro"], "hipHop"),
+    "Hip-Hop should establish the verse pocket before the hook and return to a final payoff after development",
   );
 
   assert.ok(
