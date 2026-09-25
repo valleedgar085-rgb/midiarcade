@@ -7613,7 +7613,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
  * scale-checked pre-polish performance, never synthesized from an arbitrary
  * pitch. Transition repairs only annotate an existing boundary event.
  */
-function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint) {
+function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
@@ -7709,6 +7709,10 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
       transitionEventsTagged,
     },
   };
+}
+
+function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint) {
+  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint);
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
@@ -9803,8 +9807,8 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  // Destructive note repair ends before Final Assembly. Final Assembly may only
-  // restore/tag protected arrangement anchors; everything after it is read-only.
+  // Candidate note repair ends before the candidate assembly repair. The single
+  // committed Final Assembly runs later, after post-selection register/section work.
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
     producerIntentEnforcement.tracks,
     harmony,
@@ -9820,7 +9824,7 @@ function compose(config, options = {}) {
     },
     structure,
   );
-  const finalAssemblyRepair = runFinalAssemblyPass(
+  const finalAssemblyRepair = runCandidateAssemblyRepair(
     tonalIntegrityRepair.tracks,
     characteristicVoice.tracks,
     structure,
@@ -12591,7 +12595,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
-  const finalAssemblyRepair = runFinalAssemblyPass(
+  const finalAssemblyRepair = runCandidateAssemblyRepair(
     preAssemblyTracks,
     producerIntentEnforcement.tracks,
     song.structure,
