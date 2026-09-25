@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const budgets = Object.freeze({
   "www/src/app.js": 361 * 1024,
+  "www/src/cover-art.js": 12 * 1024,
   "www/src/generation-worker.js": 320 * 1024,
   "www/src/quality-pipeline.js": 24 * 1024,
   "www/styles.css": 150 * 1024,
@@ -34,6 +35,7 @@ const generationCss = await readFile(path.join(projectRoot, "www/generation-expe
 const shapeCss = await readFile(path.join(projectRoot, "www/shape-director.css"), "utf8");
 const solarPopCss = await readFile(path.join(projectRoot, "www/solar-pop.css"), "utf8");
 const app = await readFile(path.join(projectRoot, "www/src/app.js"), "utf8");
+const coverArt = await readFile(path.join(projectRoot, "www/src/cover-art.js"), "utf8");
 const generationWorker = await readFile(path.join(projectRoot, "www/src/generation-worker.js"), "utf8");
 const qualityPipeline = await readFile(path.join(projectRoot, "www/src/quality-pipeline.js"), "utf8");
 const buttonCount = (html.match(/<button\b/g) || []).length;
@@ -57,6 +59,7 @@ for (const [relativePath, source] of [
   ["www/shape-director.css", shapeCss],
   ["www/solar-pop.css", solarPopCss],
   ["www/src/app.js", app],
+  ["www/src/cover-art.js", coverArt],
   ["www/src/generation-worker.js", generationWorker],
   ["www/src/quality-pipeline.js", qualityPipeline],
 ]) {
