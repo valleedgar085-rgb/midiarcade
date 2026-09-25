@@ -920,6 +920,15 @@ export const GENRE_RHYTHM_GRAMMARS = deepFreeze({
   synthPopRadio: { phrase: "synth-drive", responseDelay: 0.5, answerKick: 2.5, turnaround: 3.5, bassAnswer: 3.0 },
 });
 
+function indexFirstById(items = []) {
+  const index = new Map();
+  for (const item of items) {
+    const id = item?.id;
+    if (id != null && !index.has(id)) index.set(id, item);
+  }
+  return index;
+}
+
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
   Object.freeze(value);
@@ -3692,7 +3701,7 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = [], option
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
-  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const byId = indexFirstById(tracks);
   const adjustedByTrack = {};
   const manualTracks = [];
   let maximumLeapBefore = 0;
@@ -3753,7 +3762,7 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = [], option
 export function evaluateDawRegisterQuality(song) {
   const tracks = song?.tracks ?? [];
   const structure = song?.structure ?? song?.sections ?? [];
-  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const byId = indexFirstById(tracks);
   const bassNotes = byId.get("bass")?.notes ?? [];
   let rangeViolations = 0;
   let separationViolations = 0;
@@ -5903,12 +5912,10 @@ function developedRepeatDegreeShift({
 function protectExpressiveLeadSpacing(notes = []) {
   const ordered = [...notes].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   const merged = [];
+  const lastByPitch = new Map();
   for (const note of ordered) {
-    const duplicate = merged.find((existing) => (
-      existing.pitch === note.pitch
-      && Math.abs(existing.start - note.start) < 1e-6
-    ));
-    if (duplicate) {
+    const duplicate = lastByPitch.get(note.pitch);
+    if (duplicate && Math.abs(duplicate.start - note.start) < 1e-6) {
       duplicate.duration = Math.max(duplicate.duration, note.duration);
       duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
       duplicate.melodySpacingProtected = true;
@@ -5917,6 +5924,7 @@ function protectExpressiveLeadSpacing(notes = []) {
       continue;
     }
     merged.push(note);
+    lastByPitch.set(note.pitch, note);
   }
   for (let index = 0; index < merged.length - 1; index += 1) {
     const current = merged[index];
@@ -6836,7 +6844,7 @@ function evaluateProducerIntentContract(sourceTracks, structure, producerIntent)
 
 function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
   const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const trackById = indexFirstById(tracks);
   let removedAnswerCollisions = 0;
 
   for (const scene of producerIntent?.scenes ?? []) {
@@ -7567,6 +7575,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     registerCollisionsLifted: 0,
     velocitiesScaled: 0,
   };
+  const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
 
   for (const track of tracks) {
     if (track.id === "drums") continue;
@@ -7584,9 +7594,9 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     }
   }
 
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
+  const bass = trackById.get("bass")?.notes ?? [];
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     for (const note of track.notes) {
       const soundingBass = bass.filter((candidate) => (
@@ -7611,8 +7621,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
 
   const finalPeak = allNotes.length ? Math.max(...allNotes.map((note) => note.velocity)) : 0;
   const featuredCoverage = (songBlueprint?.orchestrationMatrix ?? []).map((entry) => {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || track.settings?.density <= 0.001) return true;
     return track.notes.some((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
   });
@@ -7841,12 +7851,11 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
       })
       .sort((left, right) => left.start - right.start || left.pitch - right.pitch || left.duration - right.duration);
     const deduped = [];
+    const lastDuplicateByPitch = new Map();
     for (const note of ordered) {
       const retriggerFloor = track.id === "drums" ? 0.0005 : 0.02;
-      const duplicate = deduped.findLast((candidate) => (
-        candidate.pitch === note.pitch && Math.abs(candidate.start - note.start) < retriggerFloor
-      ));
-      if (duplicate) {
+      const duplicate = lastDuplicateByPitch.get(note.pitch);
+      if (duplicate && Math.abs(duplicate.start - note.start) < retriggerFloor) {
         const duplicateEnd = Math.max(
           duplicate.start + duplicate.duration,
           note.start + note.duration,
@@ -7857,6 +7866,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
         continue;
       }
       deduped.push(note);
+      lastDuplicateByPitch.set(note.pitch, note);
     }
     if (track.id !== "drums") {
       const lastByPitch = new Map();
@@ -7924,12 +7934,20 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   const fallbackById = new Map(
     fallbackTracks.map((track) => [track.id, track.notes ?? []]),
   );
+  const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
+  const transitionTracks = tracks.filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id));
+  const taggedHandoffs = new Set(
+    tracks.flatMap((track) => track.notes ?? [])
+      .map((note) => note.transitionHandoffId)
+      .filter(Boolean),
+  );
   let featuredAnchorsRestored = 0;
   let transitionEventsTagged = 0;
 
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     const hasFeature = track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -7985,22 +8003,18 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   }
 
   for (const transition of songBlueprint?.transitions ?? []) {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const from = sectionById.get(transition.fromSectionId);
+    const to = sectionById.get(transition.toSectionId);
     if (!from || !to) continue;
     const lastSection = structure[structure.length - 1];
     if (to.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
     const handoffId = `${from.id}->${to.id}`;
-    const alreadyTagged = tracks.some((track) => track.notes.some((note) => (
-      note.transitionHandoffId === handoffId
-    )));
-    if (alreadyTagged || transition.type === "drop-out") continue;
+    if (taggedHandoffs.has(handoffId) || transition.type === "drop-out") continue;
     const pickupStart = Math.max(
       from.startBeat,
       from.endBeat - clamp(finite(transition.pickupBeats, 0.5), 0.25, 2),
     );
-    const candidates = tracks
-      .filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id))
+    const candidates = transitionTracks
       .flatMap((track) => track.notes.map((note) => ({ note, trackId: track.id })))
       .filter(({ note }) => note.start >= pickupStart - 1e-6 && note.start <= from.endBeat + 0.12)
       .sort((left, right) => (
@@ -8013,21 +8027,21 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     candidates[0].note.transitionHandoffRole = `${transition.type}-final-boundary`;
     candidates[0].note.transitionFeature ??= transition.type;
     candidates[0].note.finalAssemblyRole = "verified-transition-event";
+    taggedHandoffs.add(handoffId);
     transitionEventsTagged += 1;
   }
 
   let melodyDuplicatesMerged = 0;
   if (config.bars >= 12) {
-    const melodyTrack = tracks.find((track) => track.id === "melody");
+    const melodyTrack = trackById.get("melody");
     if (melodyTrack) {
       const merged = [];
+      const lastByPitch = new Map();
       for (const note of [...(melodyTrack.notes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch)) {
-        const duplicate = merged.find((existing) => (
-          existing.pitch === note.pitch
-          && Math.abs(existing.start - note.start) < 1e-6
-        ));
-        if (!duplicate) {
+        const duplicate = lastByPitch.get(note.pitch);
+        if (!duplicate || Math.abs(duplicate.start - note.start) >= 1e-6) {
           merged.push(note);
+          lastByPitch.set(note.pitch, note);
           continue;
         }
         duplicate.duration = Math.max(duplicate.duration, note.duration);
@@ -8065,10 +8079,12 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
+  const sectionById = indexFirstById(structure);
+  const trackById = indexFirstById(tracks);
   const missingFeaturedSections = [];
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     if (!track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -8082,12 +8098,12 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
     ))))
     .map((section) => section.id);
   const transitionContracts = (songBlueprint?.transitions ?? []).filter((transition) => {
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const to = sectionById.get(transition.toSectionId);
     const lastSection = structure[structure.length - 1];
     return !(to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name));
   });
   const coordinatedTransitions = transitionContracts.filter((transition) => {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const from = sectionById.get(transition.fromSectionId);
     if (!from) return false;
     const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
     if (transition.type !== "drop-out") {
@@ -8255,8 +8271,9 @@ function runVoiceLeadingPass(sourceTracks, config) {
   let commonTonesHeld = 0;
   let bassCollisionsCleared = 0;
   let padDoublingsAvoided = 0;
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
-  const chords = tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const trackById = indexFirstById(tracks);
+  const bass = trackById.get("bass")?.notes ?? [];
+  const chords = trackById.get("chords")?.notes ?? [];
   const candidatesForPitchClass = (pitch, minimum, maximum) => {
     const pitchClass = mod(pitch, 12);
     const candidates = [];
@@ -8267,7 +8284,7 @@ function runVoiceLeadingPass(sourceTracks, config) {
   };
 
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     const groups = new Map();
     for (const note of track.notes) {
@@ -8462,6 +8479,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = indexFirstById(tracks);
   const eligible = structure
     .filter((section) => !["intro", "outro"].includes(section.name))
     .sort((left, right) => finite(left.energy, 0.5) - finite(right.energy, 0.5));
@@ -8482,7 +8500,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["counterpoint", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         const inBreath = windows.some((window) => note.start >= window.start && note.start < window.end);
@@ -8511,6 +8529,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = indexFirstById(tracks);
   const enabled = VOCAL_LED_GENRES.has(config.genre);
   const barBeats = beatsPerBar(config);
   const verseSections = enabled
@@ -8530,7 +8549,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
   ));
   if (windows.length) {
     for (const id of ["melody", "counterpoint"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
@@ -8548,7 +8567,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["chords", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       for (const note of track.notes) {
         if (!inVocalWindow(note)) continue;
@@ -8651,7 +8670,7 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const trackById = indexFirstById(tracks);
   let sectionsCoordinated = 0;
   let notesRetuned = 0;
   let releasesShaped = 0;
