@@ -1,4 +1,5 @@
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
+import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
@@ -10,6 +11,40 @@ import {
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
+
+
+function committedAuthorityRegression(beforeSong, afterSong) {
+  if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
+  const reasons = [];
+  const beforeAssembly = beforeSong.finalAssembly?.checks ?? {};
+  const afterAssembly = afterSong.finalAssembly?.checks ?? {};
+  for (const [check, passed] of Object.entries(beforeAssembly)) {
+    if (passed === true && afterAssembly[check] !== true) reasons.push(`final-assembly:${check}`);
+  }
+  const beforeGroove = beforeSong.finalRhythmLock ?? {};
+  const afterGroove = afterSong.finalRhythmLock ?? {};
+  if (Number(afterGroove.timingViolations ?? 0) > Number(beforeGroove.timingViolations ?? 0)) {
+    reasons.push("groove-timing-regression");
+  }
+  if (Number(afterGroove.protectedSpaceViolations ?? 0) > Number(beforeGroove.protectedSpaceViolations ?? 0)) {
+    reasons.push("groove-negative-space-regression");
+  }
+  if (beforeSong.producerIntentReport?.status === "complete" && afterSong.producerIntentReport?.status !== "complete") {
+    reasons.push("producer-intent-regression");
+  }
+  const beforeTonal = beforeSong.tonalIntegrity?.finalValidation ?? beforeSong.tonalIntegrity?.after ?? {};
+  const afterTonal = afterSong.tonalIntegrity?.finalValidation ?? afterSong.tonalIntegrity?.after ?? {};
+  if (Number(afterTonal.scaleFit ?? 0) + 1e-9 < Number(beforeTonal.scaleFit ?? 0)) {
+    reasons.push("tonal-scale-regression");
+  }
+  if (Number(afterTonal.harshStrongNotes ?? 0) > Number(beforeTonal.harshStrongNotes ?? 0)) {
+    reasons.push("tonal-context-regression");
+  }
+  return Object.freeze({
+    passed: reasons.length === 0,
+    reasons: Object.freeze(reasons),
+  });
+}
 
 export function createGenerationExecutor({
   fallback,
@@ -240,15 +275,51 @@ export function createGenerationExecutor({
       }
 
       const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
+      const preQualityResult = selectedResult;
+      const preQualitySong = preQualityResult?.song
+        ? refreshCommittedGenerationDiagnostics(preQualityResult.song, qualityConfig)
+        : null;
       let stageDiagnostics = {};
-      selectedResult = applyResultOutputQualityPipeline(selectedResult, qualityConfig, {
+      const qualityResult = applyResultOutputQualityPipeline(preQualityResult, qualityConfig, {
         onStageDiagnostics(diagnostics) {
           stageDiagnostics = diagnostics ?? {};
         },
       });
+      let committedQuality = Object.freeze({
+        accepted: qualityResult === preQualityResult,
+        reason: qualityResult === preQualityResult ? "unchanged" : "pending-validation",
+        authorityRegression: Object.freeze({ passed: true, reasons: Object.freeze([]) }),
+        releasePassed: preQualitySong ? evaluateSongReleaseGate(preQualitySong).passed : null,
+      });
+      if (qualityResult?.song && qualityResult !== preQualityResult) {
+        const refreshedQualitySong = refreshCommittedGenerationDiagnostics(qualityResult.song, qualityConfig);
+        const authorityRegression = committedAuthorityRegression(preQualitySong, refreshedQualitySong);
+        const committedRelease = evaluateSongReleaseGate(refreshedQualitySong);
+        const accepted = authorityRegression.passed && committedRelease.passed;
+        committedQuality = Object.freeze({
+          accepted,
+          reason: accepted
+            ? "committed-authorities-preserved"
+            : !authorityRegression.passed
+              ? "committed-authority-regression"
+              : "committed-release-gate-failed",
+          authorityRegression,
+          releasePassed: committedRelease.passed,
+          releaseFailures: Object.freeze([...(committedRelease.failures ?? [])]),
+        });
+        selectedResult = accepted
+          ? { ...qualityResult, song: refreshedQualitySong }
+          : {
+            ...preQualityResult,
+            outputQualityRejected: committedQuality,
+          };
+      } else if (preQualitySong && preQualityResult?.song !== preQualitySong) {
+        selectedResult = { ...preQualityResult, song: preQualitySong };
+      }
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
         repairAuthority,
+        committedQuality,
         resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
         returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
