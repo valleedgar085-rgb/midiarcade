@@ -268,3 +268,54 @@ test("candidate judge recognizes House offbeat bass as correct interlock instead
     "House should expose offbeat bass relationship events",
   );
 });
+
+
+test("full-song intros use a one-way opening boundary instead of entering mid-loop", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBar: 0, bars: 2 },
+    { id: "verse-1", name: "verse", startBar: 2, bars: 6 },
+    { id: "chorus-1", name: "chorus", startBar: 8, bars: 4 },
+  ];
+
+  for (const genre of ["hipHop", "trap", "pop", "house", "neoSoul", "rock"]) {
+    const result = createGrooveDNA({
+      seed: `opening-boundary:${genre}`,
+      genre,
+      bars: 12,
+      beatsPerBar: 4,
+      complexity: 0.68,
+      variation: 0.56,
+    }, { structure });
+    const opening = result.bars[0];
+    assert.equal(opening.openingBoundary, true, `${genre} should mark the first intro bar as an opening boundary`);
+    assert.ok(opening.kick.steps.some((step) => Math.abs(step) < 1e-6), `${genre} should establish beat one`);
+    assert.ok(
+      opening.snare.steps.every((step) => step >= 8 - 1e-6),
+      `${genre} should not play a backbeat as though the intro began before beat one`,
+    );
+    assert.ok(
+      opening.percussion.steps.every((step) => step >= 12 - 1e-6),
+      `${genre} opening percussion should enter as a late-bar pickup, not a pre-existing loop`,
+    );
+    assert.equal(result.bars[1].openingBoundary, false);
+  }
+});
+
+test("short loop sketches preserve immediate Groove DNA behavior", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBar: 0, bars: 2 },
+    { id: "idea-1", name: "idea", startBar: 2, bars: 6 },
+  ];
+  const result = createGrooveDNA({
+    seed: "short-loop-opening-boundary",
+    genre: "house",
+    bars: 8,
+    beatsPerBar: 4,
+    complexity: 0.68,
+    variation: 0.56,
+  }, { structure });
+
+  assert.equal(result.bars[0].openingBoundary, false);
+  assert.deepEqual(result.bars[0].kick.requiredSteps, [0, 4, 8, 12]);
+  assert.deepEqual(result.bars[0].hat.requiredSteps, [2, 6, 10, 14]);
+});
