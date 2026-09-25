@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   attachGenerationRepairAuthority,
+  authorizeQualityStage,
   decideGenerationRepairAuthority,
   qualityStageAuthority,
   resolveWeaknessAuthority,
@@ -58,4 +59,17 @@ test("quality stages declare their mutation owners through the same router", () 
   assert.deepEqual(qualityStageAuthority("groovePocket").owners, ["groove"]);
   assert.deepEqual(qualityStageAuthority("phraseResolutionRefinement").owners, ["phrase", "harmony"]);
   assert.equal(qualityStageAuthority("transitionFxRefinement").automationOnly, true);
+});
+
+
+test("quality specialist admission follows the diagnosed mutation owner", () => {
+  const authority = decideGenerationRepairAuthority("new", {
+    shouldRetry: false,
+    focusDimension: "registerHealth",
+    focusGroup: "motif",
+  }, {});
+  assert.equal(authority.mutationOwner, "register");
+  assert.equal(authorizeQualityStage("registerHealthRefinement", authority).allowed, true);
+  assert.equal(authorizeQualityStage("groovePocket", authority).allowed, false);
+  assert.equal(authorizeQualityStage("transitionFxRefinement", authority).allowed, true);
 });
