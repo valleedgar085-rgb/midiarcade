@@ -35,7 +35,7 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
-import { refineRoleRegisters } from "./core/role-register-refinement.js";
+import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
   humanGrooveInfluence,
@@ -7806,6 +7806,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     song.grooveConductor,
     { beatsPerBar: beatsPerBar(resolvedConfig) },
   );
+  const finalRegisterIntegrity = analyzeRoleRegisters(song.tracks);
   const finalTonalIntegrity = analyzeTonalIntegrity(
     song.tracks,
     song.harmony ?? [],
@@ -7858,6 +7859,12 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
 
   return {
     ...song,
+    registerIntegrity: {
+      ...(song.registerIntegrity ?? {}),
+      status: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
+      after: finalRegisterIntegrity,
+      finalValidation: finalRegisterIntegrity,
+    },
     producerIntentReport: {
       ...producerIntentReport,
       ...(song.producerIntentReport?.enforcement
@@ -7874,6 +7881,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
+      register: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
       assembly: finalAssembly.status,
     }),
   };
@@ -13431,6 +13439,7 @@ function commitCandidate(candidates, search = {}) {
       ? "release-ready"
       : "committed-authority-below-gate",
   };
+  selected.song.meta.score = committedEvaluation.score;
   selected.song.meta.scoreDetails = {
     ...(selected.song.meta.scoreDetails ?? {}),
     totalScore: committedEvaluation.score,
