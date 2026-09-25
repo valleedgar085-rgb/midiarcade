@@ -47,6 +47,7 @@ import {
   createGrooveDNA,
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
+import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
 import {
   absoluteGroovePulses,
   grooveBarPlan,
@@ -6485,14 +6486,14 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
   }));
 }
 
-function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
+function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
   const sectionForNote = (note) => structure.find((section) => (
     note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
   ));
-  const tracks = sourceTracks.map((track) => ({
+  return sourceTracks.map((track) => ({
     ...track,
-    notes: track.notes.map((note) => {
+    notes: (track.notes ?? []).map((note) => {
       const section = sectionForNote(note);
       const scene = scenes.get(section?.id);
       return {
@@ -6502,32 +6503,10 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       };
     }),
   }));
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
-  for (const scene of producerIntent?.scenes ?? []) {
-    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
-    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
-    const answerTrack = trackById.get(scene.answerTrack);
-    if (!section || !answerTrack || !foreground.length) continue;
-    answerTrack.notes = answerTrack.notes.filter((note) => {
-      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
-      const protectedAnchor = note.phraseAnchor
-        || note.resolutionRole
-        || note.transitionRole
-        || note.transitionFeature
-        || note.transitionHandoffRole
-        || note.memoryRole
-        || note.motifHandoffRole
-        || note.ensembleAccent
-        || note.finalAssemblyRole;
-      if (protectedAnchor) return true;
-      return !foreground.some((lead) => (
-        lead.start >= section.startBeat - 1e-6
-        && lead.start < section.endBeat - 1e-6
-        && Math.abs(lead.start - note.start) < 0.105
-      ));
-    });
-  }
+}
+
+function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
     const section = structure.find((candidate) => candidate.id === scene.sectionId);
     const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
@@ -6538,7 +6517,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
     const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
-    const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
+    const restTrackIds = Object.entries(scene.roles ?? {}).filter(([, role]) => role === "rest").map(([id]) => id);
     const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
     return {
       sectionId: scene.sectionId,
@@ -6554,7 +6533,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       restNotes,
     };
   });
-  const allNotes = tracks.flatMap((track) => track.notes);
+  const allNotes = (sourceTracks ?? []).flatMap((track) => track.notes ?? []);
   const foregroundCoverage = sceneReports.filter((scene) => scene.foregroundNotes > 0).length
     / Math.max(1, sceneReports.length);
   const answerCollisionRate = average(sceneReports.map((scene) => scene.answerCollisionRate), 0);
@@ -6567,29 +6546,64 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
   const developedReturns = (producerIntent?.scenes ?? [])
     .filter((scene) => finite(scene.returnIndex, 0) > 0)
     .every((scene) => ["rhythm", "density", "register", "dialogue"].includes(scene.developmentAxis));
+  const checks = {
+    completeRoles,
+    singleForeground,
+    developedReturns,
+    foregroundAudible: foregroundCoverage >= 0.9,
+    answersSeparated: answerCollisionRate <= 0.28,
+    allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
+  };
+  return {
+    phase: 76,
+    version: 2,
+    status: Object.values(checks).every(Boolean) ? "complete" : "best-available",
+    signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
+    metrics: {
+      sceneCount: sceneReports.length,
+      taggedNotes: allNotes.filter((note) => note.producerRole).length,
+      foregroundCoverage: round(foregroundCoverage),
+      answerCollisionRate: round(answerCollisionRate),
+      restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+    },
+    checks,
+    scenes: sceneReports,
+  };
+}
+
+function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  let removedAnswerCollisions = 0;
+
+  for (const scene of producerIntent?.scenes ?? []) {
+    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
+    const answerTrack = trackById.get(scene.answerTrack);
+    if (!section || !answerTrack || !foreground.length) continue;
+    const before = answerTrack.notes.length;
+    answerTrack.notes = answerTrack.notes.filter((note) => {
+      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
+      if (isProtectedArrangementNote(note)) return true;
+      return !foreground.some((lead) => (
+        lead.start >= section.startBeat - 1e-6
+        && lead.start < section.endBeat - 1e-6
+        && Math.abs(lead.start - note.start) < 0.105
+      ));
+    });
+    removedAnswerCollisions += before - answerTrack.notes.length;
+  }
+
+  const report = evaluateProducerIntentContract(tracks, structure, producerIntent);
   return {
     tracks,
     report: {
-      phase: 76,
-      version: 1,
-      status: "complete",
-      signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
-      metrics: {
-        sceneCount: sceneReports.length,
-        taggedNotes: allNotes.filter((note) => note.producerRole).length,
-        foregroundCoverage: round(foregroundCoverage),
-        answerCollisionRate: round(answerCollisionRate),
-        restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+      ...report,
+      enforcement: {
+        version: 1,
+        removedAnswerCollisions,
       },
-      checks: {
-        completeRoles,
-        singleForeground,
-        developedReturns,
-        foregroundAudible: foregroundCoverage >= 0.9,
-        answersSeparated: answerCollisionRate <= 0.28,
-        allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
-      },
-      scenes: sceneReports,
     },
   };
 }
@@ -9773,13 +9787,7 @@ function compose(config, options = {}) {
     )
     : { tracks: creativePolish.tracks, added: 0 };
   const melodicFlow = shapeRenderedMelodicFlow(counterCoverage.tracks, structure);
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    melodicFlow.tracks,
-    scaleSafety.tracks,
-    structure,
-    songBlueprint,
-  );
-  const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
+  const finalMaster = runFinalMasterPass(melodicFlow.tracks, structure, songBlueprint, config);
   const withSectionLandings = ensureFinalMelodicSectionLandings(
     finalMaster.tracks,
     structure,
@@ -9789,36 +9797,19 @@ function compose(config, options = {}) {
   );
   const finalScaleSafety = enforceScaleSafety(withSectionLandings, config);
   const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
-  const producerIntentAudit = auditProducerIntentContract(
+  const producerIntentEnforcement = enforceProducerIntentContract(
     characteristicVoice.tracks,
     structure,
     songBlueprint.producerIntent,
   );
-  const postIntentAssembly = runFinalAssemblyPass(
-    producerIntentAudit.tracks,
-    finalAssemblyRepair.tracks,
+  const finalAssemblyRepair = runFinalAssemblyPass(
+    producerIntentEnforcement.tracks,
+    finalScaleSafety.tracks,
     structure,
     songBlueprint,
   );
-  const finalProducerIntentAudit = auditProducerIntentContract(
-    postIntentAssembly.tracks,
-    structure,
-    songBlueprint.producerIntent,
-  );
-  const finalGrooveAssembly = runFinalAssemblyPass(
-    finalProducerIntentAudit.tracks,
-    postIntentAssembly.tracks,
-    structure,
-    songBlueprint,
-  );
-  const postGrooveIntentAudit = auditProducerIntentContract(
-    finalGrooveAssembly.tracks,
-    structure,
-    songBlueprint.producerIntent,
-  );
-  const finalGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
-    finalGrooveAssembly.tracks,
+    finalAssemblyRepair.tracks,
     harmony,
     config,
   );
@@ -9838,21 +9829,25 @@ function compose(config, options = {}) {
   produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
   produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
   produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
-  let tracks = tonalIntegrity.tracks;
+  const tracks = tonalIntegrity.tracks;
+  const finalProducerIntentReport = evaluateProducerIntentContract(
+    tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalGrooveRhythmLock = evaluateGrooveAuthorityLock(
+    tracks,
+    grooveConductor,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  produced.report.metrics.grooveAuthorityAdherence = finalGrooveRhythmLock.adherence;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
     songBlueprint,
-    {
-      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored
-        + finalGrooveAssembly.repairs.featuredAnchorsRestored,
-      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged
-        + finalGrooveAssembly.repairs.transitionEventsTagged,
-    },
+    finalAssemblyRepair.repairs,
   );
   const sectionContrast = createSectionContrastReport(
     tracks,
@@ -9931,8 +9926,11 @@ function compose(config, options = {}) {
     characteristicVoice: characteristicVoice.report,
     songDNA: clone(songBlueprint.songDNA),
     producerIntent: clone(songBlueprint.producerIntent),
-    producerIntentReport: postGrooveIntentAudit.report,
-    finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },
+    producerIntentReport: {
+      ...finalProducerIntentReport,
+      enforcement: producerIntentEnforcement.report.enforcement,
+    },
+    finalRhythmLock: finalGrooveRhythmLock,
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
@@ -9971,7 +9969,7 @@ function compose(config, options = {}) {
       { phase: 71, id: "genre-native-drum-fill-vocabulary", status: "complete" },
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
-      { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
+      { phase: 76, id: "producer-intent-contract", status: finalProducerIntentReport.status },
     ],
     idea,
   };
