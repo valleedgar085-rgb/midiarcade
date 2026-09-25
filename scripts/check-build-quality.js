@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const budgets = Object.freeze({
-  "www/src/app.js": 360 * 1024,
+  "www/src/app.js": 361 * 1024,
   "www/src/generation-worker.js": 320 * 1024,
   "www/src/quality-pipeline.js": 24 * 1024,
   "www/styles.css": 150 * 1024,

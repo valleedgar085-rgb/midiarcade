@@ -110,17 +110,21 @@ export function createGenerationFlightRecorder({
       }));
       return true;
     },
-    complete(id, song) {
+    complete(id, result) {
       const run = active.get(id);
       if (!run) return false;
       active.delete(id);
       const endedAt = Number(clock());
+      // Keep the legacy complete(id, song) call shape while allowing the
+      // executor to record the actual result contract for variations and
+      // rejected composition candidates.
       publish({
         ...run,
-        status: "committed",
+        status: result?.status ?? "committed",
         endedAt,
         durationMs: Math.max(0, endedAt - run.startedAt),
-        song: summarizeSong(song),
+        song: result?.song ? summarizeSong(result.song) : result?.status ? null : summarizeSong(result),
+        ...(Array.isArray(result?.variations) ? { variationCount: result.variations.length } : {}),
         stages: Object.freeze([...run.stages]),
       });
       return true;

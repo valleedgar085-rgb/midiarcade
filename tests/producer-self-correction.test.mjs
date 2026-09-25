@@ -64,7 +64,7 @@ test("self-correction diagnosis retries only an unresolved critic focus and pres
 
   const variations = diagnoseGenerationOutcome("songVariations", result("variations"), ENABLED_CONFIG);
   assert.equal(variations.shouldRetry, false);
-  assert.equal(variations.reason, "unsupported-kind");
+  assert.equal(variations.reason, "variation-set-atomic");
 });
 
 test("correction payload focuses one route without mutating the original request", () => {

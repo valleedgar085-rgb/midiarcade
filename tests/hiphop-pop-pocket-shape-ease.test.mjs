@@ -21,6 +21,7 @@ test("Hip-Hop pocket keeps its calibrated writing budget while timing feel chang
   assert.equal(profile.arrangement.fillFrequency, 0.4);
   assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "sparseEcho"]);
   assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.9);
+  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.leapChance < 0.16);
 });
 
 test("Hip-Hop micro timing keeps kick and bass anchored while creating controlled push-pull", () => {
@@ -38,6 +39,7 @@ test("Pop keeps the hook forward and supporting lanes slightly behind", () => {
   const grammar = GENRE_MELODY_GRAMMARS.pop;
   assert.deepEqual(grammar.phraseShapes, ["questionAnswer", "syncopatedLoop"]);
   assert.deepEqual(grammar.contours, ["arch", "climbFall"]);
+  assert.ok(grammar.leapChance < 0.24);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "melody", start: 2 }) < 0);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "counterpoint", start: 2 }) > 0);
   assert.ok(genreMicroTimingOffset({ genre: "pop", trackId: "drums", pitch: 38, start: 2 }) > 0);

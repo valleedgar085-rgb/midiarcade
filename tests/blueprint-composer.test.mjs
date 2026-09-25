@@ -9,6 +9,7 @@ import {
   rejectCompositionCandidate,
   validateCompositionCandidate,
 } from "../src/core/blueprint-composer.js";
+import { generateNew } from "../src/music-engine.js";
 
 function sourceSong() {
   return {
@@ -180,6 +181,37 @@ test("scoped Composer receives a canonical song-state snapshot and exact Groove 
   assert.deepEqual(observedInput.canonicalSongState.harmony, source.harmony);
   assert.deepEqual(observedInput.canonicalSongState.grooveConductor, source.grooveConductor);
   assert.deepEqual(observedInput.grooveConductor, source.grooveConductor);
+});
+
+test("default scoped Composer locks stale app settings to the source song authorities", () => {
+  const source = generateNew({
+    seed: "scoped-authority-source",
+    genre: "hipHop",
+    bars: 8,
+    key: "A",
+    scale: "minor",
+    candidateCount: 1,
+    adaptiveCandidates: false,
+  });
+  const transaction = createCompositionCandidate(source, {
+    target: "track",
+    trackId: "melody",
+  }, {
+    seed: "scoped-authority-candidate",
+    genre: "pop",
+    bars: 32,
+    key: "C",
+    scale: "major",
+  });
+
+  assert.equal(transaction.generated.key, source.key);
+  assert.equal(transaction.generated.mode, source.mode);
+  assert.equal(transaction.generated.bars, source.bars);
+  assert.deepEqual(transaction.generated.structure, source.structure);
+  assert.deepEqual(transaction.generated.harmony, source.harmony);
+  assert.deepEqual(transaction.generated.songBlueprint, source.songBlueprint);
+  assert.ok(!transaction.validation.issues.some((issue) => issue.startsWith("out-of-scale:")));
+  assert.ok(!transaction.validation.issues.some((issue) => issue.startsWith("composer-authority-diverged:")));
 });
 
 test("scoped regeneration rejects notes composed against divergent musical authorities", () => {

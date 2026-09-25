@@ -276,10 +276,9 @@ export const GENRE_GROOVE_GRAMMARS = Object.freeze({
     probability: Object.freeze({ kick: 0.5, snare: 0.62, hat: 0.94, percussion: 0.42 }),
     locked: Object.freeze({ kick: Object.freeze([0]), snare: Object.freeze([]), hat: Object.freeze([0, 4, 8, 12]), percussion: Object.freeze([]) }),
     density: Object.freeze({ kick: 0.64, snare: 0.78, hat: 1, percussion: 0.58 }),
-    transforms: Object.freeze([
-      Object.freeze({ lane: "snare", type: "rotateEvery", every: 3, amount: 1, chance: 0.46 }),
-      Object.freeze({ lane: "percussion", type: "euclid", pulses: 5, steps: 12, rotateEvery: 2 }),
-    ]),
+    // The quarter-note ride is the identity anchor. Let the drummer vary
+    // through dynamics and comping, rather than rotating the timekeeping cell.
+    transforms: Object.freeze([]),
     relationships: Object.freeze({
       bass: Object.freeze({ source: "hat", mode: "walking-quarter-dialogue", lock: 0.46, answerDelayBeats: 0.5, syncopation: 0.5 }),
       chords: Object.freeze({ source: "snare", mode: "comping-conversation", offsetBeats: -0.25, syncopation: 0.7 }),
@@ -759,7 +758,9 @@ export function createGrooveDNA(input = {}, {
         protectedSteps,
         `${seed}:${genre}:${bar}:${lane}:density`,
       );
-      const variationAmount = Math.round(variation * (lane === "hat" ? 2 : 1));
+      const variationAmount = genre === "jazz"
+        ? 0
+        : Math.round(variation * (lane === "hat" ? 2 : 1));
       const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
         ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
         : densitySteps;

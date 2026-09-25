@@ -175,7 +175,7 @@ export function createGenerationExecutor({
       ? new Date(Number(now())).toISOString()
       : null;
     const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
-    const config = adaptedPayload?.config ?? {};
+    const config = adaptedPayload?.config ?? adaptedPayload?.input ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
       config,
@@ -208,7 +208,7 @@ export function createGenerationExecutor({
           compositionCandidate: true,
           passed: transaction?.validation?.valid === true,
         });
-        flightRecorder.complete(flightId, transaction?.after ?? adaptedPayload?.sourceSong);
+        flightRecorder.complete(flightId, originalResult);
         return originalResult;
       }
 
@@ -276,7 +276,7 @@ export function createGenerationExecutor({
       if (shouldPersist) {
         flightRecorder.mark(flightId, "persist", { enabled: true });
       }
-      flightRecorder.complete(flightId, selectedResult?.song);
+      flightRecorder.complete(flightId, selectedResult);
 
       if (shouldPersist) {
         try {

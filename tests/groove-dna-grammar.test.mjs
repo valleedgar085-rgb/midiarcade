@@ -121,6 +121,50 @@ test("House conductor identity remains four-floor plus offbeat hats", () => {
   }
 });
 
+test("Jazz keeps a stable quarter-note ride foundation as variation changes", () => {
+  const steady = createGrooveDNA({
+    seed: "jazz-ride-foundation",
+    genre: "jazz",
+    bars: 8,
+    beatsPerBar: 4,
+    complexity: 0.68,
+    variation: 0,
+  });
+  const varied = createGrooveDNA({
+    seed: "jazz-ride-foundation",
+    genre: "jazz",
+    bars: 8,
+    beatsPerBar: 4,
+    complexity: 0.68,
+    variation: 1,
+  });
+  for (const result of [steady, varied]) {
+    for (let bar = 0; bar < result.barCount; bar += 1) {
+      const lanes = grooveDNAConductorLanes(result, bar);
+      for (const beat of [0, 1, 2, 3]) {
+        assert.ok(lanes.hatPulses.some((pulse) => Math.abs(pulse - beat) < 0.001));
+      }
+    }
+  }
+  assert.deepEqual(varied.bars.map((bar) => bar.hat.steps), steady.bars.map((bar) => bar.hat.steps));
+});
+
+test("generated Jazz maps its timekeeper and accents to consistent ride voices", () => {
+  const song = generateNew({
+    seed: "jazz-ride-voices",
+    genre: "jazz",
+    bars: 8,
+    candidateCount: 1,
+  });
+  const drums = song.tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const ride = drums.filter((note) => note.grooveSource === "jazz-swing-conversation.hat");
+  const accents = drums.filter((note) => note.grooveSource === "jazz-swing-conversation.percussion");
+  assert.ok(ride.length >= 24);
+  assert.ok(accents.length > 0);
+  assert.ok(ride.every((note) => note.pitch === 51));
+  assert.ok(accents.every((note) => note.pitch === 53));
+});
+
 test("Trap and Hip-Hop are not variants of the same kick/snare/hat skeleton", () => {
   const hipHop = dna("hipHop", "hiphop-v-trap");
   const trap = dna("trap", "hiphop-v-trap");

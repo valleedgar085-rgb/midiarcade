@@ -47,7 +47,7 @@ export function diagnoseGenerationOutcome(kind, result, config = {}) {
     reason: shouldRetry
       ? "critic-focus-retry"
       : !eligibleKind
-        ? "unsupported-kind"
+        ? requestKind === "songVariations" ? "variation-set-atomic" : "unsupported-kind"
         : explicitRoute
           ? "explicit-route-preserved"
           : !search
