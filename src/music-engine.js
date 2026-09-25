@@ -6172,7 +6172,7 @@ function generateLead(
       figures += 1;
     }
   }
-  return counterpoint ? notes : protectExpressiveLeadSpacing(notes);
+  return counterpoint || config.bars < 12 ? notes : protectExpressiveLeadSpacing(notes);
 }
 
 const FORWARD_COUNTER_ANSWER_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
@@ -8016,6 +8016,31 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     transitionEventsTagged += 1;
   }
 
+  let melodyDuplicatesMerged = 0;
+  if (config.bars >= 12) {
+    const melodyTrack = tracks.find((track) => track.id === "melody");
+    if (melodyTrack) {
+      const merged = [];
+      for (const note of [...(melodyTrack.notes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch)) {
+        const duplicate = merged.find((existing) => (
+          existing.pitch === note.pitch
+          && Math.abs(existing.start - note.start) < 1e-6
+        ));
+        if (!duplicate) {
+          merged.push(note);
+          continue;
+        }
+        duplicate.duration = Math.max(duplicate.duration, note.duration);
+        duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
+        duplicate.finalAssemblyRole = duplicate.finalAssemblyRole ?? "merged-melody-duplicate";
+        duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
+        duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
+        melodyDuplicatesMerged += 1;
+      }
+      melodyTrack.notes = merged;
+    }
+  }
+
   const counterWindow = DAW_REGISTER_POLICIES.counterpoint ?? { min: 36, max: 116 };
   const separationRepair = repairLeadCounterpointSeparation(tracks, config, {
     minPitch: counterWindow.min,
@@ -8030,6 +8055,7 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
       leadDissonancesCleared: separationRepair.leadDissonancesCleared,
       leadUnisonsCleared: separationRepair.leadUnisonsCleared,
       leadCounterpointNotesRemoved: separationRepair.notesRemoved,
+      melodyDuplicatesMerged,
     },
   };
 }
