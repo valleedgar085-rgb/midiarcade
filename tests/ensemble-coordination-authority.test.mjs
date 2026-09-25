@@ -212,3 +212,38 @@ test("committed diagnostic refresh publishes read-only ensemble coordination fro
     refreshed.committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
   );
 });
+
+
+test("ensemble hardening exposes cloning, register crowding, and support-layer pressure", () => {
+  const song = generateNew({
+    genre: "hipHop", seed: "ensemble-hardening-metrics", bars: 16,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const before = structuredClone(song);
+  const report = evaluateEnsembleCoordinationAuthority(song);
+
+  assert.deepEqual(song, before, "hardened ensemble critic must remain read-only");
+  for (const metric of [
+    "kickBassCloneRatio", "bassIndependence", "melodyChordCrowding",
+    "leadHarmonySeparation", "supportForegroundOverlap", "supportRestraint",
+  ]) assert.ok(Number.isFinite(report.metrics[metric]), metric);
+});
+
+test("kick-bass cloning is penalized without requiring bass to ignore the groove", () => {
+  const song = generateNew({
+    genre: "hipHop", seed: "ensemble-clone-proof", bars: 16,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const cloned = structuredClone(song);
+  const drums = cloned.tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const kicks = drums.filter((note) => [35, 36].includes(Math.round(Number(note.pitch))));
+  const bass = cloned.tracks.find((track) => track.id === "bass");
+  if (bass && kicks.length) {
+    bass.notes = kicks.map((kick, index) => ({
+      ...kick, pitch: 36 + (index % 3) * 2, duration: 0.45, velocity: 92,
+    }));
+  }
+  const report = evaluateEnsembleCoordinationAuthority(cloned);
+  assert.ok(report.metrics.kickBassCloneRatio >= 0.68, JSON.stringify(report.metrics));
+  assert.ok(report.metrics.bassIndependence < 1, JSON.stringify(report.metrics));
+});
