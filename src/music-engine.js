@@ -4217,6 +4217,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       genrePhrase,
       phrasePosition,
       role,
+      openingBoundary: Boolean(grooveDNA.bars?.[bar]?.openingBoundary),
       anchors,
       humanGrooveAdjustment: humanGrooveAdjustment.adjustment,
       humanGrooveInfluence: humanGrooveAdjustment.influence,
