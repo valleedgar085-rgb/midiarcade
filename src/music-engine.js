@@ -9839,6 +9839,9 @@ function compose(config, options = {}) {
   );
   const tonalIntegrityReport = Object.freeze({
     ...tonalIntegrityRepair.report,
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
     after: finalTonalIntegrity,
     finalValidation: finalTonalIntegrity,
   });
@@ -12607,6 +12610,9 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   );
   song.tonalIntegrity = Object.freeze({
     ...repairedTonalIntegrity.report,
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
     after: finalTonalIntegrity,
     finalValidation: finalTonalIntegrity,
   });
