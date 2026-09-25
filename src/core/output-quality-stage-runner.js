@@ -1,3 +1,5 @@
+import { auditStageMutationAuthority } from "./mutation-authority.js";
+
 export function createQualityEvaluationContext({
   evaluateCandidate,
   evaluateReleaseGate,
@@ -37,8 +39,14 @@ export function runQualityStageSequence(song, stages = []) {
   const diagnostics = {};
   for (const stage of stages) {
     if (!stage || typeof stage.run !== "function") continue;
+    const before = current;
     const result = stage.run(current);
-    diagnostics[stage.id] = result?.diagnostics ?? null;
+    const after = result?.song ?? current;
+    const mutationAuthority = auditStageMutationAuthority(before, after, stage.id);
+    const stageDiagnostics = result?.diagnostics ?? null;
+    diagnostics[stage.id] = stageDiagnostics && typeof stageDiagnostics === "object"
+      ? Object.freeze({ ...stageDiagnostics, mutationAuthority })
+      : stageDiagnostics;
     if (result?.song) current = result.song;
   }
   return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });
