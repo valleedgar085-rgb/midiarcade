@@ -2,7 +2,7 @@ import { cloneValue } from "./clone-value.js";
 import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
-export const MAX_MELODY_CONTINUITY_LINKS = 24;
+export const MAX_MELODY_CONTINUITY_LINKS = 28;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
