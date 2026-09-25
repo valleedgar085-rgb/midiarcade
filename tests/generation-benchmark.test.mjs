@@ -162,3 +162,26 @@ test("quality lab can still produce an explicit pre-Phase-6 baseline for A/B com
   assert.equal(baseline.results[0].exportChecks, true);
   assert.equal(evolved.results[0].exportChecks, true);
 });
+
+test("quality lab reports density in critic units and explains skipped groove-pocket refinement", () => {
+  const report = runGenerationBenchmark({
+    genres: ["drumBass", "pop"],
+    seeds: ["diagnostic-proof"],
+    bars: 8,
+  });
+
+  const drumBass = report.results.find(({ genre }) => genre === "drumBass");
+  const pop = report.results.find(({ genre }) => genre === "pop");
+  assert.equal(drumBass.densityMetric, "ensemble-events");
+  assert.equal(pop.densityMetric, "pitched-notes");
+  assert.deepEqual(report.densityMetrics, { "ensemble-events": 1, "pitched-notes": 1 });
+  for (const result of report.results) {
+    assert.ok(Number.isFinite(result.notesPerBar));
+    assert.ok(Number.isFinite(result.densityObserved));
+    assert.ok(Number.isFinite(result.densityTarget));
+    assert.equal(result.densityDelta, Number((result.densityObserved - result.densityTarget).toFixed(2)));
+    assert.equal(result.groovePocketReason, "disabled");
+  }
+  assert.deepEqual(report.groovePocketReasons, { disabled: 2 });
+  assert.deepEqual(report.perGenre.find(({ genre }) => genre === "pop").groovePocketReasons, { disabled: 1 });
+});
