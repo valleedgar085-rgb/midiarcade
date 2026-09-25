@@ -5775,14 +5775,15 @@ function melodyNotationIntent({
   sectionIndex,
 }) {
   const openingEvent = eventIndex === 0;
+  const fullSong = finite(config?.bars, 0) >= 12;
   const strongSection = ["prechorus", "chorus", "build", "drop", "solo"].includes(section.name);
   const syncopatedGenre = ["hipHop", "rap", "trap", "neoSoul", "funk", "reggaeton", "afrobeats"].includes(config.genre);
   const movementStep = syncopatedGenre ? 0.25 : 0.125;
   const developmentType = development?.type ?? "statement";
 
-  // Existing counterline and phrase-anchor authorities remain untouched.
-  // Expressive notation lives inside the lead phrase, not on its structural skeleton.
-  if (counterpoint || phraseAnchor) {
+  // Existing counterline, short-form calibration, and phrase-anchor authorities remain untouched.
+  // Expressive notation lives inside full-song lead phrases, not on their structural skeleton.
+  if (!fullSong || counterpoint || phraseAnchor) {
     return {
       role: openingEvent && phraseAnchor ? "statement" : "structural-anchor",
       timingShift: 0,
@@ -5829,6 +5830,7 @@ function melodyNotationIntent({
 }
 
 function melodyStoryIntent({
+  fullSong,
   section,
   sectionIndex,
   repeat,
@@ -5838,7 +5840,7 @@ function melodyStoryIntent({
   counterpoint,
   variation,
 }) {
-  if (counterpoint || phraseAnchor || variation <= 0.18) {
+  if (!fullSong || counterpoint || phraseAnchor || variation <= 0.18) {
     return { role: "preserve", degreeShift: 0, reason: "protect-structural-voice" };
   }
   const name = String(section?.name ?? "section").toLowerCase();
@@ -5875,6 +5877,7 @@ function melodyStoryIntent({
 
 
 function developedRepeatDegreeShift({
+  fullSong,
   section,
   repeat,
   eventIndex,
@@ -5885,6 +5888,7 @@ function developedRepeatDegreeShift({
   variation,
 }) {
   return melodyStoryIntent({
+    fullSong,
     section,
     sectionIndex,
     repeat,
@@ -5898,9 +5902,25 @@ function developedRepeatDegreeShift({
 
 function protectExpressiveLeadSpacing(notes = []) {
   const ordered = [...notes].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
-  for (let index = 0; index < ordered.length - 1; index += 1) {
-    const current = ordered[index];
-    const next = ordered[index + 1];
+  const merged = [];
+  for (const note of ordered) {
+    const duplicate = merged.find((existing) => (
+      existing.pitch === note.pitch
+      && Math.abs(existing.start - note.start) < 1e-6
+    ));
+    if (duplicate) {
+      duplicate.duration = Math.max(duplicate.duration, note.duration);
+      duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
+      duplicate.melodySpacingProtected = true;
+      duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
+      duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
+      continue;
+    }
+    merged.push(note);
+  }
+  for (let index = 0; index < merged.length - 1; index += 1) {
+    const current = merged[index];
+    const next = merged[index + 1];
     const expressive = Math.abs(finite(current.melodyTimingIntent, 0)) > 1e-6
       || Math.abs(finite(next.melodyTimingIntent, 0)) > 1e-6;
     if (!expressive) continue;
@@ -5910,7 +5930,7 @@ function protectExpressiveLeadSpacing(notes = []) {
       current.melodySpacingProtected = true;
     }
   }
-  return ordered;
+  return merged;
 }
 
 
@@ -6032,6 +6052,7 @@ function generateLead(
           && rng.bool(settings.variation * (0.1 + config.variation * 0.18));
         if (legacyVariationTrigger) rng.pick([-2, -1, 1, 2]);
         const storyIntent = developedRepeatDegreeShift({
+          fullSong: config.bars >= 12,
           section,
           repeat,
           eventIndex,
