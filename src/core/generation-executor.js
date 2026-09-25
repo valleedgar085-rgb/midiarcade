@@ -1,5 +1,10 @@
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
+import { resolveGenerationRequest } from "./resolved-generation-intent.js";
+import {
+  attachGenerationRepairAuthority,
+  decideGenerationRepairAuthority,
+} from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
@@ -153,10 +158,7 @@ export function createGenerationExecutor({
     const databaseStartedAt = typeof persistGeneration === "function"
       ? new Date(Number(now())).toISOString()
       : null;
-    const intentRuntime = await import("./resolved-generation-intent.js");
-    const repairRuntime = await import("./generation-repair-router.js");
-    requireCurrentLifecycle(expectedLifecycle);
-    const adaptedPayload = intentRuntime.resolveGenerationRequest(kind, payload);
+    const adaptedPayload = resolveGenerationRequest(kind, payload);
     const config = adaptedPayload?.config ?? adaptedPayload?.input ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
@@ -196,7 +198,7 @@ export function createGenerationExecutor({
       }
 
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
-      const repairAuthority = repairRuntime.decideGenerationRepairAuthority(kind, diagnosis, config);
+      const repairAuthority = decideGenerationRepairAuthority(kind, diagnosis, config);
       flightRecorder.mark(flightId, "diagnose", {
         shouldRetry: repairAuthority.mode === "composition-reroute",
         reason: diagnosis.reason,
@@ -237,7 +239,7 @@ export function createGenerationExecutor({
         });
       }
 
-      const qualityConfig = repairRuntime.attachGenerationRepairAuthority(config, repairAuthority);
+      const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
       let stageDiagnostics = {};
       selectedResult = applyResultOutputQualityPipeline(selectedResult, qualityConfig, {
         onStageDiagnostics(diagnostics) {
