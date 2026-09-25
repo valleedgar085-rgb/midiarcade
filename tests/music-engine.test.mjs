@@ -3724,7 +3724,7 @@ test("melody notation uses phrase-role intent for timing, duration, dynamics, an
 
     const roles = new Set(intentional.map((note) => note.melodyNotationRole));
     assert.ok(roles.size >= 3, `${genre} melody should use multiple phrase-performance roles`);
-    assert.ok(roles.has("statement") || roles.has("landing"), `${genre} melody should contain structural statement/landing intent`);
+    assert.ok(roles.has("statement") || roles.has("structural-anchor"), `${genre} melody should preserve a structural phrase skeleton`);
     assert.ok(
       intentional.some((note) => Math.abs(Number(note.melodyTimingIntent ?? 0)) > 0),
       `${genre} melody should occasionally move timing for an intentional pickup, response, or rhythmic turn`,
@@ -3735,9 +3735,11 @@ test("melody notation uses phrase-role intent for timing, duration, dynamics, an
     assert.ok(durationIntents.size >= 3, `${genre} melody should vary note length by phrase function`);
     assert.ok(velocityIntents.size >= 3, `${genre} melody should vary attack strength by phrase function`);
 
+    const expressive = intentional.filter((note) => !["statement", "structural-anchor"].includes(note.melodyNotationRole));
+    assert.ok(expressive.length > 0, `${genre} should contain expressive interior melody notes`);
     assert.ok(
-      intentional.every((note) => note.melodyNotationReason && note.articulationIntent),
-      `${genre} melody performance changes should carry an explicit musical reason and articulation intent`,
+      expressive.every((note) => note.melodyNotationReason && note.articulationIntent),
+      `${genre} expressive melody changes should carry an explicit musical reason and articulation intent`,
     );
     assertValidNotes(song);
     assertAllGeneratedPitchesInScale(song);
@@ -3755,12 +3757,21 @@ test("lead repeat development moves selected notes purposefully instead of rando
     candidateCount: 1,
   });
   const melody = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
-  const moved = melody.filter((note) => note.melodicMotionIntent === "developed-repeat");
+  const moved = melody.filter((note) => note.melodicMotionIntent === "story-arc");
+  const storyRoles = new Set(melody.map((note) => note.melodyStoryRole).filter(Boolean));
 
   assert.ok(moved.length > 0, "long-form Hip-Hop should deliberately develop at least one repeated melody tone");
   assert.ok(
-    moved.every((note) => [1, 2].includes(Math.abs(Number(note.melodicMotionDegrees)))),
-    "developed repeat motion should use bounded one- or two-degree phrase movement",
+    moved.every((note) => Math.abs(Number(note.melodicMotionDegrees)) === 1),
+    "story movement should use bounded one-degree phrase development",
+  );
+  assert.ok(
+    storyRoles.has("question") || storyRoles.has("answer") || storyRoles.has("declare-answer"),
+    "long-form melody should expose an explicit question/answer or hook-story role",
+  );
+  assert.ok(
+    moved.every((note) => note.melodyStoryReason),
+    "every story-arc pitch move should publish its musical reason",
   );
   assertValidNotes(song);
   assertAllGeneratedPitchesInScale(song);
