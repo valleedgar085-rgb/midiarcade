@@ -6249,8 +6249,7 @@ function generatePad(
 const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
 
 export function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
-  if (!STAGGERED_ENTRY_GENRES.has(config.genre)) return null;
-  if (!section || !scene || ["foreground", "foundation", "rest"].includes(producerRole)) return null;
+  if (!section || !scene || producerRole === "rest") return null;
   const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
   if (span < 1.5) return null;
   const barBeats = Math.max(1, beatsPerBar(config));
@@ -6260,31 +6259,66 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   ) - Math.min(
     ...structure.map((candidate) => finite(candidate?.startBeat, 0)),
   );
+  // Short loop forms intentionally remain immediate. Opening staging is a
+  // full-song behavior so eight-bar idea sketches do not acquire dead air.
   if (totalArrangementBeats < barBeats * 12 - 1e-6) return null;
+
+  const urbanStagger = STAGGERED_ENTRY_GENRES.has(config.genre);
+  const isOpeningIntro = section.id === structure[0]?.id
+    && String(section.name ?? "").toLowerCase() === "intro"
+    && scene.purpose === "establish";
   let entryBeat = null;
   let exitBeat = null;
 
-  if (section.id === structure[0]?.id && scene.purpose === "establish") {
-    const delayFraction = {
-      answer: 0.24,
-      support: 0.14,
-      texture: 0.34,
-    }[producerRole] ?? 0;
-    const maxBars = {
-      answer: 1,
-      support: 0.5,
-      texture: 1.5,
-    }[producerRole] ?? 0;
+  if (isOpeningIntro) {
+    let delayFraction = 0;
+    let maxBars = 0;
+
+    if (trackId === "bass" && producerRole === "foundation") {
+      // Let the opening downbeat read before low-end motion completes the
+      // pocket. Drums keep the first beat, but Groove DNA thins bar one.
+      delayFraction = urbanStagger ? 0.08 : 0.1;
+      maxBars = 0.5;
+    } else if (!["foreground", "foundation"].includes(producerRole)) {
+      const urbanFractions = {
+        answer: 0.24,
+        support: 0.14,
+        texture: 0.34,
+      };
+      const urbanMaxBars = {
+        answer: 1,
+        support: 0.5,
+        texture: 1.5,
+      };
+      const universalFractions = {
+        answer: 0.18,
+        support: 0.1,
+        texture: 0.26,
+      };
+      const universalMaxBars = {
+        answer: 0.75,
+        support: 0.35,
+        texture: 1,
+      };
+      delayFraction = (urbanStagger ? urbanFractions : universalFractions)[producerRole] ?? 0;
+      maxBars = (urbanStagger ? urbanMaxBars : universalMaxBars)[producerRole] ?? 0;
+    }
+
     if (delayFraction > 0 && maxBars > 0) {
       const delay = Math.min(span * delayFraction, barBeats * maxBars);
       entryBeat = round(section.startBeat + Math.max(0.5, delay));
     }
   }
 
+  // Resolving-layer exits remain the calibrated Hip-Hop/Trap behavior. This
+  // patch changes how songs begin without imposing urban ending grammar on
+  // every genre.
   if (
-    section.id === structure.at(-1)?.id
+    urbanStagger
+    && section.id === structure.at(-1)?.id
     && scene.purpose === "resolve"
     && !["chords"].includes(trackId)
+    && !["foreground", "foundation"].includes(producerRole)
   ) {
     const tailFraction = {
       answer: 0.18,
