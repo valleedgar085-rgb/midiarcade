@@ -1,3 +1,6 @@
+import { authorizeQualityStage } from "./generation-repair-router.js";
+import { auditStageMutationAuthority } from "./mutation-authority.js";
+
 export function createQualityEvaluationContext({
   evaluateCandidate,
   evaluateReleaseGate,
@@ -32,13 +35,29 @@ export function createQualityEvaluationContext({
   });
 }
 
-export function runQualityStageSequence(song, stages = []) {
+export function runQualityStageSequence(song, stages = [], { repairAuthority = null } = {}) {
   let current = song;
   const diagnostics = {};
   for (const stage of stages) {
     if (!stage || typeof stage.run !== "function") continue;
+    const admission = authorizeQualityStage(stage.id, repairAuthority);
+    if (!admission.allowed) {
+      diagnostics[stage.id] = Object.freeze({
+        accepted: false,
+        skipped: true,
+        reason: admission.reason,
+        repairAuthority: admission,
+      });
+      continue;
+    }
+    const before = current;
     const result = stage.run(current);
-    diagnostics[stage.id] = result?.diagnostics ?? null;
+    const after = result?.song ?? current;
+    const mutationAuthority = auditStageMutationAuthority(before, after, stage.id);
+    const stageDiagnostics = result?.diagnostics ?? null;
+    diagnostics[stage.id] = stageDiagnostics && typeof stageDiagnostics === "object"
+      ? Object.freeze({ ...stageDiagnostics, repairAuthority: admission, mutationAuthority })
+      : stageDiagnostics;
     if (result?.song) current = result.song;
   }
   return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });

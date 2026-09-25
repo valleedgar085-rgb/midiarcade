@@ -33,9 +33,9 @@ import {
   pickGenreRhythmTemplate,
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
-import { refineTonalIntegrity } from "./core/tonal-integrity.js";
+import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
-import { refineRoleRegisters } from "./core/role-register-refinement.js";
+import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
   humanGrooveInfluence,
@@ -47,6 +47,8 @@ import {
   createGrooveDNA,
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
+import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
+import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
   absoluteGroovePulses,
   grooveBarPlan,
@@ -6485,14 +6487,14 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
   }));
 }
 
-function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
+function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
   const sectionForNote = (note) => structure.find((section) => (
     note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
   ));
-  const tracks = sourceTracks.map((track) => ({
+  return sourceTracks.map((track) => ({
     ...track,
-    notes: track.notes.map((note) => {
+    notes: (track.notes ?? []).map((note) => {
       const section = sectionForNote(note);
       const scene = scenes.get(section?.id);
       return {
@@ -6502,32 +6504,10 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       };
     }),
   }));
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
-  for (const scene of producerIntent?.scenes ?? []) {
-    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
-    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
-    const answerTrack = trackById.get(scene.answerTrack);
-    if (!section || !answerTrack || !foreground.length) continue;
-    answerTrack.notes = answerTrack.notes.filter((note) => {
-      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
-      const protectedAnchor = note.phraseAnchor
-        || note.resolutionRole
-        || note.transitionRole
-        || note.transitionFeature
-        || note.transitionHandoffRole
-        || note.memoryRole
-        || note.motifHandoffRole
-        || note.ensembleAccent
-        || note.finalAssemblyRole;
-      if (protectedAnchor) return true;
-      return !foreground.some((lead) => (
-        lead.start >= section.startBeat - 1e-6
-        && lead.start < section.endBeat - 1e-6
-        && Math.abs(lead.start - note.start) < 0.105
-      ));
-    });
-  }
+}
+
+function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
     const section = structure.find((candidate) => candidate.id === scene.sectionId);
     const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
@@ -6538,7 +6518,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
     const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
     const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
-    const restTrackIds = Object.entries(scene.roles).filter(([, role]) => role === "rest").map(([id]) => id);
+    const restTrackIds = Object.entries(scene.roles ?? {}).filter(([, role]) => role === "rest").map(([id]) => id);
     const restNotes = restTrackIds.reduce((sum, id) => sum + notesFor(id).length, 0);
     return {
       sectionId: scene.sectionId,
@@ -6554,7 +6534,7 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
       restNotes,
     };
   });
-  const allNotes = tracks.flatMap((track) => track.notes);
+  const allNotes = (sourceTracks ?? []).flatMap((track) => track.notes ?? []);
   const foregroundCoverage = sceneReports.filter((scene) => scene.foregroundNotes > 0).length
     / Math.max(1, sceneReports.length);
   const answerCollisionRate = average(sceneReports.map((scene) => scene.answerCollisionRate), 0);
@@ -6567,29 +6547,64 @@ function auditProducerIntentContract(sourceTracks, structure, producerIntent) {
   const developedReturns = (producerIntent?.scenes ?? [])
     .filter((scene) => finite(scene.returnIndex, 0) > 0)
     .every((scene) => ["rhythm", "density", "register", "dialogue"].includes(scene.developmentAxis));
+  const checks = {
+    completeRoles,
+    singleForeground,
+    developedReturns,
+    foregroundAudible: foregroundCoverage >= 0.9,
+    answersSeparated: answerCollisionRate <= 0.28,
+    allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
+  };
+  return {
+    phase: 76,
+    version: 2,
+    status: Object.values(checks).every(Boolean) ? "complete" : "best-available",
+    signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
+    metrics: {
+      sceneCount: sceneReports.length,
+      taggedNotes: allNotes.filter((note) => note.producerRole).length,
+      foregroundCoverage: round(foregroundCoverage),
+      answerCollisionRate: round(answerCollisionRate),
+      restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+    },
+    checks,
+    scenes: sceneReports,
+  };
+}
+
+function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  let removedAnswerCollisions = 0;
+
+  for (const scene of producerIntent?.scenes ?? []) {
+    if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
+    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
+    const answerTrack = trackById.get(scene.answerTrack);
+    if (!section || !answerTrack || !foreground.length) continue;
+    const before = answerTrack.notes.length;
+    answerTrack.notes = answerTrack.notes.filter((note) => {
+      if (note.start < section.startBeat - 1e-6 || note.start >= section.endBeat - 1e-6) return true;
+      if (isProtectedArrangementNote(note)) return true;
+      return !foreground.some((lead) => (
+        lead.start >= section.startBeat - 1e-6
+        && lead.start < section.endBeat - 1e-6
+        && Math.abs(lead.start - note.start) < 0.105
+      ));
+    });
+    removedAnswerCollisions += before - answerTrack.notes.length;
+  }
+
+  const report = evaluateProducerIntentContract(tracks, structure, producerIntent);
   return {
     tracks,
     report: {
-      phase: 76,
-      version: 1,
-      status: "complete",
-      signatureTrack: producerIntent?.identity?.signatureTrack ?? "melody",
-      metrics: {
-        sceneCount: sceneReports.length,
-        taggedNotes: allNotes.filter((note) => note.producerRole).length,
-        foregroundCoverage: round(foregroundCoverage),
-        answerCollisionRate: round(answerCollisionRate),
-        restSections: sceneReports.filter((scene) => scene.restTracks > 0).length,
+      ...report,
+      enforcement: {
+        version: 1,
+        removedAnswerCollisions,
       },
-      checks: {
-        completeRoles,
-        singleForeground,
-        developedReturns,
-        foregroundAudible: foregroundCoverage >= 0.9,
-        answersSeparated: answerCollisionRate <= 0.28,
-        allNotesTagged: allNotes.every((note) => note.producerRole && note.producerScenePurpose),
-      },
-      scenes: sceneReports,
     },
   };
 }
@@ -7424,6 +7439,93 @@ function runPerceptualMixPass(sourceTracks, structure) {
  * overlaps, clears lead/counterpoint unisons, and preserves section dynamics
  * while keeping deterministic headroom.
  */
+function repairLeadCounterpointSeparation(tracks, config, {
+  minPitch = 36,
+  maxPitch = 116,
+  marker = "lead-dissonance-space",
+} = {}) {
+  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterTrack = tracks.find((track) => track.id === "counterpoint");
+  const counterpoint = counterTrack?.notes ?? [];
+  const allowedScale = scalePitchClasses(config);
+  const removed = new Set();
+  let leadDissonancesCleared = 0;
+  let leadUnisonsCleared = 0;
+  let notesRemoved = 0;
+
+  const forbidden = (counterPitch, leadPitch) => (
+    [0, 1, 6, 11].includes(mod(Math.abs(counterPitch - leadPitch), 12))
+  );
+
+  for (const counterNote of counterpoint) {
+    const overlappingLeads = melody.filter((leadNote) => (
+      counterNote.start < leadNote.start + leadNote.duration
+      && leadNote.start < counterNote.start + counterNote.duration
+    ));
+    const conflicts = overlappingLeads.filter((leadNote) => forbidden(counterNote.pitch, leadNote.pitch));
+    if (!conflicts.length) continue;
+
+    if (conflicts.some((leadNote) => leadNote.pitch === counterNote.pitch)) {
+      leadUnisonsCleared += 1;
+    }
+
+    const firstConflict = [...conflicts].sort((left, right) => left.start - right.start)[0];
+    const availableDuration = firstConflict.start - counterNote.start - 0.06;
+    if (availableDuration >= 0.08) {
+      counterNote.duration = round(Math.min(counterNote.duration, availableDuration));
+      counterNote.finalMasterRepair = marker;
+      leadDissonancesCleared += 1;
+      continue;
+    }
+
+    const candidates = [];
+    for (let pitch = Math.max(0, Math.round(minPitch)); pitch <= Math.min(127, Math.round(maxPitch)); pitch += 1) {
+      if (!allowedScale.has(mod(pitch, 12))) continue;
+      if (overlappingLeads.some((lead) => forbidden(pitch, lead.pitch))) continue;
+      const counterCollision = counterpoint.some((candidate) => (
+        candidate !== counterNote
+        && !removed.has(candidate)
+        && candidate.pitch === pitch
+        && candidate.start < counterNote.start + counterNote.duration
+        && counterNote.start < candidate.start + candidate.duration
+      ));
+      if (counterCollision) continue;
+      candidates.push(pitch);
+    }
+
+    const registerCenter = finite(DAW_REGISTER_POLICIES.counterpoint?.center, 64);
+    candidates.sort((left, right) => (
+      Math.abs(left - counterNote.pitch) - Math.abs(right - counterNote.pitch)
+      || Math.abs(left - registerCenter) - Math.abs(right - registerCenter)
+      || left - right
+    ));
+    const pitch = candidates[0];
+    if (Number.isFinite(pitch)) {
+      counterNote.pitch = pitch;
+      counterNote.finalMasterRepair = marker;
+      leadDissonancesCleared += 1;
+      continue;
+    }
+
+    // Never claim a repair while leaving an audible masking conflict. If the
+    // scale/register window has no safe pitch and the note cannot end before
+    // the lead enters, drop this support note instead of moving its Groove DNA timing.
+    removed.add(counterNote);
+    notesRemoved += 1;
+    leadDissonancesCleared += 1;
+  }
+
+  if (counterTrack && removed.size) {
+    counterTrack.notes = counterTrack.notes.filter((note) => !removed.has(note));
+  }
+
+  return {
+    leadDissonancesCleared,
+    leadUnisonsCleared,
+    notesRemoved,
+  };
+}
+
 function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
   const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
   const tracks = sourceTracks.map((track) => ({
@@ -7498,67 +7600,10 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
     track.notes = deduped;
   }
 
-  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
-  const counterpoint = tracks.find((track) => track.id === "counterpoint")?.notes ?? [];
-  const allowedScale = scalePitchClasses(config);
-  for (const counterNote of counterpoint) {
-    const overlappingLeads = melody.filter((leadNote) => (
-      counterNote.start < leadNote.start + leadNote.duration
-      && leadNote.start < counterNote.start + counterNote.duration
-    ));
-    const dissonantLeads = overlappingLeads.filter((leadNote) => (
-      [0, 1, 6, 11].includes(mod(Math.abs(counterNote.pitch - leadNote.pitch), 12))
-    ));
-    if (dissonantLeads.length) {
-      const firstConflict = dissonantLeads
-        .slice()
-        .sort((left, right) => left.start - right.start)[0];
-      const availableDuration = firstConflict.start - counterNote.start - 0.06;
-      if (availableDuration >= 0.08) {
-        counterNote.duration = round(Math.min(counterNote.duration, availableDuration));
-      } else {
-        const candidates = [];
-        for (let shift = -7; shift <= 7; shift += 1) {
-          const pitch = counterNote.pitch + shift;
-          if (pitch < 36 || pitch > 116 || !allowedScale.has(mod(pitch, 12))) continue;
-          if (overlappingLeads.some((lead) => [0, 1, 6, 11].includes(mod(Math.abs(pitch - lead.pitch), 12)))) continue;
-          candidates.push(pitch);
-        }
-        const pitch = candidates.sort((left, right) => (
-          Math.abs(left - counterNote.pitch) - Math.abs(right - counterNote.pitch)
-          || left - right
-        ))[0];
-        if (Number.isFinite(pitch)) counterNote.pitch = pitch;
-        else {
-          counterNote.velocity = clamp(counterNote.velocity - 10, 1, 120);
-          counterNote.duration = round(Math.max(0.04, counterNote.duration * 0.58));
-        }
-      }
-      counterNote.finalMasterRepair = "lead-dissonance-space";
-      repairs.leadDissonancesCleared += 1;
-    }
-    const unison = melody.find((leadNote) => (
-      leadNote.pitch === counterNote.pitch
-      && Math.abs(leadNote.start - counterNote.start) <= 0.035
-      && leadNote.start < counterNote.start + counterNote.duration
-      && counterNote.start < leadNote.start + leadNote.duration
-    ));
-    if (!unison) continue;
-    const shifted = counterNote.pitch + (counterNote.pitch <= 103 ? 12 : -12);
-    const shiftIsClear = shifted >= 0 && shifted <= 127 && !counterpoint.some((candidate) => (
-      candidate !== counterNote
-      && candidate.pitch === shifted
-      && candidate.start < counterNote.start + counterNote.duration
-      && counterNote.start < candidate.start + candidate.duration
-    ));
-    if (shiftIsClear) counterNote.pitch = shifted;
-    else {
-      counterNote.velocity = clamp(counterNote.velocity - 8, 1, 120);
-      counterNote.duration = round(Math.max(0.02, counterNote.duration * 0.82));
-    }
-    counterNote.finalMasterRepair = "lead-unison-space";
-    repairs.leadUnisonsCleared += 1;
-  }
+  const separationRepair = repairLeadCounterpointSeparation(tracks, config);
+  repairs.leadDissonancesCleared += separationRepair.leadDissonancesCleared;
+  repairs.leadUnisonsCleared += separationRepair.leadUnisonsCleared;
+  repairs.leadCounterpointNotesRemoved = separationRepair.notesRemoved;
 
   const notes = tracks.flatMap((track) => track.notes ?? []);
   const velocities = notes.map((note) => note.velocity).sort((left, right) => left - right);
@@ -7598,7 +7643,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
  * scale-checked pre-polish performance, never synthesized from an arbitrary
  * pitch. Transition repairs only annotate an existing boundary event.
  */
-function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint) {
+function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
@@ -7630,9 +7675,21 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
         .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
         .sort((left, right) => Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor)) || left.start - right.start)[0];
       if (melodyAnchor) {
+        const counterWindow = DAW_REGISTER_POLICIES.counterpoint;
+        const target = melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12;
+        const pitchClass = mod(melodyAnchor.pitch, 12);
+        const counterPitches = [];
+        for (let pitch = pitchClass; pitch <= 127; pitch += 12) {
+          if (pitch >= counterWindow.min && pitch <= counterWindow.max) counterPitches.push(pitch);
+        }
+        const safeCounterPitch = counterPitches.sort((left, right) => (
+          Math.abs(left - target) - Math.abs(right - target)
+          || Number(left === melodyAnchor.pitch) - Number(right === melodyAnchor.pitch)
+          || left - right
+        ))[0] ?? clamp(target, counterWindow.min, counterWindow.max);
         anchor = {
           ...melodyAnchor,
-          pitch: melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12,
+          pitch: safeCounterPitch,
           velocity: clamp(Math.round(melodyAnchor.velocity * 0.78), 1, 120),
           duration: round(Math.min(melodyAnchor.duration, 0.75)),
           counterMelodyRole: "answer",
@@ -7687,13 +7744,26 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
     transitionEventsTagged += 1;
   }
 
+  const counterWindow = DAW_REGISTER_POLICIES.counterpoint ?? { min: 36, max: 116 };
+  const separationRepair = repairLeadCounterpointSeparation(tracks, config, {
+    minPitch: counterWindow.min,
+    maxPitch: counterWindow.max,
+    marker: "final-assembly-lead-space",
+  });
   return {
     tracks,
     repairs: {
       featuredAnchorsRestored,
       transitionEventsTagged,
+      leadDissonancesCleared: separationRepair.leadDissonancesCleared,
+      leadUnisonsCleared: separationRepair.leadUnisonsCleared,
+      leadCounterpointNotesRemoved: separationRepair.notesRemoved,
     },
   };
+}
+
+function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
+  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
@@ -7753,6 +7823,106 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
       transitionCount: transitionContracts.length,
       coordinatedTransitions,
     },
+  };
+}
+
+
+export function refreshCommittedGenerationDiagnostics(song, config = {}) {
+  if (!song || typeof song !== "object" || !Array.isArray(song.tracks)) return song;
+  const resolvedConfig = normalizeConfig({
+    ...configFromSong(song),
+    ...(config && typeof config === "object" ? config : {}),
+  });
+  const structure = song.structure ?? song.sections ?? [];
+  const songBlueprint = song.songBlueprint ?? {};
+  const producerIntentReport = evaluateProducerIntentContract(
+    song.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalRhythmLock = evaluateGrooveAuthorityLock(
+    song.tracks,
+    song.grooveConductor,
+    { beatsPerBar: beatsPerBar(resolvedConfig) },
+  );
+  const finalRegisterIntegrity = analyzeRoleRegisters(song.tracks);
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony ?? [],
+    {
+      keyPc: resolvedConfig.keyPc,
+      scaleIntervals: resolvedConfig.scaleIntervals,
+      beatsPerBar: beatsPerBar(resolvedConfig),
+    },
+    structure,
+  );
+  const finalAssembly = createFinalAssemblyReport(
+    song.tracks,
+    structure,
+    songBlueprint,
+    song.finalAssembly?.repairs ?? { featuredAnchorsRestored: 0, transitionEventsTagged: 0 },
+  );
+  const tonalIntegrity = Object.freeze({
+    ...(song.tonalIntegrity ?? {}),
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
+  const noteCount = song.tracks.reduce((sum, track) => sum + (track.notes?.length ?? 0), 0);
+  const finalMaster = song.finalMaster
+    ? {
+      ...song.finalMaster,
+      metrics: {
+        ...(song.finalMaster.metrics ?? {}),
+        noteCount,
+      },
+    }
+    : song.finalMaster;
+  const producerPass = song.producerPass
+    ? {
+      ...song.producerPass,
+      metrics: {
+        ...(song.producerPass.metrics ?? {}),
+        finalScaleFit: finalTonalIntegrity.scaleFit,
+        strongChordFit: finalTonalIntegrity.strongChordFit,
+        grooveAuthorityAdherence: finalRhythmLock.adherence,
+      },
+      checks: {
+        ...(song.producerPass.checks ?? {}),
+        finalScaleSafety: finalTonalIntegrity.scaleFit >= 0.999999,
+      },
+    }
+    : song.producerPass;
+
+  return {
+    ...song,
+    registerIntegrity: {
+      ...(song.registerIntegrity ?? {}),
+      status: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
+      after: finalRegisterIntegrity,
+      finalValidation: finalRegisterIntegrity,
+    },
+    producerIntentReport: {
+      ...producerIntentReport,
+      ...(song.producerIntentReport?.enforcement
+        ? { enforcement: song.producerIntentReport.enforcement }
+        : {}),
+    },
+    finalRhythmLock,
+    tonalIntegrity,
+    finalAssembly,
+    finalMaster,
+    producerPass,
+    committedAuthorityValidation: Object.freeze({
+      version: 1,
+      producerIntent: producerIntentReport.status,
+      groove: finalRhythmLock.status,
+      tonal: tonalIntegrity.status,
+      register: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
+      assembly: finalAssembly.status,
+    }),
   };
 }
 
@@ -9773,13 +9943,7 @@ function compose(config, options = {}) {
     )
     : { tracks: creativePolish.tracks, added: 0 };
   const melodicFlow = shapeRenderedMelodicFlow(counterCoverage.tracks, structure);
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    melodicFlow.tracks,
-    scaleSafety.tracks,
-    structure,
-    songBlueprint,
-  );
-  const finalMaster = runFinalMasterPass(finalAssemblyRepair.tracks, structure, songBlueprint, config);
+  const finalMaster = runFinalMasterPass(melodicFlow.tracks, structure, songBlueprint, config);
   const withSectionLandings = ensureFinalMelodicSectionLandings(
     finalMaster.tracks,
     structure,
@@ -9789,40 +9953,19 @@ function compose(config, options = {}) {
   );
   const finalScaleSafety = enforceScaleSafety(withSectionLandings, config);
   const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
-  const producerIntentAudit = auditProducerIntentContract(
+  const producerIntentEnforcement = enforceProducerIntentContract(
     characteristicVoice.tracks,
     structure,
     songBlueprint.producerIntent,
   );
-  const postIntentAssembly = runFinalAssemblyPass(
-    producerIntentAudit.tracks,
-    finalAssemblyRepair.tracks,
-    structure,
-    songBlueprint,
-  );
-  const finalProducerIntentAudit = auditProducerIntentContract(
-    postIntentAssembly.tracks,
-    structure,
-    songBlueprint.producerIntent,
-  );
-  const finalGrooveAssembly = runFinalAssemblyPass(
-    finalProducerIntentAudit.tracks,
-    postIntentAssembly.tracks,
-    structure,
-    songBlueprint,
-  );
-  const postGrooveIntentAudit = auditProducerIntentContract(
-    finalGrooveAssembly.tracks,
-    structure,
-    songBlueprint.producerIntent,
-  );
-  const finalGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
+  // Candidate note repair ends before the candidate assembly repair. The single
+  // committed Final Assembly runs later, after post-selection register/section work.
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
-    finalGrooveAssembly.tracks,
+    producerIntentEnforcement.tracks,
     harmony,
     config,
   );
-  const tonalIntegrity = refineTonalIntegrity(
+  const tonalIntegrityRepair = refineTonalIntegrity(
     rockPowerChordRepair.tracks,
     harmony,
     {
@@ -9832,27 +9975,56 @@ function compose(config, options = {}) {
     },
     structure,
   );
+  const finalAssemblyRepair = runCandidateAssemblyRepair(
+    tonalIntegrityRepair.tracks,
+    characteristicVoice.tracks,
+    structure,
+    songBlueprint,
+    config,
+  );
+  const tracks = finalAssemblyRepair.tracks;
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    tracks,
+    harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    structure,
+  );
+  const tonalIntegrityReport = Object.freeze({
+    ...tonalIntegrityRepair.report,
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
   produced.report.repairs.rockPowerChordAttacks = rockPowerChordRepair.repairs;
-  produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
-  produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
-  produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
-  produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
-  produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
-  let tracks = tonalIntegrity.tracks;
+  produced.report.repairs.finalScaleCorrections = tonalIntegrityRepair.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = tonalIntegrityRepair.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = finalTonalIntegrity.scaleFit;
+  produced.report.metrics.strongChordFit = finalTonalIntegrity.strongChordFit;
+  produced.report.checks.finalScaleSafety = finalTonalIntegrity.scaleFit >= 0.999999;
+  const finalProducerIntentReport = evaluateProducerIntentContract(
+    tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalGrooveRhythmLock = evaluateGrooveAuthorityLock(
+    tracks,
+    grooveConductor,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  produced.report.metrics.grooveAuthorityAdherence = finalGrooveRhythmLock.adherence;
   finalMaster.report.metrics.noteCount = tracks.reduce((sum, track) => sum + track.notes.length, 0);
   finalMaster.report.repairs.finalRhythmLock = finalGrooveRhythmLock.repairs;
   const finalAssembly = createFinalAssemblyReport(
     tracks,
     structure,
     songBlueprint,
-    {
-      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored
-        + finalGrooveAssembly.repairs.featuredAnchorsRestored,
-      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged
-        + finalGrooveAssembly.repairs.transitionEventsTagged,
-    },
+    finalAssemblyRepair.repairs,
   );
   const sectionContrast = createSectionContrastReport(
     tracks,
@@ -9931,13 +10103,16 @@ function compose(config, options = {}) {
     characteristicVoice: characteristicVoice.report,
     songDNA: clone(songBlueprint.songDNA),
     producerIntent: clone(songBlueprint.producerIntent),
-    producerIntentReport: postGrooveIntentAudit.report,
-    finalRhythmLock: { status: "complete", repairs: finalGrooveRhythmLock.repairs },
+    producerIntentReport: {
+      ...finalProducerIntentReport,
+      enforcement: producerIntentEnforcement.report.enforcement,
+    },
+    finalRhythmLock: finalGrooveRhythmLock,
     motifHandoff: motifHandoff.report,
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
-    tonalIntegrity: tonalIntegrity.report,
+    tonalIntegrity: tonalIntegrityReport,
     spectrumPlan,
     generationInterlock,
     tracks,
@@ -9971,7 +10146,7 @@ function compose(config, options = {}) {
       { phase: 71, id: "genre-native-drum-fill-vocabulary", status: "complete" },
       { phase: 72, id: "rhythm-section-turnaround-conversation", status: "complete" },
       { phase: 75, id: "final-song-assembly-contract", status: finalAssembly.status },
-      { phase: 76, id: "producer-intent-contract", status: finalProducerIntentAudit.report.status },
+      { phase: 76, id: "producer-intent-contract", status: finalProducerIntentReport.status },
     ],
     idea,
   };
@@ -11742,6 +11917,7 @@ function repairRepetitionMetrics(song) {
 
 function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, config) {
   const dimension = String(diagnosis?.weakestDimension ?? "");
+  const routedAuthority = resolveWeaknessAuthority(diagnosis);
   let trackIds = targetedRepairTrackIds(sourceCandidate, diagnosis);
   const trackOverrides = {};
   const configPatch = {};
@@ -11860,9 +12036,12 @@ function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, con
   }
 
   return {
-    version: 2,
+    version: 3,
     id,
     dimension: dimension || null,
+    owner: routedAuthority.owner,
+    specialist: routedAuthority.specialist,
+    allowedMutations: routedAuthority.mutations,
     trackIds,
     trackOverrides,
     configPatch,
@@ -11883,6 +12062,9 @@ function specializedRepairSummary(strategy) {
     version: strategy.version ?? 1,
     id: strategy.id ?? null,
     dimension: strategy.dimension ?? null,
+    owner: strategy.owner ?? null,
+    specialist: strategy.specialist ?? null,
+    allowedMutations: clone(strategy.allowedMutations ?? []),
     tracks: clone(strategy.trackIds ?? []),
     configPatch: clone(strategy.configPatch ?? {}),
     trackOverrides: clone(strategy.trackOverrides ?? {}),
@@ -12527,14 +12709,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
       config,
       song.grooveConductor,
     );
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    repairedCounterCoverage.tracks,
-    scaleSafety.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
   const finalMaster = runFinalMasterPass(
-    finalAssemblyRepair.tracks,
+    repairedCounterCoverage.tracks,
     song.structure,
     song.songBlueprint,
     config,
@@ -12546,36 +12722,13 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   produced.report.metrics.perceptualDynamicRange = perceptualMix.report.dynamicRange;
   produced.report.metrics.spectralSpan = spectral.metrics.span;
   produced.report.checks.scaleSafety = scaleSafety.passed;
-  const producerIntentAudit = auditProducerIntentContract(
+  const producerIntentEnforcement = enforceProducerIntentContract(
     finalMaster.tracks,
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  const postIntentAssembly = runFinalAssemblyPass(
-    producerIntentAudit.tracks,
-    finalAssemblyRepair.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
-  const finalProducerIntentAudit = auditProducerIntentContract(
-    postIntentAssembly.tracks,
-    song.structure,
-    song.songBlueprint?.producerIntent,
-  );
-  const repairedFinalGrooveAssembly = runFinalAssemblyPass(
-    finalProducerIntentAudit.tracks,
-    postIntentAssembly.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
-  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
-    repairedFinalGrooveAssembly.tracks,
-    song.structure,
-    song.songBlueprint?.producerIntent,
-  );
-  const repairedGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
   const repairedTonalIntegrity = refineTonalIntegrity(
-    repairedFinalGrooveAssembly.tracks,
+    producerIntentEnforcement.tracks,
     song.harmony,
     {
       keyPc: config.keyPc,
@@ -12584,34 +12737,70 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     },
     song.structure,
   );
-  song.tracks = repairedTonalIntegrity.tracks;
-  song.tonalIntegrity = repairedTonalIntegrity.report;
-  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
-  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
-  produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
-  produced.report.metrics.strongChordFit = repairedTonalIntegrity.report.after.strongChordFit;
-  produced.report.checks.finalScaleSafety = repairedTonalIntegrity.report.after.scaleFit >= 0.999999;
+  let preAssemblyTracks = repairedTonalIntegrity.tracks;
   if (repairStrategy?.dimension === "performance") {
-    const performanceRepair = rebalanceRepairPerformance(song);
-    song.tracks = performanceRepair.tracks;
+    const performanceRepair = rebalanceRepairPerformance({
+      ...song,
+      tracks: preAssemblyTracks,
+    });
+    preAssemblyTracks = performanceRepair.tracks;
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
+  const finalAssemblyRepair = runCandidateAssemblyRepair(
+    preAssemblyTracks,
+    producerIntentEnforcement.tracks,
+    song.structure,
+    song.songBlueprint,
+    config,
+  );
+  song.tracks = finalAssemblyRepair.tracks;
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    song.structure,
+  );
+  song.tonalIntegrity = Object.freeze({
+    ...repairedTonalIntegrity.report,
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
+  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = finalTonalIntegrity.scaleFit;
+  produced.report.metrics.strongChordFit = finalTonalIntegrity.strongChordFit;
+  produced.report.checks.finalScaleSafety = finalTonalIntegrity.scaleFit >= 0.999999;
+  const finalProducerIntentReport = evaluateProducerIntentContract(
+    song.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  const repairedGrooveRhythmLock = evaluateGrooveAuthorityLock(
+    song.tracks,
+    song.grooveConductor,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  produced.report.metrics.grooveAuthorityAdherence = repairedGrooveRhythmLock.adherence;
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
-  song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
+  song.finalRhythmLock = repairedGrooveRhythmLock;
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
     song.songBlueprint,
-    {
-      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored
-        + repairedFinalGrooveAssembly.repairs.featuredAnchorsRestored,
-      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged
-        + repairedFinalGrooveAssembly.repairs.transitionEventsTagged,
-    },
+    finalAssemblyRepair.repairs,
   );
+  song.producerIntentReport = {
+    ...finalProducerIntentReport,
+    enforcement: producerIntentEnforcement.report.enforcement,
+  };
   song.sectionContrast = createSectionContrastReport(
     song.tracks,
     song.structure,
@@ -12627,7 +12816,6 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
   song.producerIntent = clone(song.songBlueprint?.producerIntent);
-  song.producerIntentReport = repairedPostGrooveIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);
@@ -13212,6 +13400,26 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
   ];
+  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
+  // The final audible fingerprint is written only after all committed-note work.
+  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
+
+  // Section completion is a destructive ensemble repair and must happen before
+  // the final committed register pass and Final Assembly.
+  const committedSectionCompletion = applySectionCompletionAuthority(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.harmony ?? [],
+    selected.song.songBlueprint ?? null,
+    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
+  );
+  selected.song.tracks = committedSectionCompletion.tracks;
+  selected.song.sectionCompletion = committedSectionCompletion.report;
+  selected.song.generationPhases = [
+    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
+    { phase: 77, id: "section-completion-authority", status: "complete" },
+  ];
+
   const committedRegister = refineRoleRegisters(selected.song.tracks, selected.song.structure, {
     releaseMelodyMax: 70,
     releaseCounterpointMax: 68,
@@ -13227,37 +13435,93 @@ function commitCandidate(candidates, search = {}) {
       registerSeparationCorrections: committedRegister.report.separationCorrections ?? 0,
     },
   };
-  const committedRegisterEvaluation = evaluateSongCandidate(selected.song);
-  const committedRegisterRelease = evaluateSongReleaseGate(selected.song, committedRegisterEvaluation);
-  selected.song.meta.scoreDetails.registerIntegrity = {
-    corrections: committedRegister.report.corrections,
-    hardViolations: committedRegister.report.after.hardViolations,
-    preferredViolations: committedRegister.report.after.preferredViolations,
-    registerHealth: committedRegisterEvaluation.subscores?.registerHealth ?? null,
-    separation: committedRegisterEvaluation.subscores?.separation ?? null,
-    releasePassed: committedRegisterRelease.passed,
-    releaseFailures: clone(committedRegisterRelease.failures ?? []),
-  };
 
-  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
-  // The final audible fingerprint is still written after section completion.
-  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
-
-  // Phase 77 is deliberately post-selection. It may improve the committed
-  // arrangement, but it must never change candidate ranking or repair choice.
-  const committedSectionCompletion = applySectionCompletionAuthority(
+  // The single committed Final Assembly occurs after every engine note-writing
+  // authority. It does not rerun any pitch/rhythm repair afterward.
+  const committedFinalAssembly = runFinalAssemblyPass(
+    selected.song.tracks,
     selected.song.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
-    selected.song.harmony ?? [],
     selected.song.songBlueprint ?? null,
-    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
+    normalizeConfig(configFromSong(selected.song)),
   );
-  selected.song.tracks = committedSectionCompletion.tracks;
-  selected.song.sectionCompletion = committedSectionCompletion.report;
-  selected.song.generationPhases = [
-    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
-    { phase: 77, id: "section-completion-authority", status: "complete" },
-  ];
+  selected.song.tracks = committedFinalAssembly.tracks;
+  selected.song.finalAssembly = createFinalAssemblyReport(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.songBlueprint ?? null,
+    committedFinalAssembly.repairs,
+  );
+  selected.song = refreshCommittedGenerationDiagnostics(selected.song);
+
+  const committedEvaluation = evaluateSongCandidate(selected.song);
+  const committedRelease = evaluateSongReleaseGate(selected.song, committedEvaluation);
+  const committedQualityGate = qualityGateForEvaluation(committedEvaluation);
+  const committedBalance = evaluateCandidateBalance(committedEvaluation);
+  const committedRegisterOutcome = evaluateDawRegisterQuality(selected.song);
+  const committedSectionOutcome = evaluateSectionOutcomeQuality(selected.song);
+  const committedOutputOutcome = {
+    ...(selected.song.meta.outputOutcome ?? {}),
+    version: 4,
+    releasePassed: committedRelease.passed,
+    qualityPassed: committedQualityGate.passed,
+    balancePassed: committedBalance.passed,
+    sectionOutcomePassed: committedSectionOutcome.passed,
+    registerOutcomePassed: committedRegisterOutcome.passed,
+    passed: committedRelease.passed
+      && committedQualityGate.passed
+      && committedBalance.passed
+      && committedSectionOutcome.passed
+      && committedRegisterOutcome.passed,
+    status: committedRelease.passed
+      && committedQualityGate.passed
+      && committedBalance.passed
+      && committedSectionOutcome.passed
+      && committedRegisterOutcome.passed
+      ? "release-ready"
+      : "committed-authority-below-gate",
+  };
+  // Preserve selection-time score fields: they explain why this candidate won
+  // the bounded search. Store exact committed-track diagnostics separately so
+  // post-selection authority repairs never rewrite candidate-ranking history.
+  selected.song.meta.score = committedEvaluation.score;
+  selected.song.meta.scoreDetails = {
+    ...(selected.song.meta.scoreDetails ?? {}),
+    committed: {
+      version: 1,
+      totalScore: committedEvaluation.score,
+      subscores: committedEvaluation.subscores,
+      diagnostics: committedEvaluation.diagnostics ?? {},
+      releaseGate: committedRelease,
+      qualityGate: committedQualityGate,
+      balance: committedBalance,
+      sectionOutcome: committedSectionOutcome,
+      registerOutcome: committedRegisterOutcome,
+      outputOutcome: committedOutputOutcome,
+      authorityValidation: selected.song.committedAuthorityValidation,
+    },
+    committedTotalScore: committedEvaluation.score,
+    committedAuthorityValidation: selected.song.committedAuthorityValidation,
+    registerIntegrity: {
+      corrections: committedRegister.report.corrections,
+      hardViolations: committedRegister.report.after.hardViolations,
+      preferredViolations: committedRegister.report.after.preferredViolations,
+      registerHealth: committedEvaluation.subscores?.registerHealth ?? null,
+      separation: committedEvaluation.subscores?.separation ?? null,
+      releasePassed: committedRelease.passed,
+      releaseFailures: clone(committedRelease.failures ?? []),
+    },
+  };
+  selected.song.meta.committedSectionOutcome = committedSectionOutcome;
+  selected.song.meta.committedRegisterOutcome = committedRegisterOutcome;
+  selected.song.meta.committedOutputOutcome = committedOutputOutcome;
+  selected.song.meta.committedQualityGate = committedQualityGate;
+  selected.song.producerPass = {
+    ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
+    committedStatus: committedOutputOutcome.passed ? "passed" : "best-available",
+    committedQualityGate,
+    committedOutputOutcome,
+  };
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
@@ -14046,6 +14310,9 @@ export function generateSectionVariations(current, sectionId, input = {}) {
       maxCandidateCount: 1,
       adaptive: false,
       recentSongs: [],
+      // Section alternatives must compose against the source song's canonical
+      // Groove DNA before their notes are spliced back into that song.
+      grooveConductor: current.grooveConductor ?? null,
     });
     const variation = clone(current);
     variation.id = `${current.id ?? "song"}-section-${section.id}-${index + 1}`;
@@ -14087,22 +14354,29 @@ export function generateSectionVariations(current, sectionId, input = {}) {
             : clone(contract)
         )),
     };
-    const evaluation = evaluateSongCandidate(variation);
-    variation.meta.score = evaluation.score;
-    variation.meta.scoreDetails = {
+    const committedVariation = refreshCommittedGenerationDiagnostics(variation);
+    const evaluation = evaluateSongCandidate(committedVariation);
+    const releaseGate = evaluateSongReleaseGate(committedVariation, evaluation);
+    committedVariation.meta.score = evaluation.score;
+    committedVariation.meta.scoreDetails = {
+      ...(committedVariation.meta.scoreDetails ?? {}),
       criticVersion: evaluation.version,
       totalScore: evaluation.score,
       subscores: evaluation.subscores,
       diagnostics: evaluation.diagnostics,
+      releaseGate,
+      committedAuthorityValidation: committedVariation.committedAuthorityValidation,
     };
-    variation.sectionVariation = {
+    committedVariation.sectionVariation = {
       version: 1,
       sectionId: section.id,
       option: index + 1,
       preservedOutsideSection: true,
       lockedTrackIds: [...locked],
+      releasePassed: releaseGate.passed,
+      releaseFailures: clone(releaseGate.failures ?? []),
     };
-    return variation;
+    return committedVariation;
   });
 }
 

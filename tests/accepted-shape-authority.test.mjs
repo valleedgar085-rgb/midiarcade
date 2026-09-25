@@ -151,5 +151,11 @@ test("application commit and generation wiring keep current state.song authorita
   assert.match(appSource, /const referenceSong\s*=\s*options\.sourceSong\s*\?\?\s*state\.song/);
   assert.match(appSource, /const sourceSong\s*=\s*kind === "new" \? null : referenceSong/);
   assert.match(appSource, /generationExecutor\.run\(kind,\s*\{\s*sourceSong,\s*config\s*\}\)/);
-  assert.match(appSource, /generateSongVariations\(sourceSong,\s*config\)/);
+  assert.match(appSource, /let variationSongs\s*=\s*kind === "songVariations" \? generated\?\.variations : null/);
+  assert.doesNotMatch(
+    appSource,
+    /generateSongVariations\(sourceSong,\s*config\)/,
+    "whole-song variations must not bypass the executor authority",
+  );
+  assert.match(appSource, /generation authority returned an incomplete variation set/);
 });

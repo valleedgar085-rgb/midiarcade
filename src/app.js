@@ -3,9 +3,7 @@ import {
   defaultChordPathForGenre,
   encodeMidi,
   generateNew,
-  generateSectionVariations,
   generateSimilar,
-  generateSongVariations,
   GENRE_PROFILES,
   ONE_SHOT_KITS,
   TRACK_DEFINITIONS,
@@ -1475,7 +1473,10 @@ async function exploreSectionVariations() {
       input: variationInput,
     });
     if (!generationOwnership.isCurrent(operation)) return;
-    const options = generated?.options || generateSectionVariations(base, section.id, variationInput);
+    const options = Array.isArray(generated?.options) ? generated.options : [];
+    if (options.length !== variationInput.count) {
+      throw new Error("The generation authority returned an incomplete section variation set.");
+    }
     state.sectionVariations = { sectionId: section.id, base, options, activeOption: 0 };
     renderSectionVariationLab(section);
     showToast(`Three ${section.name} alternatives are ready. Audition A, B, and C, then keep your favorite.`);
@@ -4000,7 +4001,7 @@ async function runGeneration(kind, options = {}) {
     if (!generationOwnership.isCurrent(operation)) return;
     let variationSongs = kind === "songVariations" ? generated?.variations : null;
     if (kind === "songVariations" && (!Array.isArray(variationSongs) || variationSongs.length !== 3)) {
-      variationSongs = generateSongVariations(sourceSong, config);
+      throw new Error("The generation authority returned an incomplete variation set.");
     }
     if (kind === "songVariations") {
       variationSongs = variationSongs.map((song, index) => applyElementAutoPrograms(
@@ -4008,13 +4009,8 @@ async function runGeneration(kind, options = {}) {
         `${config.seed}:element-program:${index}`,
       ));
     }
-    let candidateSong = kind === "songVariations" ? variationSongs[0] : generated?.song;
-    if (!candidateSong) {
-      candidateSong = kind === "new"
-        ? generateNew(config)
-        : generateSimilar(sourceSong, config);
-    }
-    if (!candidateSong) throw new Error("The composition engine could not produce a valid arrangement.");
+    const candidateSong = kind === "songVariations" ? variationSongs[0] : generated?.song;
+    if (!candidateSong) throw new Error("The generation authority could not produce a valid arrangement.");
     const nextSong = kind === "similar" ? preserveLockedTracks(state.song, candidateSong) : candidateSong;
     appStore.transaction("generation:commit", (draft) => {
       draft.song = nextSong;

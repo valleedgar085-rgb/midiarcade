@@ -94,6 +94,7 @@ fs.writeFileSync(
 await build({
   entryPoints: {
     app: path.join(projectRoot, 'src', 'app.js'),
+    'cover-art': path.join(projectRoot, 'src', 'cover-art.js'),
     'generation-worker': path.join(projectRoot, 'src', 'generation-worker.js'),
     'quality-pipeline': path.join(projectRoot, 'src', 'core', 'output-quality-pipeline-register.js'),
   },

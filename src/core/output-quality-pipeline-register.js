@@ -29,15 +29,7 @@ import {
   MAX_REPETITION_REFINEMENT_CANDIDATES,
   repetitionRefinementFamily,
 } from "./repetition-refinement.js";
-import {
-  applyDensityRefinement,
-  applyPhraseResolutionRefinement,
-} from "./output-quality-pipeline.js";
-import {
-  applyArrangementPostprocess,
-  applyGroovePocketPostprocess,
-  applyReturnDevelopmentPostprocess,
-} from "./output-quality-postprocess.js";
+import { createBaseOutputQualityStages } from "./output-quality-pipeline.js";
 import {
   createQualityEvaluationContext,
   runQualityStageSequence,
@@ -1034,11 +1026,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     ? { ...config, registerHealthRefinement: true }
     : config;
   const sequence = runQualityStageSequence(song, [
-    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
-    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
-    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
-    { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
-    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, phraseConfig, evaluate, release) },
+    ...createBaseOutputQualityStages(config, evaluate, release, { phraseConfig }),
     { id: "repetitionRefinement", run: (current) => applyRepetitionRefinement(current, config, evaluate, release) },
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, registerConfig, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
@@ -1049,7 +1037,9 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
-  ]);
+  ], {
+    repairAuthority: config?.generationRepairAuthority ?? null,
+  });
   const diagnostics = sequence.diagnostics;
   return {
     song: sequence.song,

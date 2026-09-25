@@ -1,30 +1,61 @@
-import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
-import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
+import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
+import { resolveGenerationRequest } from "./resolved-generation-intent.js";
+import {
+  attachGenerationRepairAuthority,
+  decideGenerationRepairAuthority,
+} from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
 
-function evolveGenerationPayload(kind, payload = {}) {
-  if (!["new", "similar", "songVariations"].includes(kind)) return payload;
-  const evolvedConfig = applyOutputQualityEvolution(payload?.config ?? {}, { kind });
-  const phraseResolutionRefinement = typeof evolvedConfig.phraseResolutionRefinement === "boolean"
-    ? evolvedConfig.phraseResolutionRefinement
-    : kind === "new";
-  const registerHealthRefinement = typeof evolvedConfig.registerHealthRefinement === "boolean"
-    ? evolvedConfig.registerHealthRefinement
-    : kind === "new";
-  return {
-    ...payload,
-    config: {
-      ...evolvedConfig,
-      phraseResolutionRefinement,
-      registerHealthRefinement,
-    },
-  };
+
+function supportsCommittedAuthorityRefresh(song) {
+  return Boolean(
+    song?.schema === "midi-arcade/song@1"
+    && Array.isArray(song?.tracks)
+    && Array.isArray(song?.structure)
+    && Array.isArray(song?.harmony)
+    && song?.finalMaster?.checks
+    && song?.finalAssembly?.checks
+    && song?.songBlueprint?.producerIntent
+  );
+}
+
+function committedAuthorityRegression(beforeSong, afterSong) {
+  if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
+  const reasons = [];
+  const beforeAssembly = beforeSong.finalAssembly?.checks ?? {};
+  const afterAssembly = afterSong.finalAssembly?.checks ?? {};
+  for (const [check, passed] of Object.entries(beforeAssembly)) {
+    if (passed === true && afterAssembly[check] !== true) reasons.push(`final-assembly:${check}`);
+  }
+  const beforeGroove = beforeSong.finalRhythmLock ?? {};
+  const afterGroove = afterSong.finalRhythmLock ?? {};
+  if (Number(afterGroove.timingViolations ?? 0) > Number(beforeGroove.timingViolations ?? 0)) {
+    reasons.push("groove-timing-regression");
+  }
+  if (Number(afterGroove.protectedSpaceViolations ?? 0) > Number(beforeGroove.protectedSpaceViolations ?? 0)) {
+    reasons.push("groove-negative-space-regression");
+  }
+  if (beforeSong.producerIntentReport?.status === "complete" && afterSong.producerIntentReport?.status !== "complete") {
+    reasons.push("producer-intent-regression");
+  }
+  const beforeTonal = beforeSong.tonalIntegrity?.finalValidation ?? beforeSong.tonalIntegrity?.after ?? {};
+  const afterTonal = afterSong.tonalIntegrity?.finalValidation ?? afterSong.tonalIntegrity?.after ?? {};
+  if (Number(afterTonal.scaleFit ?? 0) + 1e-9 < Number(beforeTonal.scaleFit ?? 0)) {
+    reasons.push("tonal-scale-regression");
+  }
+  if (Number(afterTonal.harshStrongNotes ?? 0) > Number(beforeTonal.harshStrongNotes ?? 0)) {
+    reasons.push("tonal-context-regression");
+  }
+  return Object.freeze({
+    passed: reasons.length === 0,
+    reasons: Object.freeze(reasons),
+  });
 }
 
 export function createGenerationExecutor({
@@ -174,7 +205,7 @@ export function createGenerationExecutor({
     const databaseStartedAt = typeof persistGeneration === "function"
       ? new Date(Number(now())).toISOString()
       : null;
-    const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
+    const adaptedPayload = resolveGenerationRequest(kind, payload);
     const config = adaptedPayload?.config ?? adaptedPayload?.input ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
@@ -184,6 +215,7 @@ export function createGenerationExecutor({
       producerBrain: config?.producerBrain?.id ?? null,
       blueprint: config?.producerBrain?.blueprint?.id ?? null,
       outputQuality: config?.outputQuality?.seedSignature ?? null,
+      resolvedIntent: config?.resolvedGenerationIntent?.id ?? null,
     });
 
     try {
@@ -213,8 +245,9 @@ export function createGenerationExecutor({
       }
 
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
+      const repairAuthority = decideGenerationRepairAuthority(kind, diagnosis, config);
       flightRecorder.mark(flightId, "diagnose", {
-        shouldRetry: diagnosis.shouldRetry,
+        shouldRetry: repairAuthority.mode === "composition-reroute",
         reason: diagnosis.reason,
         focusRoute: diagnosis.focusRoute,
         focusDimension: diagnosis.focusDimension,
@@ -223,10 +256,11 @@ export function createGenerationExecutor({
         creativeFloor: diagnosis.creativeFloor,
         criticalFloor: diagnosis.criticalFloor,
         lowestCriticalDimension: diagnosis.lowestCriticalDimension,
+        repairAuthority: repairAuthority.mode,
       });
 
       let selectedResult = originalResult;
-      if (diagnosis.shouldRetry) {
+      if (repairAuthority.mode === "composition-reroute") {
         const correctionPayload = createSelfCorrectionPayload(adaptedPayload, diagnosis);
         flightRecorder.mark(flightId, "repair", {
           pass: 1,
@@ -252,14 +286,56 @@ export function createGenerationExecutor({
         });
       }
 
+      const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
+      const preQualityResult = selectedResult;
+      const refreshCommittedAuthorities = supportsCommittedAuthorityRefresh(preQualityResult?.song);
+      const preQualitySong = refreshCommittedAuthorities
+        ? refreshCommittedGenerationDiagnostics(preQualityResult.song, qualityConfig)
+        : preQualityResult?.song ?? null;
       let stageDiagnostics = {};
-      selectedResult = applyResultOutputQualityPipeline(selectedResult, config, {
+      const qualityResult = applyResultOutputQualityPipeline(preQualityResult, qualityConfig, {
         onStageDiagnostics(diagnostics) {
           stageDiagnostics = diagnostics ?? {};
         },
       });
+      let committedQuality = Object.freeze({
+        accepted: qualityResult === preQualityResult,
+        reason: qualityResult === preQualityResult ? "unchanged" : "pending-validation",
+        authorityRegression: Object.freeze({ passed: true, reasons: Object.freeze([]) }),
+        releasePassed: preQualitySong ? evaluateSongReleaseGate(preQualitySong).passed : null,
+      });
+      if (qualityResult?.song && qualityResult !== preQualityResult && refreshCommittedAuthorities) {
+        const refreshedQualitySong = refreshCommittedGenerationDiagnostics(qualityResult.song, qualityConfig);
+        const authorityRegression = committedAuthorityRegression(preQualitySong, refreshedQualitySong);
+        const committedRelease = evaluateSongReleaseGate(refreshedQualitySong);
+        const accepted = authorityRegression.passed && committedRelease.passed;
+        committedQuality = Object.freeze({
+          accepted,
+          reason: accepted
+            ? "committed-authorities-preserved"
+            : !authorityRegression.passed
+              ? "committed-authority-regression"
+              : "committed-release-gate-failed",
+          authorityRegression,
+          releasePassed: committedRelease.passed,
+          releaseFailures: Object.freeze([...(committedRelease.failures ?? [])]),
+        });
+        selectedResult = accepted
+          ? { ...qualityResult, song: refreshedQualitySong }
+          : {
+            ...preQualityResult,
+            outputQualityRejected: committedQuality,
+          };
+      } else if (qualityResult?.song && qualityResult !== preQualityResult) {
+        selectedResult = qualityResult;
+      } else if (refreshCommittedAuthorities && preQualitySong && preQualityResult?.song !== preQualitySong) {
+        selectedResult = { ...preQualityResult, song: preQualitySong };
+      }
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
+        repairAuthority,
+        committedQuality,
+        resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
         returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
         densityRefinement: stageDiagnostics.densityRefinement ?? acceptedDiagnostics.densityRefinement ?? null,
