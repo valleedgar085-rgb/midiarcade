@@ -390,6 +390,21 @@ export function applyPhraseResolutionRefinement(song, config, evaluateCandidate,
   return { song: selected.song, diagnostics };
 }
 
+export function createBaseOutputQualityStages(config, evaluate, release, { phraseConfig = config } = {}) {
+  return [
+    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
+    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
+    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
+    { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
+    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, phraseConfig, evaluate, release) },
+  ];
+}
+
+/**
+ * Compatibility surface for focused calibration tests. Runtime generation uses
+ * output-quality-pipeline-register.js, which now consumes the same base stage
+ * definition instead of maintaining a second copy.
+ */
 /**
  * Phase 6D wrapper: preserve the existing arrangement/return/pocket pipeline,
  * then audition bounded support articulation and section-ending melody cadence
@@ -403,13 +418,10 @@ export function applySongOutputQualityPipeline(song, config = {}, {
   const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
   const evaluate = evaluators.evaluateCandidate;
   const release = evaluators.evaluateReleaseGate;
-  const sequence = runQualityStageSequence(song, [
-    { id: "arrangement", run: (current) => applyArrangementPostprocess(current, config, evaluate, release) },
-    { id: "returnDevelopment", run: (current) => applyReturnDevelopmentPostprocess(current, config, evaluate, release) },
-    { id: "groovePocket", run: (current) => applyGroovePocketPostprocess(current, config, evaluate, release) },
-    { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
-    { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, config, evaluate, release) },
-  ]);
+  const sequence = runQualityStageSequence(
+    song,
+    createBaseOutputQualityStages(config, evaluate, release),
+  );
   return {
     song: sequence.song,
     diagnostics: sequence.diagnostics.arrangement,
