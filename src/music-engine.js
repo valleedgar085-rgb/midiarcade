@@ -866,14 +866,14 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.11, leapChance: 0.16, ornamentChance: 0.1, durationScale: 0.9 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.1, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.9 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
   techno: { phraseShapes: ["staircase", "syncopatedLoop"], contours: ["pedalLaunch", "wave"], restBias: 0.03, leapChance: 0.12, ornamentChance: 0.04, durationScale: 0.72 },
   drumBass: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["climbFall", "fallRebound"], restBias: 0.06, leapChance: 0.3, ornamentChance: 0.12, durationScale: 0.7 },
   synthwave: { phraseShapes: ["staircase", "longShort"], contours: ["climbFall", "arch", "pedalLaunch"], restBias: 0.05, leapChance: 0.28, ornamentChance: 0.08, durationScale: 0.94 },
-  pop: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "climbFall"], restBias: 0.04, leapChance: 0.24, ornamentChance: 0.1, durationScale: 0.92 },
+  pop: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.07, durationScale: 0.92 },
   loFiHipHop: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["wave", "fallRebound"], restBias: 0.16, leapChance: 0.12, ornamentChance: 0.14, durationScale: 1.12 },
   rnbSoul: { phraseShapes: ["questionAnswer", "longShort"], contours: ["arch", "wave", "fallRebound"], restBias: 0.12, leapChance: 0.18, ornamentChance: 0.24, durationScale: 1.14 },
   drill: { phraseShapes: ["sparseEcho", "staircase"], contours: ["fallRebound", "pedalLaunch"], restBias: 0.15, leapChance: 0.3, ornamentChance: 0.06, durationScale: 0.72 },
@@ -3099,7 +3099,18 @@ function assignMotifFamily(structure, songBlueprint = null) {
 
 function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   const barBeats = beatsPerBar(config);
-  const melodyGrammar = GENRE_MELODY_GRAMMARS[config.genre] ?? GENRE_MELODY_GRAMMARS.pop;
+  const melodyGrammarProfile = GENRE_MELODY_GRAMMARS[config.genre] ?? GENRE_MELODY_GRAMMARS.pop;
+  // Keep calibrated blend behavior intact; the new motif edits are for the
+  // standalone Hip-Hop and Pop voices, not their parent-relative fusions.
+  const melodyGrammar = config.secondaryGenre && ["hipHop", "pop"].includes(config.genre)
+    ? {
+      ...melodyGrammarProfile,
+      restBias: config.genre === "hipHop" ? 0.11 : 0.04,
+      leapChance: config.genre === "hipHop" ? 0.16 : 0.24,
+      ornamentChance: 0.1,
+      durationScale: config.genre === "pop" ? 0.92 : 0.9,
+    }
+    : melodyGrammarProfile;
   const rhythmIdentity = style.rhythmIdentity
     ?? createRhythmIdentity(config, style.drumGroove, rng.fork("fallback-rhythm-identity"));
   const grammarCycle = clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4);
@@ -4389,7 +4400,9 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     for (let percussionIndex = 0; percussionIndex < (groovePlan?.percussionPulses ?? []).length; percussionIndex += 1) {
       const offset = groovePlan.percussionPulses[percussionIndex];
       const percussionRng = grammarRng.fork(`groove-dna-percussion-${percussionIndex}`);
-      const pitches = config.genre === "rock"
+      const pitches = config.genre === "jazz"
+        ? [53]
+        : config.genre === "rock"
         ? [54, 56]
         : config.genre === "house"
           ? [70, 75, 56]
@@ -4419,16 +4432,18 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       const offSixteenthGrid = Math.abs(offset * 4 - Math.round(offset * 4)) > 0.01;
       const exactSixthTriplet = offSixteenthGrid && Math.abs(offset * 6 - Math.round(offset * 6)) < 0.002;
       const exactEighthTriplet = offSixteenthGrid && Math.abs(offset * 3 - Math.round(offset * 3)) < 0.002;
-      const open = ["house", "techno"].includes(config.genre)
-        ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
-        : cellRng.bool(0.08 + settings.variation * 0.16);
+      const open = config.genre === "jazz"
+        ? false
+        : ["house", "techno"].includes(config.genre)
+          ? Math.abs(mod(offset, 1) - 0.5) < 0.01 && cellRng.bool(0.58)
+          : cellRng.bool(0.08 + settings.variation * 0.16);
       const grooveFeature = exactSixthTriplet
         ? "triplet-sixteenth"
         : exactEighthTriplet
           ? "triplet-eighth"
           : open ? "groove-dna-open-hat" : "groove-dna-hat";
       hit(
-        open ? 46 : 42,
+        config.genre === "jazz" ? 51 : open ? 46 : 42,
         start + offset,
         eventVelocity(config, settings, intensity, cellRng, isBeat ? 0.68 : 0.56),
         open ? 0.22 : 0.055,
