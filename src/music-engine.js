@@ -7896,6 +7896,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       },
     }
     : song.producerPass;
+  const committedEnsembleCoordination = evaluateEnsembleCoordinationAuthority(song);
   const wholeSongCompletion = evaluateWholeSongCompletion({
     ...song,
     registerIntegrity: {
@@ -7932,14 +7933,16 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalMaster,
     producerPass,
     wholeSongCompletion,
+    committedEnsembleCoordination,
     committedAuthorityValidation: Object.freeze({
-      version: 2,
+      version: 3,
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
       register: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
       assembly: finalAssembly.status,
       wholeSongCompletion: wholeSongCompletion.status,
+      ensembleCoordination: committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
     }),
   };
 }
