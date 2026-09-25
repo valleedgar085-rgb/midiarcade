@@ -72,6 +72,35 @@ function overlapRatio(leftNotes, rightNotes, tolerance = 0.08) {
   return clamp(matched / leftNotes.length);
 }
 
+function temporalOverlapRatio(responderNotes, leaderNotes, tolerance = 0.04) {
+  if (!responderNotes.length || !leaderNotes.length) return 0;
+  const overlapping = responderNotes.filter((responder) => {
+    const responderStart = finite(responder?.start);
+    const responderEnd = responderStart + Math.max(0.05, finite(responder?.duration, 0.25));
+    return leaderNotes.some((leader) => {
+      const leaderStart = finite(leader?.start);
+      const leaderEnd = leaderStart + Math.max(0.05, finite(leader?.duration, 0.25));
+      return responderStart < leaderEnd - tolerance && responderEnd > leaderStart + tolerance;
+    });
+  }).length;
+  return clamp(overlapping / responderNotes.length);
+}
+
+function callResponseTimingScore(leaderNotes, responderNotes, maxResponseGap = 1.5) {
+  if (!leaderNotes.length || !responderNotes.length) return 0.72;
+  const leaderEnds = leaderNotes
+    .map((note) => finite(note?.start) + Math.max(0.05, finite(note?.duration, 0.25)))
+    .sort((left, right) => left - right);
+  const responses = responderNotes.filter((answer) => {
+    const start = finite(answer?.start);
+    return leaderEnds.some((end) => {
+      const gap = start - end;
+      return gap >= -0.04 && gap <= maxResponseGap;
+    });
+  }).length;
+  return clamp(responses / responderNotes.length);
+}
+
 function registerCrowding(leftNotes, rightNotes, semitones = 7, tolerance = 0.16) {
   if (!leftNotes.length || !rightNotes.length) return 0;
   const crowded = leftNotes.filter((left) => rightNotes.some((right) => (
@@ -251,8 +280,16 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     const collisionControl = counterpoint.length
       ? clamp(1 - (collisions / counterpoint.length) * 1.45)
       : melody.length ? 0.72 : 0.8;
+    const leadPhraseOverlap = temporalOverlapRatio(counterpoint, melody, 0.04);
+    const phraseSeparation = clamp(1 - leadPhraseOverlap);
+    const callResponseTiming = callResponseTimingScore(melody, counterpoint, 1.5);
     const leadDialogue = melody.length && counterpoint.length
-      ? clamp(counterLaneFit * 0.58 + collisionControl * 0.42)
+      ? clamp(
+        counterLaneFit * 0.38
+        + collisionControl * 0.22
+        + callResponseTiming * 0.22
+        + phraseSeparation * 0.18
+      )
       : melody.length || counterpoint.length
         ? 0.68
         : 0.76;
@@ -348,6 +385,9 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       roleHierarchy: round(roleHierarchy),
       cadenceTeam: round(cadenceTeam),
       collisionControl: round(collisionControl),
+      leadPhraseOverlap: round(leadPhraseOverlap),
+      phraseSeparation: round(phraseSeparation),
+      callResponseTiming: round(callResponseTiming),
       kickBassCloneRatio: round(kickBassCloneRatio),
       bassIndependence: round(bassIndependence),
       melodyChordCrowding: round(melodyChordCrowding),
@@ -388,6 +428,9 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     roleHierarchy: round(average(sectionReports.map((entry) => entry.roleHierarchy), 0.55)),
     cadenceTeam: round(average(sectionReports.map((entry) => entry.cadenceTeam), 0.55)),
     collisionControl: round(average(sectionReports.map((entry) => entry.collisionControl), 0.55)),
+    leadPhraseOverlap: round(average(sectionReports.map((entry) => entry.leadPhraseOverlap), 0)),
+    phraseSeparation: round(average(sectionReports.map((entry) => entry.phraseSeparation), 0.8)),
+    callResponseTiming: round(average(sectionReports.map((entry) => entry.callResponseTiming), 0.72)),
     kickBassCloneRatio: round(average(sectionReports.map((entry) => entry.kickBassCloneRatio), 0)),
     bassIndependence: round(average(sectionReports.map((entry) => entry.bassIndependence), 0.82)),
     melodyChordCrowding: round(average(sectionReports.map((entry) => entry.melodyChordCrowding), 0)),
