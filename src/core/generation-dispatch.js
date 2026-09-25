@@ -32,9 +32,13 @@ const GENERATION_HANDLERS = Object.freeze({
   sectionVariations: Object.freeze({
     engineMethod: "generateSectionVariations",
     run(fn, payload) {
+      const options = fn(payload.sourceSong, payload.sectionId, payload.input ?? {});
+      if (!Array.isArray(options) || !options.length || options.some((option) => option?.sectionVariation?.releasePassed !== true)) {
+        throw new Error("Section variation generation did not produce a complete release-safe option set.");
+      }
       return {
         status: "committed",
-        options: fn(payload.sourceSong, payload.sectionId, payload.input ?? {}),
+        options,
       };
     },
   }),
