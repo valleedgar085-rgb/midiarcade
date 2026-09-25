@@ -3051,6 +3051,14 @@ test("four-floor Groove DNA preserves the core pulse without legacy ghost-kick m
       `${genre} should not receive legacy post-DNA kick pickups`,
     );
     for (const plan of song.grooveConductor.bars) {
+      if (plan.openingBoundary) {
+        assert.ok(plan.anchors.includes(0), `${genre} opening must establish beat 1`);
+        assert.ok(
+          plan.anchors.filter((beat) => beat > 0).every((beat) => beat >= 2 - 1e-6),
+          `${genre} opening should thin the early four-floor pulse instead of sounding mid-loop`,
+        );
+        continue;
+      }
       for (const beat of [0, 1, 2, 3]) {
         assert.ok(plan.anchors.includes(beat), `${genre} must retain kick beat ${beat + 1}`);
       }
