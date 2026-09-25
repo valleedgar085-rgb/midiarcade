@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { applyOutputQualityEvolution } from "../src/core/output-quality-evolution.js";
-import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline.js";
+import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
 import { densityActivityForSong } from "../src/core/density-activity.js";
 import {
   createDensityRefinementCandidates,
