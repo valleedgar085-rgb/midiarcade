@@ -117,3 +117,24 @@ test("Techno normalization keeps its dedicated grammar contract", () => {
   assert.equal(techno.arrangementProfileId, "techno");
   assert.equal(techno.phraseBars, 8);
 });
+
+
+test("Hip-Hop keeps a dedicated arrangement grammar instead of inheriting Trap", () => {
+  const hipHop = genreArrangementProfile("hipHop");
+  const rap = genreArrangementProfile("rap");
+  const trap = genreArrangementProfile("trap");
+
+  assert.equal(hipHop.id, "hipHop");
+  assert.equal(rap.id, "hipHop", "Rap should share the verse-forward Hip-Hop arrangement vocabulary");
+  assert.equal(trap.id, "hipHopTrap");
+  assert.ok(hipHop.rhythmTemplates.some((template) => template.id === "laid-back-backbeat"));
+  assert.ok(hipHop.rhythmTemplates.some((template) => template.id === "displaced-kick-pocket"));
+  assert.equal(hipHop.rhythmTemplates.some((template) => template.id === "triplet-turn"), false);
+  assert.ok(trap.rhythmTemplates.some((template) => template.id === "triplet-turn"));
+  assert.ok(progressionGoalsFor(hipHop, "chorus", "intense").some((goal) => goal.id === "hook-lift"));
+
+  const normalizedHipHop = normalizeConfig({ genre: "hipHop", seed: "hiphop-arrangement-profile" });
+  const normalizedTrap = normalizeConfig({ genre: "trap", seed: "trap-arrangement-profile" });
+  assert.equal(normalizedHipHop.arrangementProfileId, "hipHop");
+  assert.equal(normalizedTrap.arrangementProfileId, "hipHopTrap");
+});
