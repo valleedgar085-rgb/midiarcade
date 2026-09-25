@@ -1,8 +1,4 @@
-import {
-  createSongFingerprint,
-  evaluateSongCandidate,
-  evaluateSongReleaseGate,
-} from "../music-engine.js";
+import { createSongFingerprint } from "../music-engine.js";
 import {
   createDensityRefinementCandidates,
   MAX_DENSITY_REFINEMENT_CANDIDATES,
@@ -16,7 +12,6 @@ import {
   applyGroovePocketPostprocess,
   applyReturnDevelopmentPostprocess,
 } from "./output-quality-postprocess.js";
-import { createQualityEvaluationContext, runQualityStageSequence } from "./output-quality-stage-runner.js";
 
 const DENSITY_ATTEMPT_CEILING = 86;
 const PHRASE_RESOLUTION_ATTEMPT_CEILING = 86;
@@ -398,62 +393,4 @@ export function createBaseOutputQualityStages(config, evaluate, release, { phras
     { id: "densityRefinement", run: (current) => applyDensityRefinement(current, config, evaluate, release) },
     { id: "phraseResolutionRefinement", run: (current) => applyPhraseResolutionRefinement(current, phraseConfig, evaluate, release) },
   ];
-}
-
-/**
- * Compatibility surface for focused calibration tests. Runtime generation uses
- * output-quality-pipeline-register.js, which now consumes the same base stage
- * definition instead of maintaining a second copy.
- */
-/**
- * Phase 6D wrapper: preserve the existing arrangement/return/pocket pipeline,
- * then audition bounded support articulation and section-ending melody cadence
- * candidates. Each stage fails closed and rejected work preserves its incoming
- * song object exactly.
- */
-export function applySongOutputQualityPipeline(song, config = {}, {
-  evaluateCandidate = evaluateSongCandidate,
-  evaluateReleaseGate = evaluateSongReleaseGate,
-} = {}) {
-  const evaluators = createQualityEvaluationContext({ evaluateCandidate, evaluateReleaseGate });
-  const evaluate = evaluators.evaluateCandidate;
-  const release = evaluators.evaluateReleaseGate;
-  const sequence = runQualityStageSequence(
-    song,
-    createBaseOutputQualityStages(config, evaluate, release),
-  );
-  return {
-    song: sequence.song,
-    diagnostics: sequence.diagnostics.arrangement,
-    returnDiagnostics: sequence.diagnostics.returnDevelopment,
-    grooveDiagnostics: sequence.diagnostics.groovePocket,
-    densityDiagnostics: sequence.diagnostics.densityRefinement,
-    phraseResolutionDiagnostics: sequence.diagnostics.phraseResolutionRefinement,
-  };
-}
-
-export function applyResultOutputQualityPipeline(result, config = {}, evaluators = {}) {
-  if (!result?.song) return result;
-  const processed = applySongOutputQualityPipeline(result.song, config, {
-    evaluateCandidate: evaluators.evaluateCandidate ?? evaluateSongCandidate,
-    evaluateReleaseGate: evaluators.evaluateReleaseGate ?? evaluateSongReleaseGate,
-  });
-  if (processed.song === result.song) return result;
-
-  const outputQualityDiagnostics = { ...(result.outputQualityDiagnostics ?? {}) };
-  const acceptedStages = [
-    ["arrangement", processed.diagnostics],
-    ["returnDevelopment", processed.returnDiagnostics],
-    ["groovePocket", processed.grooveDiagnostics],
-    ["densityRefinement", processed.densityDiagnostics],
-    ["phraseResolutionRefinement", processed.phraseResolutionDiagnostics],
-  ];
-  for (const [key, diagnostics] of acceptedStages) {
-    if (diagnostics?.accepted) outputQualityDiagnostics[key] = diagnostics;
-  }
-  return {
-    ...result,
-    song: processed.song,
-    outputQualityDiagnostics,
-  };
 }
