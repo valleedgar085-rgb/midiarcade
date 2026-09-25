@@ -800,14 +800,20 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
     const textureExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "pad", "texture", config);
     assert.ok(supportExit.exitBeat <= 47.5);
     assert.ok(textureExit.exitBeat < supportExit.exitBeat);
-    assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config), null);
+    const bass = engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config);
+    assert.ok(bass.entryBeat >= 0.5);
     assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "foreground", config), null);
   }
 
-  assert.equal(
-    engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", { genre: "pop", timeSignature: [4, 4] }),
-    null,
-  );
+  for (const genre of ["pop", "house", "neoSoul", "rock"]) {
+    const config = { genre, timeSignature: [4, 4] };
+    const support = engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", config);
+    const answer = engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "answer", config);
+    const bass = engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config);
+    assert.ok(support.entryBeat >= 0.5, `${genre} should stage harmonic support after the opening gesture`);
+    assert.ok(answer.entryBeat > support.entryBeat, `${genre} answers should enter after support`);
+    assert.ok(bass.entryBeat >= 0.5, `${genre} bass should not make bar one feel like a pre-running loop`);
+  }
 
   const shortStructure = [
     { id: "short-intro", name: "intro", startBeat: 0, endBeat: 8 },
@@ -3660,4 +3666,26 @@ test("Track B DAW register cleanup cannot create duplicate pitch/onset or same-p
   }
   assert.ok(result.report.mergedDuplicates >= 1);
   assert.ok(result.report.overlapsTrimmed >= 1);
+});
+
+test("full-song intro staging preserves an immediate foreground while delaying supporting layers", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBeat: 0, endBeat: 16 },
+    { id: "verse-1", name: "verse", startBeat: 16, endBeat: 32 },
+    { id: "chorus-1", name: "chorus", startBeat: 32, endBeat: 48 },
+  ];
+  const scene = { purpose: "establish" };
+
+  for (const genre of ["hipHop", "trap", "pop", "house", "neoSoul", "rock"]) {
+    const config = { genre, timeSignature: [4, 4] };
+    assert.equal(
+      engine.producerRoleGateWindow(structure[0], structure, scene, "pad", "foreground", config),
+      null,
+      `${genre} foreground should own beat one`,
+    );
+    const bass = engine.producerRoleGateWindow(structure[0], structure, scene, "bass", "foundation", config);
+    const support = engine.producerRoleGateWindow(structure[0], structure, scene, "chords", "support", config);
+    assert.ok(bass?.entryBeat > 0, `${genre} bass should enter after the opening boundary`);
+    assert.ok(support?.entryBeat > 0, `${genre} support should enter after the opening boundary`);
+  }
 });
