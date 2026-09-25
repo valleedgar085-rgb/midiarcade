@@ -12525,14 +12525,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
       config,
       song.grooveConductor,
     );
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    repairedCounterCoverage.tracks,
-    scaleSafety.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
   const finalMaster = runFinalMasterPass(
-    finalAssemblyRepair.tracks,
+    repairedCounterCoverage.tracks,
     song.structure,
     song.songBlueprint,
     config,
@@ -12544,36 +12538,19 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   produced.report.metrics.perceptualDynamicRange = perceptualMix.report.dynamicRange;
   produced.report.metrics.spectralSpan = spectral.metrics.span;
   produced.report.checks.scaleSafety = scaleSafety.passed;
-  const producerIntentAudit = auditProducerIntentContract(
+  const producerIntentEnforcement = enforceProducerIntentContract(
     finalMaster.tracks,
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  const postIntentAssembly = runFinalAssemblyPass(
-    producerIntentAudit.tracks,
-    finalAssemblyRepair.tracks,
+  const finalAssemblyRepair = runFinalAssemblyPass(
+    producerIntentEnforcement.tracks,
+    scaleSafety.tracks,
     song.structure,
     song.songBlueprint,
   );
-  const finalProducerIntentAudit = auditProducerIntentContract(
-    postIntentAssembly.tracks,
-    song.structure,
-    song.songBlueprint?.producerIntent,
-  );
-  const repairedFinalGrooveAssembly = runFinalAssemblyPass(
-    finalProducerIntentAudit.tracks,
-    postIntentAssembly.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
-  const repairedPostGrooveIntentAudit = auditProducerIntentContract(
-    repairedFinalGrooveAssembly.tracks,
-    song.structure,
-    song.songBlueprint?.producerIntent,
-  );
-  const repairedGrooveRhythmLock = { repairs: 0, status: "groove-dna-authority" };
   const repairedTonalIntegrity = refineTonalIntegrity(
-    repairedFinalGrooveAssembly.tracks,
+    finalAssemblyRepair.tracks,
     song.harmony,
     {
       keyPc: config.keyPc,
@@ -12595,21 +12572,29 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
+  const finalProducerIntentReport = evaluateProducerIntentContract(
+    song.tracks,
+    song.structure,
+    song.songBlueprint?.producerIntent,
+  );
+  const repairedGrooveRhythmLock = evaluateGrooveAuthorityLock(
+    song.tracks,
+    song.grooveConductor,
+    { beatsPerBar: beatsPerBar(config) },
+  );
+  produced.report.metrics.grooveAuthorityAdherence = repairedGrooveRhythmLock.adherence;
   finalMaster.report.repairs.finalRhythmLock = repairedGrooveRhythmLock.repairs;
-  song.finalRhythmLock = { status: "complete", repairs: repairedGrooveRhythmLock.repairs };
+  song.finalRhythmLock = repairedGrooveRhythmLock;
   song.finalAssembly = createFinalAssemblyReport(
     song.tracks,
     song.structure,
     song.songBlueprint,
-    {
-      featuredAnchorsRestored: finalAssemblyRepair.repairs.featuredAnchorsRestored
-        + postIntentAssembly.repairs.featuredAnchorsRestored
-        + repairedFinalGrooveAssembly.repairs.featuredAnchorsRestored,
-      transitionEventsTagged: finalAssemblyRepair.repairs.transitionEventsTagged
-        + postIntentAssembly.repairs.transitionEventsTagged
-        + repairedFinalGrooveAssembly.repairs.transitionEventsTagged,
-    },
+    finalAssemblyRepair.repairs,
   );
+  song.producerIntentReport = {
+    ...finalProducerIntentReport,
+    enforcement: producerIntentEnforcement.report.enforcement,
+  };
   song.sectionContrast = createSectionContrastReport(
     song.tracks,
     song.structure,
@@ -12625,7 +12610,6 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
   song.ensembleCadence = creativePolish.ensembleCadence;
   song.transitionHandoff = creativePolish.transitionHandoff;
   song.producerIntent = clone(song.songBlueprint?.producerIntent);
-  song.producerIntentReport = repairedPostGrooveIntentAudit.report;
   song.finalMaster = finalMaster.report;
   song.drumFillVocabulary = createDrumFillVocabularyReport(song.tracks, config.genre);
   song.rhythmTurnaroundConversation = createRhythmTurnaroundReport(song.tracks);
