@@ -71,6 +71,7 @@ export function evaluateGrooveAuthorityLock(
   let timingViolations = 0;
   let protectedSpaceViolations = 0;
   const byTrack = {};
+  const byLane = {};
 
   for (const track of tracks ?? []) {
     const trackId = String(track?.id ?? "");
@@ -97,9 +98,16 @@ export function evaluateGrooveAuthorityLock(
       if (explicitlyAuthored) {
         authoredNotes += 1;
         trackAuthored += 1;
+        const laneReport = byLane[lane] ?? {
+          authoredNotes: 0,
+          timingViolations: 0,
+        };
+        laneReport.authoredNotes += 1;
+        byLane[lane] = laneReport;
         if (nearest.distance == null || nearest.distance > timingTolerance + 1e-9) {
           timingViolations += 1;
           trackTimingViolations += 1;
+          laneReport.timingViolations += 1;
         }
       }
 
@@ -130,19 +138,35 @@ export function evaluateGrooveAuthorityLock(
   const status = timingViolations === 0 && protectedSpaceViolations === 0
     ? "complete"
     : "best-available";
+  const frozenByLane = Object.freeze(Object.fromEntries(
+    Object.entries(byLane).map(([lane, report]) => [lane, Object.freeze({ ...report })]),
+  ));
+  const laneClean = (lane) => (byLane[lane]?.timingViolations ?? 0) === 0;
+  const checks = Object.freeze({
+    kickAnchors: laneClean("anchors"),
+    snareAnchors: laneClean("snarePulses"),
+    bassPulses: laneClean("bassPulses"),
+    chordPulses: laneClean("chordPulses"),
+    leadCounterRhythm: laneClean("leadPulses") && laneClean("counterPulses"),
+    protectedNegativeSpace: protectedSpaceViolations === 0,
+    postCompositionTimingStable: timingViolations === 0,
+  });
 
   return Object.freeze({
-    version: 1,
+    version: 2,
     status,
     authority: "groove-dna",
     repairs: 0,
     checkedNotes,
     authoredNotes,
     timingViolations,
+    postCompositionTimingMutations: timingViolations,
     protectedSpaceViolations,
     adherence: round(adherence),
     timingTolerance: round(timingTolerance),
     protectedSpaceTolerance: round(protectedSpaceTolerance),
+    checks,
+    byLane: frozenByLane,
     byTrack: Object.freeze(byTrack),
   });
 }
