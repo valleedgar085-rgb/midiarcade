@@ -33,7 +33,7 @@ import {
   pickGenreRhythmTemplate,
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
-import { refineTonalIntegrity } from "./core/tonal-integrity.js";
+import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
@@ -9802,18 +9802,14 @@ function compose(config, options = {}) {
     structure,
     songBlueprint.producerIntent,
   );
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    producerIntentEnforcement.tracks,
-    finalScaleSafety.tracks,
-    structure,
-    songBlueprint,
-  );
+  // Destructive note repair ends before Final Assembly. Final Assembly may only
+  // restore/tag protected arrangement anchors; everything after it is read-only.
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
-    finalAssemblyRepair.tracks,
+    producerIntentEnforcement.tracks,
     harmony,
     config,
   );
-  const tonalIntegrity = refineTonalIntegrity(
+  const tonalIntegrityRepair = refineTonalIntegrity(
     rockPowerChordRepair.tracks,
     harmony,
     {
@@ -9823,13 +9819,34 @@ function compose(config, options = {}) {
     },
     structure,
   );
+  const finalAssemblyRepair = runFinalAssemblyPass(
+    tonalIntegrityRepair.tracks,
+    characteristicVoice.tracks,
+    structure,
+    songBlueprint,
+  );
+  const tracks = finalAssemblyRepair.tracks;
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    tracks,
+    harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    structure,
+  );
+  const tonalIntegrityReport = Object.freeze({
+    ...tonalIntegrityRepair.report,
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
   produced.report.repairs.rockPowerChordAttacks = rockPowerChordRepair.repairs;
-  produced.report.repairs.finalScaleCorrections = tonalIntegrity.report.scaleCorrections;
-  produced.report.repairs.tonalOutlierCorrections = tonalIntegrity.report.chordCorrections;
-  produced.report.metrics.finalScaleFit = tonalIntegrity.report.after.scaleFit;
-  produced.report.metrics.strongChordFit = tonalIntegrity.report.after.strongChordFit;
-  produced.report.checks.finalScaleSafety = tonalIntegrity.report.after.scaleFit >= 0.999999;
-  const tracks = tonalIntegrity.tracks;
+  produced.report.repairs.finalScaleCorrections = tonalIntegrityRepair.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = tonalIntegrityRepair.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = finalTonalIntegrity.scaleFit;
+  produced.report.metrics.strongChordFit = finalTonalIntegrity.strongChordFit;
+  produced.report.checks.finalScaleSafety = finalTonalIntegrity.scaleFit >= 0.999999;
   const finalProducerIntentReport = evaluateProducerIntentContract(
     tracks,
     structure,
@@ -9935,7 +9952,7 @@ function compose(config, options = {}) {
     hookDistinctiveness: motifs.hookDistinctiveness,
     finalMaster: finalMaster.report,
     finalAssembly,
-    tonalIntegrity: tonalIntegrity.report,
+    tonalIntegrity: tonalIntegrityReport,
     spectrumPlan,
     generationInterlock,
     tracks,
@@ -12543,14 +12560,8 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.structure,
     song.songBlueprint?.producerIntent,
   );
-  const finalAssemblyRepair = runFinalAssemblyPass(
-    producerIntentEnforcement.tracks,
-    scaleSafety.tracks,
-    song.structure,
-    song.songBlueprint,
-  );
   const repairedTonalIntegrity = refineTonalIntegrity(
-    finalAssemblyRepair.tracks,
+    producerIntentEnforcement.tracks,
     song.harmony,
     {
       keyPc: config.keyPc,
@@ -12559,19 +12570,43 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     },
     song.structure,
   );
-  song.tracks = repairedTonalIntegrity.tracks;
-  song.tonalIntegrity = repairedTonalIntegrity.report;
-  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
-  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
-  produced.report.metrics.finalScaleFit = repairedTonalIntegrity.report.after.scaleFit;
-  produced.report.metrics.strongChordFit = repairedTonalIntegrity.report.after.strongChordFit;
-  produced.report.checks.finalScaleSafety = repairedTonalIntegrity.report.after.scaleFit >= 0.999999;
+  let preAssemblyTracks = repairedTonalIntegrity.tracks;
   if (repairStrategy?.dimension === "performance") {
-    const performanceRepair = rebalanceRepairPerformance(song);
-    song.tracks = performanceRepair.tracks;
+    const performanceRepair = rebalanceRepairPerformance({
+      ...song,
+      tracks: preAssemblyTracks,
+    });
+    preAssemblyTracks = performanceRepair.tracks;
     song.performanceProfile = performanceRepair.performanceProfile;
     song.precisionRepair = performanceRepair.precisionRepair;
   }
+  const finalAssemblyRepair = runFinalAssemblyPass(
+    preAssemblyTracks,
+    producerIntentEnforcement.tracks,
+    song.structure,
+    song.songBlueprint,
+  );
+  song.tracks = finalAssemblyRepair.tracks;
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony,
+    {
+      keyPc: config.keyPc,
+      scaleIntervals: config.scaleIntervals,
+      beatsPerBar: beatsPerBar(config),
+    },
+    song.structure,
+  );
+  song.tonalIntegrity = Object.freeze({
+    ...repairedTonalIntegrity.report,
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
+  produced.report.repairs.finalScaleCorrections = repairedTonalIntegrity.report.scaleCorrections;
+  produced.report.repairs.tonalOutlierCorrections = repairedTonalIntegrity.report.chordCorrections;
+  produced.report.metrics.finalScaleFit = finalTonalIntegrity.scaleFit;
+  produced.report.metrics.strongChordFit = finalTonalIntegrity.strongChordFit;
+  produced.report.checks.finalScaleSafety = finalTonalIntegrity.scaleFit >= 0.999999;
   const finalProducerIntentReport = evaluateProducerIntentContract(
     song.tracks,
     song.structure,
