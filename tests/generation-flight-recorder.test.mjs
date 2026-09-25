@@ -31,8 +31,8 @@ test("flight recorder preserves primitive arrays and authoritative final score",
   ]);
   assert.deepEqual(run.stages[0].detail.targetDimensions, ["density", "phraseResolution"]);
   assert.equal(run.song.score, 95);
+  assert.equal(run.variationCount, undefined);
 });
-
 
 test("flight recorder counts variation results instead of reporting an empty song", () => {
   const recorder = createGenerationFlightRecorder({ clock: () => 10 });
