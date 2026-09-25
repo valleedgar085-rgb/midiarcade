@@ -13,6 +13,18 @@ import {
 } from "./generation-self-correction.js";
 
 
+function supportsCommittedAuthorityRefresh(song) {
+  return Boolean(
+    song?.schema === "midi-arcade/song@1"
+    && Array.isArray(song?.tracks)
+    && Array.isArray(song?.structure)
+    && Array.isArray(song?.harmony)
+    && song?.finalMaster?.checks
+    && song?.finalAssembly?.checks
+    && song?.songBlueprint?.producerIntent
+  );
+}
+
 function committedAuthorityRegression(beforeSong, afterSong) {
   if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
   const reasons = [];
@@ -276,9 +288,10 @@ export function createGenerationExecutor({
 
       const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
       const preQualityResult = selectedResult;
-      const preQualitySong = preQualityResult?.song
+      const refreshCommittedAuthorities = supportsCommittedAuthorityRefresh(preQualityResult?.song);
+      const preQualitySong = refreshCommittedAuthorities
         ? refreshCommittedGenerationDiagnostics(preQualityResult.song, qualityConfig)
-        : null;
+        : preQualityResult?.song ?? null;
       let stageDiagnostics = {};
       const qualityResult = applyResultOutputQualityPipeline(preQualityResult, qualityConfig, {
         onStageDiagnostics(diagnostics) {
@@ -291,7 +304,7 @@ export function createGenerationExecutor({
         authorityRegression: Object.freeze({ passed: true, reasons: Object.freeze([]) }),
         releasePassed: preQualitySong ? evaluateSongReleaseGate(preQualitySong).passed : null,
       });
-      if (qualityResult?.song && qualityResult !== preQualityResult) {
+      if (qualityResult?.song && qualityResult !== preQualityResult && refreshCommittedAuthorities) {
         const refreshedQualitySong = refreshCommittedGenerationDiagnostics(qualityResult.song, qualityConfig);
         const authorityRegression = committedAuthorityRegression(preQualitySong, refreshedQualitySong);
         const committedRelease = evaluateSongReleaseGate(refreshedQualitySong);
@@ -313,7 +326,9 @@ export function createGenerationExecutor({
             ...preQualityResult,
             outputQualityRejected: committedQuality,
           };
-      } else if (preQualitySong && preQualityResult?.song !== preQualitySong) {
+      } else if (qualityResult?.song && qualityResult !== preQualityResult) {
+        selectedResult = qualityResult;
+      } else if (refreshCommittedAuthorities && preQualitySong && preQualityResult?.song !== preQualitySong) {
         selectedResult = { ...preQualityResult, song: preQualitySong };
       }
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
