@@ -10,7 +10,9 @@ test("generation UI has no raw-engine emergency escape hatch", async () => {
   const app = await readFile(appUrl, "utf8");
   assert.equal(app.includes("variationSongs = generateSongVariations(sourceSong, config)"), false);
   assert.equal(app.includes('candidateSong = kind === "new"'), false);
+  assert.equal(app.includes("generateSectionVariations("), false);
   assert.match(app, /generation authority could not produce a valid arrangement/);
+  assert.match(app, /generation authority returned an incomplete section variation set/);
 });
 
 test("final composer has one Producer Intent enforcement and one Final Assembly invocation", async () => {
