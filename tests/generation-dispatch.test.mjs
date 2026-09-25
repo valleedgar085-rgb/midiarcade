@@ -25,7 +25,10 @@ function fakeEngine(calls) {
     },
     generateSectionVariations(sourceSong, sectionId, input) {
       calls.push(["sectionVariations", sourceSong, sectionId, input]);
-      return [{ id: "section-a" }, { id: "section-b" }];
+      return [
+        { id: "section-a", sectionVariation: { releasePassed: true } },
+        { id: "section-b", sectionVariation: { releasePassed: true } },
+      ];
     },
     generateSongVariations(sourceSong, config) {
       calls.push(["songVariations", sourceSong, config]);
@@ -66,7 +69,10 @@ test("generation dispatcher owns the complete background generation command surf
     input: { intensity: 0.8 },
   }, engine), {
     status: "committed",
-    options: [{ id: "section-a" }, { id: "section-b" }],
+    options: [
+      { id: "section-a", sectionVariation: { releasePassed: true } },
+      { id: "section-b", sectionVariation: { releasePassed: true } },
+    ],
   });
   assert.deepEqual(dispatchGenerationRequest("songVariations", {
     sourceSong,
@@ -114,5 +120,21 @@ test("generation dispatcher rejects unknown commands and incomplete engine contr
   assert.throws(
     () => dispatchGenerationRequest("new", {}, {}),
     /generation engine is missing generateNew/,
+  );
+});
+
+
+test("generation dispatcher fails closed when any section option is not release-safe", () => {
+  const engine = fakeEngine([]);
+  engine.generateSectionVariations = () => [
+    { id: "safe", sectionVariation: { releasePassed: true } },
+    { id: "unsafe", sectionVariation: { releasePassed: false } },
+  ];
+  assert.throws(
+    () => dispatchGenerationRequest("sectionVariations", {
+      sourceSong: { id: "source" },
+      sectionId: "verse-1",
+    }, engine),
+    /complete release-safe option set/,
   );
 });
