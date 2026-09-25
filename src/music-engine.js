@@ -7775,6 +7775,98 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
   };
 }
 
+
+export function refreshCommittedGenerationDiagnostics(song, config = {}) {
+  if (!song || typeof song !== "object" || !Array.isArray(song.tracks)) return song;
+  const resolvedConfig = normalizeConfig({
+    ...configFromSong(song),
+    ...(config && typeof config === "object" ? config : {}),
+  });
+  const structure = song.structure ?? song.sections ?? [];
+  const songBlueprint = song.songBlueprint ?? {};
+  const producerIntentReport = evaluateProducerIntentContract(
+    song.tracks,
+    structure,
+    songBlueprint.producerIntent,
+  );
+  const finalRhythmLock = evaluateGrooveAuthorityLock(
+    song.tracks,
+    song.grooveConductor,
+    { beatsPerBar: beatsPerBar(resolvedConfig) },
+  );
+  const finalTonalIntegrity = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony ?? [],
+    {
+      keyPc: resolvedConfig.keyPc,
+      scaleIntervals: resolvedConfig.scaleIntervals,
+      beatsPerBar: beatsPerBar(resolvedConfig),
+    },
+    structure,
+  );
+  const finalAssembly = createFinalAssemblyReport(
+    song.tracks,
+    structure,
+    songBlueprint,
+    song.finalAssembly?.repairs ?? { featuredAnchorsRestored: 0, transitionEventsTagged: 0 },
+  );
+  const tonalIntegrity = Object.freeze({
+    ...(song.tonalIntegrity ?? {}),
+    status: finalTonalIntegrity.scaleFit >= 0.999999 && finalTonalIntegrity.harshStrongNotes === 0
+      ? "clean"
+      : "best-available",
+    after: finalTonalIntegrity,
+    finalValidation: finalTonalIntegrity,
+  });
+  const noteCount = song.tracks.reduce((sum, track) => sum + (track.notes?.length ?? 0), 0);
+  const finalMaster = song.finalMaster
+    ? {
+      ...song.finalMaster,
+      metrics: {
+        ...(song.finalMaster.metrics ?? {}),
+        noteCount,
+      },
+    }
+    : song.finalMaster;
+  const producerPass = song.producerPass
+    ? {
+      ...song.producerPass,
+      metrics: {
+        ...(song.producerPass.metrics ?? {}),
+        finalScaleFit: finalTonalIntegrity.scaleFit,
+        strongChordFit: finalTonalIntegrity.strongChordFit,
+        grooveAuthorityAdherence: finalRhythmLock.adherence,
+      },
+      checks: {
+        ...(song.producerPass.checks ?? {}),
+        finalScaleSafety: finalTonalIntegrity.scaleFit >= 0.999999,
+      },
+    }
+    : song.producerPass;
+
+  return {
+    ...song,
+    producerIntentReport: {
+      ...producerIntentReport,
+      ...(song.producerIntentReport?.enforcement
+        ? { enforcement: song.producerIntentReport.enforcement }
+        : {}),
+    },
+    finalRhythmLock,
+    tonalIntegrity,
+    finalAssembly,
+    finalMaster,
+    producerPass,
+    committedAuthorityValidation: Object.freeze({
+      version: 1,
+      producerIntent: producerIntentReport.status,
+      groove: finalRhythmLock.status,
+      tonal: tonalIntegrity.status,
+      assembly: finalAssembly.status,
+    }),
+  };
+}
+
 function runVoiceLeadingPass(sourceTracks, config) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
