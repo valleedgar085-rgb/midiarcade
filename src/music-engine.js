@@ -4051,9 +4051,10 @@ function addNote(notes, pitch, start, duration, velocity, totalBeats, metadata =
   });
 }
 
-function eventVelocity(config, settings, intensity, rng, accent = 1) {
+function eventVelocity(config, settings, intensity, rng, accent = 1, variance = 1) {
   const base = 46 + config.energy * 43 + intensity * 12;
-  return clamp(Math.round((base + (rng.float() - 0.5) * 12) * settings.velocity * accent), 1, 127);
+  const randomRange = 12 * clamp(finite(variance, 1), 0, 1);
+  return clamp(Math.round((base + (rng.float() - 0.5) * randomRange) * settings.velocity * accent), 1, 127);
 }
 
 function phraseEvolutionForBar(config, structure, bar, trackId, rng, rhythmIdentity = null) {
@@ -5759,6 +5760,92 @@ function magnetizeBeatToGroove(conductor, beat, lane, barBeats, maximumDistance)
   };
 }
 
+function melodyNotationIntent({
+  config,
+  section,
+  development,
+  event,
+  eventIndex,
+  eventCount,
+  progress,
+  plannedTension,
+  phraseAnchor,
+  counterpoint,
+  repeat,
+  sectionIndex,
+}) {
+  const finalEvent = eventIndex >= Math.max(0, eventCount - 1);
+  const openingEvent = eventIndex === 0;
+  const strongSection = ["prechorus", "chorus", "build", "drop", "solo"].includes(section.name);
+  const syncopatedGenre = ["hipHop", "rap", "trap", "neoSoul", "funk", "reggaeton", "afrobeats"].includes(config.genre);
+  const movementStep = syncopatedGenre ? 0.25 : 0.125;
+  const developmentType = development?.type ?? "statement";
+
+  let role = "continuation";
+  if (finalEvent && ["resolution", "answer", "climax"].includes(developmentType)) role = "landing";
+  else if (openingEvent && phraseAnchor) role = "statement";
+  else if (developmentType === "rhythm" && progress >= 0.42) role = "rhythmic-turn";
+  else if (
+    !phraseAnchor
+    && progress >= 0.52
+    && progress < 0.9
+    && plannedTension >= 0.48
+    && (eventIndex + repeat + sectionIndex) % 3 === 1
+  ) role = "pickup";
+  else if (!phraseAnchor && finite(event?.duration, 0.5) <= 0.5) role = "passing";
+  else if (developmentType === "answer" || counterpoint) role = "response";
+  else if (strongSection && phraseAnchor && progress >= 0.45) role = "accent";
+
+  const profiles = {
+    statement: { timingShift: 0, durationScale: 1.04, velocityScale: 1.03, articulation: "tenuto", reason: "establish-phrase" },
+    passing: { timingShift: 0, durationScale: 0.68, velocityScale: 0.84, articulation: "staccato", reason: "connect-important-tones" },
+    pickup: { timingShift: -movementStep, durationScale: 0.64, velocityScale: 0.88, articulation: "staccato", reason: "anticipate-next-gesture" },
+    response: { timingShift: movementStep * 0.5, durationScale: 0.9, velocityScale: 0.94, articulation: "legato", reason: "answer-previous-gesture" },
+    "rhythmic-turn": {
+      timingShift: (eventIndex + repeat) % 2 ? movementStep : -movementStep,
+      durationScale: 0.76,
+      velocityScale: 1.02,
+      articulation: "accent",
+      reason: "develop-rhythm",
+    },
+    accent: { timingShift: 0, durationScale: 0.88, velocityScale: 1.1, articulation: "accent", reason: "mark-section-lift" },
+    landing: { timingShift: 0, durationScale: 1.28, velocityScale: 1.1, articulation: "tenuto", reason: "complete-phrase" },
+    continuation: { timingShift: 0, durationScale: 0.96, velocityScale: 0.98, articulation: "tenuto", reason: "carry-phrase" },
+  };
+  const selected = profiles[role] ?? profiles.continuation;
+  return {
+    role,
+    ...selected,
+    durationScale: clamp(
+      selected.durationScale * (role === "landing" ? 1 + plannedTension * 0.08 : 1),
+      0.5,
+      1.4,
+    ),
+    velocityScale: clamp(
+      selected.velocityScale * (strongSection && ["accent", "landing"].includes(role) ? 1.03 : 1),
+      0.72,
+      1.2,
+    ),
+  };
+}
+
+function developedRepeatDegreeShift({
+  repeat,
+  eventIndex,
+  sectionIndex,
+  progress,
+  phraseAnchor,
+  counterpoint,
+  development,
+  variation,
+}) {
+  if (repeat <= 0 || counterpoint || phraseAnchor || variation <= 0.18) return 0;
+  if ((eventIndex + repeat + sectionIndex) % 3 !== 0) return 0;
+  const direction = Math.sign(finite(development?.direction, repeat % 2 ? 1 : -1)) || 1;
+  const distance = progress >= 0.58 && variation >= 0.62 ? 2 : 1;
+  return direction * distance;
+}
+
 function generateLead(
   config,
   structure,
@@ -5822,7 +5909,23 @@ function generateLead(
         ) continue;
         let startShift = 0;
         if (development?.type === "rhythm" && progress >= 0.45 && eventIndex % 2 === 1) startShift = development.rhythmShift;
-        const proposedStart = repeatStart + finite(event.offset, 0) + startShift;
+        const unperformedStart = repeatStart + finite(event.offset, 0) + startShift;
+        const plannedTension = plannedTensionAtBeat(songBlueprint, section, unperformedStart, barBeats);
+        const notationIntent = melodyNotationIntent({
+          config,
+          section,
+          development,
+          event,
+          eventIndex,
+          eventCount: activeMotif.events.length,
+          progress,
+          plannedTension,
+          phraseAnchor,
+          counterpoint,
+          repeat,
+          sectionIndex,
+        });
+        const proposedStart = unperformedStart + notationIntent.timingShift;
         if (proposedStart >= section.endBeat - 0.04 || proposedStart >= totalBeats) continue;
         const timingMagnet = counterpoint
           ? 0.18 + config.syncopation * 0.08
@@ -5836,7 +5939,6 @@ function generateLead(
         );
         const start = Math.max(repeatStart, synchronized.beat);
         const plannedDensity = sectionPlan?.density ?? 0.7;
-        const plannedTension = plannedTensionAtBeat(songBlueprint, section, proposedStart, barBeats);
         const tensionDensity = 0.82 + plannedTension * (counterpoint ? 0.18 : 0.3);
         const baseProbability = settings.density
           * intensity
@@ -5856,7 +5958,17 @@ function generateLead(
         const motifDegree = Math.round(finite(event.degree, 0));
         let degree = motifDegree + sectionDegreeShift(section);
         if (section.name === "bridge" && !counterpoint) degree = -degree + 3;
-        if (repeat > 0 && rng.bool(settings.variation * (0.1 + config.variation * 0.18))) degree += rng.pick([-2, -1, 1, 2]);
+        const developedRepeatShift = developedRepeatDegreeShift({
+          repeat,
+          eventIndex,
+          sectionIndex,
+          progress,
+          phraseAnchor,
+          counterpoint,
+          development,
+          variation: settings.variation * config.variation,
+        });
+        degree += developedRepeatShift;
         if (development?.type === "answer" && progress >= 0.45) degree += development.direction * (eventIndex % 2 === 0 ? 2 : 1);
         if (development?.type === "contour") degree += development.direction * Math.round(progress * (1 + config.complexity * 2));
         if (development?.type === "inversion") degree = -motifDegree + sectionDegreeShift(section) + development.direction;
@@ -5889,23 +6001,40 @@ function generateLead(
             : development?.type === "resolution"
               ? 1.18
               : 1;
-        const duration = Math.min(clamp(finite(event.duration, 0.5) * rhythmFactor, 0.1, 4), maxDuration);
+        const duration = Math.min(
+          clamp(finite(event.duration, 0.5) * rhythmFactor * notationIntent.durationScale, 0.08, 4),
+          maxDuration,
+        );
         const developmentAccent = development
           ? 0.9 + development.intensity * 0.08 + progress * 0.06 + plannedTension * 0.1
           : 0.94 + plannedTension * 0.1;
-        const accent = clamp(finite(event.accent, 0.75) * developmentAccent, 0.4, 1.25);
+        const accent = clamp(
+          finite(event.accent, 0.75) * developmentAccent * notationIntent.velocityScale,
+          0.38,
+          1.3,
+        );
         addNote(
           notes,
           pitch,
           start,
           duration,
-          eventVelocity(config, settings, intensity, rng, accent),
+          eventVelocity(config, settings, intensity, rng, accent, counterpoint ? 0.4 : 0.22),
           totalBeats,
           {
             genrePhraseGrammar: activeMotif.genreGrammar ?? config.genre,
             ...(phraseAnchor ? { phraseAnchor: true } : {}),
             grooveRole: groove.role,
             plannedTension,
+            articulationIntent: notationIntent.articulation,
+            melodyNotationRole: notationIntent.role,
+            melodyNotationReason: notationIntent.reason,
+            melodyTimingIntent: round(notationIntent.timingShift),
+            melodyDurationIntent: round(notationIntent.durationScale),
+            melodyVelocityIntent: round(notationIntent.velocityScale),
+            ...(developedRepeatShift ? {
+              melodicMotionIntent: "developed-repeat",
+              melodicMotionDegrees: developedRepeatShift,
+            } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
           },
         );
@@ -6997,6 +7126,13 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
       ...(Number.isFinite(note.phraseBoundary) ? { phraseBoundary: round(note.phraseBoundary) } : {}),
       ...(note.articulationIntent ? { articulationIntent: note.articulationIntent } : {}),
+      ...(note.melodyNotationRole ? { melodyNotationRole: note.melodyNotationRole } : {}),
+      ...(note.melodyNotationReason ? { melodyNotationReason: note.melodyNotationReason } : {}),
+      ...(Number.isFinite(note.melodyTimingIntent) ? { melodyTimingIntent: round(note.melodyTimingIntent) } : {}),
+      ...(Number.isFinite(note.melodyDurationIntent) ? { melodyDurationIntent: round(note.melodyDurationIntent) } : {}),
+      ...(Number.isFinite(note.melodyVelocityIntent) ? { melodyVelocityIntent: round(note.melodyVelocityIntent) } : {}),
+      ...(note.melodicMotionIntent ? { melodicMotionIntent: note.melodicMotionIntent } : {}),
+      ...(Number.isFinite(note.melodicMotionDegrees) ? { melodicMotionDegrees: note.melodicMotionDegrees } : {}),
       ...(note.connectionId ? { connectionId: note.connectionId } : {}),
       ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
       ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
