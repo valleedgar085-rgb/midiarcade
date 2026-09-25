@@ -252,6 +252,9 @@ export function createGenerationExecutor({
         focusRoute: diagnosis.focusRoute,
         focusDimension: diagnosis.focusDimension,
         focusGroup: diagnosis.focusGroup,
+        focusSource: diagnosis.focusSource,
+        criticalPriority: diagnosis.criticalPriority,
+        criticalFloorGap: diagnosis.criticalFloorGap,
         totalScore: diagnosis.totalScore,
         creativeFloor: diagnosis.creativeFloor,
         criticalFloor: diagnosis.criticalFloor,
@@ -267,6 +270,8 @@ export function createGenerationExecutor({
           focusRoute: diagnosis.focusRoute,
           focusDimension: diagnosis.focusDimension,
           focusGroup: diagnosis.focusGroup,
+          focusSource: diagnosis.focusSource,
+          criticalPriority: diagnosis.criticalPriority,
         });
         const correctedResult = await executeAdapted(kind, correctionPayload, expectedLifecycle);
         requireCurrentLifecycle(expectedLifecycle);
@@ -277,6 +282,7 @@ export function createGenerationExecutor({
           reason: comparison.reason,
           scoreDelta: comparison.scoreDelta,
           creativeFloorDelta: comparison.creativeFloorDelta,
+          criticalFloorDelta: comparison.criticalFloorDelta,
         });
       } else {
         flightRecorder.mark(flightId, "compare", {
