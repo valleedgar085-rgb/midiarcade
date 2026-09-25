@@ -1,16 +1,5 @@
 import { continueElementLineage } from "./elemental-lineage.js";
 
-function retiredRhythmDiagnostic(id) {
-  return Object.freeze({
-    version: 1,
-    id,
-    attempted: false,
-    accepted: false,
-    changed: false,
-    reason: "retired-groove-dna-authority",
-  });
-}
-
 /**
  * Single authoritative post-generation finalizer used by worker and synchronous
  * fallback paths. Groove DNA owns rhythmic structure, so finalization may
@@ -25,9 +14,8 @@ export function finalizeGeneratedSong(song, {
     return Object.freeze({
       song,
       diagnostics: Object.freeze({
-        snareBounce: null,
-        sectionDrumEvolution: null,
         rhythmAuthority: "groove-dna",
+        rhythmChanged: false,
       }),
     });
   }
@@ -39,9 +27,8 @@ export function finalizeGeneratedSong(song, {
   return Object.freeze({
     song: lineageSong,
     diagnostics: Object.freeze({
-      snareBounce: retiredRhythmDiagnostic("snare-bounce"),
-      sectionDrumEvolution: retiredRhythmDiagnostic("section-drum-evolution"),
       rhythmAuthority: "groove-dna",
+      rhythmChanged: false,
     }),
   });
 }
