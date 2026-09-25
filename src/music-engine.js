@@ -14250,6 +14250,9 @@ export function generateSectionVariations(current, sectionId, input = {}) {
       maxCandidateCount: 1,
       adaptive: false,
       recentSongs: [],
+      // Section alternatives must compose against the source song's canonical
+      // Groove DNA before their notes are spliced back into that song.
+      grooveConductor: current.grooveConductor ?? null,
     });
     const variation = clone(current);
     variation.id = `${current.id ?? "song"}-section-${section.id}-${index + 1}`;
@@ -14291,22 +14294,29 @@ export function generateSectionVariations(current, sectionId, input = {}) {
             : clone(contract)
         )),
     };
-    const evaluation = evaluateSongCandidate(variation);
-    variation.meta.score = evaluation.score;
-    variation.meta.scoreDetails = {
+    const committedVariation = refreshCommittedGenerationDiagnostics(variation);
+    const evaluation = evaluateSongCandidate(committedVariation);
+    const releaseGate = evaluateSongReleaseGate(committedVariation, evaluation);
+    committedVariation.meta.score = evaluation.score;
+    committedVariation.meta.scoreDetails = {
+      ...(committedVariation.meta.scoreDetails ?? {}),
       criticVersion: evaluation.version,
       totalScore: evaluation.score,
       subscores: evaluation.subscores,
       diagnostics: evaluation.diagnostics,
+      releaseGate,
+      committedAuthorityValidation: committedVariation.committedAuthorityValidation,
     };
-    variation.sectionVariation = {
+    committedVariation.sectionVariation = {
       version: 1,
       sectionId: section.id,
       option: index + 1,
       preservedOutsideSection: true,
       lockedTrackIds: [...locked],
+      releasePassed: releaseGate.passed,
+      releaseFailures: clone(releaseGate.failures ?? []),
     };
-    return variation;
+    return committedVariation;
   });
 }
 
