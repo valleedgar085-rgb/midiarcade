@@ -321,6 +321,10 @@ test("candidate generation is deterministic, bounded, and commits the highest sc
     details.totalScore,
     details.candidateScores.find(({ index }) => index === details.selectedCandidate).score,
   );
+  const committedEvaluation = engine.evaluateSongCandidate(first);
+  assert.equal(details.committedTotalScore, committedEvaluation.score);
+  assert.equal(details.committed.totalScore, committedEvaluation.score);
+  assert.deepEqual(details.committed.subscores, committedEvaluation.subscores);
   assert.equal(details.candidateSearch.adaptive, false);
   assert.equal(details.candidateSearch.expandedBy, 0);
   assert.ok(details.balance.balanceScore >= 0 && details.balance.balanceScore <= 100);
