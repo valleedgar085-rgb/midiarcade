@@ -41,8 +41,8 @@ export function createGenerationRunner({
         const song = finalized.song;
         recorder?.mark?.(flightId, "diagnose", {
           candidateSearch: Boolean(song?.meta?.scoreDetails?.candidateSearch),
-          snareBounce: finalized.diagnostics.snareBounce,
-          sectionDrumEvolution: finalized.diagnostics.sectionDrumEvolution,
+          rhythmAuthority: finalized.diagnostics.rhythmAuthority,
+          rhythmChanged: finalized.diagnostics.rhythmChanged,
         });
         if (!validate(song)) throw new Error("The composition engine returned an incomplete song.");
         recorder?.mark?.(flightId, "finalize");
