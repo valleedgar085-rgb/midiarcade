@@ -13518,9 +13518,9 @@ function commitCandidate(candidates, search = {}) {
   selected.song.meta.committedQualityGate = committedQualityGate;
   selected.song.producerPass = {
     ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
-    status: committedOutputOutcome.passed ? "passed" : "best-available",
-    qualityGate: committedQualityGate,
-    outputOutcome: committedOutputOutcome,
+    committedStatus: committedOutputOutcome.passed ? "passed" : "best-available",
+    committedQualityGate,
+    committedOutputOutcome,
   };
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
