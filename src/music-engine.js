@@ -13481,17 +13481,26 @@ function commitCandidate(candidates, search = {}) {
       ? "release-ready"
       : "committed-authority-below-gate",
   };
+  // Preserve selection-time score fields: they explain why this candidate won
+  // the bounded search. Store exact committed-track diagnostics separately so
+  // post-selection authority repairs never rewrite candidate-ranking history.
   selected.song.meta.score = committedEvaluation.score;
   selected.song.meta.scoreDetails = {
     ...(selected.song.meta.scoreDetails ?? {}),
-    totalScore: committedEvaluation.score,
-    subscores: committedEvaluation.subscores,
-    diagnostics: committedEvaluation.diagnostics ?? {},
-    releaseGate: committedRelease,
-    balance: committedBalance,
-    sectionOutcome: committedSectionOutcome,
-    registerOutcome: committedRegisterOutcome,
-    outputOutcome: committedOutputOutcome,
+    committed: {
+      version: 1,
+      totalScore: committedEvaluation.score,
+      subscores: committedEvaluation.subscores,
+      diagnostics: committedEvaluation.diagnostics ?? {},
+      releaseGate: committedRelease,
+      qualityGate: committedQualityGate,
+      balance: committedBalance,
+      sectionOutcome: committedSectionOutcome,
+      registerOutcome: committedRegisterOutcome,
+      outputOutcome: committedOutputOutcome,
+      authorityValidation: selected.song.committedAuthorityValidation,
+    },
+    committedTotalScore: committedEvaluation.score,
     committedAuthorityValidation: selected.song.committedAuthorityValidation,
     registerIntegrity: {
       corrections: committedRegister.report.corrections,
@@ -13503,10 +13512,10 @@ function commitCandidate(candidates, search = {}) {
       releaseFailures: clone(committedRelease.failures ?? []),
     },
   };
-  selected.song.meta.sectionOutcome = committedSectionOutcome;
-  selected.song.meta.registerOutcome = committedRegisterOutcome;
-  selected.song.meta.outputOutcome = committedOutputOutcome;
-  selected.song.meta.qualityGate = committedQualityGate;
+  selected.song.meta.committedSectionOutcome = committedSectionOutcome;
+  selected.song.meta.committedRegisterOutcome = committedRegisterOutcome;
+  selected.song.meta.committedOutputOutcome = committedOutputOutcome;
+  selected.song.meta.committedQualityGate = committedQualityGate;
   selected.song.producerPass = {
     ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
     status: committedOutputOutcome.passed ? "passed" : "best-available",
