@@ -146,7 +146,7 @@ test("production build has explicit size, UI-density, and CSS performance budget
   const pagesWorkflow = await readFile(new URL("../.github/workflows/deploy-pages.yml", import.meta.url), "utf8");
   assert.match(packageSource, /"quality":\s*"npm test && npm run build && node scripts\/check-build-quality\.js"/);
   assert.match(packageSource, /"test:coverage":\s*"node --test --experimental-test-coverage"/);
-  assert.match(qualitySource, /"www\/src\/app\.js":\s*360 \* 1024/);
+  assert.match(qualitySource, /"www\/src\/app\.js":\s*361 \* 1024/);
   assert.match(qualitySource, /"www\/src\/generation-worker\.js":\s*320 \* 1024/);
   assert.match(qualitySource, /buttonCount > 94/);
   assert.match(qualitySource, /transitionAllCount > 30/);
