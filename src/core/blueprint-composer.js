@@ -159,6 +159,18 @@ function candidateInput(sourceSong, directive, input) {
   const directorDefaults = directorExpressiveInput(directive, { ...input, ...jazzDefaults });
   return {
     ...input,
+    // Scoped edits stay in the source song's musical world, even when app
+    // controls still contain settings for a different generation.
+    ...(normalized.target === "song" ? {} : {
+      key: sourceSong?.key ?? sourceSong?.meta?.key ?? input?.key,
+      scale: sourceSong?.mode ?? sourceSong?.meta?.scale ?? input?.scale,
+      bars: sourceSong?.bars ?? sourceSong?.meta?.bars ?? input?.bars,
+      timeSignature: sourceSong?.meta?.timeSignature ?? input?.timeSignature,
+      similarity: 1,
+      variation: 0,
+      surprise: 0,
+      canonicalScope: true,
+    }),
     ...directorDefaults,
     ...jazzDefaults,
     jazzGrammar: directive?.jazzGrammar ?? null,
