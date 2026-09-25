@@ -5,6 +5,7 @@ import test from "node:test";
 const appUrl = new URL("../src/app.js", import.meta.url);
 const engineUrl = new URL("../src/music-engine.js", import.meta.url);
 const finalizerUrl = new URL("../src/core/generation-finalizer.js", import.meta.url);
+const pipelineUrl = new URL("../src/core/output-quality-pipeline.js", import.meta.url);
 
 test("generation UI has no raw-engine emergency escape hatch", async () => {
   const app = await readFile(appUrl, "utf8");
@@ -56,4 +57,12 @@ test("retired rhythm compatibility diagnostics stay deleted", async () => {
   assert.equal(finalizer.includes("snareBounce"), false);
   assert.equal(finalizer.includes("sectionDrumEvolution"), false);
   assert.match(finalizer, /rhythmChanged:\s*false/);
+});
+
+
+test("base output quality module defines stages but cannot orchestrate a second pipeline", async () => {
+  const pipeline = await readFile(pipelineUrl, "utf8");
+  assert.match(pipeline, /export function createBaseOutputQualityStages/);
+  assert.equal(pipeline.includes("export function applySongOutputQualityPipeline"), false);
+  assert.equal(pipeline.includes("export function applyResultOutputQualityPipeline"), false);
 });
