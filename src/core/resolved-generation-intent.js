@@ -34,16 +34,32 @@ function round(value, digits = 4) {
   return Math.round((number + Number.EPSILON) * factor) / factor;
 }
 
-function record(requested, producer, final) {
+function record(requested, genreResolved, producer, final) {
   const requestedValue = finiteOrNull(requested);
+  const genreValue = finiteOrNull(genreResolved);
   const producerValue = finiteOrNull(producer);
   const finalValue = finiteOrNull(final);
+  const genreAdjustment = requestedValue == null || genreValue == null
+    ? null
+    : round(genreValue - requestedValue);
+  const tasteAdjustment = genreValue == null || producerValue == null
+    ? null
+    : round(producerValue - genreValue);
+  const qualityAdjustment = producerValue == null || finalValue == null
+    ? null
+    : round(finalValue - producerValue);
   return Object.freeze({
     requested: round(requestedValue),
+    genre: round(genreValue),
     producer: round(producerValue),
     final: round(finalValue),
+    genreAdjustment,
+    tasteAdjustment,
+    qualityAdjustment,
+    // Compatibility aliases for existing debugger consumers.
     producerDelta: requestedValue == null || producerValue == null ? null : round(producerValue - requestedValue),
-    qualityDelta: producerValue == null || finalValue == null ? null : round(finalValue - producerValue),
+    qualityDelta: qualityAdjustment,
+    equation: "requested + genreAdjustment + tasteAdjustment + qualityAdjustment = final",
   });
 }
 
@@ -51,33 +67,43 @@ function trackInputs(config = {}) {
   return config?.tracks ?? config?.trackControls ?? config?.trackSettings ?? {};
 }
 
-function createResolvedIntentSnapshot(requested, producer, final, kind) {
+function createResolvedIntentSnapshot(requested, genreResolved, producer, final, kind) {
   const requestedTracks = trackInputs(requested);
+  const genreTracks = trackInputs(genreResolved);
   const producerTracks = trackInputs(producer);
   const finalTracks = trackInputs(final);
   const trackIds = [...new Set([
     ...Object.keys(requestedTracks),
+    ...Object.keys(genreTracks),
     ...Object.keys(producerTracks),
     ...Object.keys(finalTracks),
   ])];
 
   return Object.freeze({
-    version: 1,
+    version: 2,
     id: "resolved-generation-intent-v1",
     kind,
+    equation: "user value + genre adjustment + taste adjustment + quality adjustment = final composer value",
     authorities: Object.freeze({
       requested: "user-config",
+      genre: "genre-character+producer-brain(neutral-taste)",
+      taste: "adaptive-taste+producer-brain",
       producer: "adaptive-generation+producer-brain",
       quality: "output-quality-evolution",
     }),
     controls: Object.freeze(Object.fromEntries(
-      CONTROL_KEYS.map((key) => [key, record(requested?.[key], producer?.[key], final?.[key])]),
+      CONTROL_KEYS.map((key) => [key, record(requested?.[key], genreResolved?.[key], producer?.[key], final?.[key])]),
     )),
     tracks: Object.freeze(Object.fromEntries(trackIds.map((trackId) => [
       trackId,
       Object.freeze(Object.fromEntries(TRACK_KEYS.map((key) => [
         key,
-        record(requestedTracks?.[trackId]?.[key], producerTracks?.[trackId]?.[key], finalTracks?.[trackId]?.[key]),
+        record(
+          requestedTracks?.[trackId]?.[key],
+          genreTracks?.[trackId]?.[key],
+          producerTracks?.[trackId]?.[key],
+          finalTracks?.[trackId]?.[key],
+        ),
       ]))),
     ]))),
   });
@@ -85,6 +111,9 @@ function createResolvedIntentSnapshot(requested, producer, final, kind) {
 
 export function resolveGenerationConfig(config = {}, { kind = "new" } = {}) {
   const requested = config && typeof config === "object" && !Array.isArray(config) ? { ...config } : {};
+  // Resolve a neutral-taste checkpoint only for provenance. The actual composer
+  // still receives the single existing adaptive-generation result below.
+  const genreResolved = adaptGenerationConfig({ ...requested, tasteProfile: {} }, { kind });
   const producerResolved = adaptGenerationConfig(requested, { kind });
   const qualityResolved = applyOutputQualityEvolution(producerResolved, { kind });
   const freshGeneration = kind === "new";
@@ -99,6 +128,7 @@ export function resolveGenerationConfig(config = {}, { kind = "new" } = {}) {
   };
   final.resolvedGenerationIntent = createResolvedIntentSnapshot(
     requested,
+    genreResolved,
     producerResolved,
     final,
     kind,
