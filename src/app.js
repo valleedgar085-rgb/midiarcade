@@ -3,7 +3,6 @@ import {
   defaultChordPathForGenre,
   encodeMidi,
   generateNew,
-  generateSectionVariations,
   generateSimilar,
   GENRE_PROFILES,
   ONE_SHOT_KITS,
@@ -1474,7 +1473,10 @@ async function exploreSectionVariations() {
       input: variationInput,
     });
     if (!generationOwnership.isCurrent(operation)) return;
-    const options = generated?.options || generateSectionVariations(base, section.id, variationInput);
+    const options = Array.isArray(generated?.options) ? generated.options : [];
+    if (options.length !== variationInput.count) {
+      throw new Error("The generation authority returned an incomplete section variation set.");
+    }
     state.sectionVariations = { sectionId: section.id, base, options, activeOption: 0 };
     renderSectionVariationLab(section);
     showToast(`Three ${section.name} alternatives are ready. Audition A, B, and C, then keep your favorite.`);
