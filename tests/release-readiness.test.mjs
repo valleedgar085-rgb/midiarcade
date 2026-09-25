@@ -90,7 +90,7 @@ test("PWA and Play artwork is versioned, present, and wired into the studio prod
   const pkg = JSON.parse(packageJson);
   const manifest = JSON.parse(webManifest);
 
-  assert.equal(pkg.version, "1.2.2");
+  assert.equal(pkg.version, "1.3.0");
   assert.equal(pkg.engines.node, ">=22.0.0");
   assert.equal(manifest.display, "standalone");
   assert.deepEqual(manifest.icons.map((icon) => icon.sizes), ["192x192", "512x512"]);
