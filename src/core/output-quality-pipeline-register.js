@@ -210,7 +210,7 @@ function compareRepetitionAssessments(left, right) {
   return left.candidateIndex - right.candidateIndex;
 }
 
-function registerDiagnosticsFor(assessment, before, candidatesEvaluated, candidateIds) {
+function registerDiagnosticsFor(assessment, before, candidatesEvaluated, candidateIds, assessments = []) {
   return Object.freeze({
     attempted: true,
     accepted: Boolean(assessment?.accepted),
@@ -222,6 +222,22 @@ function registerDiagnosticsFor(assessment, before, candidatesEvaluated, candida
     candidatesEvaluated,
     candidateLimit: MAX_REGISTER_HEALTH_CANDIDATES,
     candidateIds,
+    candidateSummaries: assessments.map((candidate) => ({
+      id: candidate.id,
+      accepted: Boolean(candidate.accepted),
+      reason: candidate.reason,
+      changedNotes: finite(candidate.changedNotes),
+      semitones: finite(candidate.semitones),
+      beforeRegisterHealth: round(candidate.beforeRegister),
+      afterRegisterHealth: round(candidate.afterRegister),
+      registerHealthDelta: round(candidate.registerDelta),
+      scoreDelta: round(candidate.scoreDelta),
+      floorDelta: round(candidate.floorDelta),
+      localScoreDelta: round(candidate.localScoreDelta),
+      protectedDeltas: Object.fromEntries(
+        Object.entries(candidate.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
+      ),
+    })),
     beforeScore: round(before?.score),
     afterScore: round(assessment?.after?.score),
     scoreDelta: round(assessment?.scoreDelta),
@@ -368,7 +384,7 @@ export function applyRegisterHealthRefinement(song, config, evaluateCandidate, e
   const candidateIds = assessments.map(({ id }) => id);
   const accepted = assessments.filter(({ accepted }) => accepted).sort(compareRegisterAssessments);
   const selected = accepted[0] ?? [...assessments].sort(compareRegisterAssessments)[0];
-  const diagnostics = registerDiagnosticsFor(selected, before, assessments.length, candidateIds);
+  const diagnostics = registerDiagnosticsFor(selected, before, assessments.length, candidateIds, assessments);
   if (!accepted.length) return { song, diagnostics };
   selected.song.outputQualityEvolution = {
     ...(selected.song.outputQualityEvolution ?? {}),

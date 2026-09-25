@@ -3,6 +3,7 @@ const FOCUS_ROUTES = Object.freeze(new Set([
   "groove-first",
   "hook-first",
 ]));
+const ASPIRATIONAL_CRITICAL_FLOOR = 68;
 
 function finiteOrNull(value) {
   const number = Number(value);
@@ -101,6 +102,13 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
   const floorDelta = original.creativeFloor != null && corrected.creativeFloor != null
     ? corrected.creativeFloor - original.creativeFloor
     : null;
+  const criticalFloorDelta = original.criticalFloor != null && corrected.criticalFloor != null
+    ? corrected.criticalFloor - original.criticalFloor
+    : null;
+  const criticalFloorCleared = original.criticalFloor != null
+    && corrected.criticalFloor != null
+    && original.criticalFloor < ASPIRATIONAL_CRITICAL_FLOOR
+    && corrected.criticalFloor >= ASPIRATIONAL_CRITICAL_FLOOR;
 
   let useCorrected = false;
   let reason = "original-retained";
@@ -109,6 +117,12 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
   } else if (original.releasePassed === false && corrected.releasePassed === true) {
     useCorrected = true;
     reason = "release-gate-improved";
+  } else if (criticalFloorCleared && (scoreDelta == null || scoreDelta >= -1)) {
+    useCorrected = true;
+    reason = "critical-floor-cleared";
+  } else if (criticalFloorDelta != null && criticalFloorDelta >= 8 && (scoreDelta == null || scoreDelta >= -0.25)) {
+    useCorrected = true;
+    reason = "critical-floor-improved";
   } else if (scoreDelta != null && scoreDelta >= 0.5) {
     useCorrected = true;
     reason = "score-improved";
@@ -123,6 +137,7 @@ export function selectSelfCorrectedResult(originalResult, correctedResult) {
     reason,
     scoreDelta,
     creativeFloorDelta: floorDelta,
+    criticalFloorDelta,
     original: Object.freeze(original),
     corrected: Object.freeze(corrected),
   });

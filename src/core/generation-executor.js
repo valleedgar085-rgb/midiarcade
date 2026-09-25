@@ -277,6 +277,7 @@ export function createGenerationExecutor({
           reason: comparison.reason,
           scoreDelta: comparison.scoreDelta,
           creativeFloorDelta: comparison.creativeFloorDelta,
+          criticalFloorDelta: comparison.criticalFloorDelta,
         });
       } else {
         flightRecorder.mark(flightId, "compare", {
