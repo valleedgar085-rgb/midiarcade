@@ -1,31 +1,15 @@
-import { adaptGenerationRequest } from "./adaptive-generation.js";
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
-import { applyOutputQualityEvolution } from "./output-quality-evolution.js";
+import {
+  attachGenerationRepairAuthority,
+  decideGenerationRepairAuthority,
+} from "./generation-repair-router.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
+import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   createSelfCorrectionPayload,
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
-
-function evolveGenerationPayload(kind, payload = {}) {
-  if (!["new", "similar", "songVariations"].includes(kind)) return payload;
-  const evolvedConfig = applyOutputQualityEvolution(payload?.config ?? {}, { kind });
-  const phraseResolutionRefinement = typeof evolvedConfig.phraseResolutionRefinement === "boolean"
-    ? evolvedConfig.phraseResolutionRefinement
-    : kind === "new";
-  const registerHealthRefinement = typeof evolvedConfig.registerHealthRefinement === "boolean"
-    ? evolvedConfig.registerHealthRefinement
-    : kind === "new";
-  return {
-    ...payload,
-    config: {
-      ...evolvedConfig,
-      phraseResolutionRefinement,
-      registerHealthRefinement,
-    },
-  };
-}
 
 export function createGenerationExecutor({
   fallback,
@@ -174,7 +158,7 @@ export function createGenerationExecutor({
     const databaseStartedAt = typeof persistGeneration === "function"
       ? new Date(Number(now())).toISOString()
       : null;
-    const adaptedPayload = evolveGenerationPayload(kind, adaptGenerationRequest(kind, payload));
+    const adaptedPayload = resolveGenerationRequest(kind, payload);
     const config = adaptedPayload?.config ?? adaptedPayload?.input ?? {};
     const flightId = flightRecorder.begin(kind, {
       sourceSong: adaptedPayload?.sourceSong,
@@ -184,6 +168,7 @@ export function createGenerationExecutor({
       producerBrain: config?.producerBrain?.id ?? null,
       blueprint: config?.producerBrain?.blueprint?.id ?? null,
       outputQuality: config?.outputQuality?.seedSignature ?? null,
+      resolvedIntent: config?.resolvedGenerationIntent?.id ?? null,
     });
 
     try {
@@ -213,8 +198,9 @@ export function createGenerationExecutor({
       }
 
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
+      const repairAuthority = decideGenerationRepairAuthority(kind, diagnosis, config);
       flightRecorder.mark(flightId, "diagnose", {
-        shouldRetry: diagnosis.shouldRetry,
+        shouldRetry: repairAuthority.mode === "composition-reroute",
         reason: diagnosis.reason,
         focusRoute: diagnosis.focusRoute,
         focusDimension: diagnosis.focusDimension,
@@ -223,10 +209,11 @@ export function createGenerationExecutor({
         creativeFloor: diagnosis.creativeFloor,
         criticalFloor: diagnosis.criticalFloor,
         lowestCriticalDimension: diagnosis.lowestCriticalDimension,
+        repairAuthority: repairAuthority.mode,
       });
 
       let selectedResult = originalResult;
-      if (diagnosis.shouldRetry) {
+      if (repairAuthority.mode === "composition-reroute") {
         const correctionPayload = createSelfCorrectionPayload(adaptedPayload, diagnosis);
         flightRecorder.mark(flightId, "repair", {
           pass: 1,
@@ -252,14 +239,17 @@ export function createGenerationExecutor({
         });
       }
 
+      const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
       let stageDiagnostics = {};
-      selectedResult = applyResultOutputQualityPipeline(selectedResult, config, {
+      selectedResult = applyResultOutputQualityPipeline(selectedResult, qualityConfig, {
         onStageDiagnostics(diagnostics) {
           stageDiagnostics = diagnostics ?? {};
         },
       });
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
+        repairAuthority,
+        resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
         returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
         densityRefinement: stageDiagnostics.densityRefinement ?? acceptedDiagnostics.densityRefinement ?? null,
