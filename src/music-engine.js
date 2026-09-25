@@ -5903,12 +5903,10 @@ function developedRepeatDegreeShift({
 function protectExpressiveLeadSpacing(notes = []) {
   const ordered = [...notes].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
   const merged = [];
+  const lastByPitch = new Map();
   for (const note of ordered) {
-    const duplicate = merged.find((existing) => (
-      existing.pitch === note.pitch
-      && Math.abs(existing.start - note.start) < 1e-6
-    ));
-    if (duplicate) {
+    const duplicate = lastByPitch.get(note.pitch);
+    if (duplicate && Math.abs(duplicate.start - note.start) < 1e-6) {
       duplicate.duration = Math.max(duplicate.duration, note.duration);
       duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
       duplicate.melodySpacingProtected = true;
@@ -5917,6 +5915,7 @@ function protectExpressiveLeadSpacing(notes = []) {
       continue;
     }
     merged.push(note);
+    lastByPitch.set(note.pitch, note);
   }
   for (let index = 0; index < merged.length - 1; index += 1) {
     const current = merged[index];
@@ -7841,12 +7840,11 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
       })
       .sort((left, right) => left.start - right.start || left.pitch - right.pitch || left.duration - right.duration);
     const deduped = [];
+    const lastDuplicateByPitch = new Map();
     for (const note of ordered) {
       const retriggerFloor = track.id === "drums" ? 0.0005 : 0.02;
-      const duplicate = deduped.findLast((candidate) => (
-        candidate.pitch === note.pitch && Math.abs(candidate.start - note.start) < retriggerFloor
-      ));
-      if (duplicate) {
+      const duplicate = lastDuplicateByPitch.get(note.pitch);
+      if (duplicate && Math.abs(duplicate.start - note.start) < retriggerFloor) {
         const duplicateEnd = Math.max(
           duplicate.start + duplicate.duration,
           note.start + note.duration,
@@ -7857,6 +7855,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
         continue;
       }
       deduped.push(note);
+      lastDuplicateByPitch.set(note.pitch, note);
     }
     if (track.id !== "drums") {
       const lastByPitch = new Map();
@@ -7924,12 +7923,20 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   const fallbackById = new Map(
     fallbackTracks.map((track) => [track.id, track.notes ?? []]),
   );
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const sectionById = new Map(structure.map((section) => [section.id, section]));
+  const transitionTracks = tracks.filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id));
+  const taggedHandoffs = new Set(
+    tracks.flatMap((track) => track.notes ?? [])
+      .map((note) => note.transitionHandoffId)
+      .filter(Boolean),
+  );
   let featuredAnchorsRestored = 0;
   let transitionEventsTagged = 0;
 
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     const hasFeature = track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -7985,22 +7992,18 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   }
 
   for (const transition of songBlueprint?.transitions ?? []) {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const from = sectionById.get(transition.fromSectionId);
+    const to = sectionById.get(transition.toSectionId);
     if (!from || !to) continue;
     const lastSection = structure[structure.length - 1];
     if (to.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
     const handoffId = `${from.id}->${to.id}`;
-    const alreadyTagged = tracks.some((track) => track.notes.some((note) => (
-      note.transitionHandoffId === handoffId
-    )));
-    if (alreadyTagged || transition.type === "drop-out") continue;
+    if (taggedHandoffs.has(handoffId) || transition.type === "drop-out") continue;
     const pickupStart = Math.max(
       from.startBeat,
       from.endBeat - clamp(finite(transition.pickupBeats, 0.5), 0.25, 2),
     );
-    const candidates = tracks
-      .filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id))
+    const candidates = transitionTracks
       .flatMap((track) => track.notes.map((note) => ({ note, trackId: track.id })))
       .filter(({ note }) => note.start >= pickupStart - 1e-6 && note.start <= from.endBeat + 0.12)
       .sort((left, right) => (
@@ -8013,21 +8016,21 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     candidates[0].note.transitionHandoffRole = `${transition.type}-final-boundary`;
     candidates[0].note.transitionFeature ??= transition.type;
     candidates[0].note.finalAssemblyRole = "verified-transition-event";
+    taggedHandoffs.add(handoffId);
     transitionEventsTagged += 1;
   }
 
   let melodyDuplicatesMerged = 0;
   if (config.bars >= 12) {
-    const melodyTrack = tracks.find((track) => track.id === "melody");
+    const melodyTrack = trackById.get("melody");
     if (melodyTrack) {
       const merged = [];
+      const lastByPitch = new Map();
       for (const note of [...(melodyTrack.notes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch)) {
-        const duplicate = merged.find((existing) => (
-          existing.pitch === note.pitch
-          && Math.abs(existing.start - note.start) < 1e-6
-        ));
-        if (!duplicate) {
+        const duplicate = lastByPitch.get(note.pitch);
+        if (!duplicate || Math.abs(duplicate.start - note.start) >= 1e-6) {
           merged.push(note);
+          lastByPitch.set(note.pitch, note);
           continue;
         }
         duplicate.duration = Math.max(duplicate.duration, note.duration);
@@ -8065,10 +8068,12 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
+  const sectionById = new Map(structure.map((section) => [section.id, section]));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
   const missingFeaturedSections = [];
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     if (!track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -8082,12 +8087,12 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
     ))))
     .map((section) => section.id);
   const transitionContracts = (songBlueprint?.transitions ?? []).filter((transition) => {
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const to = sectionById.get(transition.toSectionId);
     const lastSection = structure[structure.length - 1];
     return !(to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name));
   });
   const coordinatedTransitions = transitionContracts.filter((transition) => {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const from = sectionById.get(transition.fromSectionId);
     if (!from) return false;
     const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
     if (transition.type !== "drop-out") {
