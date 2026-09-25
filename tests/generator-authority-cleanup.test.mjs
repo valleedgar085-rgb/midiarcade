@@ -20,7 +20,11 @@ test("final composer has one Producer Intent enforcement and one Final Assembly 
   assert.match(engine, /function evaluateProducerIntentContract/);
 
   const finalAssemblyCalls = [...engine.matchAll(/runFinalAssemblyPass\(/g)].length;
-  assert.equal(finalAssemblyCalls, 2, "one declaration plus one final invocation should remain");
+  assert.equal(
+    finalAssemblyCalls,
+    3,
+    "one declaration plus one final invocation for fresh composition and one for targeted critic repair should remain",
+  );
 });
 
 test("retired rhythm compatibility diagnostics stay deleted", async () => {
