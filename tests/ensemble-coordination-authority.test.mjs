@@ -158,6 +158,10 @@ test("critic detects rendered parts that stop honoring the ensemble authority", 
     "counterpoint should lose call/response separation",
   );
   assert.ok(
+    disconnectedAuthority.metrics.phraseSeparation < connectedAuthority.metrics.phraseSeparation,
+    "synchronized counterpoint should create more phrase overlap",
+  );
+  assert.ok(
     disconnectedEvaluation.subscores.stageInterlock < connectedEvaluation.subscores.stageInterlock,
     `${disconnectedEvaluation.subscores.stageInterlock} should be below ${connectedEvaluation.subscores.stageInterlock}`,
   );
@@ -226,6 +230,7 @@ test("ensemble hardening exposes cloning, register crowding, and support-layer p
   for (const metric of [
     "kickBassCloneRatio", "bassIndependence", "melodyChordCrowding",
     "leadHarmonySeparation", "supportForegroundOverlap", "supportRestraint",
+    "leadPhraseOverlap", "phraseSeparation", "callResponseTiming",
   ]) assert.ok(Number.isFinite(report.metrics[metric]), metric);
 });
 
@@ -261,4 +266,43 @@ test("ensemble critic publishes section-role evolution and breathing-room diagno
   assert.ok(Number.isFinite(report.metrics.sectionRoleEvolution));
   assert.ok(Number.isFinite(report.metrics.arrangementBreathingRoom));
   assert.equal(typeof report.metrics.allLayersAlwaysOn, "boolean");
+});
+
+
+test("lead dialogue rewards turn-taking over synchronized competing phrases", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "lead-counterline-dialogue-proof",
+    bars: 20,
+    candidateCount: 1,
+    targetedRepair: false,
+  });
+  const healthy = evaluateEnsembleCoordinationAuthority(song);
+  const competing = structuredClone(song);
+  const melody = competing.tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = competing.tracks.find((track) => track.id === "counterpoint");
+  if (counterpoint && melody.length) {
+    counterpoint.notes = counterpoint.notes.map((answer, index) => {
+      const call = melody[index % melody.length];
+      return {
+        ...answer,
+        start: call.start,
+        duration: Math.max(Number(answer.duration ?? 0.25), Number(call.duration ?? 0.25)),
+      };
+    });
+  }
+
+  const crowded = evaluateEnsembleCoordinationAuthority(competing);
+  assert.ok(
+    crowded.metrics.leadPhraseOverlap >= healthy.metrics.leadPhraseOverlap,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
+  );
+  assert.ok(
+    crowded.metrics.phraseSeparation <= healthy.metrics.phraseSeparation,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
+  );
+  assert.ok(
+    crowded.metrics.leadDialogue <= healthy.metrics.leadDialogue,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
+  );
 });
