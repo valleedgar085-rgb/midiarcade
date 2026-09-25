@@ -81,6 +81,20 @@ function registerCrowding(leftNotes, rightNotes, semitones = 7, tolerance = 0.16
   return clamp(crowded / leftNotes.length);
 }
 
+function activeRoleIds(tracks, range) {
+  return [...tracks.entries()]
+    .filter(([trackId, track]) => trackId !== "fx" && notesInRange(track, range).length > 0)
+    .map(([trackId]) => trackId)
+    .sort();
+}
+
+function setDistance(left, right) {
+  const union = new Set([...left, ...right]);
+  if (!union.size) return 0;
+  const shared = [...union].filter((value) => left.includes(value) && right.includes(value)).length;
+  return clamp(1 - shared / union.size);
+}
+
 function uniqueOnsets(notes) {
   const values = [];
   for (const note of notes) {
@@ -343,6 +357,29 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     });
   }
 
+  const roleEvolution = sectionReports.map((entry, index) => {
+    const section = sectionById.get(String(entry.sectionId));
+    const range = section ? sectionRange(song, section) : null;
+    const activeRoles = range ? activeRoleIds(tracks, range) : [];
+    const previous = index > 0 ? sectionReports[index - 1] : null;
+    const previousSection = previous ? sectionById.get(String(previous.sectionId)) : null;
+    const previousRange = previousSection ? sectionRange(song, previousSection) : null;
+    const previousRoles = previousRange ? activeRoleIds(tracks, previousRange) : [];
+    return {
+      sectionId: entry.sectionId,
+      activeRoles,
+      changeFromPrevious: index ? round(setDistance(activeRoles, previousRoles)) : 0,
+    };
+  });
+  const roleChangeValues = roleEvolution.slice(1).map((entry) => entry.changeFromPrevious);
+  const sectionRoleEvolution = roleChangeValues.length
+    ? clamp(average(roleChangeValues) / 0.28)
+    : 0.72;
+  const allLayersAlwaysOn = roleEvolution.length > 2
+    && roleEvolution.every((entry) => entry.activeRoles.length >= 6)
+    && average(roleChangeValues, 0) < 0.08;
+  const arrangementBreathingRoom = allLayersAlwaysOn ? 0.3 : clamp(0.62 + sectionRoleEvolution * 0.38);
+
   const metrics = {
     contractCoverage: round(average(sectionReports.map((entry) => entry.contractCoverage), 0)),
     rhythmFoundation: round(average(sectionReports.map((entry) => entry.rhythmFoundation), 0.55)),
@@ -357,6 +394,9 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     leadHarmonySeparation: round(average(sectionReports.map((entry) => entry.leadHarmonySeparation), 0.8)),
     supportForegroundOverlap: round(average(sectionReports.map((entry) => entry.supportForegroundOverlap), 0)),
     supportRestraint: round(average(sectionReports.map((entry) => entry.supportRestraint), 0.88)),
+    sectionRoleEvolution: round(sectionRoleEvolution),
+    arrangementBreathingRoom: round(arrangementBreathingRoom),
+    allLayersAlwaysOn,
   };
   const score = Math.round(average(sectionReports.map((entry) => entry.score), 55));
   const passed = score >= 70
@@ -373,6 +413,7 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     reason: passed ? "ensemble-contract-honored" : "ensemble-contract-weak",
     score,
     metrics,
+    roleEvolution,
     weakestSection,
     sections: sectionReports,
   };
