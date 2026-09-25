@@ -7645,9 +7645,21 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
         .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
         .sort((left, right) => Number(Boolean(right.phraseAnchor)) - Number(Boolean(left.phraseAnchor)) || left.start - right.start)[0];
       if (melodyAnchor) {
+        const counterWindow = DAW_REGISTER_POLICIES.counterpoint;
+        const target = melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12;
+        const pitchClass = mod(melodyAnchor.pitch, 12);
+        const counterPitches = [];
+        for (let pitch = pitchClass; pitch <= 127; pitch += 12) {
+          if (pitch >= counterWindow.min && pitch <= counterWindow.max) counterPitches.push(pitch);
+        }
+        const safeCounterPitch = counterPitches.sort((left, right) => (
+          Math.abs(left - target) - Math.abs(right - target)
+          || Number(left === melodyAnchor.pitch) - Number(right === melodyAnchor.pitch)
+          || left - right
+        ))[0] ?? clamp(target, counterWindow.min, counterWindow.max);
         anchor = {
           ...melodyAnchor,
-          pitch: melodyAnchor.pitch >= 60 ? melodyAnchor.pitch - 12 : melodyAnchor.pitch + 12,
+          pitch: safeCounterPitch,
           velocity: clamp(Math.round(melodyAnchor.velocity * 0.78), 1, 120),
           duration: round(Math.min(melodyAnchor.duration, 0.75)),
           counterMelodyRole: "answer",
