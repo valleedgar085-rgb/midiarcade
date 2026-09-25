@@ -144,6 +144,31 @@ export function decideGenerationRepairAuthority(kind, diagnosis = {}, config = {
   });
 }
 
+
+export function authorizeQualityStage(stageId, repairAuthority = null) {
+  const stage = qualityStageAuthority(stageId);
+  if (!repairAuthority) {
+    return Object.freeze({ allowed: true, reason: "no-router-context", stage });
+  }
+  if (repairAuthority.allowsSurgicalPostprocess !== true) {
+    return Object.freeze({ allowed: false, reason: "surgical-postprocess-disabled", stage });
+  }
+  if (stage.automationOnly) {
+    return Object.freeze({ allowed: true, reason: "automation-only", stage });
+  }
+  const owner = repairAuthority.mutationOwner ?? null;
+  if (!owner) {
+    return Object.freeze({ allowed: true, reason: "general-postprocess-authority", stage });
+  }
+  const allowed = stage.owners.includes(owner);
+  return Object.freeze({
+    allowed,
+    reason: allowed ? "specialist-owner-match" : "specialist-owner-mismatch",
+    stage,
+    requestedOwner: owner,
+  });
+}
+
 export function attachGenerationRepairAuthority(config = {}, authority = null) {
   if (!authority) return { ...config };
   return {
