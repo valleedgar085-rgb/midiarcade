@@ -48,6 +48,7 @@ import {
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
+import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
   absoluteGroovePulses,
   grooveBarPlan,
@@ -11757,6 +11758,7 @@ function repairRepetitionMetrics(song) {
 
 function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, config) {
   const dimension = String(diagnosis?.weakestDimension ?? "");
+  const routedAuthority = resolveWeaknessAuthority(diagnosis);
   let trackIds = targetedRepairTrackIds(sourceCandidate, diagnosis);
   const trackOverrides = {};
   const configPatch = {};
@@ -11875,9 +11877,12 @@ function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, con
   }
 
   return {
-    version: 2,
+    version: 3,
     id,
     dimension: dimension || null,
+    owner: routedAuthority.owner,
+    specialist: routedAuthority.specialist,
+    allowedMutations: routedAuthority.mutations,
     trackIds,
     trackOverrides,
     configPatch,
@@ -11898,6 +11903,9 @@ function specializedRepairSummary(strategy) {
     version: strategy.version ?? 1,
     id: strategy.id ?? null,
     dimension: strategy.dimension ?? null,
+    owner: strategy.owner ?? null,
+    specialist: strategy.specialist ?? null,
+    allowedMutations: clone(strategy.allowedMutations ?? []),
     tracks: clone(strategy.trackIds ?? []),
     configPatch: clone(strategy.configPatch ?? {}),
     trackOverrides: clone(strategy.trackOverrides ?? {}),
