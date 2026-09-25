@@ -9416,14 +9416,18 @@ function compose(config, options = {}) {
     ?? createStructure(config, rootRng.fork("structure"));
   const style = options.style
     ?? createStyle(config, rootRng.fork("style"));
-  const songBlueprint = createSongBlueprint(
-    config,
-    baseStructure,
-    style,
-    rootRng.fork("song-blueprint"),
-    options.songBlueprint,
-  );
-  const structure = applySongBlueprint(baseStructure, songBlueprint);
+  const songBlueprint = options.preserveAuthorities && options.songBlueprint
+    ? clone(options.songBlueprint)
+    : createSongBlueprint(
+      config,
+      baseStructure,
+      style,
+      rootRng.fork("song-blueprint"),
+      options.songBlueprint,
+    );
+  const structure = options.preserveAuthorities
+    ? baseStructure
+    : applySongBlueprint(baseStructure, songBlueprint);
   const spectrumPlan = createSpectrumPlan(config, structure, songBlueprint);
   const performanceProfile = createPerformanceProfile(
     config,
@@ -9431,13 +9435,15 @@ function compose(config, options = {}) {
     rootRng.fork("performance-profile"),
     options.performanceProfile,
   );
-  const harmony = createHarmony(
-    config,
-    structure,
-    rootRng.fork("harmony"),
-    options.harmonyBlueprint,
-    songBlueprint,
-  );
+  const harmony = options.preserveAuthorities && Array.isArray(options.harmonyBlueprint)
+    ? clone(options.harmonyBlueprint)
+    : createHarmony(
+      config,
+      structure,
+      rootRng.fork("harmony"),
+      options.harmonyBlueprint,
+      songBlueprint,
+    );
   let motifs = options.motifs
     ?? createMotif(config, style, rootRng.fork("motifs"), structure, songBlueprint);
   if (!Array.isArray(motifs.sectionAssignments) || motifs.sectionAssignments.length !== structure.length) {
@@ -13852,7 +13858,9 @@ export function generateSimilar(current, input = {}) {
     };
     const config = normalizeConfig(merged);
     const rng = createSeededRandom(config.seed);
-    const structure = adaptStructure(current.structure, config)
+    const canonicalState = input.canonicalScope === true ? input.canonicalSongState : null;
+    const structure = (canonicalState?.structure ? clone(canonicalState.structure) : null)
+      ?? adaptStructure(current.structure, config)
       ?? createStructure(config, rng.fork("structure"));
     const style = varyStyle(current.style, config, rng.fork("style-variation"));
     const motifs = varyMotifs(current.motifs, config, style, rng.fork("motif-variation"));
@@ -13873,8 +13881,9 @@ export function generateSimilar(current, input = {}) {
       structure,
       style,
       motifs,
-      harmonyBlueprint: current.harmony,
-      songBlueprint: current.songBlueprint,
+      harmonyBlueprint: canonicalState?.harmony ?? current.harmony,
+      songBlueprint: canonicalState?.songBlueprint ?? current.songBlueprint,
+      preserveAuthorities: Boolean(canonicalState),
       performanceProfile: current.performanceProfile,
       compositionRoute: routeId,
       targetTrack,
