@@ -13339,6 +13339,26 @@ function commitCandidate(candidates, search = {}) {
       selectedGroup: selected.repair?.group ?? null,
     },
   ];
+  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
+  // The final audible fingerprint is written only after all committed-note work.
+  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
+
+  // Section completion is a destructive ensemble repair and must happen before
+  // the final committed register pass and Final Assembly.
+  const committedSectionCompletion = applySectionCompletionAuthority(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.harmony ?? [],
+    selected.song.songBlueprint ?? null,
+    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
+  );
+  selected.song.tracks = committedSectionCompletion.tracks;
+  selected.song.sectionCompletion = committedSectionCompletion.report;
+  selected.song.generationPhases = [
+    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
+    { phase: 77, id: "section-completion-authority", status: "complete" },
+  ];
+
   const committedRegister = refineRoleRegisters(selected.song.tracks, selected.song.structure, {
     releaseMelodyMax: 70,
     releaseCounterpointMax: 68,
@@ -13354,37 +13374,82 @@ function commitCandidate(candidates, search = {}) {
       registerSeparationCorrections: committedRegister.report.separationCorrections ?? 0,
     },
   };
-  const committedRegisterEvaluation = evaluateSongCandidate(selected.song);
-  const committedRegisterRelease = evaluateSongReleaseGate(selected.song, committedRegisterEvaluation);
-  selected.song.meta.scoreDetails.registerIntegrity = {
-    corrections: committedRegister.report.corrections,
-    hardViolations: committedRegister.report.after.hardViolations,
-    preferredViolations: committedRegister.report.after.preferredViolations,
-    registerHealth: committedRegisterEvaluation.subscores?.registerHealth ?? null,
-    separation: committedRegisterEvaluation.subscores?.separation ?? null,
-    releasePassed: committedRegisterRelease.passed,
-    releaseFailures: clone(committedRegisterRelease.failures ?? []),
-  };
 
-  // Preserve the exact pre-phase-77 candidate identity for novelty comparison.
-  // The final audible fingerprint is still written after section completion.
-  selected.song.meta.noveltyFingerprint = canonicalNoveltyFingerprint(selected.song);
-
-  // Phase 77 is deliberately post-selection. It may improve the committed
-  // arrangement, but it must never change candidate ranking or repair choice.
-  const committedSectionCompletion = applySectionCompletionAuthority(
+  // The single committed Final Assembly occurs after every engine note-writing
+  // authority. It does not rerun any pitch/rhythm repair afterward.
+  const committedFinalAssembly = runFinalAssemblyPass(
+    selected.song.tracks,
     selected.song.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
-    selected.song.harmony ?? [],
     selected.song.songBlueprint ?? null,
-    { beatsPerBar: finite(selected.song.meta?.beatsPerBar, 4) },
   );
-  selected.song.tracks = committedSectionCompletion.tracks;
-  selected.song.sectionCompletion = committedSectionCompletion.report;
-  selected.song.generationPhases = [
-    ...(selected.song.generationPhases ?? []).filter((phase) => phase.phase !== 77),
-    { phase: 77, id: "section-completion-authority", status: "complete" },
-  ];
+  selected.song.tracks = committedFinalAssembly.tracks;
+  selected.song.finalAssembly = createFinalAssemblyReport(
+    selected.song.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.songBlueprint ?? null,
+    committedFinalAssembly.repairs,
+  );
+  selected.song = refreshCommittedGenerationDiagnostics(selected.song);
+
+  const committedEvaluation = evaluateSongCandidate(selected.song);
+  const committedRelease = evaluateSongReleaseGate(selected.song, committedEvaluation);
+  const committedQualityGate = qualityGateForEvaluation(committedEvaluation);
+  const committedBalance = evaluateCandidateBalance(committedEvaluation);
+  const committedRegisterOutcome = evaluateDawRegisterQuality(selected.song);
+  const committedSectionOutcome = evaluateSectionOutcomeQuality(selected.song);
+  const committedOutputOutcome = {
+    ...(selected.song.meta.outputOutcome ?? {}),
+    version: 4,
+    releasePassed: committedRelease.passed,
+    qualityPassed: committedQualityGate.passed,
+    balancePassed: committedBalance.passed,
+    sectionOutcomePassed: committedSectionOutcome.passed,
+    registerOutcomePassed: committedRegisterOutcome.passed,
+    passed: committedRelease.passed
+      && committedQualityGate.passed
+      && committedBalance.passed
+      && committedSectionOutcome.passed
+      && committedRegisterOutcome.passed,
+    status: committedRelease.passed
+      && committedQualityGate.passed
+      && committedBalance.passed
+      && committedSectionOutcome.passed
+      && committedRegisterOutcome.passed
+      ? "release-ready"
+      : "committed-authority-below-gate",
+  };
+  selected.song.meta.scoreDetails = {
+    ...(selected.song.meta.scoreDetails ?? {}),
+    totalScore: committedEvaluation.score,
+    subscores: committedEvaluation.subscores,
+    diagnostics: committedEvaluation.diagnostics ?? {},
+    releaseGate: committedRelease,
+    balance: committedBalance,
+    sectionOutcome: committedSectionOutcome,
+    registerOutcome: committedRegisterOutcome,
+    outputOutcome: committedOutputOutcome,
+    committedAuthorityValidation: selected.song.committedAuthorityValidation,
+    registerIntegrity: {
+      corrections: committedRegister.report.corrections,
+      hardViolations: committedRegister.report.after.hardViolations,
+      preferredViolations: committedRegister.report.after.preferredViolations,
+      registerHealth: committedEvaluation.subscores?.registerHealth ?? null,
+      separation: committedEvaluation.subscores?.separation ?? null,
+      releasePassed: committedRelease.passed,
+      releaseFailures: clone(committedRelease.failures ?? []),
+    },
+  };
+  selected.song.meta.sectionOutcome = committedSectionOutcome;
+  selected.song.meta.registerOutcome = committedRegisterOutcome;
+  selected.song.meta.outputOutcome = committedOutputOutcome;
+  selected.song.meta.qualityGate = committedQualityGate;
+  selected.song.producerPass = {
+    ...(selected.song.producerPass ?? { phase: 9, version: 1 }),
+    status: committedOutputOutcome.passed ? "passed" : "best-available",
+    qualityGate: committedQualityGate,
+    outputOutcome: committedOutputOutcome,
+  };
   selected.song.meta.ideaFingerprint = createSongFingerprint(selected.song);
   return selected.song;
 }
