@@ -64,6 +64,7 @@ import {
   applySectionCompletionAuthority,
   evaluateSectionCompletionAuthority,
 } from "./core/section-completion-authority.js";
+import { evaluateWholeSongCompletion } from "./core/whole-song-completion.js";
 
 export const PPQ = 480;
 
@@ -7895,6 +7896,21 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       },
     }
     : song.producerPass;
+  const wholeSongCompletion = evaluateWholeSongCompletion({
+    ...song,
+    registerIntegrity: {
+      ...(song.registerIntegrity ?? {}),
+      status: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
+      after: finalRegisterIntegrity,
+      finalValidation: finalRegisterIntegrity,
+    },
+    producerIntentReport,
+    finalRhythmLock,
+    tonalIntegrity,
+    finalAssembly,
+    finalMaster,
+    producerPass,
+  });
 
   return {
     ...song,
@@ -7915,13 +7931,15 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalAssembly,
     finalMaster,
     producerPass,
+    wholeSongCompletion,
     committedAuthorityValidation: Object.freeze({
-      version: 1,
+      version: 2,
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
       register: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
       assembly: finalAssembly.status,
+      wholeSongCompletion: wholeSongCompletion.status,
     }),
   };
 }
