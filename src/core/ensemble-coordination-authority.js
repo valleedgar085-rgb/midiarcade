@@ -64,6 +64,23 @@ function onsetLaneFit(notes, pulses, tolerance = 0.095, fallback = 0.72) {
   return clamp(aligned / notes.length);
 }
 
+function overlapRatio(leftNotes, rightNotes, tolerance = 0.08) {
+  if (!leftNotes.length || !rightNotes.length) return 0;
+  const matched = leftNotes.filter((left) => rightNotes.some((right) => (
+    Math.abs(finite(left?.start) - finite(right?.start)) <= tolerance
+  ))).length;
+  return clamp(matched / leftNotes.length);
+}
+
+function registerCrowding(leftNotes, rightNotes, semitones = 7, tolerance = 0.16) {
+  if (!leftNotes.length || !rightNotes.length) return 0;
+  const crowded = leftNotes.filter((left) => rightNotes.some((right) => (
+    Math.abs(finite(left?.start) - finite(right?.start)) <= tolerance
+    && Math.abs(finite(left?.pitch) - finite(right?.pitch)) <= semitones
+  ))).length;
+  return clamp(crowded / leftNotes.length);
+}
+
 function uniqueOnsets(notes) {
   const values = [];
   for (const note of notes) {
@@ -197,6 +214,12 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       range.beatsPerBar,
     );
     const rhythmFoundation = onsetLaneFit(bass, bassPulses, 0.095, 0.75);
+    const kickNotes = notesInRange(tracks.get("drums"), range)
+      .filter((note) => [35, 36].includes(Math.round(finite(note?.pitch, -1))));
+    const kickBassCloneRatio = overlapRatio(bass, kickNotes, 0.055);
+    const bassIndependence = bass.length && kickNotes.length
+      ? clamp(1 - Math.max(0, kickBassCloneRatio - 0.68) / 0.32)
+      : 0.82;
 
     const melody = notesInRange(tracks.get("melody"), range);
     const counterpoint = notesInRange(tracks.get("counterpoint"), range);
@@ -245,6 +268,13 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     const harmonicSupport = harmonicNotes.length
       ? clamp(chordLaneFit * 0.72 + foundationYield * 0.28)
       : 0.82;
+    const melodyChordCrowding = registerCrowding(melody, chords, 7, 0.18);
+    const leadHarmonySeparation = clamp(1 - melodyChordCrowding);
+    const supportNotes = [...pads, ...notesInRange(tracks.get("arp"), range)];
+    const supportForegroundOverlap = overlapRatio(supportNotes, [...melody, ...counterpoint], 0.14);
+    const supportRestraint = supportNotes.length
+      ? clamp(1 - Math.max(0, supportForegroundOverlap - 0.55) / 0.45)
+      : 0.88;
 
     const roles = coordination?.roles ?? contract?.ensembleRoles ?? {};
     const featuredTrack = String(coordination?.featuredTrack ?? contract?.featuredTrack ?? "melody");
@@ -286,7 +316,10 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       + leadDialogue * 0.22
       + harmonicSupport * 0.13
       + roleHierarchy * 0.12
-      + cadenceTeam * 0.13,
+      + cadenceTeam * 0.08
+      + bassIndependence * 0.05
+      + leadHarmonySeparation * 0.05
+      + supportRestraint * 0.05,
       0,
       1,
     );
@@ -301,6 +334,12 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       roleHierarchy: round(roleHierarchy),
       cadenceTeam: round(cadenceTeam),
       collisionControl: round(collisionControl),
+      kickBassCloneRatio: round(kickBassCloneRatio),
+      bassIndependence: round(bassIndependence),
+      melodyChordCrowding: round(melodyChordCrowding),
+      leadHarmonySeparation: round(leadHarmonySeparation),
+      supportForegroundOverlap: round(supportForegroundOverlap),
+      supportRestraint: round(supportRestraint),
     });
   }
 
@@ -312,6 +351,12 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     roleHierarchy: round(average(sectionReports.map((entry) => entry.roleHierarchy), 0.55)),
     cadenceTeam: round(average(sectionReports.map((entry) => entry.cadenceTeam), 0.55)),
     collisionControl: round(average(sectionReports.map((entry) => entry.collisionControl), 0.55)),
+    kickBassCloneRatio: round(average(sectionReports.map((entry) => entry.kickBassCloneRatio), 0)),
+    bassIndependence: round(average(sectionReports.map((entry) => entry.bassIndependence), 0.82)),
+    melodyChordCrowding: round(average(sectionReports.map((entry) => entry.melodyChordCrowding), 0)),
+    leadHarmonySeparation: round(average(sectionReports.map((entry) => entry.leadHarmonySeparation), 0.8)),
+    supportForegroundOverlap: round(average(sectionReports.map((entry) => entry.supportForegroundOverlap), 0)),
+    supportRestraint: round(average(sectionReports.map((entry) => entry.supportRestraint), 0.88)),
   };
   const score = Math.round(average(sectionReports.map((entry) => entry.score), 55));
   const passed = score >= 70
