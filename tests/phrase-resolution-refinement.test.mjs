@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { createGenerationExecutor } from "../src/core/generation-executor.js";
-import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline.js";
+import { applySongOutputQualityPipeline } from "../src/core/output-quality-pipeline-register.js";
 import {
   createPhraseResolutionCandidates,
   MAX_PHRASE_RESOLUTION_CANDIDATES,
