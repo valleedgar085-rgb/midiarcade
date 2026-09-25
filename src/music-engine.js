@@ -7439,6 +7439,93 @@ function runPerceptualMixPass(sourceTracks, structure) {
  * overlaps, clears lead/counterpoint unisons, and preserves section dynamics
  * while keeping deterministic headroom.
  */
+function repairLeadCounterpointSeparation(tracks, config, {
+  minPitch = 36,
+  maxPitch = 116,
+  marker = "lead-dissonance-space",
+} = {}) {
+  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterTrack = tracks.find((track) => track.id === "counterpoint");
+  const counterpoint = counterTrack?.notes ?? [];
+  const allowedScale = scalePitchClasses(config);
+  const removed = new Set();
+  let leadDissonancesCleared = 0;
+  let leadUnisonsCleared = 0;
+  let notesRemoved = 0;
+
+  const forbidden = (counterPitch, leadPitch) => (
+    [0, 1, 6, 11].includes(mod(Math.abs(counterPitch - leadPitch), 12))
+  );
+
+  for (const counterNote of counterpoint) {
+    const overlappingLeads = melody.filter((leadNote) => (
+      counterNote.start < leadNote.start + leadNote.duration
+      && leadNote.start < counterNote.start + counterNote.duration
+    ));
+    const conflicts = overlappingLeads.filter((leadNote) => forbidden(counterNote.pitch, leadNote.pitch));
+    if (!conflicts.length) continue;
+
+    if (conflicts.some((leadNote) => leadNote.pitch === counterNote.pitch)) {
+      leadUnisonsCleared += 1;
+    }
+
+    const firstConflict = [...conflicts].sort((left, right) => left.start - right.start)[0];
+    const availableDuration = firstConflict.start - counterNote.start - 0.06;
+    if (availableDuration >= 0.08) {
+      counterNote.duration = round(Math.min(counterNote.duration, availableDuration));
+      counterNote.finalMasterRepair = marker;
+      leadDissonancesCleared += 1;
+      continue;
+    }
+
+    const candidates = [];
+    for (let pitch = Math.max(0, Math.round(minPitch)); pitch <= Math.min(127, Math.round(maxPitch)); pitch += 1) {
+      if (!allowedScale.has(mod(pitch, 12))) continue;
+      if (overlappingLeads.some((lead) => forbidden(pitch, lead.pitch))) continue;
+      const counterCollision = counterpoint.some((candidate) => (
+        candidate !== counterNote
+        && !removed.has(candidate)
+        && candidate.pitch === pitch
+        && candidate.start < counterNote.start + counterNote.duration
+        && counterNote.start < candidate.start + candidate.duration
+      ));
+      if (counterCollision) continue;
+      candidates.push(pitch);
+    }
+
+    const registerCenter = finite(DAW_REGISTER_POLICIES.counterpoint?.center, 64);
+    candidates.sort((left, right) => (
+      Math.abs(left - counterNote.pitch) - Math.abs(right - counterNote.pitch)
+      || Math.abs(left - registerCenter) - Math.abs(right - registerCenter)
+      || left - right
+    ));
+    const pitch = candidates[0];
+    if (Number.isFinite(pitch)) {
+      counterNote.pitch = pitch;
+      counterNote.finalMasterRepair = marker;
+      leadDissonancesCleared += 1;
+      continue;
+    }
+
+    // Never claim a repair while leaving an audible masking conflict. If the
+    // scale/register window has no safe pitch and the note cannot end before
+    // the lead enters, drop this support note instead of moving its Groove DNA timing.
+    removed.add(counterNote);
+    notesRemoved += 1;
+    leadDissonancesCleared += 1;
+  }
+
+  if (counterTrack && removed.size) {
+    counterTrack.notes = counterTrack.notes.filter((note) => !removed.has(note));
+  }
+
+  return {
+    leadDissonancesCleared,
+    leadUnisonsCleared,
+    notesRemoved,
+  };
+}
+
 function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
   const totalBeats = Math.max(0, ...structure.map((section) => finite(section.endBeat, 0)));
   const tracks = sourceTracks.map((track) => ({
@@ -7513,67 +7600,10 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
     track.notes = deduped;
   }
 
-  const melody = tracks.find((track) => track.id === "melody")?.notes ?? [];
-  const counterpoint = tracks.find((track) => track.id === "counterpoint")?.notes ?? [];
-  const allowedScale = scalePitchClasses(config);
-  for (const counterNote of counterpoint) {
-    const overlappingLeads = melody.filter((leadNote) => (
-      counterNote.start < leadNote.start + leadNote.duration
-      && leadNote.start < counterNote.start + counterNote.duration
-    ));
-    const dissonantLeads = overlappingLeads.filter((leadNote) => (
-      [0, 1, 6, 11].includes(mod(Math.abs(counterNote.pitch - leadNote.pitch), 12))
-    ));
-    if (dissonantLeads.length) {
-      const firstConflict = dissonantLeads
-        .slice()
-        .sort((left, right) => left.start - right.start)[0];
-      const availableDuration = firstConflict.start - counterNote.start - 0.06;
-      if (availableDuration >= 0.08) {
-        counterNote.duration = round(Math.min(counterNote.duration, availableDuration));
-      } else {
-        const candidates = [];
-        for (let shift = -7; shift <= 7; shift += 1) {
-          const pitch = counterNote.pitch + shift;
-          if (pitch < 36 || pitch > 116 || !allowedScale.has(mod(pitch, 12))) continue;
-          if (overlappingLeads.some((lead) => [0, 1, 6, 11].includes(mod(Math.abs(pitch - lead.pitch), 12)))) continue;
-          candidates.push(pitch);
-        }
-        const pitch = candidates.sort((left, right) => (
-          Math.abs(left - counterNote.pitch) - Math.abs(right - counterNote.pitch)
-          || left - right
-        ))[0];
-        if (Number.isFinite(pitch)) counterNote.pitch = pitch;
-        else {
-          counterNote.velocity = clamp(counterNote.velocity - 10, 1, 120);
-          counterNote.duration = round(Math.max(0.04, counterNote.duration * 0.58));
-        }
-      }
-      counterNote.finalMasterRepair = "lead-dissonance-space";
-      repairs.leadDissonancesCleared += 1;
-    }
-    const unison = melody.find((leadNote) => (
-      leadNote.pitch === counterNote.pitch
-      && Math.abs(leadNote.start - counterNote.start) <= 0.035
-      && leadNote.start < counterNote.start + counterNote.duration
-      && counterNote.start < leadNote.start + leadNote.duration
-    ));
-    if (!unison) continue;
-    const shifted = counterNote.pitch + (counterNote.pitch <= 103 ? 12 : -12);
-    const shiftIsClear = shifted >= 0 && shifted <= 127 && !counterpoint.some((candidate) => (
-      candidate !== counterNote
-      && candidate.pitch === shifted
-      && candidate.start < counterNote.start + counterNote.duration
-      && counterNote.start < candidate.start + candidate.duration
-    ));
-    if (shiftIsClear) counterNote.pitch = shifted;
-    else {
-      counterNote.velocity = clamp(counterNote.velocity - 8, 1, 120);
-      counterNote.duration = round(Math.max(0.02, counterNote.duration * 0.82));
-    }
-    counterNote.finalMasterRepair = "lead-unison-space";
-    repairs.leadUnisonsCleared += 1;
-  }
+  const separationRepair = repairLeadCounterpointSeparation(tracks, config);
+  repairs.leadDissonancesCleared += separationRepair.leadDissonancesCleared;
+  repairs.leadUnisonsCleared += separationRepair.leadUnisonsCleared;
+  repairs.leadCounterpointNotesRemoved = separationRepair.notesRemoved;
 
   const notes = tracks.flatMap((track) => track.notes ?? []);
   const velocities = notes.map((note) => note.velocity).sort((left, right) => left - right);
@@ -7613,7 +7643,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
  * scale-checked pre-polish performance, never synthesized from an arbitrary
  * pitch. Transition repairs only annotate an existing boundary event.
  */
-function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint) {
+function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
@@ -7714,17 +7744,26 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     transitionEventsTagged += 1;
   }
 
+  const counterWindow = DAW_REGISTER_POLICIES.counterpoint ?? { min: 36, max: 116 };
+  const separationRepair = repairLeadCounterpointSeparation(tracks, config, {
+    minPitch: counterWindow.min,
+    maxPitch: counterWindow.max,
+    marker: "final-assembly-lead-space",
+  });
   return {
     tracks,
     repairs: {
       featuredAnchorsRestored,
       transitionEventsTagged,
+      leadDissonancesCleared: separationRepair.leadDissonancesCleared,
+      leadUnisonsCleared: separationRepair.leadUnisonsCleared,
+      leadCounterpointNotesRemoved: separationRepair.notesRemoved,
     },
   };
 }
 
-function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint) {
-  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint);
+function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
+  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
@@ -9941,6 +9980,7 @@ function compose(config, options = {}) {
     characteristicVoice.tracks,
     structure,
     songBlueprint,
+    config,
   );
   const tracks = finalAssemblyRepair.tracks;
   const finalTonalIntegrity = analyzeTonalIntegrity(
@@ -12712,6 +12752,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     producerIntentEnforcement.tracks,
     song.structure,
     song.songBlueprint,
+    config,
   );
   song.tracks = finalAssemblyRepair.tracks;
   const finalTonalIntegrity = analyzeTonalIntegrity(
@@ -13402,6 +13443,7 @@ function commitCandidate(candidates, search = {}) {
     selected.song.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
     selected.song.songBlueprint ?? null,
+    normalizeConfig(configFromSong(selected.song)),
   );
   selected.song.tracks = committedFinalAssembly.tracks;
   selected.song.finalAssembly = createFinalAssemblyReport(
