@@ -7566,6 +7566,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     registerCollisionsLifted: 0,
     velocitiesScaled: 0,
   };
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const sectionById = new Map(structure.map((section) => [section.id, section]));
 
   for (const track of tracks) {
     if (track.id === "drums") continue;
@@ -7583,9 +7585,9 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     }
   }
 
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
+  const bass = trackById.get("bass")?.notes ?? [];
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     for (const note of track.notes) {
       const soundingBass = bass.filter((candidate) => (
@@ -7610,8 +7612,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
 
   const finalPeak = allNotes.length ? Math.max(...allNotes.map((note) => note.velocity)) : 0;
   const featuredCoverage = (songBlueprint?.orchestrationMatrix ?? []).map((entry) => {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || track.settings?.density <= 0.001) return true;
     return track.notes.some((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
   });
@@ -8260,8 +8262,9 @@ function runVoiceLeadingPass(sourceTracks, config) {
   let commonTonesHeld = 0;
   let bassCollisionsCleared = 0;
   let padDoublingsAvoided = 0;
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
-  const chords = tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const bass = trackById.get("bass")?.notes ?? [];
+  const chords = trackById.get("chords")?.notes ?? [];
   const candidatesForPitchClass = (pitch, minimum, maximum) => {
     const pitchClass = mod(pitch, 12);
     const candidates = [];
@@ -8272,7 +8275,7 @@ function runVoiceLeadingPass(sourceTracks, config) {
   };
 
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     const groups = new Map();
     for (const note of track.notes) {
@@ -8467,6 +8470,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
   const eligible = structure
     .filter((section) => !["intro", "outro"].includes(section.name))
     .sort((left, right) => finite(left.energy, 0.5) - finite(right.energy, 0.5));
@@ -8487,7 +8491,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["counterpoint", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         const inBreath = windows.some((window) => note.start >= window.start && note.start < window.end);
@@ -8516,6 +8520,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = new Map(tracks.map((track) => [track.id, track]));
   const enabled = VOCAL_LED_GENRES.has(config.genre);
   const barBeats = beatsPerBar(config);
   const verseSections = enabled
@@ -8535,7 +8540,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
   ));
   if (windows.length) {
     for (const id of ["melody", "counterpoint"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
@@ -8553,7 +8558,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["chords", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       for (const note of track.notes) {
         if (!inVocalWindow(note)) continue;
