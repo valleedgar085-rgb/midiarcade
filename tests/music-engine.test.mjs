@@ -3697,3 +3697,71 @@ test("full-song intro staging preserves an immediate foreground while delaying s
     assert.ok(support?.entryBeat > 0, `${genre} support should enter after the opening boundary`);
   }
 });
+
+
+test("melody notation uses phrase-role intent for timing, duration, dynamics, and motion", () => {
+  for (const genre of ["hipHop", "pop"]) {
+    const input = {
+      genre,
+      seed: `notation-intent-${genre}`,
+      bars: 32,
+      energy: 0.74,
+      complexity: 0.72,
+      variation: 0.78,
+      humanize: 0.08,
+      candidateCount: 1,
+    };
+    const song = engine.generateNew(input);
+    const repeated = engine.generateNew(input);
+    const melody = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
+    const repeatedMelody = repeated.tracks.find((track) => track.id === "melody")?.notes ?? [];
+
+    assert.deepEqual(melody, repeatedMelody, `${genre} notation intent must remain fixed-seed deterministic`);
+    assert.ok(melody.length > 8, `${genre} should generate enough melody notes to evaluate performance intent`);
+
+    const intentional = melody.filter((note) => note.melodyNotationRole);
+    assert.ok(intentional.length >= Math.max(6, Math.floor(melody.length * 0.55)), `${genre} should preserve notation intent on most authored melody notes`);
+
+    const roles = new Set(intentional.map((note) => note.melodyNotationRole));
+    assert.ok(roles.size >= 3, `${genre} melody should use multiple phrase-performance roles`);
+    assert.ok(roles.has("statement") || roles.has("landing"), `${genre} melody should contain structural statement/landing intent`);
+    assert.ok(
+      intentional.some((note) => Math.abs(Number(note.melodyTimingIntent ?? 0)) > 0),
+      `${genre} melody should occasionally move timing for an intentional pickup, response, or rhythmic turn`,
+    );
+
+    const durationIntents = new Set(intentional.map((note) => Number(note.melodyDurationIntent ?? 1).toFixed(2)));
+    const velocityIntents = new Set(intentional.map((note) => Number(note.melodyVelocityIntent ?? 1).toFixed(2)));
+    assert.ok(durationIntents.size >= 3, `${genre} melody should vary note length by phrase function`);
+    assert.ok(velocityIntents.size >= 3, `${genre} melody should vary attack strength by phrase function`);
+
+    assert.ok(
+      intentional.every((note) => note.melodyNotationReason && note.articulationIntent),
+      `${genre} melody performance changes should carry an explicit musical reason and articulation intent`,
+    );
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
+test("lead repeat development moves selected notes purposefully instead of random pitch mutation", () => {
+  const song = engine.generateNew({
+    genre: "hipHop",
+    seed: "developed-repeat-motion-proof",
+    bars: 48,
+    energy: 0.72,
+    complexity: 0.76,
+    variation: 0.9,
+    candidateCount: 1,
+  });
+  const melody = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const moved = melody.filter((note) => note.melodicMotionIntent === "developed-repeat");
+
+  assert.ok(moved.length > 0, "long-form Hip-Hop should deliberately develop at least one repeated melody tone");
+  assert.ok(
+    moved.every((note) => [1, 2].includes(Math.abs(Number(note.melodicMotionDegrees)))),
+    "developed repeat motion should use bounded one- or two-degree phrase movement",
+  );
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
