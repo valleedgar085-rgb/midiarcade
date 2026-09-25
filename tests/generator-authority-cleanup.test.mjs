@@ -25,6 +25,27 @@ test("final composer has one Producer Intent enforcement and one Final Assembly 
     3,
     "one declaration plus one final invocation for fresh composition and one for targeted critic repair should remain",
   );
+
+  const composeStart = engine.indexOf("function compose(");
+  const repairStart = engine.indexOf("function finishRepairedSong(");
+  const composeFinal = engine.slice(composeStart, repairStart);
+  const repairedFinal = engine.slice(repairStart, engine.indexOf("function repairCandidateSong(", repairStart));
+
+  const composeTonal = composeFinal.indexOf("const tonalIntegrityRepair = refineTonalIntegrity(");
+  const composeAssembly = composeFinal.indexOf("const finalAssemblyRepair = runFinalAssemblyPass(");
+  const composeReadOnly = composeFinal.indexOf("const finalProducerIntentReport = evaluateProducerIntentContract(");
+  assert.ok(composeTonal >= 0 && composeTonal < composeAssembly);
+  assert.ok(composeAssembly < composeReadOnly);
+  assert.equal(composeFinal.slice(composeAssembly).includes("refineTonalIntegrity("), false);
+
+  const repairedTonal = repairedFinal.indexOf("const repairedTonalIntegrity = refineTonalIntegrity(");
+  const repairedPerformance = repairedFinal.indexOf('repairStrategy?.dimension === "performance"');
+  const repairedAssembly = repairedFinal.indexOf("const finalAssemblyRepair = runFinalAssemblyPass(");
+  const repairedReadOnly = repairedFinal.indexOf("const finalProducerIntentReport = evaluateProducerIntentContract(");
+  assert.ok(repairedTonal >= 0 && repairedTonal < repairedAssembly);
+  assert.ok(repairedPerformance >= 0 && repairedPerformance < repairedAssembly);
+  assert.ok(repairedAssembly < repairedReadOnly);
+  assert.equal(repairedFinal.slice(repairedAssembly).includes("refineTonalIntegrity("), false);
 });
 
 test("retired rhythm compatibility diagnostics stay deleted", async () => {
