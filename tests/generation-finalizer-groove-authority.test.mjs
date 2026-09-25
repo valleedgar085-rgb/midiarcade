@@ -54,8 +54,9 @@ test("generation finalizer never rewrites Groove DNA rhythm", () => {
   assert.deepEqual(rhythmSignature(result.song), before);
   assert.strictEqual(result.song, source);
   assert.equal(result.diagnostics.rhythmAuthority, "groove-dna");
-  assert.equal(result.diagnostics.snareBounce.reason, "retired-groove-dna-authority");
-  assert.equal(result.diagnostics.sectionDrumEvolution.reason, "retired-groove-dna-authority");
+  assert.equal(result.diagnostics.rhythmChanged, false);
+  assert.equal("snareBounce" in result.diagnostics, false);
+  assert.equal("sectionDrumEvolution" in result.diagnostics, false);
 });
 
 
