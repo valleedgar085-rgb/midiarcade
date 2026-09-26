@@ -64,6 +64,66 @@ function onsetLaneFit(notes, pulses, tolerance = 0.095, fallback = 0.72) {
   return clamp(aligned / notes.length);
 }
 
+function overlapRatio(leftNotes, rightNotes, tolerance = 0.08) {
+  if (!leftNotes.length || !rightNotes.length) return 0;
+  const matched = leftNotes.filter((left) => rightNotes.some((right) => (
+    Math.abs(finite(left?.start) - finite(right?.start)) <= tolerance
+  ))).length;
+  return clamp(matched / leftNotes.length);
+}
+
+function temporalOverlapRatio(responderNotes, leaderNotes, tolerance = 0.04) {
+  if (!responderNotes.length || !leaderNotes.length) return 0;
+  const overlapping = responderNotes.filter((responder) => {
+    const responderStart = finite(responder?.start);
+    const responderEnd = responderStart + Math.max(0.05, finite(responder?.duration, 0.25));
+    return leaderNotes.some((leader) => {
+      const leaderStart = finite(leader?.start);
+      const leaderEnd = leaderStart + Math.max(0.05, finite(leader?.duration, 0.25));
+      return responderStart < leaderEnd - tolerance && responderEnd > leaderStart + tolerance;
+    });
+  }).length;
+  return clamp(overlapping / responderNotes.length);
+}
+
+function callResponseTimingScore(leaderNotes, responderNotes, maxResponseGap = 1.5) {
+  if (!leaderNotes.length || !responderNotes.length) return 0.72;
+  const leaderEnds = leaderNotes
+    .map((note) => finite(note?.start) + Math.max(0.05, finite(note?.duration, 0.25)))
+    .sort((left, right) => left - right);
+  const responses = responderNotes.filter((answer) => {
+    const start = finite(answer?.start);
+    return leaderEnds.some((end) => {
+      const gap = start - end;
+      return gap >= -0.04 && gap <= maxResponseGap;
+    });
+  }).length;
+  return clamp(responses / responderNotes.length);
+}
+
+function registerCrowding(leftNotes, rightNotes, semitones = 7, tolerance = 0.16) {
+  if (!leftNotes.length || !rightNotes.length) return 0;
+  const crowded = leftNotes.filter((left) => rightNotes.some((right) => (
+    Math.abs(finite(left?.start) - finite(right?.start)) <= tolerance
+    && Math.abs(finite(left?.pitch) - finite(right?.pitch)) <= semitones
+  ))).length;
+  return clamp(crowded / leftNotes.length);
+}
+
+function activeRoleIds(tracks, range) {
+  return [...tracks.entries()]
+    .filter(([trackId, track]) => trackId !== "fx" && notesInRange(track, range).length > 0)
+    .map(([trackId]) => trackId)
+    .sort();
+}
+
+function setDistance(left, right) {
+  const union = new Set([...left, ...right]);
+  if (!union.size) return 0;
+  const shared = [...union].filter((value) => left.includes(value) && right.includes(value)).length;
+  return clamp(1 - shared / union.size);
+}
+
 function uniqueOnsets(notes) {
   const values = [];
   for (const note of notes) {
@@ -197,6 +257,12 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       range.beatsPerBar,
     );
     const rhythmFoundation = onsetLaneFit(bass, bassPulses, 0.095, 0.75);
+    const kickNotes = notesInRange(tracks.get("drums"), range)
+      .filter((note) => [35, 36].includes(Math.round(finite(note?.pitch, -1))));
+    const kickBassCloneRatio = overlapRatio(bass, kickNotes, 0.055);
+    const bassIndependence = bass.length && kickNotes.length
+      ? clamp(1 - Math.max(0, kickBassCloneRatio - 0.68) / 0.32)
+      : 0.82;
 
     const melody = notesInRange(tracks.get("melody"), range);
     const counterpoint = notesInRange(tracks.get("counterpoint"), range);
@@ -214,8 +280,16 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     const collisionControl = counterpoint.length
       ? clamp(1 - (collisions / counterpoint.length) * 1.45)
       : melody.length ? 0.72 : 0.8;
+    const leadPhraseOverlap = temporalOverlapRatio(counterpoint, melody, 0.04);
+    const phraseSeparation = clamp(1 - leadPhraseOverlap);
+    const callResponseTiming = callResponseTimingScore(melody, counterpoint, 1.5);
     const leadDialogue = melody.length && counterpoint.length
-      ? clamp(counterLaneFit * 0.58 + collisionControl * 0.42)
+      ? clamp(
+        counterLaneFit * 0.38
+        + collisionControl * 0.22
+        + callResponseTiming * 0.22
+        + phraseSeparation * 0.18
+      )
       : melody.length || counterpoint.length
         ? 0.68
         : 0.76;
@@ -245,6 +319,13 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     const harmonicSupport = harmonicNotes.length
       ? clamp(chordLaneFit * 0.72 + foundationYield * 0.28)
       : 0.82;
+    const melodyChordCrowding = registerCrowding(melody, chords, 7, 0.18);
+    const leadHarmonySeparation = clamp(1 - melodyChordCrowding);
+    const supportNotes = [...pads, ...notesInRange(tracks.get("arp"), range)];
+    const supportForegroundOverlap = overlapRatio(supportNotes, [...melody, ...counterpoint], 0.14);
+    const supportRestraint = supportNotes.length
+      ? clamp(1 - Math.max(0, supportForegroundOverlap - 0.55) / 0.45)
+      : 0.88;
 
     const roles = coordination?.roles ?? contract?.ensembleRoles ?? {};
     const featuredTrack = String(coordination?.featuredTrack ?? contract?.featuredTrack ?? "melody");
@@ -286,7 +367,10 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       + leadDialogue * 0.22
       + harmonicSupport * 0.13
       + roleHierarchy * 0.12
-      + cadenceTeam * 0.13,
+      + cadenceTeam * 0.08
+      + bassIndependence * 0.05
+      + leadHarmonySeparation * 0.05
+      + supportRestraint * 0.05,
       0,
       1,
     );
@@ -301,8 +385,40 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       roleHierarchy: round(roleHierarchy),
       cadenceTeam: round(cadenceTeam),
       collisionControl: round(collisionControl),
+      leadPhraseOverlap: round(leadPhraseOverlap),
+      phraseSeparation: round(phraseSeparation),
+      callResponseTiming: round(callResponseTiming),
+      kickBassCloneRatio: round(kickBassCloneRatio),
+      bassIndependence: round(bassIndependence),
+      melodyChordCrowding: round(melodyChordCrowding),
+      leadHarmonySeparation: round(leadHarmonySeparation),
+      supportForegroundOverlap: round(supportForegroundOverlap),
+      supportRestraint: round(supportRestraint),
     });
   }
+
+  const roleEvolution = sectionReports.map((entry, index) => {
+    const section = sectionById.get(String(entry.sectionId));
+    const range = section ? sectionRange(song, section) : null;
+    const activeRoles = range ? activeRoleIds(tracks, range) : [];
+    const previous = index > 0 ? sectionReports[index - 1] : null;
+    const previousSection = previous ? sectionById.get(String(previous.sectionId)) : null;
+    const previousRange = previousSection ? sectionRange(song, previousSection) : null;
+    const previousRoles = previousRange ? activeRoleIds(tracks, previousRange) : [];
+    return {
+      sectionId: entry.sectionId,
+      activeRoles,
+      changeFromPrevious: index ? round(setDistance(activeRoles, previousRoles)) : 0,
+    };
+  });
+  const roleChangeValues = roleEvolution.slice(1).map((entry) => entry.changeFromPrevious);
+  const sectionRoleEvolution = roleChangeValues.length
+    ? clamp(average(roleChangeValues) / 0.28)
+    : 0.72;
+  const allLayersAlwaysOn = roleEvolution.length > 2
+    && roleEvolution.every((entry) => entry.activeRoles.length >= 6)
+    && average(roleChangeValues, 0) < 0.08;
+  const arrangementBreathingRoom = allLayersAlwaysOn ? 0.3 : clamp(0.62 + sectionRoleEvolution * 0.38);
 
   const metrics = {
     contractCoverage: round(average(sectionReports.map((entry) => entry.contractCoverage), 0)),
@@ -312,6 +428,18 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     roleHierarchy: round(average(sectionReports.map((entry) => entry.roleHierarchy), 0.55)),
     cadenceTeam: round(average(sectionReports.map((entry) => entry.cadenceTeam), 0.55)),
     collisionControl: round(average(sectionReports.map((entry) => entry.collisionControl), 0.55)),
+    leadPhraseOverlap: round(average(sectionReports.map((entry) => entry.leadPhraseOverlap), 0)),
+    phraseSeparation: round(average(sectionReports.map((entry) => entry.phraseSeparation), 0.8)),
+    callResponseTiming: round(average(sectionReports.map((entry) => entry.callResponseTiming), 0.72)),
+    kickBassCloneRatio: round(average(sectionReports.map((entry) => entry.kickBassCloneRatio), 0)),
+    bassIndependence: round(average(sectionReports.map((entry) => entry.bassIndependence), 0.82)),
+    melodyChordCrowding: round(average(sectionReports.map((entry) => entry.melodyChordCrowding), 0)),
+    leadHarmonySeparation: round(average(sectionReports.map((entry) => entry.leadHarmonySeparation), 0.8)),
+    supportForegroundOverlap: round(average(sectionReports.map((entry) => entry.supportForegroundOverlap), 0)),
+    supportRestraint: round(average(sectionReports.map((entry) => entry.supportRestraint), 0.88)),
+    sectionRoleEvolution: round(sectionRoleEvolution),
+    arrangementBreathingRoom: round(arrangementBreathingRoom),
+    allLayersAlwaysOn,
   };
   const score = Math.round(average(sectionReports.map((entry) => entry.score), 55));
   const passed = score >= 70
@@ -328,6 +456,7 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     reason: passed ? "ensemble-contract-honored" : "ensemble-contract-weak",
     score,
     metrics,
+    roleEvolution,
     weakestSection,
     sections: sectionReports,
   };

@@ -800,14 +800,20 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
     const textureExit = engine.producerRoleGateWindow(structure[1], structure, resolve, "pad", "texture", config);
     assert.ok(supportExit.exitBeat <= 47.5);
     assert.ok(textureExit.exitBeat < supportExit.exitBeat);
-    assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config), null);
+    const bass = engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config);
+    assert.ok(bass.entryBeat >= 0.5);
     assert.equal(engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "foreground", config), null);
   }
 
-  assert.equal(
-    engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", { genre: "pop", timeSignature: [4, 4] }),
-    null,
-  );
+  for (const genre of ["pop", "house", "neoSoul", "rock"]) {
+    const config = { genre, timeSignature: [4, 4] };
+    const support = engine.producerRoleGateWindow(structure[0], structure, establish, "chords", "support", config);
+    const answer = engine.producerRoleGateWindow(structure[0], structure, establish, "melody", "answer", config);
+    const bass = engine.producerRoleGateWindow(structure[0], structure, establish, "bass", "foundation", config);
+    assert.ok(support.entryBeat >= 0.5, `${genre} should stage harmonic support after the opening gesture`);
+    assert.ok(answer.entryBeat > support.entryBeat, `${genre} answers should enter after support`);
+    assert.ok(bass.entryBeat >= 0.5, `${genre} bass should not make bar one feel like a pre-running loop`);
+  }
 
   const shortStructure = [
     { id: "short-intro", name: "intro", startBeat: 0, endBeat: 8 },
@@ -3045,6 +3051,14 @@ test("four-floor Groove DNA preserves the core pulse without legacy ghost-kick m
       `${genre} should not receive legacy post-DNA kick pickups`,
     );
     for (const plan of song.grooveConductor.bars) {
+      if (plan.openingBoundary) {
+        assert.ok(plan.anchors.includes(0), `${genre} opening must establish beat 1`);
+        assert.ok(
+          plan.anchors.filter((beat) => beat > 0).every((beat) => beat >= 2 - 1e-6),
+          `${genre} opening should thin the early four-floor pulse instead of sounding mid-loop`,
+        );
+        continue;
+      }
       for (const beat of [0, 1, 2, 3]) {
         assert.ok(plan.anchors.includes(beat), `${genre} must retain kick beat ${beat + 1}`);
       }
@@ -3660,4 +3674,105 @@ test("Track B DAW register cleanup cannot create duplicate pitch/onset or same-p
   }
   assert.ok(result.report.mergedDuplicates >= 1);
   assert.ok(result.report.overlapsTrimmed >= 1);
+});
+
+test("full-song intro staging preserves an immediate foreground while delaying supporting layers", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBeat: 0, endBeat: 16 },
+    { id: "verse-1", name: "verse", startBeat: 16, endBeat: 32 },
+    { id: "chorus-1", name: "chorus", startBeat: 32, endBeat: 48 },
+  ];
+  const scene = { purpose: "establish" };
+
+  for (const genre of ["hipHop", "trap", "pop", "house", "neoSoul", "rock"]) {
+    const config = { genre, timeSignature: [4, 4] };
+    assert.equal(
+      engine.producerRoleGateWindow(structure[0], structure, scene, "pad", "foreground", config),
+      null,
+      `${genre} foreground should own beat one`,
+    );
+    const bass = engine.producerRoleGateWindow(structure[0], structure, scene, "bass", "foundation", config);
+    const support = engine.producerRoleGateWindow(structure[0], structure, scene, "chords", "support", config);
+    assert.ok(bass?.entryBeat > 0, `${genre} bass should enter after the opening boundary`);
+    assert.ok(support?.entryBeat > 0, `${genre} support should enter after the opening boundary`);
+  }
+});
+
+
+test("melody notation uses phrase-role intent for timing, duration, dynamics, and motion", () => {
+  for (const genre of ["hipHop", "pop"]) {
+    const input = {
+      genre,
+      seed: `notation-intent-${genre}`,
+      bars: 32,
+      energy: 0.74,
+      complexity: 0.72,
+      variation: 0.78,
+      humanize: 0.08,
+      candidateCount: 1,
+    };
+    const song = engine.generateNew(input);
+    const repeated = engine.generateNew(input);
+    const melody = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
+    const repeatedMelody = repeated.tracks.find((track) => track.id === "melody")?.notes ?? [];
+
+    assert.deepEqual(melody, repeatedMelody, `${genre} notation intent must remain fixed-seed deterministic`);
+    assert.ok(melody.length > 8, `${genre} should generate enough melody notes to evaluate performance intent`);
+
+    const intentional = melody.filter((note) => note.melodyNotationRole);
+    assert.ok(intentional.length >= Math.max(6, Math.floor(melody.length * 0.55)), `${genre} should preserve notation intent on most authored melody notes`);
+
+    const roles = new Set(intentional.map((note) => note.melodyNotationRole));
+    assert.ok(roles.size >= 3, `${genre} melody should use multiple phrase-performance roles`);
+    assert.ok(roles.has("statement") || roles.has("structural-anchor"), `${genre} melody should preserve a structural phrase skeleton`);
+    assert.ok(
+      intentional.some((note) => Math.abs(Number(note.melodyTimingIntent ?? 0)) > 0),
+      `${genre} melody should occasionally move timing for an intentional pickup, response, or rhythmic turn`,
+    );
+
+    const durationIntents = new Set(intentional.map((note) => Number(note.melodyDurationIntent ?? 1).toFixed(2)));
+    const velocityIntents = new Set(intentional.map((note) => Number(note.melodyVelocityIntent ?? 1).toFixed(2)));
+    assert.ok(durationIntents.size >= 3, `${genre} melody should vary note length by phrase function`);
+    assert.ok(velocityIntents.size >= 3, `${genre} melody should vary attack strength by phrase function`);
+
+    const expressive = intentional.filter((note) => !["statement", "structural-anchor"].includes(note.melodyNotationRole));
+    assert.ok(expressive.length > 0, `${genre} should contain expressive interior melody notes`);
+    assert.ok(
+      expressive.every((note) => note.melodyNotationReason && note.articulationIntent),
+      `${genre} expressive melody changes should carry an explicit musical reason and articulation intent`,
+    );
+    assertValidNotes(song);
+    assertAllGeneratedPitchesInScale(song);
+  }
+});
+
+test("lead repeat development moves selected notes purposefully instead of random pitch mutation", () => {
+  const song = engine.generateNew({
+    genre: "hipHop",
+    seed: "developed-repeat-motion-proof",
+    bars: 48,
+    energy: 0.72,
+    complexity: 0.76,
+    variation: 0.9,
+    candidateCount: 1,
+  });
+  const melody = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const moved = melody.filter((note) => note.melodicMotionIntent === "story-arc");
+  const storyRoles = new Set(melody.map((note) => note.melodyStoryRole).filter(Boolean));
+
+  assert.ok(moved.length > 0, "long-form Hip-Hop should deliberately develop at least one repeated melody tone");
+  assert.ok(
+    moved.every((note) => Math.abs(Number(note.melodicMotionDegrees)) === 1),
+    "story movement should use bounded one-degree phrase development",
+  );
+  assert.ok(
+    storyRoles.has("question") || storyRoles.has("answer") || storyRoles.has("declare-answer"),
+    "long-form melody should expose an explicit question/answer or hook-story role",
+  );
+  assert.ok(
+    moved.every((note) => note.melodyStoryReason),
+    "every story-arc pitch move should publish its musical reason",
+  );
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
 });

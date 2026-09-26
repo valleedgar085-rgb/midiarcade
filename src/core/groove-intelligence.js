@@ -648,7 +648,25 @@ function sourcePulseLane(lanes, source) {
   return lane?.steps ?? [];
 }
 
-function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed) {
+function shapeOpeningLaneSteps(steps, lane, gridSteps, openingBoundary) {
+  if (!openingBoundary) return uniqueSorted(steps);
+  const midpoint = gridSteps / 2;
+  const lateQuarter = gridSteps * 0.75;
+  if (lane === "kick") {
+    return uniqueSorted([
+      ...(steps.some((step) => Math.abs(step) < 1e-6) ? [0] : []),
+      ...steps.filter((step) => step >= midpoint - 1e-6),
+    ]);
+  }
+  if (lane === "snare") return uniqueSorted(steps.filter((step) => step >= midpoint - 1e-6));
+  if (lane === "hat") {
+    return uniqueSorted(steps.filter((step) => Math.abs(step) < 1e-6 || step >= midpoint - 1e-6));
+  }
+  if (lane === "percussion") return uniqueSorted(steps.filter((step) => step >= lateQuarter - 1e-6));
+  return uniqueSorted(steps);
+}
+
+function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed, { wrap = true } = {}) {
   if (relationship.mode === "riff-lock") {
     // Rock's chord lane is a guitar strum/riff clock, so give it a steady
     // quarter-note frame while the kick lane supplies accents and pickups.
@@ -666,8 +684,10 @@ function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed) {
       result.push(step + answerSteps);
     }
   }
-  return uniqueSorted(result
-    .map((step) => ((step % gridSteps) + gridSteps) % gridSteps));
+  return uniqueSorted(result.flatMap((step) => {
+    if (wrap) return [((step % gridSteps) + gridSteps) % gridSteps];
+    return step >= 0 && step < gridSteps ? [step] : [];
+  }));
 }
 
 function normalizeStructure(structure, bars, beatsPerBar) {
@@ -719,10 +739,20 @@ export function createGrooveDNA(input = {}, {
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
     const protectedSpaceSteps = scaleSteps(cellPolicy.protectedSpaces, gridSteps);
+    const openingBoundary = bars >= 12
+      && bar === 0
+      && section.startBar === 0
+      && sectionRole(section) === "intro";
     const lanePlans = {};
     for (const lane of ["kick", "snare", "hat", "percussion"]) {
       const protectedSteps = protectedSpaceSteps;
-      const requiredSteps = scaleSteps(grammar.locked[lane], gridSteps);
+      const identityRequiredSteps = scaleSteps(grammar.locked[lane], gridSteps);
+      const requiredSteps = shapeOpeningLaneSteps(
+        identityRequiredSteps,
+        lane,
+        gridSteps,
+        openingBoundary,
+      );
       const optionalSteps = scaleSteps(cellPolicy.lanes[lane], gridSteps);
       const baseSteps = sanitizeLaneSteps(
         scaleSteps(grammar.base[lane], gridSteps),
@@ -764,8 +794,14 @@ export function createGrooveDNA(input = {}, {
       const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
         ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
         : densitySteps;
-      const variedSteps = sanitizeLaneSteps(
+      const openingShapedCandidate = shapeOpeningLaneSteps(
         variedCandidate,
+        lane,
+        gridSteps,
+        openingBoundary,
+      );
+      const variedSteps = sanitizeLaneSteps(
+        openingShapedCandidate,
         transformAuthorizedSteps,
         lockedSteps,
         protectedSteps,
@@ -795,6 +831,7 @@ export function createGrooveDNA(input = {}, {
         beatsPerStep,
         gridSteps,
         `${seed}:${genre}:${bar}:${role}`,
+        { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
         ...relationship,
@@ -812,6 +849,7 @@ export function createGrooveDNA(input = {}, {
       bar,
       sectionId: section.id,
       sectionRole: sectionRole(section),
+      openingBoundary,
       kick: lanePlans.kick,
       snare: lanePlans.snare,
       hat: lanePlans.hat,

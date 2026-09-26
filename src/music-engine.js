@@ -64,6 +64,7 @@ import {
   applySectionCompletionAuthority,
   evaluateSectionCompletionAuthority,
 } from "./core/section-completion-authority.js";
+import { evaluateWholeSongCompletion } from "./core/whole-song-completion.js";
 
 export const PPQ = 480;
 
@@ -918,6 +919,15 @@ export const GENRE_RHYTHM_GRAMMARS = deepFreeze({
   popRadio: { phrase: "radio-hook-pulse", responseDelay: 0.5, answerKick: 2.75, turnaround: 3.5, bassAnswer: 3.25 },
   synthPopRadio: { phrase: "synth-drive", responseDelay: 0.5, answerKick: 2.5, turnaround: 3.5, bassAnswer: 3.0 },
 });
+
+function indexFirstById(items = []) {
+  const index = new Map();
+  for (const item of items) {
+    const id = item?.id;
+    if (id != null && !index.has(id)) index.set(id, item);
+  }
+  return index;
+}
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -3691,7 +3701,7 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = [], option
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
-  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const byId = indexFirstById(tracks);
   const adjustedByTrack = {};
   const manualTracks = [];
   let maximumLeapBefore = 0;
@@ -3752,7 +3762,7 @@ export function applyDawRegisterPolicy(sourceTracks = [], structure = [], option
 export function evaluateDawRegisterQuality(song) {
   const tracks = song?.tracks ?? [];
   const structure = song?.structure ?? song?.sections ?? [];
-  const byId = new Map(tracks.map((track) => [track.id, track]));
+  const byId = indexFirstById(tracks);
   const bassNotes = byId.get("bass")?.notes ?? [];
   let rangeViolations = 0;
   let separationViolations = 0;
@@ -4050,9 +4060,10 @@ function addNote(notes, pitch, start, duration, velocity, totalBeats, metadata =
   });
 }
 
-function eventVelocity(config, settings, intensity, rng, accent = 1) {
+function eventVelocity(config, settings, intensity, rng, accent = 1, variance = 1) {
   const base = 46 + config.energy * 43 + intensity * 12;
-  return clamp(Math.round((base + (rng.float() - 0.5) * 12) * settings.velocity * accent), 1, 127);
+  const randomRange = 12 * clamp(finite(variance, 1), 0, 1);
+  return clamp(Math.round((base + (rng.float() - 0.5) * randomRange) * settings.velocity * accent), 1, 127);
 }
 
 function phraseEvolutionForBar(config, structure, bar, trackId, rng, rhythmIdentity = null) {
@@ -4216,6 +4227,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       genrePhrase,
       phrasePosition,
       role,
+      openingBoundary: Boolean(grooveDNA.bars?.[bar]?.openingBoundary),
       anchors,
       humanGrooveAdjustment: humanGrooveAdjustment.adjustment,
       humanGrooveInfluence: humanGrooveAdjustment.influence,
@@ -5757,6 +5769,179 @@ function magnetizeBeatToGroove(conductor, beat, lane, barBeats, maximumDistance)
   };
 }
 
+function melodyNotationIntent({
+  config,
+  section,
+  development,
+  event,
+  eventIndex,
+  eventCount,
+  progress,
+  plannedTension,
+  phraseAnchor,
+  counterpoint,
+  repeat,
+  sectionIndex,
+}) {
+  const openingEvent = eventIndex === 0;
+  const fullSong = finite(config?.bars, 0) >= 12;
+  const strongSection = ["prechorus", "chorus", "build", "drop", "solo"].includes(section.name);
+  const syncopatedGenre = ["hipHop", "rap", "trap", "neoSoul", "funk", "reggaeton", "afrobeats"].includes(config.genre);
+  const movementStep = syncopatedGenre ? 0.25 : 0.125;
+  const developmentType = development?.type ?? "statement";
+
+  // Existing counterline, short-form calibration, and phrase-anchor authorities remain untouched.
+  // Expressive notation lives inside full-song lead phrases, not on their structural skeleton.
+  if (!fullSong || counterpoint || phraseAnchor) {
+    return {
+      role: openingEvent && phraseAnchor ? "statement" : "structural-anchor",
+      timingShift: 0,
+      durationScale: 1,
+      velocityScale: 1,
+      articulation: null,
+      reason: counterpoint ? "preserve-counterline-authority" : "preserve-motif-cadence-anchor",
+    };
+  }
+
+  let role = "continuation";
+  if (developmentType === "rhythm" && progress >= 0.42) role = "rhythmic-turn";
+  else if (
+    progress >= 0.52
+    && progress < 0.9
+    && plannedTension >= 0.48
+    && (eventIndex + repeat + sectionIndex) % 3 === 1
+  ) role = "pickup";
+  else if (finite(event?.duration, 0.5) <= 0.5) role = "passing";
+  else if (developmentType === "answer") role = "response";
+  else if (strongSection && progress >= 0.45) role = "accent";
+
+  const profiles = {
+    passing: { timingShift: 0, durationScale: 0.76, velocityScale: 0.9, articulation: "staccato", reason: "connect-important-tones" },
+    pickup: { timingShift: -movementStep, durationScale: 0.7, velocityScale: 0.92, articulation: "staccato", reason: "anticipate-next-gesture" },
+    response: { timingShift: movementStep * 0.5, durationScale: 0.92, velocityScale: 0.96, articulation: "legato", reason: "answer-previous-gesture" },
+    "rhythmic-turn": {
+      timingShift: (eventIndex + repeat) % 2 ? movementStep : -movementStep,
+      durationScale: 0.82,
+      velocityScale: 1.02,
+      articulation: "accent",
+      reason: "develop-rhythm",
+    },
+    accent: { timingShift: 0, durationScale: 0.9, velocityScale: 1.08, articulation: "accent", reason: "mark-section-lift" },
+    continuation: { timingShift: 0, durationScale: 0.98, velocityScale: 0.99, articulation: "tenuto", reason: "carry-phrase" },
+  };
+  const selected = profiles[role] ?? profiles.continuation;
+  return {
+    role,
+    ...selected,
+    durationScale: clamp(selected.durationScale, 0.62, 1.08),
+    velocityScale: clamp(selected.velocityScale, 0.82, 1.12),
+  };
+}
+
+function melodyStoryIntent({
+  fullSong,
+  section,
+  sectionIndex,
+  repeat,
+  progress,
+  eventIndex,
+  phraseAnchor,
+  counterpoint,
+  variation,
+}) {
+  if (!fullSong || counterpoint || phraseAnchor || variation <= 0.18) {
+    return { role: "preserve", degreeShift: 0, reason: "protect-structural-voice" };
+  }
+  const name = String(section?.name ?? "section").toLowerCase();
+  const selectedInterior = (eventIndex + repeat + sectionIndex) % 3 === 0;
+  if (!selectedInterior) return { role: "carry", degreeShift: 0, reason: "preserve-recognizable-motif" };
+
+  if (["prechorus", "build"].includes(name)) {
+    return { role: "climb", degreeShift: progress >= 0.45 ? 1 : 0, reason: "increase-tension-toward-payoff" };
+  }
+  if (["chorus", "drop", "theme"].includes(name)) {
+    const shift = repeat % 2 === 0 ? 1 : -1;
+    return { role: "declare-answer", degreeShift: progress >= 0.35 ? shift : 0, reason: "develop-hook-return" };
+  }
+  if (["bridge", "breakdown"].includes(name)) {
+    return { role: "retreat", degreeShift: progress >= 0.4 ? -1 : 0, reason: "create-contrast-space" };
+  }
+  if (name === "outro") {
+    return { role: "resolve", degreeShift: progress >= 0.55 ? -1 : 0, reason: "settle-toward-ending" };
+  }
+  if (name === "verse") {
+    const question = repeat % 2 === 0;
+    return {
+      role: question ? "question" : "answer",
+      degreeShift: progress >= 0.5 ? (question ? 1 : -1) : 0,
+      reason: question ? "open-phrase-question" : "answer-previous-phrase",
+    };
+  }
+  return {
+    role: "develop",
+    degreeShift: progress >= 0.58 && variation >= 0.62 ? (repeat % 2 ? -1 : 1) : 0,
+    reason: "controlled-phrase-development",
+  };
+}
+
+
+function developedRepeatDegreeShift({
+  fullSong,
+  section,
+  repeat,
+  eventIndex,
+  sectionIndex,
+  progress,
+  phraseAnchor,
+  counterpoint,
+  variation,
+}) {
+  return melodyStoryIntent({
+    fullSong,
+    section,
+    sectionIndex,
+    repeat,
+    progress,
+    eventIndex,
+    phraseAnchor,
+    counterpoint,
+    variation,
+  });
+}
+
+function protectExpressiveLeadSpacing(notes = []) {
+  const ordered = [...notes].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  const merged = [];
+  const lastByPitch = new Map();
+  for (const note of ordered) {
+    const duplicate = lastByPitch.get(note.pitch);
+    if (duplicate && Math.abs(duplicate.start - note.start) < 1e-6) {
+      duplicate.duration = Math.max(duplicate.duration, note.duration);
+      duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
+      duplicate.melodySpacingProtected = true;
+      duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
+      duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
+      continue;
+    }
+    merged.push(note);
+    lastByPitch.set(note.pitch, note);
+  }
+  for (let index = 0; index < merged.length - 1; index += 1) {
+    const current = merged[index];
+    const next = merged[index + 1];
+    const expressive = Math.abs(finite(current.melodyTimingIntent, 0)) > 1e-6
+      || Math.abs(finite(next.melodyTimingIntent, 0)) > 1e-6;
+    if (!expressive) continue;
+    const maximum = next.start - current.start - 0.02;
+    if (maximum >= 0.06 && current.duration > maximum) {
+      current.duration = round(maximum);
+      current.melodySpacingProtected = true;
+    }
+  }
+  return merged;
+}
+
+
 function generateLead(
   config,
   structure,
@@ -5820,7 +6005,23 @@ function generateLead(
         ) continue;
         let startShift = 0;
         if (development?.type === "rhythm" && progress >= 0.45 && eventIndex % 2 === 1) startShift = development.rhythmShift;
-        const proposedStart = repeatStart + finite(event.offset, 0) + startShift;
+        const unperformedStart = repeatStart + finite(event.offset, 0) + startShift;
+        const plannedTension = plannedTensionAtBeat(songBlueprint, section, unperformedStart, barBeats);
+        const notationIntent = melodyNotationIntent({
+          config,
+          section,
+          development,
+          event,
+          eventIndex,
+          eventCount: activeMotif.events.length,
+          progress,
+          plannedTension,
+          phraseAnchor,
+          counterpoint,
+          repeat,
+          sectionIndex,
+        });
+        const proposedStart = unperformedStart + notationIntent.timingShift;
         if (proposedStart >= section.endBeat - 0.04 || proposedStart >= totalBeats) continue;
         const timingMagnet = counterpoint
           ? 0.18 + config.syncopation * 0.08
@@ -5834,7 +6035,6 @@ function generateLead(
         );
         const start = Math.max(repeatStart, synchronized.beat);
         const plannedDensity = sectionPlan?.density ?? 0.7;
-        const plannedTension = plannedTensionAtBeat(songBlueprint, section, proposedStart, barBeats);
         const tensionDensity = 0.82 + plannedTension * (counterpoint ? 0.18 : 0.3);
         const baseProbability = settings.density
           * intensity
@@ -5854,7 +6054,24 @@ function generateLead(
         const motifDegree = Math.round(finite(event.degree, 0));
         let degree = motifDegree + sectionDegreeShift(section);
         if (section.name === "bridge" && !counterpoint) degree = -degree + 3;
-        if (repeat > 0 && rng.bool(settings.variation * (0.1 + config.variation * 0.18))) degree += rng.pick([-2, -1, 1, 2]);
+        // Preserve the historical RNG stream so fixed-seed downstream
+        // decisions remain calibrated, but never use the random pitch choice.
+        const legacyVariationTrigger = repeat > 0
+          && rng.bool(settings.variation * (0.1 + config.variation * 0.18));
+        if (legacyVariationTrigger) rng.pick([-2, -1, 1, 2]);
+        const storyIntent = developedRepeatDegreeShift({
+          fullSong: config.bars >= 12,
+          section,
+          repeat,
+          eventIndex,
+          sectionIndex,
+          progress,
+          phraseAnchor,
+          counterpoint,
+          variation: settings.variation * config.variation,
+        });
+        const developedRepeatShift = storyIntent.degreeShift;
+        degree += developedRepeatShift;
         if (development?.type === "answer" && progress >= 0.45) degree += development.direction * (eventIndex % 2 === 0 ? 2 : 1);
         if (development?.type === "contour") degree += development.direction * Math.round(progress * (1 + config.complexity * 2));
         if (development?.type === "inversion") degree = -motifDegree + sectionDegreeShift(section) + development.direction;
@@ -5887,11 +6104,18 @@ function generateLead(
             : development?.type === "resolution"
               ? 1.18
               : 1;
-        const duration = Math.min(clamp(finite(event.duration, 0.5) * rhythmFactor, 0.1, 4), maxDuration);
+        const duration = Math.min(
+          clamp(finite(event.duration, 0.5) * rhythmFactor * notationIntent.durationScale, 0.08, 4),
+          maxDuration,
+        );
         const developmentAccent = development
           ? 0.9 + development.intensity * 0.08 + progress * 0.06 + plannedTension * 0.1
           : 0.94 + plannedTension * 0.1;
-        const accent = clamp(finite(event.accent, 0.75) * developmentAccent, 0.4, 1.25);
+        const accent = clamp(
+          finite(event.accent, 0.75) * developmentAccent * notationIntent.velocityScale,
+          0.38,
+          1.3,
+        );
         addNote(
           notes,
           pitch,
@@ -5904,6 +6128,18 @@ function generateLead(
             ...(phraseAnchor ? { phraseAnchor: true } : {}),
             grooveRole: groove.role,
             plannedTension,
+            ...(notationIntent.articulation ? { articulationIntent: notationIntent.articulation } : {}),
+            melodyNotationRole: notationIntent.role,
+            melodyNotationReason: notationIntent.reason,
+            melodyTimingIntent: round(notationIntent.timingShift),
+            melodyDurationIntent: round(notationIntent.durationScale),
+            melodyVelocityIntent: round(notationIntent.velocityScale),
+            melodyStoryRole: storyIntent.role,
+            melodyStoryReason: storyIntent.reason,
+            ...(developedRepeatShift ? {
+              melodicMotionIntent: "story-arc",
+              melodicMotionDegrees: developedRepeatShift,
+            } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
           },
         );
@@ -5944,7 +6180,7 @@ function generateLead(
       figures += 1;
     }
   }
-  return notes;
+  return counterpoint || config.bars < 12 ? notes : protectExpressiveLeadSpacing(notes);
 }
 
 const FORWARD_COUNTER_ANSWER_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
@@ -6248,8 +6484,7 @@ function generatePad(
 const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
 
 export function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
-  if (!STAGGERED_ENTRY_GENRES.has(config.genre)) return null;
-  if (!section || !scene || ["foreground", "foundation", "rest"].includes(producerRole)) return null;
+  if (!section || !scene || producerRole === "rest") return null;
   const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
   if (span < 1.5) return null;
   const barBeats = Math.max(1, beatsPerBar(config));
@@ -6259,31 +6494,66 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   ) - Math.min(
     ...structure.map((candidate) => finite(candidate?.startBeat, 0)),
   );
+  // Short loop forms intentionally remain immediate. Opening staging is a
+  // full-song behavior so eight-bar idea sketches do not acquire dead air.
   if (totalArrangementBeats < barBeats * 12 - 1e-6) return null;
+
+  const urbanStagger = STAGGERED_ENTRY_GENRES.has(config.genre);
+  const isOpeningIntro = section.id === structure[0]?.id
+    && String(section.name ?? "").toLowerCase() === "intro"
+    && scene.purpose === "establish";
   let entryBeat = null;
   let exitBeat = null;
 
-  if (section.id === structure[0]?.id && scene.purpose === "establish") {
-    const delayFraction = {
-      answer: 0.24,
-      support: 0.14,
-      texture: 0.34,
-    }[producerRole] ?? 0;
-    const maxBars = {
-      answer: 1,
-      support: 0.5,
-      texture: 1.5,
-    }[producerRole] ?? 0;
+  if (isOpeningIntro) {
+    let delayFraction = 0;
+    let maxBars = 0;
+
+    if (trackId === "bass" && producerRole === "foundation") {
+      // Let the opening downbeat read before low-end motion completes the
+      // pocket. Drums keep the first beat, but Groove DNA thins bar one.
+      delayFraction = urbanStagger ? 0.08 : 0.1;
+      maxBars = 0.5;
+    } else if (!["foreground", "foundation"].includes(producerRole)) {
+      const urbanFractions = {
+        answer: 0.24,
+        support: 0.14,
+        texture: 0.34,
+      };
+      const urbanMaxBars = {
+        answer: 1,
+        support: 0.5,
+        texture: 1.5,
+      };
+      const universalFractions = {
+        answer: 0.18,
+        support: 0.1,
+        texture: 0.26,
+      };
+      const universalMaxBars = {
+        answer: 0.75,
+        support: 0.35,
+        texture: 1,
+      };
+      delayFraction = (urbanStagger ? urbanFractions : universalFractions)[producerRole] ?? 0;
+      maxBars = (urbanStagger ? urbanMaxBars : universalMaxBars)[producerRole] ?? 0;
+    }
+
     if (delayFraction > 0 && maxBars > 0) {
       const delay = Math.min(span * delayFraction, barBeats * maxBars);
       entryBeat = round(section.startBeat + Math.max(0.5, delay));
     }
   }
 
+  // Resolving-layer exits remain the calibrated Hip-Hop/Trap behavior. This
+  // patch changes how songs begin without imposing urban ending grammar on
+  // every genre.
   if (
-    section.id === structure.at(-1)?.id
+    urbanStagger
+    && section.id === structure.at(-1)?.id
     && scene.purpose === "resolve"
     && !["chords"].includes(trackId)
+    && !["foreground", "foundation"].includes(producerRole)
   ) {
     const tailFraction = {
       answer: 0.18,
@@ -6574,7 +6844,7 @@ function evaluateProducerIntentContract(sourceTracks, structure, producerIntent)
 
 function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
   const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const trackById = indexFirstById(tracks);
   let removedAnswerCollisions = 0;
 
   for (const scene of producerIntent?.scenes ?? []) {
@@ -6961,6 +7231,16 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
       ...(Number.isFinite(note.phraseBoundary) ? { phraseBoundary: round(note.phraseBoundary) } : {}),
       ...(note.articulationIntent ? { articulationIntent: note.articulationIntent } : {}),
+      ...(note.melodyNotationRole ? { melodyNotationRole: note.melodyNotationRole } : {}),
+      ...(note.melodyNotationReason ? { melodyNotationReason: note.melodyNotationReason } : {}),
+      ...(Number.isFinite(note.melodyTimingIntent) ? { melodyTimingIntent: round(note.melodyTimingIntent) } : {}),
+      ...(Number.isFinite(note.melodyDurationIntent) ? { melodyDurationIntent: round(note.melodyDurationIntent) } : {}),
+      ...(Number.isFinite(note.melodyVelocityIntent) ? { melodyVelocityIntent: round(note.melodyVelocityIntent) } : {}),
+      ...(note.melodicMotionIntent ? { melodicMotionIntent: note.melodicMotionIntent } : {}),
+      ...(Number.isFinite(note.melodicMotionDegrees) ? { melodicMotionDegrees: note.melodicMotionDegrees } : {}),
+      ...(note.melodyStoryRole ? { melodyStoryRole: note.melodyStoryRole } : {}),
+      ...(note.melodyStoryReason ? { melodyStoryReason: note.melodyStoryReason } : {}),
+      ...(note.melodySpacingProtected ? { melodySpacingProtected: true } : {}),
       ...(note.connectionId ? { connectionId: note.connectionId } : {}),
       ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
       ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
@@ -7295,6 +7575,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     registerCollisionsLifted: 0,
     velocitiesScaled: 0,
   };
+  const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
 
   for (const track of tracks) {
     if (track.id === "drums") continue;
@@ -7312,9 +7594,9 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
     }
   }
 
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
+  const bass = trackById.get("bass")?.notes ?? [];
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     for (const note of track.notes) {
       const soundingBass = bass.filter((candidate) => (
@@ -7339,8 +7621,8 @@ function runProducerPass(sourceTracks, structure, songBlueprint) {
 
   const finalPeak = allNotes.length ? Math.max(...allNotes.map((note) => note.velocity)) : 0;
   const featuredCoverage = (songBlueprint?.orchestrationMatrix ?? []).map((entry) => {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || track.settings?.density <= 0.001) return true;
     return track.notes.some((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
   });
@@ -7569,12 +7851,11 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
       })
       .sort((left, right) => left.start - right.start || left.pitch - right.pitch || left.duration - right.duration);
     const deduped = [];
+    const lastDuplicateByPitch = new Map();
     for (const note of ordered) {
       const retriggerFloor = track.id === "drums" ? 0.0005 : 0.02;
-      const duplicate = deduped.findLast((candidate) => (
-        candidate.pitch === note.pitch && Math.abs(candidate.start - note.start) < retriggerFloor
-      ));
-      if (duplicate) {
+      const duplicate = lastDuplicateByPitch.get(note.pitch);
+      if (duplicate && Math.abs(duplicate.start - note.start) < retriggerFloor) {
         const duplicateEnd = Math.max(
           duplicate.start + duplicate.duration,
           note.start + note.duration,
@@ -7585,6 +7866,7 @@ function runFinalMasterPass(sourceTracks, structure, songBlueprint, config) {
         continue;
       }
       deduped.push(note);
+      lastDuplicateByPitch.set(note.pitch, note);
     }
     if (track.id !== "drums") {
       const lastByPitch = new Map();
@@ -7652,12 +7934,20 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   const fallbackById = new Map(
     fallbackTracks.map((track) => [track.id, track.notes ?? []]),
   );
+  const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
+  const transitionTracks = tracks.filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id));
+  const taggedHandoffs = new Set(
+    tracks.flatMap((track) => track.notes ?? [])
+      .map((note) => note.transitionHandoffId)
+      .filter(Boolean),
+  );
   let featuredAnchorsRestored = 0;
   let transitionEventsTagged = 0;
 
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     const hasFeature = track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -7713,22 +8003,18 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
   }
 
   for (const transition of songBlueprint?.transitions ?? []) {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const from = sectionById.get(transition.fromSectionId);
+    const to = sectionById.get(transition.toSectionId);
     if (!from || !to) continue;
     const lastSection = structure[structure.length - 1];
     if (to.id === lastSection?.id && ["outro", "breakdown"].includes(to.name)) continue;
     const handoffId = `${from.id}->${to.id}`;
-    const alreadyTagged = tracks.some((track) => track.notes.some((note) => (
-      note.transitionHandoffId === handoffId
-    )));
-    if (alreadyTagged || transition.type === "drop-out") continue;
+    if (taggedHandoffs.has(handoffId) || transition.type === "drop-out") continue;
     const pickupStart = Math.max(
       from.startBeat,
       from.endBeat - clamp(finite(transition.pickupBeats, 0.5), 0.25, 2),
     );
-    const candidates = tracks
-      .filter((track) => ["drums", "bass", "chords", "pad"].includes(track.id))
+    const candidates = transitionTracks
       .flatMap((track) => track.notes.map((note) => ({ note, trackId: track.id })))
       .filter(({ note }) => note.start >= pickupStart - 1e-6 && note.start <= from.endBeat + 0.12)
       .sort((left, right) => (
@@ -7741,7 +8027,32 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     candidates[0].note.transitionHandoffRole = `${transition.type}-final-boundary`;
     candidates[0].note.transitionFeature ??= transition.type;
     candidates[0].note.finalAssemblyRole = "verified-transition-event";
+    taggedHandoffs.add(handoffId);
     transitionEventsTagged += 1;
+  }
+
+  let melodyDuplicatesMerged = 0;
+  if (config.bars >= 12) {
+    const melodyTrack = trackById.get("melody");
+    if (melodyTrack) {
+      const merged = [];
+      const lastByPitch = new Map();
+      for (const note of [...(melodyTrack.notes ?? [])].sort((left, right) => left.start - right.start || left.pitch - right.pitch)) {
+        const duplicate = lastByPitch.get(note.pitch);
+        if (!duplicate || Math.abs(duplicate.start - note.start) >= 1e-6) {
+          merged.push(note);
+          lastByPitch.set(note.pitch, note);
+          continue;
+        }
+        duplicate.duration = Math.max(duplicate.duration, note.duration);
+        duplicate.velocity = Math.max(duplicate.velocity, note.velocity);
+        duplicate.finalAssemblyRole = duplicate.finalAssemblyRole ?? "merged-melody-duplicate";
+        duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
+        duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
+        melodyDuplicatesMerged += 1;
+      }
+      melodyTrack.notes = merged;
+    }
   }
 
   const counterWindow = DAW_REGISTER_POLICIES.counterpoint ?? { min: 36, max: 116 };
@@ -7758,6 +8069,7 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
       leadDissonancesCleared: separationRepair.leadDissonancesCleared,
       leadUnisonsCleared: separationRepair.leadUnisonsCleared,
       leadCounterpointNotesRemoved: separationRepair.notesRemoved,
+      melodyDuplicatesMerged,
     },
   };
 }
@@ -7767,10 +8079,12 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
+  const sectionById = indexFirstById(structure);
+  const trackById = indexFirstById(tracks);
   const missingFeaturedSections = [];
   for (const entry of songBlueprint?.orchestrationMatrix ?? []) {
-    const section = structure.find((candidate) => candidate.id === entry.sectionId);
-    const track = tracks.find((candidate) => candidate.id === entry.featuredTrack);
+    const section = sectionById.get(entry.sectionId);
+    const track = trackById.get(entry.featuredTrack);
     if (!section || !track || entry.lanes?.[entry.featuredTrack]?.presence <= 0.001) continue;
     if (!track.notes.some((note) => (
       note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6
@@ -7784,12 +8098,12 @@ function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
     ))))
     .map((section) => section.id);
   const transitionContracts = (songBlueprint?.transitions ?? []).filter((transition) => {
-    const to = structure.find((section) => section.id === transition.toSectionId);
+    const to = sectionById.get(transition.toSectionId);
     const lastSection = structure[structure.length - 1];
     return !(to?.id === lastSection?.id && ["outro", "breakdown"].includes(to.name));
   });
   const coordinatedTransitions = transitionContracts.filter((transition) => {
-    const from = structure.find((section) => section.id === transition.fromSectionId);
+    const from = sectionById.get(transition.fromSectionId);
     if (!from) return false;
     const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
     if (transition.type !== "drop-out") {
@@ -7895,6 +8209,22 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       },
     }
     : song.producerPass;
+  const committedEnsembleCoordination = evaluateEnsembleCoordinationAuthority(song);
+  const wholeSongCompletion = evaluateWholeSongCompletion({
+    ...song,
+    registerIntegrity: {
+      ...(song.registerIntegrity ?? {}),
+      status: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
+      after: finalRegisterIntegrity,
+      finalValidation: finalRegisterIntegrity,
+    },
+    producerIntentReport,
+    finalRhythmLock,
+    tonalIntegrity,
+    finalAssembly,
+    finalMaster,
+    producerPass,
+  });
 
   return {
     ...song,
@@ -7915,13 +8245,17 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalAssembly,
     finalMaster,
     producerPass,
+    wholeSongCompletion,
+    committedEnsembleCoordination,
     committedAuthorityValidation: Object.freeze({
-      version: 1,
+      version: 3,
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
       register: finalRegisterIntegrity.hardViolations === 0 ? "clean" : "best-available",
       assembly: finalAssembly.status,
+      wholeSongCompletion: wholeSongCompletion.status,
+      ensembleCoordination: committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
     }),
   };
 }
@@ -7937,8 +8271,9 @@ function runVoiceLeadingPass(sourceTracks, config) {
   let commonTonesHeld = 0;
   let bassCollisionsCleared = 0;
   let padDoublingsAvoided = 0;
-  const bass = tracks.find((track) => track.id === "bass")?.notes ?? [];
-  const chords = tracks.find((track) => track.id === "chords")?.notes ?? [];
+  const trackById = indexFirstById(tracks);
+  const bass = trackById.get("bass")?.notes ?? [];
+  const chords = trackById.get("chords")?.notes ?? [];
   const candidatesForPitchClass = (pitch, minimum, maximum) => {
     const pitchClass = mod(pitch, 12);
     const candidates = [];
@@ -7949,7 +8284,7 @@ function runVoiceLeadingPass(sourceTracks, config) {
   };
 
   for (const id of ["chords", "pad"]) {
-    const track = tracks.find((candidate) => candidate.id === id);
+    const track = trackById.get(id);
     if (!track) continue;
     const groups = new Map();
     for (const note of track.notes) {
@@ -8144,6 +8479,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = indexFirstById(tracks);
   const eligible = structure
     .filter((section) => !["intro", "outro"].includes(section.name))
     .sort((left, right) => finite(left.energy, 0.5) - finite(right.energy, 0.5));
@@ -8164,7 +8500,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["counterpoint", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         const inBreath = windows.some((window) => note.start >= window.start && note.start < window.end);
@@ -8193,6 +8529,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
+  const trackById = indexFirstById(tracks);
   const enabled = VOCAL_LED_GENRES.has(config.genre);
   const barBeats = beatsPerBar(config);
   const verseSections = enabled
@@ -8212,7 +8549,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
   ));
   if (windows.length) {
     for (const id of ["melody", "counterpoint"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
@@ -8230,7 +8567,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       });
     }
     for (const id of ["chords", "pad"]) {
-      const track = tracks.find((candidate) => candidate.id === id);
+      const track = trackById.get(id);
       if (!track) continue;
       for (const note of track.notes) {
         if (!inVocalWindow(note)) continue;
@@ -8333,7 +8670,7 @@ function runEnsembleCadencePass(sourceTracks, structure, harmony, songBlueprint,
     ...track,
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
-  const trackById = new Map(tracks.map((track) => [track.id, track]));
+  const trackById = indexFirstById(tracks);
   let sectionsCoordinated = 0;
   let notesRetuned = 0;
   let releasesShaped = 0;

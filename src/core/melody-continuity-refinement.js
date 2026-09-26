@@ -2,7 +2,7 @@ import { cloneValue } from "./clone-value.js";
 import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
-export const MAX_MELODY_CONTINUITY_LINKS = 24;
+export const MAX_MELODY_CONTINUITY_LINKS = 28;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
@@ -219,7 +219,11 @@ function candidateRequestSets(song) {
   while (balanced.length < MAX_MELODY_CONTINUITY_LINKS) {
     const next = melodicSections(balancedSong)
       .map((bounds) => sectionContinuity(balancedSong, melodyTrack(balancedSong), bounds))
-      .filter(({ notes, windows, deficit }) => notes.length >= 2 && windows.length > 0 && deficit > 0.01)
+      .filter(({ notes, windows, silenceDeficit }) => (
+        notes.length >= 2
+        && windows.length > 0
+        && silenceDeficit > 0.05
+      ))
       .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index)[0];
     const window = next?.windows?.[0];
     if (!next || !window) break;

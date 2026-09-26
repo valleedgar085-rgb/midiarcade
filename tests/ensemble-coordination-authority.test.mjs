@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   evaluateSongCandidate,
   generateNew,
+  refreshCommittedGenerationDiagnostics,
 } from "../src/music-engine.js";
 import {
   ENSEMBLE_RELATIONSHIP_KINDS,
@@ -157,6 +158,10 @@ test("critic detects rendered parts that stop honoring the ensemble authority", 
     "counterpoint should lose call/response separation",
   );
   assert.ok(
+    disconnectedAuthority.metrics.phraseSeparation < connectedAuthority.metrics.phraseSeparation,
+    "synchronized counterpoint should create more phrase overlap",
+  );
+  assert.ok(
     disconnectedEvaluation.subscores.stageInterlock < connectedEvaluation.subscores.stageInterlock,
     `${disconnectedEvaluation.subscores.stageInterlock} should be below ${connectedEvaluation.subscores.stageInterlock}`,
   );
@@ -188,5 +193,116 @@ test("critic fails closed when an accepted section loses a required ensemble rel
   assert.ok(
     degraded.score <= intact.score,
     `degraded contract score ${degraded.score} must not improve over intact ${intact.score}`,
+  );
+});
+
+
+test("committed diagnostic refresh publishes read-only ensemble coordination from final tracks", () => {
+  const song = generateNew({
+    genre: "hipHop",
+    seed: "committed-ensemble-diagnostic-proof",
+    bars: 16,
+    candidateCount: 1,
+    targetedRepair: false,
+  });
+  const beforeTracks = structuredClone(song.tracks);
+  const refreshed = refreshCommittedGenerationDiagnostics(song);
+
+  assert.deepEqual(song.tracks, beforeTracks, "committed ensemble evaluation must not mutate final tracks");
+  assert.equal(refreshed.committedEnsembleCoordination?.version, 2);
+  assert.ok(Number.isFinite(refreshed.committedEnsembleCoordination?.score));
+  assert.equal(
+    refreshed.committedAuthorityValidation?.ensembleCoordination,
+    refreshed.committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
+  );
+});
+
+
+test("ensemble hardening exposes cloning, register crowding, and support-layer pressure", () => {
+  const song = generateNew({
+    genre: "hipHop", seed: "ensemble-hardening-metrics", bars: 16,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const before = structuredClone(song);
+  const report = evaluateEnsembleCoordinationAuthority(song);
+
+  assert.deepEqual(song, before, "hardened ensemble critic must remain read-only");
+  for (const metric of [
+    "kickBassCloneRatio", "bassIndependence", "melodyChordCrowding",
+    "leadHarmonySeparation", "supportForegroundOverlap", "supportRestraint",
+    "leadPhraseOverlap", "phraseSeparation", "callResponseTiming",
+  ]) assert.ok(Number.isFinite(report.metrics[metric]), metric);
+});
+
+test("kick-bass cloning is penalized without requiring bass to ignore the groove", () => {
+  const song = generateNew({
+    genre: "hipHop", seed: "ensemble-clone-proof", bars: 16,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const cloned = structuredClone(song);
+  const drums = cloned.tracks.find((track) => track.id === "drums")?.notes ?? [];
+  const kicks = drums.filter((note) => [35, 36].includes(Math.round(Number(note.pitch))));
+  const bass = cloned.tracks.find((track) => track.id === "bass");
+  if (bass && kicks.length) {
+    bass.notes = kicks.map((kick, index) => ({
+      ...kick, pitch: 36 + (index % 3) * 2, duration: 0.45, velocity: 92,
+    }));
+  }
+  const report = evaluateEnsembleCoordinationAuthority(cloned);
+  assert.ok(report.metrics.kickBassCloneRatio >= 0.68, JSON.stringify(report.metrics));
+  assert.ok(report.metrics.bassIndependence < 1, JSON.stringify(report.metrics));
+});
+
+
+test("ensemble critic publishes section-role evolution and breathing-room diagnostics", () => {
+  const song = generateNew({
+    genre: "pop", seed: "ensemble-role-evolution-proof", bars: 24,
+    candidateCount: 1, targetedRepair: false,
+  });
+  const before = structuredClone(song);
+  const report = evaluateEnsembleCoordinationAuthority(song);
+  assert.deepEqual(song, before, "role-evolution analysis must remain read-only");
+  assert.equal(report.roleEvolution.length, song.structure.length);
+  assert.ok(Number.isFinite(report.metrics.sectionRoleEvolution));
+  assert.ok(Number.isFinite(report.metrics.arrangementBreathingRoom));
+  assert.equal(typeof report.metrics.allLayersAlwaysOn, "boolean");
+});
+
+
+test("lead dialogue rewards turn-taking over synchronized competing phrases", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "lead-counterline-dialogue-proof",
+    bars: 20,
+    candidateCount: 1,
+    targetedRepair: false,
+  });
+  const healthy = evaluateEnsembleCoordinationAuthority(song);
+  const competing = structuredClone(song);
+  const melody = competing.tracks.find((track) => track.id === "melody")?.notes ?? [];
+  const counterpoint = competing.tracks.find((track) => track.id === "counterpoint");
+  if (counterpoint && melody.length) {
+    counterpoint.notes = counterpoint.notes.map((answer, index) => {
+      const call = melody[index % melody.length];
+      return {
+        ...answer,
+        start: call.start,
+        duration: Math.max(Number(answer.duration ?? 0.25), Number(call.duration ?? 0.25)),
+      };
+    });
+  }
+
+  const crowded = evaluateEnsembleCoordinationAuthority(competing);
+  assert.ok(
+    crowded.metrics.leadPhraseOverlap >= healthy.metrics.leadPhraseOverlap,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
+  );
+  assert.ok(
+    crowded.metrics.phraseSeparation <= healthy.metrics.phraseSeparation,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
+  );
+  assert.ok(
+    crowded.metrics.leadDialogue <= healthy.metrics.leadDialogue,
+    JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
   );
 });
