@@ -1988,7 +1988,10 @@ function renderSongShowcase() {
   $("#showcaseSeed").textContent = `ORIGINAL ${formatSeed(songSeed())}`;
   if (cover) {
     cover.dataset.coverStyle = "original";
-    cover.style.backgroundImage = `url("${coverArtworkDataUrl({ ...state.song, title }, { variation: 0 })}")`;
+    const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
+    const heroPanel = $("#heroPanel");
+    if (heroPanel) heroPanel.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    cover.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.setProperty("--cover-hue", coverHue);
     cover.style.setProperty("--cover-hue-2", secondHue);
     cover.style.setProperty("--cover-angle", `${coverAngle}deg`);

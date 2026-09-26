@@ -66,6 +66,10 @@ const solarPopStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'solar-pop.css'), 'utf8'),
   transformOptions,
 );
+const midnightStudioStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'midnight-studio.css'), 'utf8'),
+  transformOptions,
+);
 fs.writeFileSync(
   path.join(wwwDir, 'generation-experience.css'),
   generationExperienceStyles.code,
@@ -78,6 +82,10 @@ fs.writeFileSync(
   path.join(wwwDir, 'solar-pop.css'),
   solarPopStyles.code,
 );
+fs.writeFileSync(
+  path.join(wwwDir, 'midnight-studio.css'),
+  midnightStudioStyles.code,
+);
 
 const indexSource = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf8');
 const compactIndexSource = indexSource
@@ -87,7 +95,7 @@ fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
   compactIndexSource.replace(
     '</head>',
-    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"></head>`,
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"><link rel="stylesheet" href="./midnight-studio.css"></head>`,
   ),
 );
 
@@ -127,6 +135,7 @@ if (fs.existsSync(androidPublicDir)) {
   copyRecursiveSync(path.join(wwwDir, 'generation-experience.css'), path.join(androidPublicDir, 'generation-experience.css'));
   copyRecursiveSync(path.join(wwwDir, 'shape-director.css'), path.join(androidPublicDir, 'shape-director.css'));
   copyRecursiveSync(path.join(wwwDir, 'solar-pop.css'), path.join(androidPublicDir, 'solar-pop.css'));
+  copyRecursiveSync(path.join(wwwDir, 'midnight-studio.css'), path.join(androidPublicDir, 'midnight-studio.css'));
   copyRecursiveSync(path.join(wwwDir, 'manifest.webmanifest'), path.join(androidPublicDir, 'manifest.webmanifest'));
   copyRecursiveSync(path.join(wwwDir, 'assets'), path.join(androidPublicDir, 'assets'));
   copyRecursiveSync(path.join(wwwDir, 'src'), path.join(androidPublicDir, 'src'));

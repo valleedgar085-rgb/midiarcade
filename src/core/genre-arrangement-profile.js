@@ -74,6 +74,26 @@ const PROFILES = Object.freeze({
       { id: "perc-spark", trackId: "drums", instrument: "percussion", sections: ["verse", "chorus", "drop"], probability: 0.14, durationBeats: 0.12, startOffsets: [0.75, 2.75], velocityRange: [54, 92], drumPitches: [56, 75] },
     ],
   },
+  hipHop: {
+    id: "hipHop",
+    phraseBars: [4, 8],
+    rhythmTemplates: [
+      { id: "laid-back-backbeat", weight: 1.9, steps: [0, 4, 7, 8, 12, 15], syncopationBias: 0.38 },
+      { id: "displaced-kick-pocket", weight: 1.55, steps: [0, 3, 8, 10, 14], syncopationBias: 0.46 },
+    ],
+    harmonicGoals: [
+      { id: "minor-sample-loop", weight: 1.45, sections: ["verse", "chorus", "theme"], moods: ["calm", "neutral", "intense"], progression: [0, 5, 3, 0] },
+      { id: "soulful-i-iv", weight: 1.15, sections: ["verse", "bridge"], moods: ["calm", "neutral"], progression: [0, 3, 0, 4] },
+      { id: "hook-lift", weight: 1, sections: ["chorus", "theme"], moods: ["neutral", "intense"], progression: [0, 3, 5, 4] },
+    ],
+    melodyMotion: { stepBias: 0.8, legatoBias: 0.38, staccatoBias: 0.18 },
+    humanization: { laidBackOffsetBeats: 0.022, gridJitterAttenuation: 0.58, velocityVarianceScale: 1.06 },
+    optionalLayers: [
+      { id: "sample-response", trackId: "counterpoint", instrument: "sample-response", sections: ["verse", "chorus"], probability: 0.12, durationBeats: 0.38, startOffsets: [1.5, 3.25], velocityRange: [54, 88], degreeOffsets: [2, 4, 5] },
+      { id: "warm-bed", trackId: "pad", instrument: "texture", sections: ["intro", "bridge", "outro"], probability: 0.11, durationBeats: 2.5, startOffsets: [0], velocityRange: [42, 70], degreeOffsets: [0, 3, 5] },
+      { id: "pocket-perc", trackId: "drums", instrument: "percussion", sections: ["verse", "chorus"], probability: 0.1, durationBeats: 0.1, startOffsets: [1.75, 3.75], velocityRange: [48, 82], drumPitches: [54, 56] },
+    ],
+  },
   hipHopTrap: {
     id: "hipHopTrap",
     phraseBars: [4, 8],
@@ -278,8 +298,8 @@ const PROFILES = Object.freeze({
 const PROFILE_BY_GENRE = Object.freeze({
   pop: "pop",
   popRadio: "pop",
-  hipHop: "hipHopTrap",
-  rap: "hipHopTrap",
+  hipHop: "hipHop",
+  rap: "hipHop",
   trap: "hipHopTrap",
   drill: "hipHopTrap",
   loFiHipHop: "lofi",

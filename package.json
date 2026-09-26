@@ -19,7 +19,8 @@
     "android:bundle": "npm run android:sync && cd android && .\\gradlew.bat :app:bundleRelease",
     "test:android-release": "node --test tests/android-release-contract.test.mjs tests/generation-timeout-ownership.test.mjs tests/preview-loop-continuity-contract.test.mjs tests/phase7-audio-runtime.test.mjs tests/section-variation-authority.test.mjs",
     "quality:jazz": "node --test tests/jazz-musical-grammar.test.mjs tests/jazz-quality-lab.test.mjs tests/jazz-drum-memory-refinement.test.mjs",
-    "quality:jazz:deep": "node scripts/benchmark-jazz-quality.mjs --seeds 128 --bars 16"
+    "quality:jazz:deep": "node scripts/benchmark-jazz-quality.mjs --seeds 128 --bars 16",
+    "quality:ensemble": "node scripts/benchmark-ensemble-coordination.mjs --seeds 4 --bars 16"
   },
   "engines": {
     "node": ">=22.0.0"

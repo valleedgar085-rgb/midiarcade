@@ -2,7 +2,7 @@ import { cloneValue } from "./clone-value.js";
 import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_MELODY_CONTINUITY_CANDIDATES = 3;
-export const MAX_MELODY_CONTINUITY_LINKS = 24;
+export const MAX_MELODY_CONTINUITY_LINKS = 28;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
@@ -182,6 +182,7 @@ function connectorNote(song, window, sectionId, mode, ordinal, slot = 0, slots =
   const duration = round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
   return {
+    ...source,
     id: `${String(source?.id ?? "melody-link")}:continuity-${sectionId}-${ordinal}`,
     pitch: finite(source?.pitch, 60),
     start,
@@ -204,7 +205,7 @@ function addConnectors(song, requests) {
   return candidate;
 }
 
-function candidateRequestSets(song) {
+function candidateRequestSets(song, maxCandidates = MAX_MELODY_CONTINUITY_CANDIDATES) {
   const track = melodyTrack(song);
   if (!track) return [];
   const opportunities = melodicSections(song)
@@ -214,12 +215,17 @@ function candidateRequestSets(song) {
   if (!opportunities.length) return [];
 
   const weakest = opportunities[0];
+  const boundedMax = Math.max(0, Math.min(MAX_MELODY_CONTINUITY_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_CONTINUITY_CANDIDATES))));
   const balanced = [];
   let balancedSong = song;
-  while (balanced.length < MAX_MELODY_CONTINUITY_LINKS) {
+  while (boundedMax > 2 && balanced.length < MAX_MELODY_CONTINUITY_LINKS) {
     const next = melodicSections(balancedSong)
       .map((bounds) => sectionContinuity(balancedSong, melodyTrack(balancedSong), bounds))
-      .filter(({ notes, windows, deficit }) => notes.length >= 2 && windows.length > 0 && deficit > 0.01)
+      .filter(({ notes, windows, silenceDeficit }) => (
+        notes.length >= 2
+        && windows.length > 0
+        && silenceDeficit > 0.05
+      ))
       .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index)[0];
     const window = next?.windows?.[0];
     if (!next || !window) break;
@@ -245,9 +251,10 @@ export function createMelodyContinuityCandidates(song, {
 } = {}) {
   const before = analyzeMelodyContinuity(song);
   if (before.deficit <= 0) return [];
+  const boundedMax = Math.max(0, Math.min(MAX_MELODY_CONTINUITY_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_CONTINUITY_CANDIDATES))));
   const seen = new Set();
-  return candidateRequestSets(song)
-    .slice(0, Math.max(0, Math.min(MAX_MELODY_CONTINUITY_CANDIDATES, Math.floor(maxCandidates))))
+  return candidateRequestSets(song, boundedMax)
+    .slice(0, boundedMax)
     .map((entry, candidateIndex) => {
       const candidateSong = addConnectors(song, entry.requests);
       const after = analyzeMelodyContinuity(candidateSong);

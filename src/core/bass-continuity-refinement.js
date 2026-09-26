@@ -277,6 +277,7 @@ function connectorRequest(song, section, window, ordinal) {
   const nextStart = next ? finite(next?.start) : window.end;
   const available = Math.max(0.18, Math.min(window.end, chordEnd, nextStart) - start);
   return {
+    ...source,
     id: `${String(source?.id ?? "bass-link")}:continuity-${section.id}-${ordinal}`,
     pitch,
     start,

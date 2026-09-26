@@ -112,6 +112,27 @@ function hasTrack(song, trackId) {
   return tracksOf(song).some((track) => String(track?.id) === String(trackId));
 }
 
+export function generateInterlockedCounterpoint(melodyNotes = [], counterNotes = []) {
+  const melody = Array.isArray(melodyNotes) ? melodyNotes : [];
+  const counters = Array.isArray(counterNotes) ? counterNotes : [];
+  return counters.map((note) => {
+    const start = Number(note?.start) || 0;
+    const duration = Math.max(0, Number(note?.duration) || 0);
+    const overlapsLead = melody.find((lead) => (
+      start < (Number(lead?.start) || 0) + Math.max(0, Number(lead?.duration) || 0)
+      && (Number(lead?.start) || 0) < start + duration
+    ));
+    const leadDuration = Math.max(0, Number(overlapsLead?.duration) || 0);
+    const role = !overlapsLead || (leadDuration >= 0.75 && start > (Number(overlapsLead?.start) || 0) + 0.35)
+      ? "conversational-response"
+      : "harmonic-anchor";
+    return {
+      ...note,
+      interlockedRole: role,
+    };
+  });
+}
+
 function roleSnapshot(gauntletSong, roleIds = []) {
   return Object.freeze(Object.fromEntries(
     roleIds
@@ -411,5 +432,6 @@ export function runSpecialistMusicianGeneration(
     stages: Object.freeze(stages),
     ensemble,
     accepted: ensemble.passed,
+    hardIssues: Object.freeze([...(ensemble.hardIssues ?? ensemble.issues ?? [])]),
   });
 }

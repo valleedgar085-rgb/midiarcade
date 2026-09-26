@@ -99,6 +99,31 @@ export function genreSequenceFitScore(names, genre) {
     if (names[finalChorus + 1] === "verse") score -= 0.45;
   }
 
+  if (["hipHop", "rap"].includes(genre)) {
+    const verses = indicesOf(names, (name) => name === "verse");
+    const payoffs = indicesOf(names, (name) => ["chorus", "theme", "hook"].includes(name));
+    const contrasts = indicesOf(names, (name) => ["bridge", "breakdown", "idea"].includes(name));
+    const bodyStart = names[0] === "intro" ? 1 : 0;
+    const firstVerse = verses[0] ?? -1;
+    const firstHook = payoffs[0] ?? -1;
+    const finalHook = payoffs.at(-1) ?? -1;
+
+    if (firstVerse === bodyStart) score += 0.85;
+    if (firstVerse >= 0 && firstHook > firstVerse) score += 0.7;
+    else if (firstHook >= 0 && (firstVerse < 0 || firstHook < firstVerse)) score -= 0.65;
+
+    if (verses.length >= 2 && finalHook > verses[1]) score += 0.75;
+    if (payoffs.length >= 2 && finalHook > firstHook) score += 0.35;
+    if (
+      firstHook >= 0
+      && finalHook > firstHook
+      && contrasts.some((index) => index > firstHook && index < finalHook)
+    ) score += 0.35;
+
+    if (payoffs.some((index, i) => i > 0 && index === payoffs[i - 1] + 1)) score -= 0.4;
+    if (finalHook >= 0 && names[finalHook + 1] === "verse") score -= 0.35;
+  }
+
   if (genre === "techno" && finalDrop > 0) {
     const builds = indicesOf(names, (name) => name === "build");
     const breakdowns = indicesOf(names, (name) => name === "breakdown");

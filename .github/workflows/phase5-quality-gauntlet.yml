@@ -7,6 +7,7 @@ on:
       - "src/generation-benchmark.js"
       - "src/core/**"
       - "scripts/benchmark-generation.mjs"
+      - "scripts/benchmark-ensemble-coordination.mjs"
       - "tests/generation-benchmark.test.mjs"
       - "tests/song-quality-gauntlet.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
@@ -35,6 +36,20 @@ jobs:
         run: node --test tests/ensemble-coordination-authority.test.mjs
       - name: Run section completion authority regression tests
         run: node --test tests/section-completion-authority.test.mjs
+      - name: Run fixed-seed ensemble intelligence matrix
+        run: |
+          node scripts/benchmark-ensemble-coordination.mjs \
+            --seeds 4 \
+            --bars 16 \
+            --json /tmp/ensemble-intelligence-matrix.json
+      - name: Upload ensemble intelligence matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ensemble-intelligence-matrix
+          path: /tmp/ensemble-intelligence-matrix.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Run 4-seed all-genre quality gauntlet
         id: gauntlet
         continue-on-error: true

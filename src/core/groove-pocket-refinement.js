@@ -33,6 +33,30 @@ function trackOf(song, id) {
   return song?.tracks?.find?.((track) => String(track?.id) === id) ?? null;
 }
 
+export function applyInstrumentMicroTiming(song, {
+  laidBack = false,
+} = {}) {
+  const candidate = cloneValue(song);
+  const beatsPerBar = Math.max(1, finite(candidate?.meta?.beatsPerBar, 4));
+  if (!laidBack) return candidate;
+  for (const track of candidate?.tracks ?? []) {
+    const shift = track?.id === "drums" ? 0.025 : track?.id === "bass" ? 0.015 : 0;
+    if (!shift) continue;
+    track.notes = (track.notes ?? []).map((note) => {
+      const current = noteStart(note);
+      const barStart = Math.floor(current / beatsPerBar) * beatsPerBar;
+      const barEnd = barStart + beatsPerBar - 0.001;
+      const nextStart = round(Math.min(barEnd, current + shift), 4);
+      return {
+        ...note,
+        start: nextStart,
+        microTimingShiftBeats: round(nextStart - current, 4),
+      };
+    });
+  }
+  return candidate;
+}
+
 function sectionsOf(song) {
   return Array.isArray(song?.structure) ? song.structure : Array.isArray(song?.sections) ? song.sections : [];
 }

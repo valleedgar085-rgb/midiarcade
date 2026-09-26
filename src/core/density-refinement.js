@@ -39,6 +39,28 @@ function densityObserved(song) {
   return densityActivityForSong(song).observed;
 }
 
+export function applyMultiBarEnergyRamps(song, {
+  startEnergy = 0.75,
+  endEnergy = 1,
+} = {}) {
+  const candidate = cloneValue(song);
+  const totalBeats = Math.max(1, finite(candidate?.meta?.totalBeats, candidate?.bars * finite(candidate?.meta?.beatsPerBar, 4) || 1));
+  const start = Math.max(0, finite(startEnergy, 0.75));
+  const end = Math.max(0, finite(endEnergy, 1));
+  for (const track of candidate?.tracks ?? []) {
+    track.notes = (track.notes ?? []).map((note) => {
+      const progress = Math.max(0, Math.min(1, finite(note?.start, 0) / totalBeats));
+      const energy = start + (end - start) * progress;
+      return {
+        ...note,
+        velocity: Math.max(1, Math.min(120, Math.round(finite(note?.velocity, 80) * energy))),
+        ...(progress >= 0.85 ? { energyRampRole: "section-payoff-ramp" } : {}),
+      };
+    });
+  }
+  return candidate;
+}
+
 function protectedSupportNote(note) {
   return Boolean(
     note?.resolutionRole

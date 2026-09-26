@@ -223,6 +223,27 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   upgradeWorkflowCopy(createPanel);
 }
 
+function setupCreateScrollState(rootDocument, createPanel) {
+  const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
+  if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
+  createPanel.dataset.createScrollState = "ready";
+  let isScrolled = false;
+  const update = () => {
+    const scrollY = Number(ownerWindow.scrollY || 0);
+    if (!isScrolled && scrollY > 140) {
+      isScrolled = true;
+      createPanel.classList.add("is-scrolled");
+    } else if (isScrolled && scrollY < 80) {
+      isScrolled = false;
+      createPanel.classList.remove("is-scrolled");
+    }
+  };
+  update();
+  ownerWindow.addEventListener("scroll", update, { passive: true });
+  ownerWindow.addEventListener("resize", update, { passive: true });
+}
+
+
 export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   if (!rootDocument?.querySelector) return false;
   const createPanel = rootDocument.querySelector("#tab-create");
@@ -239,6 +260,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   consolidateAdvancedDirection(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);
+  setupCreateScrollState(rootDocument, createPanel);
   return true;
 }
 
