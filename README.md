@@ -1,5 +1,7 @@
 # MIDI Arcade
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/valleedgar085-rgb/midiarcade?utm_source=oss&utm_medium=github&utm_campaign=valleedgar085-rgb%2Fmidiarcade&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 MIDI Arcade is an **Android-first, local-first producer workstation and deterministic multitrack MIDI song generator**. It combines producer-directed generation, Song DNA, Creative Genome, Fire / Electric / Drip creative personalities, non-destructive Shape editing, Android-safe preview playback, and DAW-ready MIDI export.
 
 The product rule is simple: musical improvements only stay when they remain deterministic, measurable, export-safe, device-safe, and compatible with the existing release contracts.
