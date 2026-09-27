@@ -3868,12 +3868,9 @@ function renderGenerationDebugger() {
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
   const audition = player.performanceAudition;
-  const auditionReport = audition?.report;
-  setText("#performanceAbStatus", audition
-    ? audition.mode === "performance"
-      ? `B active · Performance Engine v1 · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max timing ${auditionReport?.metrics?.timing?.maxAbsMs ?? 0} ms`
-      : "A active · Current canonical timing · no performed changes are committed."
-    : "A = current canonical song · B = preview-only performed copy · nothing is committed.");
+  setText("#performanceAbStatus", audition?.mode === "performance"
+    ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+    : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3954,20 +3951,15 @@ async function copyGenerationDebuggerReport() {
 }
 
 async function auditionPerformanceDebugger(mode) {
-  if (!state.song) {
-    showToast("Generate a song before using Performance A/B.");
-    return false;
-  }
+  if (!state.song) return showToast("Generate a song first."), false;
   try {
     await player.auditionPerformanceAB(mode, { humanize: 0.65 });
     renderGenerationDebugger();
-    showToast(mode === "performance"
-      ? "B is playing the preview-only Performance Engine version."
-      : "A is playing the current canonical song.");
+    showToast(mode === "performance" ? "B preview active." : "A current song active.");
     return true;
   } catch (error) {
-    console.error("Performance A/B audition failed", error);
-    showToast("Performance A/B was blocked by its safety checks.");
+    console.error("Performance A/B failed", error);
+    showToast("A/B blocked by safety checks.");
     renderGenerationDebugger();
     return false;
   }
@@ -3976,7 +3968,7 @@ async function auditionPerformanceDebugger(mode) {
 async function endPerformanceDebugger() {
   await player.endPerformanceAB();
   renderGenerationDebugger();
-  showToast("Performance A/B ended. Canonical playback restored.");
+  showToast("A/B ended.");
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -5313,41 +5305,29 @@ export class PreviewPlayer {
     return this.play();
   }
 
-  async auditionPerformanceAB(mode, {
-    humanize = 0.65,
-    startSeconds = null,
-  } = {}) {
-    const canonicalSong = state.song;
-    if (!canonicalSong) return false;
-    if (!["current", "performance"].includes(mode)) {
-      throw new RangeError("Performance A/B mode must be current or performance");
-    }
-
-    const position = Number.isFinite(Number(startSeconds))
-      ? Number(startSeconds)
-      : this.currentSongTime();
-    const safePosition = clamp(position, 0, totalSeconds(canonicalSong));
-
+  async auditionPerformanceAB(mode, { humanize = 0.65, startSeconds } = {}) {
+    const song = state.song;
+    if (!song) return false;
+    const position = clamp(
+      Number.isFinite(Number(startSeconds)) ? Number(startSeconds) : this.currentSongTime(),
+      0,
+      totalSeconds(song),
+    );
     if (mode === "current") {
-      const previousReport = this.performanceAudition?.report ?? null;
-      this.performanceAudition = {
-        mode: "current",
-        humanize: Number(humanize),
-        report: previousReport,
-      };
-      return this.auditionSong(canonicalSong, { startSeconds: safePosition });
+      this.performanceAudition = { mode, report: this.performanceAudition?.report ?? null };
+      return this.auditionSong(song, { startSeconds: position });
     }
-
-    const pair = createPerformanceAuditionSong(canonicalSong, {
+    if (mode !== "performance") throw new RangeError("Unknown A/B mode");
+    const pair = createPerformanceAuditionSong(song, {
       humanize,
-      seed: `${canonicalSong.seed ?? canonicalSong.id ?? "song"}:performance-ab`,
+      seed: `${song.seed ?? song.id ?? "song"}:performance-ab`,
     });
     this.performanceAudition = {
-      mode: "performance",
+      mode,
       humanize: pair.performanceSong.performanceAudition.humanize,
       report: pair.report,
     };
-    return this.auditionSong(pair.performanceSong, { startSeconds: safePosition });
+    return this.auditionSong(pair.performanceSong, { startSeconds: position });
   }
 
   async endPerformanceAB() {
