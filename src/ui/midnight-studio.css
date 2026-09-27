@@ -129,7 +129,7 @@ body:has(#tab-create.is-active) .menu-button b {
 }
 
 /* Create layout */
-#tab-create {
+#tab-create.is-active {
   display: flex !important;
   flex-direction: column !important;
   gap: 12px !important;
@@ -173,25 +173,8 @@ body:has(#tab-create.is-active) .menu-button b {
 }
 
 #tab-create .song-showcase::before {
-  content: "" !important;
-  position: absolute !important;
-  inset: 96px 0 0 !important;
-  width: auto !important;
-  height: auto !important;
-  z-index: 0 !important;
-  background:
-    linear-gradient(180deg, transparent 0%, rgba(8, 9, 13, 0.2) 56%, rgba(8, 9, 13, 0.96) 100%),
-    var(--create-cover-art, url("./assets/brand/icon-512-v2.png")) center top / cover no-repeat !important;
-  opacity: 0.98 !important;
-  transform: scale(1.02) !important;
-  border-radius: 0 !important;
-  will-change: inset, width, height, border-radius, opacity, transform;
-  transition: inset 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              width 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              height 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              border-radius 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              opacity 0.38s ease,
-              transform 0.38s ease !important;
+  content: none !important;
+  display: none !important;
 }
 
 #tab-create .song-showcase::after {
@@ -213,7 +196,26 @@ body:has(#tab-create.is-active) .menu-button b {
 }
 
 #tab-create .showcase-art {
-  display: none !important;
+  display: grid !important;
+  width: min(82vw, 360px) !important;
+  max-width: 360px !important;
+  aspect-ratio: 1 !important;
+  margin: 10px auto 20px !important;
+  border-radius: 24px !important;
+  transform: scale(var(--create-art-scale, 1)) translateZ(0) !important;
+  transform-origin: center center !important;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+  will-change: transform !important;
+  transition: transform 80ms linear, box-shadow 180ms ease !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+#tab-create .showcase-art:focus-visible {
+  outline: 3px solid rgba(255, 46, 77, .72) !important;
+  outline-offset: 4px !important;
 }
 
 #tab-create .showcase-copy {
@@ -325,106 +327,6 @@ body:has(#tab-create.is-active) .menu-button b {
 #tab-create .song-showcase .create-live-controls {
   display: none !important;
 }
-
-/* Scrolled state: compact now-playing header with smooth animated album cover */
-#tab-create.is-scrolled .song-showcase {
-  position: sticky !important;
-  top: 74px !important;
-  z-index: 70 !important;
-  min-height: 72px !important;
-  flex-direction: row !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  padding: 8px 12px 8px 90px !important;
-  margin: 0 0 8px !important;
-  border: 1px solid var(--midnight-border) !important;
-  border-radius: 16px !important;
-  background: rgba(18, 19, 25, 0.94) !important;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42) !important;
-  backdrop-filter: blur(22px) saturate(1.15) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
-}
-
-#tab-create.is-scrolled .song-showcase::before {
-  position: absolute !important;
-  top: 8px !important;
-  left: 10px !important;
-  bottom: auto !important;
-  right: auto !important;
-  width: 68px !important;
-  height: 54px !important;
-  border-radius: 10px !important;
-  background:
-    linear-gradient(180deg, rgba(8, 9, 13, 0.04), rgba(8, 9, 13, 0.24)),
-    var(--create-cover-art, url("./assets/brand/icon-192-v2.png")) center / cover no-repeat !important;
-  opacity: 1 !important;
-  transform: none !important;
-}
-
-#tab-create.is-scrolled .song-showcase::after {
-  opacity: 0 !important;
-}
-
-#tab-create.is-scrolled .title-row h1::before,
-#tab-create.is-scrolled #songSummary,
-#tab-create.is-scrolled #factBars,
-#tab-create.is-scrolled #factDuration,
-#tab-create.is-scrolled #factRhythm {
-  opacity: 0 !important;
-  max-height: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  pointer-events: none !important;
-  overflow: hidden !important;
-  transition: opacity 0.2s ease, max-height 0.3s ease !important;
-}
-
-#tab-create.is-scrolled .title-row h1 {
-  margin: 0 !important;
-  font-size: 1.1rem !important;
-  line-height: 1.15 !important;
-  letter-spacing: -0.03em !important;
-  transition: font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1), margin 0.35s ease !important;
-}
-
-#tab-create.is-scrolled .title-row h1::after {
-  content: none !important;
-}
-
-#tab-create.is-scrolled .song-facts {
-  order: initial !important;
-  display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 4px !important;
-  margin: 4px 0 0 !important;
-  overflow: hidden !important;
-}
-
-#tab-create.is-scrolled .song-facts span {
-  min-height: 18px !important;
-  padding: 2px 6px !important;
-  font-size: 0.6rem !important;
-}
-
-#tab-create.is-scrolled .showcase-actions {
-  margin: 0 !important;
-  flex: 0 0 auto !important;
-}
-
-#tab-create.is-scrolled .showcase-play {
-  width: 50px !important;
-  height: 50px !important;
-  min-height: 50px !important;
-  box-shadow: 0 8px 20px rgba(255, 23, 77, 0.36) !important;
-  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
-}
-
-#tab-create.is-scrolled .showcase-play-icon {
-  border-top-width: 9px !important;
-  border-bottom-width: 9px !important;
-  border-left-width: 14px !important;
-}
-
 
 /* Your songs strip placeholder style from existing sections/cards */
 #tab-create .song-creator-panel::before {
@@ -790,54 +692,29 @@ input[type="range"] {
 }
 
 
-/* ─── MOBILE STABILITY PASS · persistent workspaces + deterministic cover ─── */
+
+
+/* ─── MOBILE UI STABILITY · isolated workspaces + real artwork ─── */
+.tab-panel[hidden],
+.tab-panel[aria-hidden="true"],
+.tab-panel:not(.is-active) {
+  display: none !important;
+}
+
 #tab-create .song-showcase {
+  position: relative !important;
   isolation: isolate !important;
+  justify-content: flex-start !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
-#tab-create .song-showcase::before {
-  inset: auto !important;
-  top: 96px !important;
-  left: 0 !important;
-  right: auto !important;
-  bottom: auto !important;
-  width: 100% !important;
-  height: calc(100% - 96px) !important;
-  opacity: var(--create-cover-opacity, 0.98) !important;
-  transform:
-    translate3d(0, var(--create-cover-lift, 0px), 0)
-    scale(var(--create-cover-scale, 1.02)) !important;
-  transform-origin: 50% 18% !important;
-  backface-visibility: hidden !important;
-  -webkit-backface-visibility: hidden !important;
-  will-change: transform !important;
-  transition:
-    top 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    left 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    border-radius 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    opacity 0.08s linear,
-    transform 0.08s linear !important;
+#tab-create .song-showcase::after {
+  pointer-events: none !important;
 }
 
-#tab-create.is-scrolled .song-showcase::before {
-  top: 8px !important;
-  left: 10px !important;
-  right: auto !important;
-  bottom: auto !important;
-  width: 68px !important;
-  height: 54px !important;
-  opacity: 1 !important;
-  transform: translate3d(0, 0, 0) scale(1) !important;
-}
-
-#tab-create.is-scrolled .showcase-play {
-  transition:
-    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    min-height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
-    box-shadow 0.32s ease !important;
+.create-compact-player {
+  display: none;
 }
 
 @media (max-width: 760px) {
@@ -857,10 +734,10 @@ input[type="range"] {
     padding: 6px !important;
     z-index: 320 !important;
     overflow: visible !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
     border-radius: 18px !important;
-    background: rgba(10, 11, 15, 0.985) !important;
-    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.42) !important;
+    background: rgba(10,11,15,.99) !important;
+    box-shadow: 0 -6px 28px rgba(0,0,0,.42) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     transform: translateZ(0);
@@ -891,8 +768,8 @@ input[type="range"] {
 
   .mobile-dock button.is-active {
     color: #fff !important;
-    background: rgba(255, 46, 77, 0.16) !important;
-    box-shadow: inset 0 0 0 1px rgba(255, 46, 77, 0.3) !important;
+    background: rgba(255,46,77,.16) !important;
+    box-shadow: inset 0 0 0 1px rgba(255,46,77,.30) !important;
   }
 
   .mobile-dock .mobile-play {
@@ -908,21 +785,97 @@ input[type="range"] {
     z-index: 305 !important;
   }
 
-  #tab-create .song-showcase::before {
-    will-change: transform !important;
+  #tab-create .song-showcase {
+    min-height: auto !important;
+    padding: 18px 16px 86px !important;
+    border-radius: 0 0 24px 24px !important;
   }
 
-  #tab-create.is-scrolled .song-showcase {
-    background: rgba(18, 19, 25, 0.99) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+  #tab-create .showcase-art {
+    width: min(88vw, 360px) !important;
+    max-width: 360px !important;
+    margin: 8px auto 18px !important;
+  }
+
+  .create-compact-player {
+    position: fixed;
+    top: calc(58px + env(safe-area-inset-top, 0px));
+    left: 10px;
+    right: 10px;
+    z-index: 315;
+    height: 68px;
+    display: grid;
+    grid-template-columns: 52px minmax(0,1fr) 34px;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 16px;
+    background: rgba(18,19,25,.99);
+    box-shadow: 0 12px 30px rgba(0,0,0,.42);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translate3d(0,-10px,0) scale(.985);
+    transition: opacity 150ms ease, transform 180ms cubic-bezier(.16,1,.3,1), visibility 0s linear 180ms;
+    touch-action: manipulation;
+  }
+
+  #tab-create.is-scrolled .create-compact-player {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate3d(0,0,0) scale(1);
+    transition-delay: 0s;
+  }
+
+  .create-compact-cover {
+    width: 52px;
+    height: 52px;
+    border-radius: 11px;
+    background: var(--create-cover-art, url("./assets/brand/icon-192-v2.png")) center / cover no-repeat;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.09);
+  }
+
+  .create-compact-copy {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .create-compact-copy strong,
+  .create-compact-copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .create-compact-copy strong {
+    color: #fff;
+    font-size: .95rem;
+    line-height: 1.1;
+  }
+
+  .create-compact-copy small {
+    color: rgba(255,255,255,.62);
+    font-size: .68rem;
+    letter-spacing: .05em;
+  }
+
+  .create-compact-play-glyph {
+    width: 0;
+    height: 0;
+    margin-left: 4px;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    border-left: 12px solid #fff;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #tab-create .song-showcase,
-  #tab-create .song-showcase::before,
-  #tab-create .showcase-play {
-    transition-duration: 0.01ms !important;
+  #tab-create .showcase-art,
+  .create-compact-player {
+    transition-duration: .01ms !important;
   }
 }
