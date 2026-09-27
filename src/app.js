@@ -3974,7 +3974,7 @@ async function auditionPerformanceDebugger(mode) {
 }
 
 async function endPerformanceDebugger() {
-  await player.endPerformanceAB({ resume: false });
+  await player.endPerformanceAB();
   renderGenerationDebugger();
   showToast("Performance A/B ended. Canonical playback restored.");
 }
@@ -5350,20 +5350,10 @@ export class PreviewPlayer {
     return this.auditionSong(pair.performanceSong, { startSeconds: safePosition });
   }
 
-  async endPerformanceAB({ resume = false } = {}) {
+  async endPerformanceAB() {
     const position = this.currentSongTime();
     this.performanceAudition = null;
-    const reset = await this.returnToCanonicalSong({
-      positionSeconds: position,
-      resume,
-    });
-    if (!reset && state.song) {
-      this.playbackSong = state.song;
-      this.position = clamp(position, 0, totalSeconds(state.song));
-      updatePlaybackUi(this.position, totalSeconds(state.song), {
-        view: playbackViewForSong(state.song),
-      });
-    }
+    await this.returnToCanonicalSong({ positionSeconds: position, resume: false });
     return true;
   }
 
@@ -6739,7 +6729,7 @@ function toggleFullscreen() {
   $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
   $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
   $("#closeDebugger")?.addEventListener("click", () => {
-    if (player.performanceAudition) void player.endPerformanceAB({ resume: false });
+    if (player.performanceAudition) void player.endPerformanceAB();
     debuggerDialog?.close();
   });
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
@@ -6750,7 +6740,7 @@ function toggleFullscreen() {
   $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
   debuggerDialog?.addEventListener("click", (event) => {
     if (event.target !== debuggerDialog) return;
-    if (player.performanceAudition) void player.endPerformanceAB({ resume: false });
+    if (player.performanceAudition) void player.endPerformanceAB();
     debuggerDialog.close();
   });
 
