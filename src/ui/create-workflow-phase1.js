@@ -225,64 +225,44 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
 
 function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
-  const slot = createPanel.querySelector?.("#createShowcaseSlot");
   const hero = createPanel.querySelector?.("#heroPanel");
-  if (!ownerWindow?.addEventListener || !createPanel?.classList || !slot || !hero || createPanel.dataset.createScrollState === "ready") return;
+  const compact = createPanel.querySelector?.("#compactCreatePlayer");
+  const topbar = rootDocument.querySelector?.(".topbar");
+  if (!ownerWindow?.addEventListener || !createPanel?.classList || !hero || !compact || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
+  createPanel.classList.remove("is-scrolled");
 
-  let isScrolled = false;
+  let compactVisible = false;
   let framePending = false;
-
-  const measureExpandedHeight = () => {
-    if (isScrolled || createPanel.hidden || !createPanel.classList.contains("is-active")) return;
-    const height = Math.ceil(hero.getBoundingClientRect?.().height || hero.offsetHeight || 0);
-    if (height > 0) slot.style.height = `${height}px`;
-  };
 
   const apply = () => {
     framePending = false;
     const active = !createPanel.hidden && createPanel.classList.contains("is-active");
     if (!active) {
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
+      compactVisible = false;
+      createPanel.classList.remove("has-compact-player");
+      compact.setAttribute("aria-hidden", "true");
       return;
     }
 
-    if (!isScrolled) measureExpandedHeight();
+    const heroRect = hero.getBoundingClientRect?.();
+    const topbarBottom = topbar?.getBoundingClientRect?.().bottom || 74;
+    const nextVisible = Boolean(heroRect && heroRect.bottom <= topbarBottom + 12);
+    if (nextVisible === compactVisible) return;
 
-    const documentScroll = Number(
-      rootDocument?.documentElement?.scrollTop
-      || rootDocument?.body?.scrollTop
-      || 0
-    );
-    const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
-    const nextScrolled = isScrolled ? scrollY >= 96 : scrollY > 168;
-    if (nextScrolled === isScrolled) return;
-
-    if (nextScrolled) measureExpandedHeight();
-    isScrolled = nextScrolled;
-    createPanel.classList.toggle("is-scrolled", isScrolled);
-
-    if (!isScrolled) {
-      ownerWindow.requestAnimationFrame?.(measureExpandedHeight);
-    }
+    compactVisible = nextVisible;
+    createPanel.classList.toggle("has-compact-player", compactVisible);
+    compact.setAttribute("aria-hidden", String(!compactVisible));
   };
 
   const schedule = () => {
     if (framePending) return;
     framePending = true;
-    if (typeof ownerWindow.requestAnimationFrame === "function") {
-      ownerWindow.requestAnimationFrame(apply);
-    } else {
-      ownerWindow.setTimeout?.(apply, 16);
-    }
+    if (typeof ownerWindow.requestAnimationFrame === "function") ownerWindow.requestAnimationFrame(apply);
+    else ownerWindow.setTimeout?.(apply, 16);
   };
 
-  if (typeof ownerWindow.requestAnimationFrame === "function") {
-    ownerWindow.requestAnimationFrame(measureExpandedHeight);
-  } else {
-    measureExpandedHeight();
-  }
+  apply();
   ownerWindow.addEventListener("scroll", schedule, { passive: true });
   ownerWindow.addEventListener("resize", schedule, { passive: true });
 }
