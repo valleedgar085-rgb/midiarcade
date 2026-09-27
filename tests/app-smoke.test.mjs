@@ -19,6 +19,7 @@ import { qualityTier } from "../src/ui/copy-catalog.js";
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const performanceAbControlsSource = await readFile(new URL("../src/ui/performance-ab-controls.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
@@ -236,7 +237,9 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     const createMounted = createRuntimeMountedIds.has(id)
       && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
     const appMounted = appRuntimeMountedIds.has(id)
-      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource);
+      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(
+        appSource + "\n" + performanceAbControlsSource,
+      );
     assert.ok(
       createMounted || appMounted,
       `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
