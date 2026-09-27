@@ -788,3 +788,141 @@ button.is-primary {
 input[type="range"] {
   accent-color: #ff2e4d !important;
 }
+
+
+/* ─── MOBILE STABILITY PASS · persistent workspaces + deterministic cover ─── */
+#tab-create .song-showcase {
+  isolation: isolate !important;
+}
+
+#tab-create .song-showcase::before {
+  inset: auto !important;
+  top: 96px !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: calc(100% - 96px) !important;
+  opacity: var(--create-cover-opacity, 0.98) !important;
+  transform:
+    translate3d(0, var(--create-cover-lift, 0px), 0)
+    scale(var(--create-cover-scale, 1.02)) !important;
+  transform-origin: 50% 18% !important;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+  will-change: transform !important;
+  transition:
+    top 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    left 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    border-radius 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.08s linear,
+    transform 0.08s linear !important;
+}
+
+#tab-create.is-scrolled .song-showcase::before {
+  top: 8px !important;
+  left: 10px !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 68px !important;
+  height: 54px !important;
+  opacity: 1 !important;
+  transform: translate3d(0, 0, 0) scale(1) !important;
+}
+
+#tab-create.is-scrolled .showcase-play {
+  transition:
+    width 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    min-height 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.32s ease !important;
+}
+
+@media (max-width: 760px) {
+  .tab-nav-shell {
+    display: none !important;
+  }
+
+  .mobile-dock,
+  body.nav-dock-collapsed .mobile-dock {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: calc(8px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
+    width: auto !important;
+    min-height: 62px !important;
+    padding: 6px !important;
+    z-index: 320 !important;
+    overflow: visible !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    border-radius: 18px !important;
+    background: rgba(10, 11, 15, 0.985) !important;
+    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.42) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    transform: translateZ(0);
+  }
+
+  .mobile-dock-toggle {
+    display: none !important;
+  }
+
+  .mobile-dock button:not(.mobile-dock-toggle),
+  body.nav-dock-collapsed .mobile-dock button:not(.mobile-dock-toggle) {
+    display: flex !important;
+    min-width: 0 !important;
+    min-height: 50px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .mobile-dock button small {
+    display: block !important;
+    overflow: visible !important;
+    color: currentColor !important;
+    font-size: 10px !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+  }
+
+  .mobile-dock button.is-active {
+    color: #fff !important;
+    background: rgba(255, 46, 77, 0.16) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 46, 77, 0.3) !important;
+  }
+
+  .mobile-dock .mobile-play {
+    background: var(--midnight-red, #ff2e4d) !important;
+    color: #fff !important;
+  }
+
+  .tab-panel {
+    padding-bottom: calc(112px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) !important;
+  }
+
+  .mobile-section-jump {
+    z-index: 305 !important;
+  }
+
+  #tab-create .song-showcase::before {
+    will-change: transform !important;
+  }
+
+  #tab-create.is-scrolled .song-showcase {
+    background: rgba(18, 19, 25, 0.99) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tab-create .song-showcase,
+  #tab-create .song-showcase::before,
+  #tab-create .showcase-play {
+    transition-duration: 0.01ms !important;
+  }
+}
