@@ -67,6 +67,7 @@ import {
 } from "./ui/session-preferences.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
+import { ensurePerformanceAbControls } from "./ui/performance-ab-controls.js";
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
@@ -3822,49 +3823,7 @@ function ensureGenerationDebuggerControls() {
     $(".debugger-section-heading", dialog)?.append(refresh);
   }
 
-  if (!$("#performanceAbLab")) {
-    const lab = document.createElement("section");
-    lab.className = "performance-ab-lab";
-    lab.id = "performanceAbLab";
-
-    const copy = document.createElement("div");
-    copy.className = "performance-ab-copy";
-    const eyebrow = document.createElement("small");
-    eyebrow.textContent = "PERFORMANCE A/B";
-    const title = document.createElement("strong");
-    title.textContent = "Compare current timing against Performance Engine v1";
-    const status = document.createElement("p");
-    status.id = "performanceAbStatus";
-    status.textContent = "A = current canonical song · B = preview-only performed copy · nothing is committed.";
-    copy.append(eyebrow, title, status);
-
-    const auditionActions = document.createElement("div");
-    auditionActions.className = "performance-ab-actions";
-    auditionActions.setAttribute("role", "group");
-    auditionActions.setAttribute("aria-label", "Performance A/B audition");
-
-    const current = document.createElement("button");
-    current.className = "small-button";
-    current.id = "performanceAbCurrent";
-    current.type = "button";
-    current.textContent = "A · Current";
-
-    const performed = document.createElement("button");
-    performed.className = "small-button";
-    performed.id = "performanceAbPerformed";
-    performed.type = "button";
-    performed.textContent = "B · Performance";
-
-    const end = document.createElement("button");
-    end.className = "small-button";
-    end.id = "performanceAbEnd";
-    end.type = "button";
-    end.textContent = "End A/B";
-
-    auditionActions.append(current, performed, end);
-    lab.append(copy, auditionActions);
-    $(".debugger-raw", dialog)?.before(lab);
-  }
+  ensurePerformanceAbControls(dialog);
 
   const actions = $(".debugger-actions", dialog);
   if (actions && !$("#copyDebuggerReport")) {
