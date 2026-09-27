@@ -3913,10 +3913,13 @@ function renderGenerationDebugger() {
   }, null, 2);
 }
 
-function openGenerationDebugger() {
-  renderGenerationDebugger();
+async function openGenerationDebugger() {
   const dialog = $("#debuggerDialog");
-  if (dialog && !dialog.open) dialog.showModal();
+  if (!dialog) return;
+  const { ensurePerformancePromotionControls } = await import("./ui/performance-promotion-controls.js");
+  ensurePerformancePromotionControls(dialog);
+  renderGenerationDebugger();
+  if (!dialog.open) dialog.showModal();
 }
 
 function clearGenerationDebugger() {
@@ -6710,8 +6713,8 @@ function toggleFullscreen() {
 
   ensureGenerationDebuggerControls();
   const debuggerDialog = $("#debuggerDialog");
-  $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
-  $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
+  $("#debuggerButton")?.addEventListener("click", () => void openGenerationDebugger());
+  $("#menuItemDebugger")?.addEventListener("click", () => void openGenerationDebugger());
   $("#closeDebugger")?.addEventListener("click", () => {
     if (player.performanceAudition) void player.endPerformanceAB();
     debuggerDialog?.close();
@@ -6719,13 +6722,14 @@ function toggleFullscreen() {
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
-  $("#performanceAbCurrent")?.addEventListener("click", () => void performanceDebuggerAction("audition", "current"));
-  $("#performanceAbPerformed")?.addEventListener("click", () => void performanceDebuggerAction("audition", "performance"));
-  $("#performanceAbValidate")?.addEventListener("click", () => void performanceDebuggerAction("validate"));
-  $("#performanceAbAccept")?.addEventListener("click", () => void performanceDebuggerAction("accept"));
-  $("#performanceAbReject")?.addEventListener("click", () => void performanceDebuggerAction("reject"));
-  $("#performanceAbEnd")?.addEventListener("click", () => void performanceDebuggerAction("end"));
   debuggerDialog?.addEventListener("click", (event) => {
+    const id = event.target?.id;
+    if (id === "performanceAbCurrent") return void performanceDebuggerAction("audition", "current");
+    if (id === "performanceAbPerformed") return void performanceDebuggerAction("audition", "performance");
+    if (id === "performanceAbValidate") return void performanceDebuggerAction("validate");
+    if (id === "performanceAbAccept") return void performanceDebuggerAction("accept");
+    if (id === "performanceAbReject") return void performanceDebuggerAction("reject");
+    if (id === "performanceAbEnd") return void performanceDebuggerAction("end");
     if (event.target !== debuggerDialog) return;
     if (player.performanceAudition) void player.endPerformanceAB();
     debuggerDialog.close();
@@ -6751,7 +6755,7 @@ function toggleFullscreen() {
     if (key === "s") runGeneration("songVariations");
     if (key === "e") exportSong();
     if (key === "f") toggleFullscreen();
-    if (key === "d") openGenerationDebugger();
+    if (key === "d") void openGenerationDebugger();
   });
   document.addEventListener("change", scheduleSessionSave);
   document.addEventListener("visibilitychange", () => {
