@@ -3826,18 +3826,43 @@ function ensureGenerationDebuggerControls() {
     const lab = document.createElement("section");
     lab.className = "performance-ab-lab";
     lab.id = "performanceAbLab";
-    lab.innerHTML = [
-      '<div class="performance-ab-copy">',
-      '<small>PERFORMANCE A/B</small>',
-      '<strong>Compare current timing against Performance Engine v1</strong>',
-      '<p id="performanceAbStatus">A = current canonical song · B = preview-only performed copy · nothing is committed.</p>',
-      '</div>',
-      '<div class="performance-ab-actions" role="group" aria-label="Performance A/B audition">',
-      '<button class="small-button" id="performanceAbCurrent" type="button">A · Current</button>',
-      '<button class="small-button" id="performanceAbPerformed" type="button">B · Performance</button>',
-      '<button class="small-button" id="performanceAbEnd" type="button">End A/B</button>',
-      '</div>',
-    ].join("");
+
+    const copy = document.createElement("div");
+    copy.className = "performance-ab-copy";
+    const eyebrow = document.createElement("small");
+    eyebrow.textContent = "PERFORMANCE A/B";
+    const title = document.createElement("strong");
+    title.textContent = "Compare current timing against Performance Engine v1";
+    const status = document.createElement("p");
+    status.id = "performanceAbStatus";
+    status.textContent = "A = current canonical song · B = preview-only performed copy · nothing is committed.";
+    copy.append(eyebrow, title, status);
+
+    const auditionActions = document.createElement("div");
+    auditionActions.className = "performance-ab-actions";
+    auditionActions.setAttribute("role", "group");
+    auditionActions.setAttribute("aria-label", "Performance A/B audition");
+
+    const current = document.createElement("button");
+    current.className = "small-button";
+    current.id = "performanceAbCurrent";
+    current.type = "button";
+    current.textContent = "A · Current";
+
+    const performed = document.createElement("button");
+    performed.className = "small-button";
+    performed.id = "performanceAbPerformed";
+    performed.type = "button";
+    performed.textContent = "B · Performance";
+
+    const end = document.createElement("button");
+    end.className = "small-button";
+    end.id = "performanceAbEnd";
+    end.type = "button";
+    end.textContent = "End A/B";
+
+    auditionActions.append(current, performed, end);
+    lab.append(copy, auditionActions);
     $(".debugger-raw", dialog)?.before(lab);
   }
 
