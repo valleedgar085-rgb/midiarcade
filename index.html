@@ -855,14 +855,14 @@
       </div>
       <nav class="mobile-dock" id="mobileDock" aria-label="Studio navigation">
         <button class="mobile-dock-toggle" id="mobileDockToggle" type="button" aria-expanded="true" aria-controls="mobileDock" aria-label="Hide workspace navigation" title="Hide navigation"><span aria-hidden="true">⌄</span></button>
-        <button id="mobileCreate" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
-        <button id="mobileArrange" type="button"><span aria-hidden="true">≋</span><small>Shape</small></button>
+        <button id="mobileCreate" data-workspace="create" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
+        <button id="mobileArrange" data-workspace="arrange" type="button"><span aria-hidden="true">≋</span><small>Shape</small></button>
         <button class="mobile-play" id="mobilePlayPause" type="button">
           <svg id="mobilePlayIcon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3" /></svg>
           <small id="mobilePlayText">Play</small>
         </button>
-        <button id="mobileMix" type="button"><span aria-hidden="true">≡</span><small>Mix</small></button>
-        <button id="mobileFinish" type="button"><span aria-hidden="true">⇩</span><small>Finish</small></button>
+        <button id="mobileMix" data-workspace="mix" type="button"><span aria-hidden="true">≡</span><small>Mix</small></button>
+        <button id="mobileFinish" data-workspace="finish" type="button"><span aria-hidden="true">⇩</span><small>Finish</small></button>
       </nav>
     </div>
 
