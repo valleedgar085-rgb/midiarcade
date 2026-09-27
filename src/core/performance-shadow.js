@@ -93,7 +93,7 @@ function nearCollisionCount(events, thresholdBeats = 1 / 960) {
   return collisions;
 }
 
-function orderingInversions(beforeEvents, afterEvents) {
+function orderingInversions(beforeEvents, afterEvents, thresholdBeats = 1 / 960) {
   const afterById = new Map(afterEvents.map((event) => [identity(event), event]));
   const tracks = new Map();
   for (const event of beforeEvents) {
@@ -106,10 +106,21 @@ function orderingInversions(beforeEvents, afterEvents) {
   for (const source of tracks.values()) {
     source.sort((left, right) => performedState(left).startBeat - performedState(right).startBeat);
     for (let index = 1; index < source.length; index += 1) {
+      const sourcePrevious = performedState(source[index - 1]);
+      const sourceCurrent = performedState(source[index]);
+      const originalSeparation = sourceCurrent.startBeat - sourcePrevious.startBeat;
+      // Notes that intentionally share an onset are a chord/stack, not an ordered
+      // sequence. Microtiming may fan that stack out without creating a phrase
+      // inversion, so only evaluate meaningfully separated source onsets.
+      if (originalSeparation <= thresholdBeats) continue;
+
       const previous = afterById.get(identity(source[index - 1]));
       const current = afterById.get(identity(source[index]));
       if (!previous || !current) continue;
-      if (performedState(previous).startBeat > performedState(current).startBeat + 1e-9) {
+      if (
+        performedState(previous).startBeat
+        > performedState(current).startBeat + thresholdBeats
+      ) {
         inversions += 1;
       }
     }
