@@ -229,17 +229,16 @@ function setupCreateScrollState(rootDocument, createPanel) {
   createPanel.dataset.createScrollState = "ready";
 
   let isScrolled = false;
+  let framePending = false;
 
-  const reset = () => {
-    if (!isScrolled && !createPanel.classList.contains("is-scrolled")) return;
-    isScrolled = false;
-    createPanel.classList.remove("is-scrolled");
-  };
-
-  const update = () => {
+  const apply = () => {
+    framePending = false;
     const active = !createPanel.hidden && createPanel.classList.contains("is-active");
     if (!active) {
-      reset();
+      if (isScrolled || createPanel.classList.contains("is-scrolled")) {
+        isScrolled = false;
+        createPanel.classList.remove("is-scrolled");
+      }
       return;
     }
 
@@ -249,25 +248,27 @@ function setupCreateScrollState(rootDocument, createPanel) {
       || 0
     );
     const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
+    const nextScrolled = isScrolled ? scrollY >= 96 : scrollY > 168;
+    if (nextScrolled === isScrolled) return;
 
-    if (!isScrolled && scrollY > 168) {
-      isScrolled = true;
-      createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 96) {
-      reset();
+    isScrolled = nextScrolled;
+    createPanel.classList.toggle("is-scrolled", isScrolled);
+  };
+
+  const schedule = () => {
+    if (framePending) return;
+    framePending = true;
+    if (typeof ownerWindow.requestAnimationFrame === "function") {
+      ownerWindow.requestAnimationFrame(apply);
+    } else {
+      ownerWindow.setTimeout?.(apply, 16);
     }
   };
 
-  update();
-  ownerWindow.addEventListener("scroll", update, { passive: true });
-  ownerWindow.addEventListener("resize", update, { passive: true });
-
-  if (typeof MutationObserver !== "undefined") {
-    const observer = new MutationObserver(update);
-    observer.observe(createPanel, { attributes: true, attributeFilter: ["hidden", "class"] });
-  }
+  apply();
+  ownerWindow.addEventListener("scroll", schedule, { passive: true });
+  ownerWindow.addEventListener("resize", schedule, { passive: true });
 }
-
 export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   if (!rootDocument?.querySelector) return false;
   const createPanel = rootDocument.querySelector("#tab-create");
