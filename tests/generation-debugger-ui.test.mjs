@@ -4,7 +4,6 @@ import fs from "node:fs";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
-const performanceAbControls = fs.readFileSync(new URL("../src/ui/performance-ab-controls.js", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
 test("generation debugger exposes the existing flight recorder without changing engine authority", () => {
@@ -14,11 +13,10 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(app, /function ensureGenerationDebuggerControls\(\)/);
   assert.match(app, /button\.id = "debuggerButton"/);
   assert.match(app, /copy\.id = "copyDebuggerReport"/);
-  assert.match(app, /ensurePerformanceAbControls\(dialog\)/);
-  assert.match(performanceAbControls, /lab\.id = "performanceAbLab"/);
-  assert.match(performanceAbControls, /id="performanceAbCurrent"/);
-  assert.match(performanceAbControls, /id="performanceAbPerformed"/);
-  assert.match(performanceAbControls, /id="performanceAbEnd"/);
+  assert.match(html, /id="performanceAbLab"/);
+  assert.match(html, /id="performanceAbCurrent"/);
+  assert.match(html, /id="performanceAbPerformed"/);
+  assert.match(html, /id="performanceAbEnd"/);
   assert.match(app, /auditionPerformanceAB\(mode/);
   assert.match(app, /createPerformanceAuditionSong\(song/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
