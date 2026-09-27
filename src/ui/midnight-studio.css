@@ -1201,7 +1201,7 @@ main#top {
   width: min(calc(100vw - 24px), 496px) !important;
   min-height: 66px !important;
   display: grid !important;
-  grid-template-columns: 50px minmax(0, 1fr) 44px !important;
+  grid-template-columns: 50px minmax(0, 1fr) !important;
   align-items: center !important;
   gap: 10px !important;
   padding: 8px 10px !important;
@@ -1255,18 +1255,6 @@ main#top {
   color: var(--midnight-muted) !important;
 }
 
-.compact-create-play-button {
-  width: 44px !important;
-  height: 44px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
-  display: grid !important;
-  place-items: center !important;
-  border-radius: 999px !important;
-  background: var(--midnight-red-2) !important;
-  color: #fff !important;
-  box-shadow: none !important;
-}
 
 /* Restore Create controls that still exist in the app contract. */
 #preGenSection .secondary-genre-control {
