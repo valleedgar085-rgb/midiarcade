@@ -227,18 +227,41 @@ function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
   if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
+
   let isScrolled = false;
-  const update = () => {
-    const scrollY = Number(ownerWindow.scrollY || 0);
-    if (!isScrolled && scrollY > 140) {
+  let frame = 0;
+  const apply = () => {
+    frame = 0;
+    const documentScroll = Number(rootDocument?.documentElement?.scrollTop || rootDocument?.body?.scrollTop || 0);
+    const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
+    const viewportHeight = Math.max(480, Number(ownerWindow.innerHeight || 720));
+    const travel = Math.max(190, Math.min(280, viewportHeight * 0.32));
+    const progress = Math.max(0, Math.min(1, (scrollY - 12) / travel));
+
+    createPanel.style?.setProperty?.("--create-scroll-progress", progress.toFixed(3));
+    createPanel.style?.setProperty?.("--create-cover-scale", (1.02 - progress * 0.14).toFixed(3));
+    createPanel.style?.setProperty?.("--create-cover-lift", `${Math.round(progress * -30)}px`);
+    createPanel.style?.setProperty?.("--create-cover-opacity", (0.98 - progress * 0.05).toFixed(3));
+
+    if (!isScrolled && progress >= 0.9) {
       isScrolled = true;
       createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 80) {
+    } else if (isScrolled && progress <= 0.18) {
       isScrolled = false;
       createPanel.classList.remove("is-scrolled");
     }
   };
-  update();
+
+  const update = () => {
+    if (frame) return;
+    if (typeof ownerWindow.requestAnimationFrame === "function") {
+      frame = ownerWindow.requestAnimationFrame(apply);
+    } else {
+      apply();
+    }
+  };
+
+  apply();
   ownerWindow.addEventListener("scroll", update, { passive: true });
   ownerWindow.addEventListener("resize", update, { passive: true });
 }
