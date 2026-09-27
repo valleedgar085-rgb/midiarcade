@@ -100,6 +100,25 @@ test("performance shadow compares note-for-note without changing pitch identity"
   assert.equal(report.technicalSafety.pitchPreserved, true);
 });
 
+test("simultaneous chord stacks are not misclassified as ordering inversions", () => {
+  const song = fixtureSong();
+  song.tracks.push({
+    id: "chords",
+    notes: [
+      { start: 2, duration: 1, pitch: 57, velocity: 76 },
+      { start: 2, duration: 1, pitch: 60, velocity: 74 },
+      { start: 2, duration: 1, pitch: 64, velocity: 78 },
+      { start: 6, duration: 1, pitch: 60, velocity: 80 },
+      { start: 6, duration: 1, pitch: 64, velocity: 79 },
+      { start: 6, duration: 1, pitch: 69, velocity: 81 },
+    ],
+  });
+
+  const report = createPerformanceShadowReport(song, { humanize: 1 });
+  assert.equal(report.metrics.orderingInversions, 0);
+  assert.equal(report.grooveSafety.orderingPreserved, true);
+});
+
 test("zero-humanize shadow reports no musical changes", () => {
   const report = createPerformanceShadowReport(fixtureSong(), { humanize: 0 });
   assert.equal(report.metrics.changedEvents, 0);
