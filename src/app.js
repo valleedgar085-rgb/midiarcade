@@ -1994,8 +1994,12 @@ function renderSongShowcase() {
     cover.dataset.coverStyle = "original";
     const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
     const heroPanel = $("#heroPanel");
-    if (heroPanel) heroPanel.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    const createPanel = $("#tab-create");
+    heroPanel?.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    createPanel?.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
     cover.style.backgroundImage = `url("${coverUrl}")`;
+    const compactCover = $("#createCompactCover");
+    if (compactCover) compactCover.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.setProperty("--cover-hue", coverHue);
     cover.style.setProperty("--cover-hue-2", secondHue);
     cover.style.setProperty("--cover-angle", `${coverAngle}deg`);
@@ -2003,6 +2007,8 @@ function renderSongShowcase() {
     cover.style.setProperty("--cover-x", `${28 + (coverHash % 38)}%`);
     cover.style.setProperty("--cover-y", `${24 + (hashNumber(`${songSeed()}:cover-y`) % 42)}%`);
   }
+  if ($("#createCompactTitle")) $("#createCompactTitle").textContent = title;
+  if ($("#createCompactMeta")) $("#createCompactMeta").textContent = `${songKey()} · ${Math.round(songBpm())} BPM`;
   if ($("#showcaseCoverLabel")) $("#showcaseCoverLabel").textContent = "ORIGINAL COVER";
   const currentRating = state.tasteProfile.songRatings[state.song.id] || "";
   if ($("#tasteRating")) $("#tasteRating").value = currentRating;
@@ -3451,7 +3457,20 @@ export function setNavigationDockCollapsed(collapsed, { announce = false } = {})
 const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
-  onChange(workspace) {
+  onChange(workspace, previousWorkspace) {
+    if (workspace !== "create") {
+      const createPanel = $("#tab-create");
+      createPanel?.classList.remove("is-scrolled");
+      createPanel?.style.setProperty("--create-art-scale", "1");
+      const compactPlayer = $("#createCompactPlayer");
+      if (compactPlayer) {
+        compactPlayer.setAttribute("aria-hidden", "true");
+        compactPlayer.tabIndex = -1;
+      }
+    }
+    if (previousWorkspace !== workspace) {
+      globalThis.window?.scrollTo?.(0, 0);
+    }
     const canonicalWorkspace = workspace !== "arrange";
     const staleAudition = canonicalWorkspace
       && playbackSourceNeedsCanonicalReset(player?.playbackSong, state.song);
@@ -6160,9 +6179,14 @@ const player = new PreviewPlayer();
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
   const showcaseButton = $("#showcasePlayButton");
+  const showcaseArt = $("#showcaseArt");
+  const compactPlayer = $("#createCompactPlayer");
   document.body?.classList.toggle("is-playing", playing);
   hero?.classList.toggle("is-playing", playing);
   showcaseButton?.classList.toggle("is-playing", playing);
+  showcaseArt?.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
+  compactPlayer?.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
+  compactPlayer?.classList.toggle("is-playing", playing);
   if (showcaseButton) {
     showcaseButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
     const label = $("strong", showcaseButton);
@@ -6567,6 +6591,15 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
+  $("#showcaseArt")?.addEventListener("click", () => player.toggle());
+  $("#createCompactPlayer")?.addEventListener("click", () => player.toggle());
+  for (const selector of ["#showcaseArt", "#createCompactPlayer"]) {
+    $(selector)?.addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      void player.toggle();
+    });
+  }
   $("#showcaseArc")?.addEventListener("click", async (event) => {
     const segment = event.target.closest?.("[data-showcase-section]");
     if (!segment || !state.song) return;
