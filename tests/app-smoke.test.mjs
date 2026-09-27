@@ -560,11 +560,14 @@ test("browser app initializes against the engine contract", async () => {
   assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
-  assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
+  assert.match(htmlSource, /id="mobileCreate"[^>]*data-workspace="create"[\s\S]*?id="mobileArrange"[^>]*data-workspace="arrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[^>]*data-workspace="mix"[\s\S]*?id="mobileFinish"[^>]*data-workspace="finish"/, "mobile navigation must bind all four real workspaces around Play");
   assert.match(htmlSource, /id="mobileSectionJump"[\s\S]*?id="mobileSectionJumpList"/, "mobile playback needs a compact live-section surface");
   assert.doesNotMatch(htmlSource, /id="mobileJam"/, "the retired Jam workspace must not remain as a dead mobile action");
   assert.match(cssSource, /\.tab-nav-shell\{[\s\S]*?position:fixed;[\s\S]*?bottom:var\(--transport-h\)/, "desktop workspace navigation must stay docked above transport");
-  assert.match(cssSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)\{display:none\}/, "mobile navigation must collapse without losing its restore handle");
+  assert.match(cssSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)\{display:none\}/, "legacy global collapse behavior remains bounded to the base stylesheet");
+  const midnightSource = await readFile(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
+  assert.match(midnightSource, /@media \(max-width: 760px\)[\s\S]*?\.mobile-dock,[\s\S]*?display:\s*grid\s*!important/, "mobile workspace dock must be explicitly visible on phones and small tablets");
+  assert.match(midnightSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)[\s\S]*?display:\s*flex\s*!important/, "mobile workspace buttons must remain reachable even if the desktop dock was collapsed");
   assert.match(appSource, /function renderMobileSectionJump\(\)[\s\S]*?data-mobile-section/, "live section controls must render from the generated arrangement");
   assert.match(appSource, /export function queueMobileSectionJump[\s\S]*?calculateNextQueuedSection/, "mobile section jumps must use safe musical boundaries");
   assert.equal(app.queueMobileSectionJump("missing-section"), false);
