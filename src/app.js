@@ -3457,7 +3457,8 @@ export function setNavigationDockCollapsed(collapsed, { announce = false } = {})
 const workspaceController = createWorkspaceController({
   root: document,
   initialWorkspace: state.activeWorkspace,
-  onChange(workspace, previousWorkspace) {
+  onChange(workspace) {
+    const previousWorkspace = state.activeWorkspace;
     if (workspace !== "create") {
       const createPanel = $("#tab-create");
       createPanel?.classList.remove("is-scrolled");
