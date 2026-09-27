@@ -6082,7 +6082,7 @@ const player = new PreviewPlayer();
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
   const showcaseButton = $("#showcasePlayButton");
-  const compactButton = $("#compactCreatePlayButton");
+  const compactButton = $("[data-compact-create-play]");
   document.body?.classList.toggle("is-playing", playing);
   hero?.classList.toggle("is-playing", playing);
   showcaseButton?.classList.toggle("is-playing", playing);
@@ -6094,7 +6094,7 @@ function setPlaybackPresentation(playing) {
   if (compactButton) {
     compactButton.classList.toggle("is-playing", playing);
     compactButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
-    const compactIcon = $("#compactCreatePlayIcon");
+    const compactIcon = $(".compact-create-play-icon", compactButton);
     if (compactIcon) compactIcon.textContent = playing ? "Ⅱ" : "▶";
   }
   const mixButton = $("#mixPlayButton");
@@ -6502,7 +6502,7 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
-  $("#compactCreatePlayButton")?.addEventListener("click", () => player.toggle());
+  $("[data-compact-create-play]")?.addEventListener("click", () => player.toggle());
   $("#showcaseArc")?.addEventListener("click", async (event) => {
     const segment = event.target.closest?.("[data-showcase-section]");
     if (!segment || !state.song) return;
