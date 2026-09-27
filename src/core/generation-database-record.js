@@ -273,7 +273,15 @@ export function createGenerationDatabaseRecord({
   const sectionIdBySource = new Map(
     sectionRows.map((section) => [section.source_section_id, section.id]),
   );
-  const musicalEvents = gauntletSong.musicalEvents.map((event, eventIndex) => {
+  const sourceOrderedEvents = [...gauntletSong.musicalEvents].sort((left, right) => (
+    finite(left?.sourceRef?.trackIndex, Number.MAX_SAFE_INTEGER)
+      - finite(right?.sourceRef?.trackIndex, Number.MAX_SAFE_INTEGER)
+    || finite(left?.sourceRef?.noteIndex, Number.MAX_SAFE_INTEGER)
+      - finite(right?.sourceRef?.noteIndex, Number.MAX_SAFE_INTEGER)
+    || finite(left?.time, 0) - finite(right?.time, 0)
+    || String(left?.id ?? "").localeCompare(String(right?.id ?? ""))
+  ));
+  const musicalEvents = sourceOrderedEvents.map((event, eventIndex) => {
     const trackId = trackIdBySource.get(event.trackId)
       ?? `${songId}:${generationRunId}:track:${event.roleId || "unknown"}`;
     return {
