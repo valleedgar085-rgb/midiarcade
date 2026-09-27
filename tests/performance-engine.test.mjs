@@ -107,6 +107,30 @@ test("performance engine preserves pitch, locked events, and song bounds", () =>
   }
 });
 
+test("performance microtiming cannot reorder distinct notes inside a track", () => {
+  const source = Object.freeze({
+    id: "close-note-order",
+    sourceSeed: "close-note-order",
+    totalBeats: 4,
+    intent: Object.freeze({ genre: "loFiHipHop", bpm: 82 }),
+    musicalEvents: Object.freeze([
+      event({ id: "bass-close-a", roleId: "bass", time: 1, duration: 0.25, pitch: 36, velocity: 88, motifId: "bass-run" }),
+      event({ id: "bass-close-b", roleId: "bass", time: 1.0025, duration: 0.25, pitch: 38, velocity: 86, motifId: "bass-run" }),
+      event({ id: "bass-close-c", roleId: "bass", time: 1.006, duration: 0.25, pitch: 40, velocity: 87, motifId: "bass-run" }),
+    ]),
+  });
+
+  for (let index = 0; index < 100; index += 1) {
+    const result = applyPerformanceEngine(source, {
+      humanize: 1,
+      seed: `order-seed-${index}`,
+    });
+    const times = result.events.map((entry) => entry.performed.startBeat);
+    assert.ok(times[0] <= times[1], `seed ${index} reordered first/second bass note`);
+    assert.ok(times[1] <= times[2], `seed ${index} reordered second/third bass note`);
+  }
+});
+
 test("phrase-related notes share structured motion without collapsing to identical values", () => {
   const result = applyPerformanceEngine(song(), { humanize: 1 });
   const leadA = result.events.find((entry) => entry.id === "lead-a");
