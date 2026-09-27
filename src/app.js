@@ -29,6 +29,7 @@ import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -4673,9 +4674,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     );
     const automation = Array.isArray(track.automation) ? track.automation : [];
     return trackNotes(track).map((note) => {
-      const startBeat = Math.max(0, noteStart(note));
-      const durationBeats = Math.max(0.01, noteDuration(note));
-      const phrasePerformance = renderPhrasePerformance(note);
+      const performedNote = resolvePerformedNote(note);
+      const startBeat = Math.max(0, performedNote.start);
+      const durationBeats = Math.max(0.01, performedNote.duration);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
       const baseReverb = clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1);
       const automatedReverb = controllerValueAtBeat(automation, 91, startBeat, baseReverb * 127) / 127;
       const brightnessCc = controllerValueAtBeat(automation, 74, startBeat, 64);
@@ -4693,7 +4695,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const expressionStart = expressionCurve[0]?.value ?? 1;
       const expressionEnd = expressionCurve.at(-1)?.value ?? expressionStart;
       const baseVelocity = clamp(
-        (noteVelocity(note) + phrasePerformance.velocityDelta) * velocityScale,
+        (performedNote.velocity + phrasePerformance.velocityDelta) * velocityScale,
         1,
         127,
       );
@@ -4701,7 +4703,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         id,
         oneShotKitId,
         program: Number(track.program ?? uiSettings.program ?? 0),
-        pitch: canonicalMidiPitch(notePitch(note)),
+        pitch: canonicalMidiPitch(performedNote.pitch),
         velocity: clamp(baseVelocity * expressionStart, 1, 127),
         baseVelocity,
         time: startBeat * secondsPerBeat,
@@ -4717,7 +4719,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * brightnessScale * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
-        articulation: String(note.articulation || "natural"),
+        articulation: String(performedNote.articulation || "natural"),
         glideFromSemitones: Number.isFinite(Number(note.glideFromSemitones)) ? Number(note.glideFromSemitones) : 0,
         glideDuration: Math.max(0, Number(note.glideBeats || 0) * secondsPerBeat),
       };
