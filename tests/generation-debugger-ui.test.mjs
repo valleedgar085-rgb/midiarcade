@@ -14,7 +14,7 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(app, /function ensureGenerationDebuggerControls\(\)/);
   assert.match(app, /button\.id = "debuggerButton"/);
   assert.match(app, /copy\.id = "copyDebuggerReport"/);
-  assert.match(promotionControls, /id="performanceAbLab"/);
+  assert.match(promotionControls, /lab\.id = "performanceAbLab"/);
   assert.match(promotionControls, /id="performanceAbCurrent"/);
   assert.match(promotionControls, /id="performanceAbPerformed"/);
   assert.match(promotionControls, /id="performanceAbValidate"/);
