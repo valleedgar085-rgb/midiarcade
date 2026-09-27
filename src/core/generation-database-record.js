@@ -1,4 +1,5 @@
 import { createProfessionalGenerationGauntletSong } from "./professional-gauntlet-song.js";
+import { createPerformanceShadowReport } from "./performance-shadow.js";
 
 const DB_RECORD_SCHEMA = "midi-arcade/generation-record@1";
 
@@ -302,7 +303,26 @@ export function createGenerationDatabaseRecord({
 
   const songVersionId = `${songId}:version:${generationRunId}`;
   const persistedStages = stageRows(generationRunId, stages, startedStamp);
-  const debuggerEvents = debuggerRows(generationRunId, songId, persistedStages);
+  const performanceShadow = createPerformanceShadowReport(song, {
+    humanize: finite(config?.humanize, 0.65),
+    seed: text(config?.seed ?? song?.seed, generationRunId),
+  });
+  const debuggerEvents = [
+    ...debuggerRows(generationRunId, songId, persistedStages),
+    {
+      generation_run_id: generationRunId,
+      song_id: songId,
+      severity: performanceShadow.safeToAudition ? "info" : "warning",
+      subsystem: "performance-shadow",
+      code: "performance-shadow-v1",
+      message: performanceShadow.safeToAudition
+        ? "Performance shadow comparison passed structural safety checks"
+        : "Performance shadow comparison detected a structural safety risk",
+      context_json: safeJson(performanceShadow),
+      occurred_at: completedStamp ?? startedStamp,
+      stage_order: persistedStages.length,
+    },
+  ];
 
   return Object.freeze({
     schema: DB_RECORD_SCHEMA,
@@ -397,6 +417,7 @@ export function createGenerationDatabaseRecord({
     tracks: Object.freeze(trackRows),
     musicalEventSchema: gauntletSong.musicalEventSchema,
     musicalEvents: Object.freeze(musicalEvents),
+    performanceShadow,
     stages: Object.freeze(persistedStages),
     debuggerEvents: Object.freeze(debuggerEvents),
     qualityEvaluations: Object.freeze(qualityRows(generationRunId, song)),
