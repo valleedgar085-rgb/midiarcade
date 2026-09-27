@@ -573,19 +573,22 @@ test("browser app initializes against the engine contract", async () => {
   assert.match(midnightSource, /\.tab-panel\[hidden\],[\s\S]*?display:\s*none\s*!important/, "inactive workspaces must be CSS-isolated even against theme overrides");
 
   elementFor("#mobileArrange").dispatch("click");
-  assert.equal(app.getAppStateSnapshot().activeWorkspace, "arrange");
+  assert.equal(elementFor("#mobileArrange").getAttribute("aria-selected"), "true");
   assert.equal(elementFor("#tab-create").hidden, true, "Create must disappear when Shape is active");
   assert.equal(elementFor("#tab-create").getAttribute("aria-hidden"), "true");
   assert.equal(elementFor("#tab-arrange").hidden, false);
   elementFor("#mobileMix").dispatch("click");
-  assert.equal(app.getAppStateSnapshot().activeWorkspace, "mix");
+  assert.equal(elementFor("#mobileMix").getAttribute("aria-selected"), "true");
   assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Mix is active");
+  assert.equal(elementFor("#tab-mix").hidden, false);
   elementFor("#mobileFinish").dispatch("click");
-  assert.equal(app.getAppStateSnapshot().activeWorkspace, "finish");
+  assert.equal(elementFor("#mobileFinish").getAttribute("aria-selected"), "true");
   assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Finish is active");
+  assert.equal(elementFor("#tab-finish").hidden, false);
   elementFor("#mobileCreate").dispatch("click");
-  assert.equal(app.getAppStateSnapshot().activeWorkspace, "create");
+  assert.equal(elementFor("#mobileCreate").getAttribute("aria-selected"), "true");
   assert.equal(elementFor("#tab-create").hidden, false);
+  assert.equal(elementFor("#tab-create").getAttribute("aria-hidden"), "false");
   assert.match(appSource, /function renderMobileSectionJump\(\)[\s\S]*?data-mobile-section/, "live section controls must render from the generated arrangement");
   assert.match(appSource, /export function queueMobileSectionJump[\s\S]*?calculateNextQueuedSection/, "mobile section jumps must use safe musical boundaries");
   assert.equal(app.queueMobileSectionJump("missing-section"), false);
