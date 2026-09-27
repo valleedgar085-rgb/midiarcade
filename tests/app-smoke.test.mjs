@@ -19,6 +19,7 @@ import { qualityTier } from "../src/ui/copy-catalog.js";
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const performancePromotionControlsSource = await readFile(new URL("../src/ui/performance-promotion-controls.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
@@ -226,13 +227,19 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "refreshDebugger",
     "copyDebuggerReport",
     "clearDebuggerHistory",
+    "performanceAbStatus",
+    "performanceAbAccept",
+    "performanceAbReject",
   ]);
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
     const createMounted = createRuntimeMountedIds.has(id)
       && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
     const appMounted = appRuntimeMountedIds.has(id)
-      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource);
+      && (
+        new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource)
+        || new RegExp(`id=["']${id}["']`).test(performancePromotionControlsSource)
+      );
     assert.ok(
       createMounted || appMounted,
       `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
@@ -241,7 +248,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
   assert.deepEqual(
     [...appRuntimeMountedIds],
-    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory"],
+    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory", "performanceAbStatus", "performanceAbAccept", "performanceAbReject"],
     "app runtime selector exceptions must remain narrow and explicit",
   );
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
