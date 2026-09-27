@@ -131,19 +131,21 @@ test("Create-specific CSS stays outside the protected global stylesheet budget a
 });
 
 
-test("Create scroll treatment uses continuous progress before compacting the hero", () => {
-  assert.match(presentation, /--create-scroll-progress/);
-  assert.match(presentation, /--create-cover-scale/);
-  assert.match(presentation, /--create-cover-lift/);
+test("Create scroll treatment only transforms the real artwork and toggles a separate compact player", () => {
+  assert.match(presentation, /--create-art-scale/);
   assert.match(presentation, /requestAnimationFrame/);
-  assert.match(presentation, /progress >= 0\.9/);
-  assert.match(presentation, /progress <= 0\.18/);
+  assert.match(presentation, /scrollY > 132/);
+  assert.match(presentation, /scrollY > 72/);
+  assert.match(presentation, /#createCompactPlayer/);
+  assert.doesNotMatch(presentation, /--create-cover-lift/);
+  assert.doesNotMatch(presentation, /--create-cover-opacity/);
 });
 
-test("mobile Create hero keeps one cover element alive while transitioning to compact mode", () => {
+test("mobile Create uses the real album art and a non-layout-changing compact player", () => {
   const midnight = fs.readFileSync(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
-  assert.match(midnight, /#tab-create \.song-showcase::before\s*\{[\s\S]*?top:\s*96px[\s\S]*?width:\s*100%[\s\S]*?height:\s*calc\(100% - 96px\)/);
-  assert.match(midnight, /#tab-create\.is-scrolled \.song-showcase::before\s*\{[\s\S]*?width:\s*68px[\s\S]*?height:\s*54px/);
-  assert.match(midnight, /var\(--create-cover-scale/);
-  assert.doesNotMatch(midnight, /#tab-create\.is-scrolled \.song-showcase::before[\s\S]{0,500}?opacity:\s*0\s*!important/);
+  assert.match(midnight, /#tab-create \.song-showcase::before\s*\{[\s\S]*?content:\s*none\s*!important/);
+  assert.match(midnight, /#tab-create \.showcase-art\s*\{[\s\S]*?display:\s*grid\s*!important[\s\S]*?var\(--create-art-scale/);
+  assert.match(midnight, /\.create-compact-player\s*\{[\s\S]*?position:\s*fixed[\s\S]*?opacity:\s*0/);
+  assert.match(midnight, /#tab-create\.is-scrolled \.create-compact-player\s*\{[\s\S]*?opacity:\s*1[\s\S]*?pointer-events:\s*auto/);
+  assert.doesNotMatch(midnight, /#tab-create\.is-scrolled \.song-showcase\s*\{[\s\S]{0,600}?min-height:\s*72px/);
 });
