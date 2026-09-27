@@ -237,8 +237,9 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     const createMounted = createRuntimeMountedIds.has(id)
       && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
     const appMounted = appRuntimeMountedIds.has(id)
-      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(
-        appSource + "\n" + performanceAbControlsSource,
+      && (
+        new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource + "\n" + performanceAbControlsSource)
+        || new RegExp(`id=["']${id}["']`).test(performanceAbControlsSource)
       );
     assert.ok(
       createMounted || appMounted,
