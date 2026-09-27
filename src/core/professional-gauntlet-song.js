@@ -1,5 +1,10 @@
 import { cloneValue } from "./clone-value.js";
 import { canonicalMidiPitch } from "./pitch-contract.js";
+import {
+  CANONICAL_MUSICAL_EVENT_SCHEMA,
+  createCanonicalMusicalEvent,
+  validateCanonicalMusicalEvent,
+} from "./canonical-musical-event.js";
 
 export const PROFESSIONAL_GAUNTLET_ROLE_IDS = Object.freeze([
   "drums",
@@ -303,7 +308,7 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
       const harmony = activeHarmony(harmonyTimeline, time);
       const motif = eventMotifId(note, roleId, section, time, beatsPerBar);
       const phraseRole = eventPhraseRole(note, roleId, section);
-      events.push(Object.freeze({
+      events.push(createCanonicalMusicalEvent({
         id: `${trackId || roleId}:${noteIndex}:${time}`,
         trackId,
         roleId,
@@ -326,6 +331,7 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
         phraseRole: phraseRole.value,
         phraseRoleSource: phraseRole.source,
         articulation: inferredArticulation(note),
+        note,
       }));
     }
   }
@@ -386,6 +392,7 @@ export function createProfessionalGenerationGauntletSong(song, {
     grooveTimeline,
     sections,
     instrumentRoles,
+    musicalEventSchema: CANONICAL_MUSICAL_EVENT_SCHEMA,
     musicalEvents,
   });
 }
@@ -417,8 +424,10 @@ export function validateProfessionalGenerationGauntletSong(gauntletSong) {
       && Array.isArray(gauntletSong.grooveTimeline)
       && Array.isArray(gauntletSong.sections)
       && gauntletSong.instrumentRoles
+      && gauntletSong.musicalEventSchema === CANONICAL_MUSICAL_EVENT_SCHEMA
       && Array.isArray(gauntletSong.musicalEvents)
     ),
+    canonicalEventContract: events.every((event) => validateCanonicalMusicalEvent(event).passed),
     roleAuthorityComplete: PROFESSIONAL_GAUNTLET_ROLE_IDS.every((roleId) => roles[roleId]?.id === roleId),
     timelinesOrdered: isSortedByTime(harmony) && isSortedByTime(groove) && isSortedByTime(sections) && isSortedByTime(events),
     eventTimingFinite: events.every((event) => (
