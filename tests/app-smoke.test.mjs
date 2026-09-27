@@ -568,6 +568,24 @@ test("browser app initializes against the engine contract", async () => {
   const midnightSource = await readFile(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
   assert.match(midnightSource, /@media \(max-width: 760px\)[\s\S]*?\.mobile-dock,[\s\S]*?display:\s*grid\s*!important/, "mobile workspace dock must be explicitly visible on phones and small tablets");
   assert.match(midnightSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)[\s\S]*?display:\s*flex\s*!important/, "mobile workspace buttons must remain reachable even if the desktop dock was collapsed");
+  assert.match(midnightSource, /#tab-create\.is-active\s*\{[\s\S]*?display:\s*flex\s*!important/, "Create may only force display while it is the active workspace");
+  assert.doesNotMatch(midnightSource, /(?:^|\n)#tab-create\s*\{[\s\S]{0,120}?display:\s*flex\s*!important/, "inactive Create must never override the workspace hidden state");
+  assert.match(midnightSource, /\.tab-panel\[hidden\],[\s\S]*?display:\s*none\s*!important/, "inactive workspaces must be CSS-isolated even against theme overrides");
+
+  elementFor("#mobileArrange").dispatch("click");
+  assert.equal(app.getAppStateSnapshot().activeWorkspace, "arrange");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must disappear when Shape is active");
+  assert.equal(elementFor("#tab-create").getAttribute("aria-hidden"), "true");
+  assert.equal(elementFor("#tab-arrange").hidden, false);
+  elementFor("#mobileMix").dispatch("click");
+  assert.equal(app.getAppStateSnapshot().activeWorkspace, "mix");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Mix is active");
+  elementFor("#mobileFinish").dispatch("click");
+  assert.equal(app.getAppStateSnapshot().activeWorkspace, "finish");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Finish is active");
+  elementFor("#mobileCreate").dispatch("click");
+  assert.equal(app.getAppStateSnapshot().activeWorkspace, "create");
+  assert.equal(elementFor("#tab-create").hidden, false);
   assert.match(appSource, /function renderMobileSectionJump\(\)[\s\S]*?data-mobile-section/, "live section controls must render from the generated arrangement");
   assert.match(appSource, /export function queueMobileSectionJump[\s\S]*?calculateNextQueuedSection/, "mobile section jumps must use safe musical boundaries");
   assert.equal(app.queueMobileSectionJump("missing-section"), false);
