@@ -20,7 +20,7 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(performanceAbControls, /id="performanceAbPerformed"/);
   assert.match(performanceAbControls, /id="performanceAbEnd"/);
   assert.match(app, /auditionPerformanceAB\(mode/);
-  assert.match(app, /createPerformanceAuditionSong\(canonicalSong/);
+  assert.match(app, /createPerformanceAuditionSong\(song/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
   assert.match(app, /generationExecutor\.clearDiagnostics\(\)/);
   assert.match(app, /function openGenerationDebugger\(\)/);
