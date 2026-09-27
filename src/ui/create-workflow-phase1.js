@@ -225,25 +225,47 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
 
 function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
-  if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
+  const hero = createPanel.querySelector?.("#heroPanel");
+  const compact = createPanel.querySelector?.("#compactCreatePlayer");
+  const topbar = rootDocument.querySelector?.(".topbar");
+  if (!ownerWindow?.addEventListener || !createPanel?.classList || !hero || !compact || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
-  let isScrolled = false;
-  const update = () => {
-    const scrollY = Number(ownerWindow.scrollY || 0);
-    if (!isScrolled && scrollY > 140) {
-      isScrolled = true;
-      createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 80) {
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
+  createPanel.classList.remove("is-scrolled");
+
+  let compactVisible = false;
+  let framePending = false;
+
+  const apply = () => {
+    framePending = false;
+    const active = !createPanel.hidden && createPanel.classList.contains("is-active");
+    if (!active) {
+      compactVisible = false;
+      createPanel.classList.remove("has-compact-player");
+      compact.setAttribute("aria-hidden", "true");
+      return;
     }
+
+    const heroRect = hero.getBoundingClientRect?.();
+    const topbarBottom = topbar?.getBoundingClientRect?.().bottom || 74;
+    const nextVisible = Boolean(heroRect && heroRect.bottom <= topbarBottom + 12);
+    if (nextVisible === compactVisible) return;
+
+    compactVisible = nextVisible;
+    createPanel.classList.toggle("has-compact-player", compactVisible);
+    compact.setAttribute("aria-hidden", String(!compactVisible));
   };
-  update();
-  ownerWindow.addEventListener("scroll", update, { passive: true });
-  ownerWindow.addEventListener("resize", update, { passive: true });
+
+  const schedule = () => {
+    if (framePending) return;
+    framePending = true;
+    if (typeof ownerWindow.requestAnimationFrame === "function") ownerWindow.requestAnimationFrame(apply);
+    else ownerWindow.setTimeout?.(apply, 16);
+  };
+
+  apply();
+  ownerWindow.addEventListener("scroll", schedule, { passive: true });
+  ownerWindow.addEventListener("resize", schedule, { passive: true });
 }
-
-
 export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   if (!rootDocument?.querySelector) return false;
   const createPanel = rootDocument.querySelector("#tab-create");
