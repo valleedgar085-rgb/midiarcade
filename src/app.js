@@ -30,6 +30,7 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
+import { createPerformanceAuditionSong } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -3821,6 +3822,25 @@ function ensureGenerationDebuggerControls() {
     $(".debugger-section-heading", dialog)?.append(refresh);
   }
 
+  if (!$("#performanceAbLab")) {
+    const lab = document.createElement("section");
+    lab.className = "performance-ab-lab";
+    lab.id = "performanceAbLab";
+    lab.innerHTML = [
+      '<div class="performance-ab-copy">',
+      '<small>PERFORMANCE A/B</small>',
+      '<strong>Compare current timing against Performance Engine v1</strong>',
+      '<p id="performanceAbStatus">A = current canonical song · B = preview-only performed copy · nothing is committed.</p>',
+      '</div>',
+      '<div class="performance-ab-actions" role="group" aria-label="Performance A/B audition">',
+      '<button class="small-button" id="performanceAbCurrent" type="button">A · Current</button>',
+      '<button class="small-button" id="performanceAbPerformed" type="button">B · Performance</button>',
+      '<button class="small-button" id="performanceAbEnd" type="button">End A/B</button>',
+      '</div>',
+    ].join("");
+    $(".debugger-raw", dialog)?.before(lab);
+  }
+
   const actions = $(".debugger-actions", dialog);
   if (actions && !$("#copyDebuggerReport")) {
     const copy = document.createElement("button");
@@ -3863,6 +3883,13 @@ function renderGenerationDebugger() {
     : "Score and seed will appear after generation.");
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
+  const audition = player.performanceAudition;
+  const auditionReport = audition?.report;
+  setText("#performanceAbStatus", audition
+    ? audition.mode === "performance"
+      ? `B active · Performance Engine v1 · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max timing ${auditionReport?.metrics?.timing?.maxAbsMs ?? 0} ms`
+      : "A active · Current canonical timing · no performed changes are committed."
+    : "A = current canonical song · B = preview-only performed copy · nothing is committed.");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3939,6 +3966,32 @@ async function copyGenerationDebuggerReport() {
     console.warn("Could not copy debugger report", error);
     showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
   }
+}
+
+async function auditionPerformanceDebugger(mode) {
+  if (!state.song) {
+    showToast("Generate a song before using Performance A/B.");
+    return false;
+  }
+  try {
+    await player.auditionPerformanceAB(mode, { humanize: 0.65 });
+    renderGenerationDebugger();
+    showToast(mode === "performance"
+      ? "B is playing the preview-only Performance Engine version."
+      : "A is playing the current canonical song.");
+    return true;
+  } catch (error) {
+    console.error("Performance A/B audition failed", error);
+    showToast("Performance A/B was blocked by its safety checks.");
+    renderGenerationDebugger();
+    return false;
+  }
+}
+
+async function endPerformanceDebugger() {
+  await player.endPerformanceAB({ resume: false });
+  renderGenerationDebugger();
+  showToast("Performance A/B ended. Canonical playback restored.");
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -4957,6 +5010,7 @@ export class PreviewPlayer {
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
     this.playbackSong = null;
+    this.performanceAudition = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
   }
@@ -5269,6 +5323,60 @@ export class PreviewPlayer {
     this.playbackSong = song;
     this.position = clamp(Number(startSeconds) || 0, 0, totalSeconds(song));
     return this.play();
+  }
+
+  async auditionPerformanceAB(mode, {
+    humanize = 0.65,
+    startSeconds = null,
+  } = {}) {
+    const canonicalSong = state.song;
+    if (!canonicalSong) return false;
+    if (!["current", "performance"].includes(mode)) {
+      throw new RangeError("Performance A/B mode must be current or performance");
+    }
+
+    const position = Number.isFinite(Number(startSeconds))
+      ? Number(startSeconds)
+      : this.currentSongTime();
+    const safePosition = clamp(position, 0, totalSeconds(canonicalSong));
+
+    if (mode === "current") {
+      const previousReport = this.performanceAudition?.report ?? null;
+      this.performanceAudition = {
+        mode: "current",
+        humanize: Number(humanize),
+        report: previousReport,
+      };
+      return this.auditionSong(canonicalSong, { startSeconds: safePosition });
+    }
+
+    const pair = createPerformanceAuditionSong(canonicalSong, {
+      humanize,
+      seed: `${canonicalSong.seed ?? canonicalSong.id ?? "song"}:performance-ab`,
+    });
+    this.performanceAudition = {
+      mode: "performance",
+      humanize: pair.performanceSong.performanceAudition.humanize,
+      report: pair.report,
+    };
+    return this.auditionSong(pair.performanceSong, { startSeconds: safePosition });
+  }
+
+  async endPerformanceAB({ resume = false } = {}) {
+    const position = this.currentSongTime();
+    this.performanceAudition = null;
+    const reset = await this.returnToCanonicalSong({
+      positionSeconds: position,
+      resume,
+    });
+    if (!reset && state.song) {
+      this.playbackSong = state.song;
+      this.position = clamp(position, 0, totalSeconds(state.song));
+      updatePlaybackUi(this.position, totalSeconds(state.song), {
+        view: playbackViewForSong(state.song),
+      });
+    }
+    return true;
   }
 
   async play() {
@@ -6646,6 +6754,9 @@ function toggleFullscreen() {
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
+  $("#performanceAbCurrent")?.addEventListener("click", () => void auditionPerformanceDebugger("current"));
+  $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
+  $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
   debuggerDialog?.addEventListener("click", (event) => {
     if (event.target === debuggerDialog) debuggerDialog.close();
   });
