@@ -3958,8 +3958,8 @@ async function auditionPerformanceDebugger(mode) {
     showToast(mode === "performance" ? "B preview active." : "A current song active.");
     return true;
   } catch (error) {
-    console.error("Performance A/B failed", error);
-    showToast("A/B blocked by safety checks.");
+    console.error("A/B failed", error);
+    showToast("A/B blocked.");
     renderGenerationDebugger();
     return false;
   }
@@ -3968,7 +3968,6 @@ async function auditionPerformanceDebugger(mode) {
 async function endPerformanceDebugger() {
   await player.endPerformanceAB();
   renderGenerationDebugger();
-  showToast("A/B ended.");
 }
 
 function chooseNewGenrePrograms(seed) {
