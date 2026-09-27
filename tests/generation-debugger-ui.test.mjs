@@ -16,9 +16,9 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(app, /copy\.id = "copyDebuggerReport"/);
   assert.match(app, /ensurePerformanceAbControls\(dialog\)/);
   assert.match(performanceAbControls, /lab\.id = "performanceAbLab"/);
-  assert.match(performanceAbControls, /current\.id = "performanceAbCurrent"/);
-  assert.match(performanceAbControls, /performed\.id = "performanceAbPerformed"/);
-  assert.match(performanceAbControls, /end\.id = "performanceAbEnd"/);
+  assert.match(performanceAbControls, /id="performanceAbCurrent"/);
+  assert.match(performanceAbControls, /id="performanceAbPerformed"/);
+  assert.match(performanceAbControls, /id="performanceAbEnd"/);
   assert.match(app, /auditionPerformanceAB\(mode/);
   assert.match(app, /createPerformanceAuditionSong\(canonicalSong/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
