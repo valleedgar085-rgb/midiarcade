@@ -53,6 +53,8 @@ export function createCanonicalMusicalEvent({
   phraseRole,
   phraseRoleSource = "role",
   articulation = "normal",
+  sourceTrackIndex = null,
+  sourceNoteIndex = null,
   note = null,
 } = {}) {
   const performedStart = round(Math.max(0, finite(time, 0)));
@@ -102,6 +104,16 @@ export function createCanonicalMusicalEvent({
     "harmonyEventId",
   ], chordContext?.id ?? null);
 
+  const sourceRef = (
+    Number.isInteger(sourceTrackIndex) && sourceTrackIndex >= 0
+    && Number.isInteger(sourceNoteIndex) && sourceNoteIndex >= 0
+  )
+    ? Object.freeze({
+      trackIndex: sourceTrackIndex,
+      noteIndex: sourceNoteIndex,
+    })
+    : null;
+
   const canonical = Object.freeze({
     startBeat: round(Math.max(0, canonicalStart.value)),
     durationBeats: round(Math.max(0, canonicalDuration.value)),
@@ -144,6 +156,7 @@ export function createCanonicalMusicalEvent({
     trackId: String(trackId ?? ""),
     roleId: String(roleId ?? ""),
     sectionId: sectionId == null ? null : String(sectionId),
+    sourceRef,
 
     // Compatibility aliases used by the existing Gauntlet and diagnostics.
     time: performed.startBeat,
@@ -181,6 +194,12 @@ export function validateCanonicalMusicalEvent(event) {
   if (!String(event.id ?? "").trim()) issues.push("id");
   if (!String(event.trackId ?? "").trim()) issues.push("trackId");
   if (!String(event.roleId ?? "").trim()) issues.push("roleId");
+  if (event.sourceRef != null && (
+    !Number.isInteger(event.sourceRef?.trackIndex)
+    || event.sourceRef.trackIndex < 0
+    || !Number.isInteger(event.sourceRef?.noteIndex)
+    || event.sourceRef.noteIndex < 0
+  )) issues.push("sourceRef");
 
   const canonical = event.canonical ?? {};
   const performed = event.performed ?? {};
