@@ -312,12 +312,14 @@ export function createGenerationDatabaseRecord({
     {
       generation_run_id: generationRunId,
       song_id: songId,
-      severity: performanceShadow.safeToAudition ? "info" : "warning",
+      severity: performanceShadow.promotionCandidate ? "info" : "warning",
       subsystem: "performance-shadow",
       code: "performance-shadow-v1",
-      message: performanceShadow.safeToAudition
-        ? "Performance shadow comparison passed structural safety checks"
-        : "Performance shadow comparison detected a structural safety risk",
+      message: !performanceShadow.safeToAudition
+        ? "Performance shadow comparison detected a technical safety risk"
+        : performanceShadow.promotionCandidate
+          ? "Performance shadow comparison passed technical and groove safety checks"
+          : "Performance shadow comparison is technically safe but needs groove review",
       context_json: safeJson(performanceShadow),
       occurred_at: completedStamp ?? startedStamp,
       stage_order: persistedStages.length,
