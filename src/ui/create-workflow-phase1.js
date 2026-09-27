@@ -225,22 +225,30 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
 
 function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
-  if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
+  const slot = createPanel.querySelector?.("#createShowcaseSlot");
+  const hero = createPanel.querySelector?.("#heroPanel");
+  if (!ownerWindow?.addEventListener || !createPanel?.classList || !slot || !hero || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
 
   let isScrolled = false;
   let framePending = false;
 
+  const measureExpandedHeight = () => {
+    if (isScrolled || createPanel.hidden || !createPanel.classList.contains("is-active")) return;
+    const height = Math.ceil(hero.getBoundingClientRect?.().height || hero.offsetHeight || 0);
+    if (height > 0) slot.style.height = `${height}px`;
+  };
+
   const apply = () => {
     framePending = false;
     const active = !createPanel.hidden && createPanel.classList.contains("is-active");
     if (!active) {
-      if (isScrolled || createPanel.classList.contains("is-scrolled")) {
-        isScrolled = false;
-        createPanel.classList.remove("is-scrolled");
-      }
+      isScrolled = false;
+      createPanel.classList.remove("is-scrolled");
       return;
     }
+
+    if (!isScrolled) measureExpandedHeight();
 
     const documentScroll = Number(
       rootDocument?.documentElement?.scrollTop
@@ -251,8 +259,13 @@ function setupCreateScrollState(rootDocument, createPanel) {
     const nextScrolled = isScrolled ? scrollY >= 96 : scrollY > 168;
     if (nextScrolled === isScrolled) return;
 
+    if (nextScrolled) measureExpandedHeight();
     isScrolled = nextScrolled;
     createPanel.classList.toggle("is-scrolled", isScrolled);
+
+    if (!isScrolled) {
+      ownerWindow.requestAnimationFrame?.(measureExpandedHeight);
+    }
   };
 
   const schedule = () => {
@@ -265,7 +278,11 @@ function setupCreateScrollState(rootDocument, createPanel) {
     }
   };
 
-  apply();
+  if (typeof ownerWindow.requestAnimationFrame === "function") {
+    ownerWindow.requestAnimationFrame(measureExpandedHeight);
+  } else {
+    measureExpandedHeight();
+  }
   ownerWindow.addEventListener("scroll", schedule, { passive: true });
   ownerWindow.addEventListener("resize", schedule, { passive: true });
 }
