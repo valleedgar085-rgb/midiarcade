@@ -297,7 +297,7 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
   const beatsPerBar = beatsPerBarOf(song);
   const events = [];
 
-  for (const track of tracks) {
+  for (const [trackIndex, track] of tracks.entries()) {
     const trackId = normalizedTrackId(track);
     const roleId = normalizedRoleId(track);
     for (const [noteIndex, note] of (track?.notes ?? []).entries()) {
@@ -331,6 +331,8 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
         phraseRole: phraseRole.value,
         phraseRoleSource: phraseRole.source,
         articulation: inferredArticulation(note),
+        sourceTrackIndex: trackIndex,
+        sourceNoteIndex: noteIndex,
         note,
       }));
     }
