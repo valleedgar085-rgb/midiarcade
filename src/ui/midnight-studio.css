@@ -1126,3 +1126,52 @@ main#top {
     width: min(calc(100vw - 36px), 330px) !important;
   }
 }
+
+
+/* CREATE SCROLL ANCHOR V1 · compact player must never change document height */
+#createShowcaseSlot {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+#tab-create:not(.is-scrolled) #heroPanel {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+}
+
+#tab-create.is-scrolled #heroPanel {
+  position: fixed !important;
+  top: calc(74px + env(safe-area-inset-top, 0px)) !important;
+  left: max(12px, calc((100vw - var(--studio-frame-width)) / 2 + 12px)) !important;
+  right: auto !important;
+  width: min(calc(100vw - 24px), 496px) !important;
+  max-width: 496px !important;
+  z-index: 90 !important;
+  margin: 0 !important;
+  transform: none !important;
+}
+
+/* The slot keeps the expanded hero height while the compact player is fixed.
+   This prevents Android WebView scroll anchoring from jumping back upward. */
+#tab-create.is-scrolled #createShowcaseSlot {
+  min-height: 1px !important;
+}
+
+@media (max-width: 420px) {
+  #tab-create.is-scrolled #heroPanel {
+    left: 10px !important;
+    width: calc(100vw - 20px) !important;
+  }
+}
+
+@media (max-width: 350px) {
+  #tab-create.is-scrolled #heroPanel {
+    left: 8px !important;
+    width: calc(100vw - 16px) !important;
+  }
+}
