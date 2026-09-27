@@ -82,6 +82,66 @@ function correlatedPhraseKey(event) {
   ].join("|");
 }
 
+function orderBoundsForEvents(events, totalBeats) {
+  const groups = new Map();
+  for (const event of events) {
+    const trackId = String(event?.trackId ?? event?.roleId ?? "track");
+    if (!groups.has(trackId)) groups.set(trackId, []);
+    groups.get(trackId).push(event);
+  }
+
+  const bounds = new Map();
+  const tieTolerance = 1e-9;
+  const guard = 1 / 1920;
+  const songEnd = Math.max(0, totalBeats - 1 / 960);
+
+  for (const trackEvents of groups.values()) {
+    const ordered = [...trackEvents].sort((left, right) => {
+      const timeDelta = finite(left?.canonical?.startBeat, left?.time)
+        - finite(right?.canonical?.startBeat, right?.time);
+      return timeDelta || String(left?.id ?? "").localeCompare(String(right?.id ?? ""));
+    });
+
+    for (let index = 0; index < ordered.length; index += 1) {
+      const event = ordered[index];
+      const start = finite(event?.canonical?.startBeat, event?.time);
+      let previousStart = null;
+      let nextStart = null;
+
+      for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+        const candidate = finite(ordered[cursor]?.canonical?.startBeat, ordered[cursor]?.time);
+        if (start - candidate > tieTolerance) {
+          previousStart = candidate;
+          break;
+        }
+      }
+      for (let cursor = index + 1; cursor < ordered.length; cursor += 1) {
+        const candidate = finite(ordered[cursor]?.canonical?.startBeat, ordered[cursor]?.time);
+        if (candidate - start > tieTolerance) {
+          nextStart = candidate;
+          break;
+        }
+      }
+
+      const lowerMidpoint = previousStart == null ? 0 : (previousStart + start) / 2;
+      const upperMidpoint = nextStart == null ? songEnd : (start + nextStart) / 2;
+      const minStart = previousStart == null
+        ? 0
+        : Math.min(start, lowerMidpoint + guard);
+      const maxStart = nextStart == null
+        ? songEnd
+        : Math.max(start, upperMidpoint - guard);
+
+      bounds.set(String(event?.id ?? ""), Object.freeze({
+        minStart: round(Math.max(0, minStart)),
+        maxStart: round(Math.min(songEnd, Math.max(minStart, maxStart))),
+      }));
+    }
+  }
+
+  return bounds;
+}
+
 function accentDelta(event) {
   const beat = finite(event?.canonical?.startBeat, event?.time);
   const position = ((beat % 4) + 4) % 4;
@@ -140,7 +200,14 @@ function velocityPolicy(event, amount, seed) {
   return (phraseMotion + localMotion + accentDelta(event)) * amount;
 }
 
-function performEvent(event, { genre, bpm, amount, seed, totalBeats }) {
+function performEvent(event, {
+  genre,
+  bpm,
+  amount,
+  seed,
+  totalBeats,
+  orderBounds = null,
+}) {
   if (amount <= 0 || event?.intent?.locked) return event;
 
   const canonical = event?.canonical ?? {
@@ -152,10 +219,15 @@ function performEvent(event, { genre, bpm, amount, seed, totalBeats }) {
   const timingDeltaBeats = timingPolicy(event, genre, amount, seed);
   const durationScale = durationPolicy(event, amount, seed);
   const velocityDelta = velocityPolicy(event, amount, seed);
+  const minimumStart = Math.max(0, finite(orderBounds?.minStart, 0));
+  const maximumStart = Math.min(
+    Math.max(0, totalBeats - 1 / 960),
+    finite(orderBounds?.maxStart, Math.max(0, totalBeats - 1 / 960)),
+  );
   const startBeat = clamp(
     canonical.startBeat + timingDeltaBeats,
-    0,
-    Math.max(0, totalBeats - 1 / 960),
+    minimumStart,
+    Math.max(minimumStart, maximumStart),
   );
   const maxDuration = Math.max(1 / 960, totalBeats - startBeat);
   const durationBeats = clamp(
@@ -200,6 +272,7 @@ export function applyPerformanceEngine(gauntletSong, {
   const genre = String(gauntletSong?.intent?.genre ?? "unknown");
   const bpm = clamp(gauntletSong?.intent?.bpm ?? 120, 30, 300);
   const totalBeats = Math.max(1 / 960, finite(gauntletSong?.totalBeats, 1));
+  const orderBounds = orderBoundsForEvents(gauntletSong.musicalEvents, totalBeats);
   const events = Object.freeze(
     gauntletSong.musicalEvents.map((event) => performEvent(event, {
       genre,
@@ -207,6 +280,7 @@ export function applyPerformanceEngine(gauntletSong, {
       amount,
       seed,
       totalBeats,
+      orderBounds: orderBounds.get(String(event?.id ?? "")) ?? null,
     })),
   );
 
