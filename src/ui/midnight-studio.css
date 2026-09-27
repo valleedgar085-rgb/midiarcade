@@ -955,3 +955,174 @@ input[type="range"] {
     width: 56px !important;
   }
 }
+
+
+/* MOBILE SCREEN ALIGNMENT V1 · one centered frame across Create / Shape / Mix / Finish */
+:root {
+  --studio-frame-width: 520px;
+  --studio-edge: 12px;
+}
+
+.app-shell {
+  width: 100% !important;
+  max-width: var(--studio-frame-width) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.topbar,
+main#top {
+  width: 100% !important;
+  max-width: var(--studio-frame-width) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+main#top {
+  padding-left: var(--studio-edge) !important;
+  padding-right: var(--studio-edge) !important;
+  padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+.tab-panel.is-active {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  align-items: stretch !important;
+}
+
+#tab-create.is-active > *,
+#tab-arrange.is-active > *,
+#tab-mix.is-active > *,
+#tab-finish.is-active > * {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+#tab-create .create-console,
+#tab-create .song-showcase,
+#preGenSection,
+#tab-arrange .panel,
+#tab-arrange .creative-thread,
+#tab-arrange .shape-stage,
+#tab-arrange .shape-director-panel,
+#tab-arrange .section-shaper,
+#tab-arrange .section-editor,
+#tab-mix .panel,
+#tab-mix .attitude-strip,
+#tab-mix .smart-mix-console,
+#tab-mix .track-rack,
+#tab-finish .panel,
+#tab-finish .finish-panel,
+#tab-finish .finish-cover,
+#tab-finish .export-setup,
+#tab-finish .export-area {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+#tab-create .showcase-art {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+:is(
+  #tab-create,
+  #tab-arrange,
+  #tab-mix,
+  #tab-finish
+) :is(
+  .creator-grid,
+  .creator-main-controls,
+  .genre-direction,
+  .create-live-controls,
+  .shape-stage,
+  .shape-director-panel,
+  .section-editor,
+  .track-rack,
+  .smart-mix-console,
+  .finish-grid,
+  .export-setup
+) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+:is(
+  #tab-create,
+  #tab-arrange,
+  #tab-mix,
+  #tab-finish
+) :is(
+  button,
+  input,
+  select,
+  textarea
+) {
+  max-width: 100% !important;
+}
+
+:is(
+  #tab-create,
+  #tab-arrange,
+  #tab-mix,
+  #tab-finish
+) :is(
+  h1,
+  h2,
+  h3,
+  h4,
+  p,
+  span,
+  small,
+  strong
+) {
+  overflow-wrap: anywhere;
+}
+
+#tabNavShell,
+.mobile-dock {
+  width: min(calc(100vw - 24px), 496px) !important;
+  max-width: 496px !important;
+  left: max(12px, calc((100vw - var(--studio-frame-width)) / 2 + 12px)) !important;
+  right: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+#tabNavShell .tab-nav,
+.mobile-dock {
+  min-width: 0 !important;
+}
+
+@media (max-width: 420px) {
+  :root {
+    --studio-edge: 10px;
+  }
+
+  #preGenSection .genre-direction {
+    grid-template-columns: 1fr !important;
+  }
+
+  #tab-create .showcase-art {
+    width: min(calc(100vw - 44px), 360px) !important;
+  }
+}
+
+@media (max-width: 350px) {
+  :root {
+    --studio-edge: 8px;
+  }
+
+  #tab-create .showcase-art {
+    width: min(calc(100vw - 36px), 330px) !important;
+  }
+}
