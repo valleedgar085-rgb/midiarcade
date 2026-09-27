@@ -206,6 +206,8 @@ export function acceptPerformanceCandidate(transaction) {
   accepted.performanceCandidate = {
     ...(accepted.performanceCandidate ?? {}),
     accepted: true,
+    status: "accepted",
+    acceptedBy: "explicit-user-action",
   };
   return accepted;
 }
