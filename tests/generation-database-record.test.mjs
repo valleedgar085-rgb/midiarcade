@@ -111,7 +111,14 @@ test("generation database record preserves canonical Groove DNA and rendered pit
   assert.equal(record.stages[0].started_at, "2026-09-24T02:00:00.000Z");
   assert.equal(record.stages[0].completed_at, "2026-09-24T02:00:00.020Z");
   assert.equal(record.stages[0].duration_ms, 20);
-  assert.equal(record.debuggerEvents.length, 3);
+  assert.equal(record.debuggerEvents.length, 4);
+  assert.equal(record.performanceShadow.mode, "diagnostic-only");
+  assert.equal(record.performanceShadow.outputMutation, false);
+  assert.equal(record.performanceShadow.technicalSafety.pitchPreserved, true);
+  const shadowDebug = record.debuggerEvents.find((event) => event.code === "performance-shadow-v1");
+  assert.ok(shadowDebug);
+  assert.equal(shadowDebug.subsystem, "performance-shadow");
+  assert.equal(JSON.parse(shadowDebug.context_json).id, "performance-shadow-v1");
   assert.equal(record.debuggerEvents[0].generation_run_id, "generation-1");
   assert.equal(record.debuggerEvents[0].song_id, "song-1");
   assert.equal(record.debuggerEvents[0].code, "stage-plan");
