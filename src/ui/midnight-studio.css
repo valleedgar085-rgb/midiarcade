@@ -854,9 +854,9 @@ input[type="range"] {
 
 /* One DOM player changes mode at a threshold. No duplicate fixed mini-player. */
 #tab-create.is-scrolled .song-showcase {
-  position: sticky !important;
-  top: calc(66px + env(safe-area-inset-top, 0px)) !important;
-  z-index: 70 !important;
+  position: relative !important;
+  top: auto !important;
+  z-index: 1 !important;
   min-height: 72px !important;
   display: grid !important;
   grid-template-columns: 56px minmax(0, 1fr) 46px !important;
