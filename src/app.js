@@ -1990,7 +1990,9 @@ function renderSongShowcase() {
     cover.dataset.coverStyle = "original";
     const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
     const heroPanel = $("#heroPanel");
+    const compactArt = $("#compactCreateArt");
     if (heroPanel) heroPanel.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    if (compactArt) compactArt.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.setProperty("--cover-hue", coverHue);
     cover.style.setProperty("--cover-hue-2", secondHue);
@@ -2142,6 +2144,8 @@ function renderSummary() {
   $("#factBars").textContent = `${bars} BARS`;
   $("#factDuration").textContent = duration;
   $("#factRhythm").textContent = rhythmFact;
+  if ($("#compactCreateTitle")) $("#compactCreateTitle").textContent = title;
+  if ($("#compactCreateMeta")) $("#compactCreateMeta").textContent = `${generatedGenreLabel} · ${key} ${modeLabel} · ${Math.round(bpm)} BPM`;
   $("#totalTime").textContent = duration;
   $("#seedLabel").textContent = `SEED ${formatSeed(seed)}`;
   $("#dnaValue").textContent = String(82 + (hashNumber(seed) % 14));
@@ -6078,6 +6082,7 @@ const player = new PreviewPlayer();
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
   const showcaseButton = $("#showcasePlayButton");
+  const compactButton = $("#compactCreatePlayButton");
   document.body?.classList.toggle("is-playing", playing);
   hero?.classList.toggle("is-playing", playing);
   showcaseButton?.classList.toggle("is-playing", playing);
@@ -6085,6 +6090,12 @@ function setPlaybackPresentation(playing) {
     showcaseButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
     const label = $("strong", showcaseButton);
     if (label) label.textContent = playing ? "Pause song" : "Play song";
+  }
+  if (compactButton) {
+    compactButton.classList.toggle("is-playing", playing);
+    compactButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
+    const compactIcon = $("#compactCreatePlayIcon");
+    if (compactIcon) compactIcon.textContent = playing ? "Ⅱ" : "▶";
   }
   const mixButton = $("#mixPlayButton");
   mixButton?.classList.toggle("is-playing", playing);
@@ -6227,6 +6238,12 @@ function toggleFullscreen() {
     updateRangeDisplays();
     renderGenerationIntent();
     showToast(`${genreLabel(id, profile)} rules are ready at ${Math.round(range.default)} BPM. Generate to hear the new world.`);
+  });
+  $("#secondaryGenreControl")?.addEventListener("change", () => {
+    const secondary = selectedSecondaryGenreId();
+    renderGenerationIntent();
+    scheduleSessionSave();
+    showToast(secondary ? `Fusion partner staged: ${genreLabel(secondary)}.` : "Fusion partner cleared. The next song will use one primary genre.");
   });
 
   $("#modeControl")?.addEventListener("change", () => {
@@ -6456,7 +6473,7 @@ function toggleFullscreen() {
     event.currentTarget.classList.toggle("is-active", active);
     event.currentTarget.setAttribute("aria-pressed", String(active));
     event.currentTarget.querySelector("span").textContent = active ? "Essentials" : "Advanced";
-    for (const details of $$(".shape-controls, .creator-recipe-side, .advanced-controls")) {
+    for (const details of $(".phase1-advanced-direction, .shape-controls, .creator-recipe-side, .advanced-controls")) {
       details.open = active;
     }
     showToast(active ? "Advanced song-shaping controls are open." : "Back to the focused essentials.");
@@ -6485,6 +6502,7 @@ function toggleFullscreen() {
 
   $("#playButton").addEventListener("click", () => player.toggle());
   $("#showcasePlayButton")?.addEventListener("click", () => player.toggle());
+  $("#compactCreatePlayButton")?.addEventListener("click", () => player.toggle());
   $("#showcaseArc")?.addEventListener("click", async (event) => {
     const segment = event.target.closest?.("[data-showcase-section]");
     if (!segment || !state.song) return;
