@@ -1175,3 +1175,378 @@ main#top {
     width: calc(100vw - 16px) !important;
   }
 }
+
+
+/* MOBILE WORKSPACE RESTORATION V2
+   Keep the Android stability fixes, restore hidden controls, and give each page
+   one clear mobile hierarchy. */
+
+/* The full hero remains in normal flow. A separate compact player docks under
+   the header only after the hero has scrolled away, so there is no blank spacer. */
+#createShowcaseSlot {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+#compactCreatePlayer {
+  display: none !important;
+}
+
+#tab-create.has-compact-player #compactCreatePlayer {
+  position: fixed !important;
+  top: 78px !important;
+  left: max(12px, calc((100vw - var(--studio-frame-width)) / 2 + 12px)) !important;
+  z-index: 96 !important;
+  width: min(calc(100vw - 24px), 496px) !important;
+  min-height: 66px !important;
+  display: grid !important;
+  grid-template-columns: 50px minmax(0, 1fr) 44px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 10px !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 16px !important;
+  background: #121319 !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,.46) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.compact-create-art {
+  width: 50px !important;
+  height: 50px !important;
+  border-radius: 11px !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  overflow: hidden !important;
+}
+
+.compact-create-copy {
+  min-width: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.compact-create-copy small {
+  font-size: .58rem !important;
+  font-weight: 800 !important;
+  letter-spacing: .12em !important;
+  color: var(--midnight-red-2) !important;
+}
+
+.compact-create-copy strong {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: .94rem !important;
+  line-height: 1.15 !important;
+}
+
+.compact-create-copy span {
+  max-width: 100% !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  font-size: .66rem !important;
+  color: var(--midnight-muted) !important;
+}
+
+#compactCreatePlayButton {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  background: var(--midnight-red-2) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+
+/* Restore Create controls that still exist in the app contract. */
+#preGenSection .secondary-genre-control {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+#preGenSection .creator-heading-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 10px !important;
+}
+
+#tab-create .title-row .tiny-button {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: 44px !important;
+  margin-top: 10px !important;
+}
+
+#preGenSection .creator-recipe-side {
+  display: block !important;
+}
+
+#tab-create .workflow-panel {
+  display: block !important;
+  width: 100% !important;
+  margin-top: 4px !important;
+}
+
+#tab-create .song-showcase .taste-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  width: 100% !important;
+  margin-top: 12px !important;
+}
+
+#preGenSection .phase1-advanced-direction {
+  display: block !important;
+  width: 100% !important;
+  margin-top: 12px !important;
+}
+
+#preGenSection .phase1-advanced-direction-body {
+  display: grid !important;
+  gap: 10px !important;
+  padding-top: 10px !important;
+}
+
+/* CREATE: make the direction controls read in a predictable order. */
+#preGenSection .genre-direction {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+#preGenSection .create-live-controls {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+#preGenSection .create-stage-heading,
+#preGenSection .direction-essentials-heading {
+  grid-column: 1 / -1 !important;
+}
+
+/* SHAPE: focus bar -> song map -> section controls -> precision editor. */
+#tab-arrange.is-active {
+  gap: 12px !important;
+}
+
+#tab-arrange > .shape-focus-bar {
+  position: relative !important;
+  top: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  padding: 12px !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-heading {
+  display: block !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-path {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+  overflow: visible !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-join {
+  display: none !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-node {
+  min-width: 0 !important;
+  width: 100% !important;
+  min-height: 64px !important;
+  padding: 8px !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-live {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+
+#tab-arrange > .shape-focus-bar .thread-live button {
+  display: inline-flex !important;
+  min-height: 44px !important;
+  flex: 0 0 auto !important;
+}
+
+#tab-arrange .arrange-workflow {
+  display: flex !important;
+  width: 100% !important;
+  gap: 8px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
+#tab-arrange .arrange-workflow > span {
+  flex: 1 0 150px !important;
+  min-width: 0 !important;
+}
+
+#tab-arrange .shape-stage {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  width: 100% !important;
+}
+
+#tab-arrange .shape-map-column,
+#tab-arrange .section-shaper,
+#tab-arrange .section-editor,
+#tab-arrange .shape-director-panel {
+  position: relative !important;
+  inset: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+#tab-arrange .section-shaper {
+  top: auto !important;
+}
+
+#tab-arrange .shape-director-scope {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 8px !important;
+}
+
+#tab-arrange .section-macro-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+#tab-arrange .section-quick-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+/* MIX: overview -> smart mix -> character -> six instrument channels. */
+#tab-mix.is-active {
+  gap: 12px !important;
+}
+
+#tab-mix .tracks-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+#tab-mix .section-heading {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  flex-wrap: wrap !important;
+}
+
+#tab-mix .mix-overview {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) auto !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+#tab-mix .mix-stat {
+  display: flex !important;
+}
+
+#tab-mix .smart-mix-controls {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+#tab-mix .attitude-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+
+#tab-mix .track-rack {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+}
+
+#tab-mix .track-card {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#tab-mix .track-card:not(.is-attitude-target) .track-expression {
+  display: block !important;
+}
+
+#tab-mix .track-primary-actions,
+#tab-mix .track-secondary-actions {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 7px !important;
+}
+
+#tab-mix .mix-primary-balance,
+#tab-mix .track-expression-grid,
+#tab-mix .track-shaping-grid {
+  grid-template-columns: 1fr !important;
+}
+
+/* FINISH stays simple and centered. */
+#tab-finish .finish-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+}
+
+#tab-finish .finish-cover {
+  width: min(100%, 360px) !important;
+  align-self: center !important;
+}
+
+@media (max-width: 420px) {
+  #tab-create.has-compact-player #compactCreatePlayer {
+    left: 10px !important;
+    width: calc(100vw - 20px) !important;
+  }
+
+  #preGenSection .genre-direction,
+  #tab-arrange .section-macro-grid,
+  #tab-arrange .section-quick-actions,
+  #tab-mix .attitude-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  #tab-arrange > .shape-focus-bar .thread-path {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  #tab-arrange > .shape-focus-bar .thread-node {
+    flex: 0 0 145px !important;
+  }
+
+  #tab-mix .mix-overview {
+    grid-template-columns: auto minmax(0, 1fr) !important;
+  }
+
+  #tab-mix .mix-listen-button {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+}
