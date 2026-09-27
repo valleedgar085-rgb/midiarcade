@@ -3943,6 +3943,7 @@ function renderGenerationDebugger() {
     capturedRuns: runs.length,
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
+    performanceAudition: player.performanceAudition,
     latest,
   }, null, 2);
 }
@@ -4063,7 +4064,10 @@ async function runGeneration(kind, options = {}) {
     if (!options.skipHistory && state.history.length) restoreHistory({ captureFuture: false, announce: false });
   });
   try {
-    try { player.stop(); } catch (_) { /* ignore player errors */ }
+    try {
+      player.stop();
+      player.performanceAudition = null;
+    } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
     showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
 
@@ -6775,7 +6779,10 @@ function toggleFullscreen() {
   const debuggerDialog = $("#debuggerDialog");
   $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
   $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
-  $("#closeDebugger")?.addEventListener("click", () => debuggerDialog?.close());
+  $("#closeDebugger")?.addEventListener("click", () => {
+    if (player.performanceAudition) void player.endPerformanceAB({ resume: false });
+    debuggerDialog?.close();
+  });
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
@@ -6783,7 +6790,9 @@ function toggleFullscreen() {
   $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
   $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
   debuggerDialog?.addEventListener("click", (event) => {
-    if (event.target === debuggerDialog) debuggerDialog.close();
+    if (event.target !== debuggerDialog) return;
+    if (player.performanceAudition) void player.endPerformanceAB({ resume: false });
+    debuggerDialog.close();
   });
 
   document.addEventListener("keydown", (event) => {
