@@ -197,16 +197,23 @@ export function createPerformanceShadowReport(song, {
   const absDurationPercent = comparisons.map((entry) => Math.abs(entry.durationDeltaPercent));
   const roles = [...new Set(comparisons.map((entry) => entry.roleId))].sort();
 
-  const safety = Object.freeze({
+  const technicalSafety = Object.freeze({
     eventCountPreserved: beforeEvents.length === afterEvents.length,
     eventIdsPreserved: idsPreserved,
     pitchPreserved,
     lockedEventsPreserved,
     boundsPreserved,
+  });
+  const grooveSafety = Object.freeze({
     orderingPreserved: inversionCount === 0,
     noNewNearCollisions: introducedNearCollisions === 0,
   });
-  const safeToAudition = Object.values(safety).every(Boolean);
+  const safety = Object.freeze({
+    ...technicalSafety,
+    ...grooveSafety,
+  });
+  const safeToAudition = Object.values(technicalSafety).every(Boolean);
+  const promotionCandidate = safeToAudition && Object.values(grooveSafety).every(Boolean);
 
   return Object.freeze({
     version: 1,
@@ -222,6 +229,9 @@ export function createPerformanceShadowReport(song, {
     engine: shadow.id,
     outputMutation: false,
     safeToAudition,
+    promotionCandidate,
+    technicalSafety,
+    grooveSafety,
     safety,
     metrics: Object.freeze({
       totalEvents: comparisons.length,
