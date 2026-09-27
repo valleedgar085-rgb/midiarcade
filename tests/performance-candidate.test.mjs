@@ -1,3 +1,4 @@
+// PR validation trigger: combined Phase 1 + adaptive candidate APK.
 import assert from "node:assert/strict";
 import test from "node:test";
 
