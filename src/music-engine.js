@@ -35,6 +35,7 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
@@ -15078,16 +15079,17 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     ), 0.65, 1.4);
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
-      const phrasePerformance = renderPhrasePerformance(note);
-      const pitch = canonicalMidiPitch(note.pitch);
+      const performedNote = resolvePerformedNote(note);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
+      const pitch = canonicalMidiPitch(performedNote.pitch);
       const velocity = clamp(Math.round(
-        (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+        (finite(performedNote.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
       ), 1, 127);
-      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+      const onTick = clamp(Math.round(finite(performedNote.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
       const offTick = clamp(
         Math.max(onTick + 1, Math.round((
-          finite(note.start, 0)
-          + finite(note.duration, 0.25) * gateScale * phrasePerformance.durationScale
+          finite(performedNote.start, 0)
+          + finite(performedNote.duration, 0.25) * gateScale * phrasePerformance.durationScale
         ) * ppq)),
         1,
         totalTicks,
@@ -15178,14 +15180,17 @@ export function createMidiExportReport(song, options = {}) {
       conductorTrack: true,
       uniqueChannels: new Set(trackReports.map((track) => track.channel)).size === trackReports.length,
       drumChannel10: trackReports.every((track) => track.id !== "drums" || track.channel === 10),
-      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => (
-        Number.isFinite(note.pitch)
-        && Number.isFinite(note.start)
-        && Number.isFinite(note.duration)
-        && note.pitch >= 0 && note.pitch <= 127
-        && note.start >= 0 && note.duration > 0
-        && note.start + note.duration <= song.meta.totalBeats + 1e-6
-      ))),
+      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => {
+        const performedNote = resolvePerformedNote(note);
+        return (
+          Number.isFinite(performedNote.pitch)
+          && Number.isFinite(performedNote.start)
+          && Number.isFinite(performedNote.duration)
+          && performedNote.pitch >= 0 && performedNote.pitch <= 127
+          && performedNote.start >= 0 && performedNote.duration > 0
+          && performedNote.start + performedNote.duration <= song.meta.totalBeats + 1e-6
+        );
+      })),
     },
   };
 }

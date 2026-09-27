@@ -29,6 +29,8 @@ import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
+import { createPerformanceAuditionSong } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -1741,6 +1743,8 @@ export function getAppStateSnapshot() {
 function applyHistorySnapshot(snapshot) {
   if (!snapshot) return false;
   player.stop();
+  player.performanceAudition = null;
+  player.performanceCandidate = null;
   state.song = snapshot.song;
   state.trackSettings = snapshot.trackSettings;
   state.muted = new Set(snapshot.muted);
@@ -3862,6 +3866,20 @@ function renderGenerationDebugger() {
     : "Score and seed will appear after generation.");
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
+  const audition = player.performanceAudition;
+  const candidate = player.performanceCandidate;
+  const validCandidate = candidate?.validation?.valid === true;
+  const acceptButton = $("#performanceAbAccept");
+  const rejectButton = $("#performanceAbReject");
+  if (acceptButton) acceptButton.disabled = !validCandidate;
+  if (rejectButton) rejectButton.disabled = !candidate;
+  setText("#performanceAbStatus", validCandidate
+    ? `B validated · ${Math.round(candidate.selectedHumanize * 100)}% · Gauntlet + ensemble PASS · Accept B to commit`
+    : candidate
+      ? `B rejected · ${candidate.validation?.issues?.join(", ") || "promotion gate failed"}`
+      : audition?.mode === "performance"
+        ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+        : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3890,14 +3908,18 @@ function renderGenerationDebugger() {
     capturedRuns: runs.length,
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
+    performanceAudition: player.performanceAudition,
     latest,
   }, null, 2);
 }
 
-function openGenerationDebugger() {
-  renderGenerationDebugger();
+async function openGenerationDebugger() {
   const dialog = $("#debuggerDialog");
-  if (dialog && !dialog.open) dialog.showModal();
+  if (!dialog) return;
+  const { ensurePerformancePromotionControls } = await import("./ui/performance-promotion-controls.js");
+  ensurePerformancePromotionControls(dialog);
+  renderGenerationDebugger();
+  if (!dialog.open) dialog.showModal();
 }
 
 function clearGenerationDebugger() {
@@ -3938,6 +3960,19 @@ async function copyGenerationDebuggerReport() {
     console.warn("Could not copy debugger report", error);
     showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
   }
+}
+
+let performancePromotionController = null;
+async function performanceDebuggerAction(action, ...args) {
+  if (!performancePromotionController) {
+    const { createPerformancePromotionController } = await import("./ui/performance-promotion-controller.js");
+    performancePromotionController = createPerformancePromotionController({
+      player, state, appStore, clamp, totalSeconds, createHistorySnapshot, pushHistory,
+      applyTrackSettingsToSong, renderAll, updatePlaybackUi, playbackViewForSong,
+      scheduleSessionSave, renderGenerationDebugger, showToast,
+    });
+  }
+  return performancePromotionController[action](...args);
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -3984,7 +4019,11 @@ async function runGeneration(kind, options = {}) {
     if (!options.skipHistory && state.history.length) restoreHistory({ captureFuture: false, announce: false });
   });
   try {
-    try { player.stop(); } catch (_) { /* ignore player errors */ }
+    try {
+      player.stop();
+      player.performanceAudition = null;
+      player.performanceCandidate = null;
+    } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
     showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
 
@@ -4673,9 +4712,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     );
     const automation = Array.isArray(track.automation) ? track.automation : [];
     return trackNotes(track).map((note) => {
-      const startBeat = Math.max(0, noteStart(note));
-      const durationBeats = Math.max(0.01, noteDuration(note));
-      const phrasePerformance = renderPhrasePerformance(note);
+      const performedNote = resolvePerformedNote(note);
+      const startBeat = Math.max(0, performedNote.start);
+      const durationBeats = Math.max(0.01, performedNote.duration);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
       const baseReverb = clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1);
       const automatedReverb = controllerValueAtBeat(automation, 91, startBeat, baseReverb * 127) / 127;
       const brightnessCc = controllerValueAtBeat(automation, 74, startBeat, 64);
@@ -4693,7 +4733,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const expressionStart = expressionCurve[0]?.value ?? 1;
       const expressionEnd = expressionCurve.at(-1)?.value ?? expressionStart;
       const baseVelocity = clamp(
-        (noteVelocity(note) + phrasePerformance.velocityDelta) * velocityScale,
+        (performedNote.velocity + phrasePerformance.velocityDelta) * velocityScale,
         1,
         127,
       );
@@ -4701,7 +4741,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         id,
         oneShotKitId,
         program: Number(track.program ?? uiSettings.program ?? 0),
-        pitch: canonicalMidiPitch(notePitch(note)),
+        pitch: canonicalMidiPitch(performedNote.pitch),
         velocity: clamp(baseVelocity * expressionStart, 1, 127),
         baseVelocity,
         time: startBeat * secondsPerBeat,
@@ -4717,7 +4757,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * brightnessScale * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
-        articulation: String(note.articulation || "natural"),
+        articulation: String(performedNote.articulation || "natural"),
         glideFromSemitones: Number.isFinite(Number(note.glideFromSemitones)) ? Number(note.glideFromSemitones) : 0,
         glideDuration: Math.max(0, Number(note.glideBeats || 0) * secondsPerBeat),
       };
@@ -4955,6 +4995,8 @@ export class PreviewPlayer {
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
     this.playbackSong = null;
+    this.performanceAudition = null;
+    this.performanceCandidate = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
   }
@@ -5267,6 +5309,39 @@ export class PreviewPlayer {
     this.playbackSong = song;
     this.position = clamp(Number(startSeconds) || 0, 0, totalSeconds(song));
     return this.play();
+  }
+
+  async auditionPerformanceAB(mode, { humanize = 0.65, startSeconds } = {}) {
+    const song = state.song;
+    if (!song) return false;
+    const position = clamp(
+      Number.isFinite(Number(startSeconds)) ? Number(startSeconds) : this.currentSongTime(),
+      0,
+      totalSeconds(song),
+    );
+    if (mode === "current") {
+      this.performanceAudition = { mode, report: this.performanceAudition?.report ?? null };
+      return this.auditionSong(song, { startSeconds: position });
+    }
+    if (mode !== "performance") throw new RangeError("Unknown A/B mode");
+    const pair = createPerformanceAuditionSong(song, {
+      humanize,
+      seed: `${song.seed ?? song.id ?? "song"}:performance-ab`,
+    });
+    this.performanceAudition = {
+      mode,
+      humanize: pair.performanceSong.performanceAudition.humanize,
+      report: pair.report,
+    };
+    return this.auditionSong(pair.performanceSong, { startSeconds: position });
+  }
+
+  async endPerformanceAB() {
+    const position = this.currentSongTime();
+    this.performanceAudition = null;
+    this.performanceCandidate = null;
+    await this.returnToCanonicalSong({ positionSeconds: position, resume: false });
+    return true;
   }
 
   async play() {
@@ -6638,14 +6713,26 @@ function toggleFullscreen() {
 
   ensureGenerationDebuggerControls();
   const debuggerDialog = $("#debuggerDialog");
-  $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
-  $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
-  $("#closeDebugger")?.addEventListener("click", () => debuggerDialog?.close());
+  $("#debuggerButton")?.addEventListener("click", () => void openGenerationDebugger());
+  $("#menuItemDebugger")?.addEventListener("click", () => void openGenerationDebugger());
+  $("#closeDebugger")?.addEventListener("click", () => {
+    if (player.performanceAudition) void player.endPerformanceAB();
+    debuggerDialog?.close();
+  });
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
   debuggerDialog?.addEventListener("click", (event) => {
-    if (event.target === debuggerDialog) debuggerDialog.close();
+    const id = event.target?.id;
+    if (id === "performanceAbCurrent") return void performanceDebuggerAction("audition", "current");
+    if (id === "performanceAbPerformed") return void performanceDebuggerAction("audition", "performance");
+    if (id === "performanceAbValidate") return void performanceDebuggerAction("validate");
+    if (id === "performanceAbAccept") return void performanceDebuggerAction("accept");
+    if (id === "performanceAbReject") return void performanceDebuggerAction("reject");
+    if (id === "performanceAbEnd") return void performanceDebuggerAction("end");
+    if (event.target !== debuggerDialog) return;
+    if (player.performanceAudition) void player.endPerformanceAB();
+    debuggerDialog.close();
   });
 
   document.addEventListener("keydown", (event) => {
@@ -6668,7 +6755,7 @@ function toggleFullscreen() {
     if (key === "s") runGeneration("songVariations");
     if (key === "e") exportSong();
     if (key === "f") toggleFullscreen();
-    if (key === "d") openGenerationDebugger();
+    if (key === "d") void openGenerationDebugger();
   });
   document.addEventListener("change", scheduleSessionSave);
   document.addEventListener("visibilitychange", () => {
