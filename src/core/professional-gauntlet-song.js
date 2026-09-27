@@ -349,7 +349,10 @@ function normalizedIntent(song, intent = null) {
     genre: song?.meta?.genre ?? song?.genre ?? null,
     key: song?.meta?.key ?? null,
     scale: song?.meta?.scale ?? null,
-    bpm: finite(song?.meta?.bpm, null),
+    bpm: finite(
+      song?.meta?.bpm,
+      finite(song?.meta?.tempo, finite(song?.bpm, finite(song?.tempo, null))),
+    ),
     bars: finite(song?.meta?.bars, null),
     energyArc: cloneValue(source?.energyArc ?? null),
     contrast: finite(source?.contrast, null),
