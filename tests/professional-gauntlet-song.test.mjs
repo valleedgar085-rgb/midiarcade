@@ -6,6 +6,7 @@ import {
   createProfessionalGenerationGauntletSong,
   validateProfessionalGenerationGauntletSong,
 } from "../src/core/professional-gauntlet-song.js";
+import { CANONICAL_MUSICAL_EVENT_SCHEMA } from "../src/core/canonical-musical-event.js";
 
 test("Professional Generation GauntletSong exposes one canonical musical authority", () => {
   const song = engine.generateNew({
@@ -46,6 +47,14 @@ test("Professional Generation GauntletSong exposes one canonical musical authori
     assert.ok(event.motifId);
     assert.ok(event.phraseRole);
     assert.ok(event.articulation);
+    assert.equal(event.schema, CANONICAL_MUSICAL_EVENT_SCHEMA);
+    assert.equal(event.time, event.performed.startBeat);
+    assert.equal(event.duration, event.performed.durationBeats);
+    assert.equal(event.renderedMidiPitch, event.performed.renderedMidiPitch);
+    assert.equal(event.velocity, event.performed.velocity);
+    assert.ok(event.intent);
+    assert.ok(event.canonical);
+    assert.ok(event.performed);
   }
 
   assert.equal(validation.passed, true, validation.issues.join(", "));
