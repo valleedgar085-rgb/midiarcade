@@ -1993,7 +1993,9 @@ function renderSongShowcase() {
     cover.dataset.coverStyle = "original";
     const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
     const heroPanel = $("#heroPanel");
+    const compactArt = $("#compactCreateArt");
     if (heroPanel) heroPanel.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    if (compactArt) compactArt.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.setProperty("--cover-hue", coverHue);
     cover.style.setProperty("--cover-hue-2", secondHue);
@@ -2145,6 +2147,8 @@ function renderSummary() {
   $("#factBars").textContent = `${bars} BARS`;
   $("#factDuration").textContent = duration;
   $("#factRhythm").textContent = rhythmFact;
+  if ($("#compactCreateTitle")) $("#compactCreateTitle").textContent = title;
+  if ($("#compactCreateMeta")) $("#compactCreateMeta").textContent = `${generatedGenreLabel} · ${key} ${modeLabel} · ${Math.round(bpm)} BPM`;
   $("#totalTime").textContent = duration;
   $("#seedLabel").textContent = `SEED ${formatSeed(seed)}`;
   $("#dnaValue").textContent = String(82 + (hashNumber(seed) % 14));
@@ -4945,15 +4949,8 @@ export function releaseScreenWakeLock() {
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      void requestScreenWakeLock();
-    } else {
-      releaseScreenWakeLock();
-    }
+    if (document.visibilityState !== "visible") releaseScreenWakeLock();
   });
-  if (document.visibilityState === "visible") {
-    void requestScreenWakeLock();
-  }
 }
 
 export class PreviewPlayer {
@@ -6302,6 +6299,12 @@ function toggleFullscreen() {
     renderGenerationIntent();
     showToast(`${genreLabel(id, profile)} rules are ready at ${Math.round(range.default)} BPM. Generate to hear the new world.`);
   });
+  $("#secondaryGenreControl")?.addEventListener("change", () => {
+    const secondary = selectedSecondaryGenreId();
+    renderGenerationIntent();
+    scheduleSessionSave();
+    showToast(secondary ? `Fusion partner staged: ${genreLabel(secondary)}.` : "Fusion partner cleared. The next song will use one primary genre.");
+  });
 
   $("#modeControl")?.addEventListener("change", () => {
     $("#modeControl").value === "auto" ? state.autoControls.add("modeControl") : state.autoControls.delete("modeControl");
@@ -6530,7 +6533,7 @@ function toggleFullscreen() {
     event.currentTarget.classList.toggle("is-active", active);
     event.currentTarget.setAttribute("aria-pressed", String(active));
     event.currentTarget.querySelector("span").textContent = active ? "Essentials" : "Advanced";
-    for (const details of $$(".shape-controls, .creator-recipe-side, .advanced-controls")) {
+    for (const details of $(".phase1-advanced-direction, .shape-controls, .creator-recipe-side, .advanced-controls")) {
       details.open = active;
     }
     showToast(active ? "Advanced song-shaping controls are open." : "Back to the focused essentials.");
@@ -6844,8 +6847,8 @@ async function init() {
       showToast(`Your last song was restored. Solo is still active on ${soloNames.join(", ")}.`);
     } else if (restored) showToast("Your last song and live take were restored.");
     discoverMidiDevices({ requestAccess: false });
-    // Prune old MIDI exports at startup (fire-and-forget).
-    pruneMidiExportsCache().catch(() => {});
+    // Native export-cache pruning runs only after an export. Avoid Filesystem bridge
+    // maintenance during Android startup, where many stat calls can stall WebView.
   } catch (error) {
     console.error(error);
     showToast("The composition engine could not start. Refresh to try again.");
