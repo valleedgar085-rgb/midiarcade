@@ -128,3 +128,21 @@ test("Create-specific CSS stays outside the protected global stylesheet budget a
   assert.match(pkg.scripts.dev, /npm run build/);
   assert.match(pkg.scripts.dev, /--directory www/);
 });
+
+
+test("Create scroll treatment uses continuous progress before compacting the hero", () => {
+  assert.match(presentation, /--create-scroll-progress/);
+  assert.match(presentation, /--create-cover-scale/);
+  assert.match(presentation, /--create-cover-lift/);
+  assert.match(presentation, /requestAnimationFrame/);
+  assert.match(presentation, /progress >= 0\.9/);
+  assert.match(presentation, /progress <= 0\.18/);
+});
+
+test("mobile Create hero keeps one cover element alive while transitioning to compact mode", () => {
+  const midnight = fs.readFileSync(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
+  assert.match(midnight, /#tab-create \.song-showcase::before\s*\{[\s\S]*?top:\s*96px[\s\S]*?width:\s*100%[\s\S]*?height:\s*calc\(100% - 96px\)/);
+  assert.match(midnight, /#tab-create\.is-scrolled \.song-showcase::before\s*\{[\s\S]*?width:\s*68px[\s\S]*?height:\s*54px/);
+  assert.match(midnight, /var\(--create-cover-scale/);
+  assert.doesNotMatch(midnight, /#tab-create\.is-scrolled \.song-showcase::before[\s\S]{0,500}?opacity:\s*0\s*!important/);
+});
