@@ -5,14 +5,17 @@ import fs from "node:fs";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+const controls = fs.readFileSync(new URL("../src/ui/performance-promotion-controls.js", import.meta.url), "utf8");
 const controller = fs.readFileSync(new URL("../src/ui/performance-promotion-controller.js", import.meta.url), "utf8");
 const candidate = fs.readFileSync(new URL("../src/core/performance-candidate.js", import.meta.url), "utf8");
 
 test("performance promotion remains explicit, gated, and undoable", () => {
-  assert.match(html, /id="performanceAbValidate"/);
-  assert.match(html, /id="performanceAbAccept"[^>]*disabled/);
-  assert.match(html, /id="performanceAbReject"[^>]*disabled/);
+  assert.doesNotMatch(html, /id="performanceAbValidate"/);
+  assert.match(controls, /id="performanceAbValidate"/);
+  assert.match(controls, /id="performanceAbAccept"[^>]*disabled/);
+  assert.match(controls, /id="performanceAbReject"[^>]*disabled/);
 
+  assert.match(app, /import\("\.\/ui\/performance-promotion-controls\.js"\)/);
   assert.match(app, /import\("\.\/ui\/performance-promotion-controller\.js"\)/);
   assert.doesNotMatch(app, /from "\.\/core\/performance-candidate\.js"/);
   assert.match(app, /this\.performanceCandidate = null/);
