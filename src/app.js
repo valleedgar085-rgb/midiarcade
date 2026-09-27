@@ -1993,10 +1993,7 @@ function renderSongShowcase() {
   if (cover) {
     cover.dataset.coverStyle = "original";
     const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
-    const heroPanel = $("#heroPanel");
-    const createPanel = $("#tab-create");
-    heroPanel?.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
-    createPanel?.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    $("#tab-create")?.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
     cover.style.backgroundImage = `url("${coverUrl}")`;
     const compactCover = $("#createCompactCover");
     if (compactCover) compactCover.style.backgroundImage = `url("${coverUrl}")`;
@@ -6180,14 +6177,9 @@ const player = new PreviewPlayer();
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
   const showcaseButton = $("#showcasePlayButton");
-  const showcaseArt = $("#showcaseArt");
-  const compactPlayer = $("#createCompactPlayer");
   document.body?.classList.toggle("is-playing", playing);
   hero?.classList.toggle("is-playing", playing);
   showcaseButton?.classList.toggle("is-playing", playing);
-  showcaseArt?.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
-  compactPlayer?.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
-  compactPlayer?.classList.toggle("is-playing", playing);
   if (showcaseButton) {
     showcaseButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
     const label = $("strong", showcaseButton);
