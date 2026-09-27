@@ -228,27 +228,41 @@ function setupCreateScrollState(rootDocument, createPanel) {
   if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
 
-  let isScrolled = false;
+  const compactPlayer = rootDocument.querySelector?.("#createCompactPlayer");
+  let compact = false;
   let frame = 0;
+
+  const reset = () => {
+    compact = false;
+    createPanel.classList.remove("is-scrolled");
+    createPanel.style?.setProperty?.("--create-art-scale", "1");
+    if (compactPlayer) {
+      compactPlayer.setAttribute("aria-hidden", "true");
+      compactPlayer.tabIndex = -1;
+    }
+  };
+
   const apply = () => {
     frame = 0;
+    const active = !createPanel.hidden && createPanel.classList.contains("is-active");
+    if (!active) {
+      reset();
+      return;
+    }
+
     const documentScroll = Number(rootDocument?.documentElement?.scrollTop || rootDocument?.body?.scrollTop || 0);
     const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
-    const viewportHeight = Math.max(480, Number(ownerWindow.innerHeight || 720));
-    const travel = Math.max(190, Math.min(280, viewportHeight * 0.32));
-    const progress = Math.max(0, Math.min(1, (scrollY - 12) / travel));
+    const progress = Math.max(0, Math.min(1, scrollY / 180));
+    createPanel.style?.setProperty?.("--create-art-scale", (1 - progress * 0.08).toFixed(3));
 
-    createPanel.style?.setProperty?.("--create-scroll-progress", progress.toFixed(3));
-    createPanel.style?.setProperty?.("--create-cover-scale", (1.02 - progress * 0.14).toFixed(3));
-    createPanel.style?.setProperty?.("--create-cover-lift", `${Math.round(progress * -30)}px`);
-    createPanel.style?.setProperty?.("--create-cover-opacity", (0.98 - progress * 0.05).toFixed(3));
-
-    if (!isScrolled && progress >= 0.9) {
-      isScrolled = true;
-      createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && progress <= 0.18) {
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
+    const nextCompact = compact ? scrollY > 72 : scrollY > 132;
+    if (nextCompact !== compact) {
+      compact = nextCompact;
+      createPanel.classList.toggle("is-scrolled", compact);
+      if (compactPlayer) {
+        compactPlayer.setAttribute("aria-hidden", String(!compact));
+        compactPlayer.tabIndex = compact ? 0 : -1;
+      }
     }
   };
 
@@ -261,7 +275,7 @@ function setupCreateScrollState(rootDocument, createPanel) {
     }
   };
 
-  apply();
+  reset();
   ownerWindow.addEventListener("scroll", update, { passive: true });
   ownerWindow.addEventListener("resize", update, { passive: true });
 }
