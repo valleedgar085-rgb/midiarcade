@@ -12,6 +12,7 @@ on:
       - "tests/generation-benchmark.test.mjs"
       - "tests/song-quality-gauntlet.test.mjs"
       - "tests/performance-shadow.test.mjs"
+      - "tests/performance-candidate.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
   workflow_dispatch:
 
@@ -38,6 +39,8 @@ jobs:
         run: node --test tests/ensemble-coordination-authority.test.mjs
       - name: Run section completion authority regression tests
         run: node --test tests/section-completion-authority.test.mjs
+      - name: Run performance candidate promotion regression tests
+        run: node --test tests/performance-candidate.test.mjs
       - name: Run fixed-seed ensemble intelligence matrix
         run: |
           node scripts/benchmark-ensemble-coordination.mjs \
