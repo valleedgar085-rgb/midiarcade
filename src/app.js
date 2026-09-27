@@ -3959,86 +3959,17 @@ async function copyGenerationDebuggerReport() {
   }
 }
 
-async function auditionPerformanceDebugger(mode) {
-  if (!state.song) return showToast("Generate a song first."), false;
-  player.performanceCandidate = null;
-  try {
-    await player.auditionPerformanceAB(mode, { humanize: 0.65 });
-    renderGenerationDebugger();
-    showToast(mode === "performance" ? "B preview active." : "A current song active.");
-    return true;
-  } catch (error) {
-    console.error("A/B failed", error);
-    showToast("A/B blocked.");
-    renderGenerationDebugger();
-    return false;
+let performancePromotionController = null;
+async function performanceDebuggerAction(action, ...args) {
+  if (!performancePromotionController) {
+    const { createPerformancePromotionController } = await import("./ui/performance-promotion-controller.js");
+    performancePromotionController = createPerformancePromotionController({
+      player, state, appStore, clamp, totalSeconds, createHistorySnapshot, pushHistory,
+      applyTrackSettingsToSong, renderAll, updatePlaybackUi, playbackViewForSong,
+      scheduleSessionSave, renderGenerationDebugger, showToast,
+    });
   }
-}
-
-async function validatePerformanceDebuggerCandidate() {
-  if (!state.song) return showToast("Generate a song first."), false;
-  showToast("Validating Performance B...");
-  const { createPerformanceCandidate } = await import("./core/performance-candidate.js");
-  const transaction = createPerformanceCandidate(state.song, {
-    humanize: 0.65,
-    seed: `${state.song.seed ?? state.song.id ?? "song"}:performance-candidate`,
-  });
-  player.performanceCandidate = transaction;
-  if (!transaction.validation?.valid) {
-    renderGenerationDebugger();
-    showToast("Performance B did not pass promotion.");
-    return false;
-  }
-  const position = player.currentSongTime();
-  player.performanceAudition = {
-    mode: "performance",
-    humanize: transaction.selectedHumanize,
-    report: transaction.report,
-  };
-  await player.auditionSong(transaction.after, { startSeconds: position });
-  renderGenerationDebugger();
-  showToast(`B validated at ${Math.round(transaction.selectedHumanize * 100)}%.`);
-  return true;
-}
-
-async function acceptPerformanceDebuggerCandidate() {
-  const transaction = player.performanceCandidate;
-  if (!transaction?.validation?.valid) return showToast("Validate B first."), false;
-  const { acceptPerformanceCandidate } = await import("./core/performance-candidate.js");
-  const snapshot = createHistorySnapshot();
-  const position = player.currentSongTime();
-  const accepted = acceptPerformanceCandidate(transaction);
-  applyTrackSettingsToSong(accepted);
-  player.stop();
-  if (snapshot) pushHistory(snapshot);
-  appStore.transaction("performance:accept", (draft) => {
-    draft.song = accepted;
-  });
-  player.performanceAudition = null;
-  player.performanceCandidate = null;
-  player.playbackSong = state.song;
-  player.position = clamp(position, 0, totalSeconds(state.song));
-  renderAll();
-  updatePlaybackUi(player.position, totalSeconds(state.song), {
-    view: playbackViewForSong(state.song),
-  });
-  scheduleSessionSave();
-  renderGenerationDebugger();
-  showToast("Performance B accepted. Undo is available.");
-  return true;
-}
-
-async function rejectPerformanceDebuggerCandidate() {
-  player.performanceCandidate = null;
-  await player.auditionPerformanceAB("current");
-  renderGenerationDebugger();
-  showToast("Performance B rejected.");
-  return true;
-}
-
-async function endPerformanceDebugger() {
-  await player.endPerformanceAB();
-  renderGenerationDebugger();
+  return performancePromotionController[action](...args);
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -6788,12 +6719,12 @@ function toggleFullscreen() {
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
-  $("#performanceAbCurrent")?.addEventListener("click", () => void auditionPerformanceDebugger("current"));
-  $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
-  $("#performanceAbValidate")?.addEventListener("click", () => void validatePerformanceDebuggerCandidate());
-  $("#performanceAbAccept")?.addEventListener("click", () => void acceptPerformanceDebuggerCandidate());
-  $("#performanceAbReject")?.addEventListener("click", () => void rejectPerformanceDebuggerCandidate());
-  $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
+  $("#performanceAbCurrent")?.addEventListener("click", () => void performanceDebuggerAction("audition", "current"));
+  $("#performanceAbPerformed")?.addEventListener("click", () => void performanceDebuggerAction("audition", "performance"));
+  $("#performanceAbValidate")?.addEventListener("click", () => void performanceDebuggerAction("validate"));
+  $("#performanceAbAccept")?.addEventListener("click", () => void performanceDebuggerAction("accept"));
+  $("#performanceAbReject")?.addEventListener("click", () => void performanceDebuggerAction("reject"));
+  $("#performanceAbEnd")?.addEventListener("click", () => void performanceDebuggerAction("end"));
   debuggerDialog?.addEventListener("click", (event) => {
     if (event.target !== debuggerDialog) return;
     if (player.performanceAudition) void player.endPerformanceAB();
