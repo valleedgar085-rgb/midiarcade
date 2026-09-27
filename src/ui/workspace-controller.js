@@ -33,6 +33,8 @@ export function createWorkspaceController({
       const active = panel.dataset.workspacePanel === workspace;
       panel.classList.toggle("is-active", active);
       panel.hidden = !active;
+      panel.inert = !active;
+      panel.setAttribute("aria-hidden", String(!active));
     }
     if (notify && (previous !== workspace || !bound)) onChange(workspace, previous);
     return true;
