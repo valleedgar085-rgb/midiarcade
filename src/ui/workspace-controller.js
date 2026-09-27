@@ -34,9 +34,7 @@ export function createWorkspaceController({
       panel.classList.toggle("is-active", active);
       panel.hidden = !active;
       panel.setAttribute("aria-hidden", String(!active));
-      if ("inert" in panel) panel.inert = !active;
-      else if (active) panel.removeAttribute("inert");
-      else panel.setAttribute("inert", "");
+      panel.inert = !active;
     }
     if (notify && (previous !== workspace || !bound)) onChange(workspace, previous);
     return true;
