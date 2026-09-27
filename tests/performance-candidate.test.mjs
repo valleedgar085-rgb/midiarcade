@@ -73,6 +73,8 @@ test("accepted performance candidate becomes a clone while rejection restores th
 
   assert.notEqual(accepted, transaction.after);
   assert.equal(accepted.performanceCandidate.accepted, true);
+  assert.equal(accepted.performanceCandidate.status, "accepted");
+  assert.equal(accepted.performanceCandidate.acceptedBy, "explicit-user-action");
   assert.deepEqual(rejected, song);
   assert.notEqual(rejected, song);
   assert.equal(validatePerformanceCandidate(transaction).valid, true);
