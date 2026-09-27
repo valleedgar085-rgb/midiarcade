@@ -67,7 +67,6 @@ import {
 } from "./ui/session-preferences.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
-import { ensurePerformanceAbControls } from "./ui/performance-ab-controls.js";
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
@@ -3822,8 +3821,6 @@ function ensureGenerationDebuggerControls() {
     refresh.textContent = "Refresh";
     $(".debugger-section-heading", dialog)?.append(refresh);
   }
-
-  ensurePerformanceAbControls(dialog);
 
   const actions = $(".debugger-actions", dialog);
   if (actions && !$("#copyDebuggerReport")) {
