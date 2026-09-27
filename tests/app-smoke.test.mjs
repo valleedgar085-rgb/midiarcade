@@ -141,8 +141,9 @@ test("preview transitions and the persistent instrument spotlight stay determini
   );
 });
 
-test("phrase performance is interpreted at the preview boundary", () => {
-  assert.match(appSource, /renderPhrasePerformance\(note\)/);
+test("phrase performance is interpreted once at the preview boundary", () => {
+  assert.match(appSource, /resolvePerformedNote\(note\)/);
+  assert.match(appSource, /performanceTransformForNote\(note, renderPhrasePerformance\(note\)\)/);
   assert.match(appSource, /phrasePerformance\.durationScale/);
   assert.match(appSource, /phrasePerformance\.velocityDelta/);
 });
