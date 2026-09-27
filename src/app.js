@@ -1743,6 +1743,8 @@ export function getAppStateSnapshot() {
 function applyHistorySnapshot(snapshot) {
   if (!snapshot) return false;
   player.stop();
+  player.performanceAudition = null;
+  player.performanceCandidate = null;
   state.song = snapshot.song;
   state.trackSettings = snapshot.trackSettings;
   state.muted = new Set(snapshot.muted);
@@ -3865,9 +3867,19 @@ function renderGenerationDebugger() {
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
   const audition = player.performanceAudition;
-  setText("#performanceAbStatus", audition?.mode === "performance"
-    ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-    : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
+  const candidate = player.performanceCandidate;
+  const validCandidate = candidate?.validation?.valid === true;
+  const acceptButton = $("#performanceAbAccept");
+  const rejectButton = $("#performanceAbReject");
+  if (acceptButton) acceptButton.disabled = !validCandidate;
+  if (rejectButton) rejectButton.disabled = !candidate;
+  setText("#performanceAbStatus", validCandidate
+    ? `B validated · ${Math.round(candidate.selectedHumanize * 100)}% · Gauntlet + ensemble PASS · Accept B to commit`
+    : candidate
+      ? `B rejected · ${candidate.validation?.issues?.join(", ") || "promotion gate failed"}`
+      : audition?.mode === "performance"
+        ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+        : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3949,6 +3961,7 @@ async function copyGenerationDebuggerReport() {
 
 async function auditionPerformanceDebugger(mode) {
   if (!state.song) return showToast("Generate a song first."), false;
+  player.performanceCandidate = null;
   try {
     await player.auditionPerformanceAB(mode, { humanize: 0.65 });
     renderGenerationDebugger();
@@ -3960,6 +3973,67 @@ async function auditionPerformanceDebugger(mode) {
     renderGenerationDebugger();
     return false;
   }
+}
+
+async function validatePerformanceDebuggerCandidate() {
+  if (!state.song) return showToast("Generate a song first."), false;
+  showToast("Validating Performance B...");
+  const { createPerformanceCandidate } = await import("./core/performance-candidate.js");
+  const transaction = createPerformanceCandidate(state.song, {
+    humanize: 0.65,
+    seed: `${state.song.seed ?? state.song.id ?? "song"}:performance-candidate`,
+  });
+  player.performanceCandidate = transaction;
+  if (!transaction.validation?.valid) {
+    renderGenerationDebugger();
+    showToast("Performance B did not pass promotion.");
+    return false;
+  }
+  const position = player.currentSongTime();
+  player.performanceAudition = {
+    mode: "performance",
+    humanize: transaction.selectedHumanize,
+    report: transaction.report,
+  };
+  await player.auditionSong(transaction.after, { startSeconds: position });
+  renderGenerationDebugger();
+  showToast(`B validated at ${Math.round(transaction.selectedHumanize * 100)}%.`);
+  return true;
+}
+
+async function acceptPerformanceDebuggerCandidate() {
+  const transaction = player.performanceCandidate;
+  if (!transaction?.validation?.valid) return showToast("Validate B first."), false;
+  const { acceptPerformanceCandidate } = await import("./core/performance-candidate.js");
+  const snapshot = createHistorySnapshot();
+  const position = player.currentSongTime();
+  const accepted = acceptPerformanceCandidate(transaction);
+  applyTrackSettingsToSong(accepted);
+  player.stop();
+  if (snapshot) pushHistory(snapshot);
+  appStore.transaction("performance:accept", (draft) => {
+    draft.song = accepted;
+  });
+  player.performanceAudition = null;
+  player.performanceCandidate = null;
+  player.playbackSong = state.song;
+  player.position = clamp(position, 0, totalSeconds(state.song));
+  renderAll();
+  updatePlaybackUi(player.position, totalSeconds(state.song), {
+    view: playbackViewForSong(state.song),
+  });
+  scheduleSessionSave();
+  renderGenerationDebugger();
+  showToast("Performance B accepted. Undo is available.");
+  return true;
+}
+
+async function rejectPerformanceDebuggerCandidate() {
+  player.performanceCandidate = null;
+  await player.auditionPerformanceAB("current");
+  renderGenerationDebugger();
+  showToast("Performance B rejected.");
+  return true;
 }
 
 async function endPerformanceDebugger() {
@@ -4014,6 +4088,7 @@ async function runGeneration(kind, options = {}) {
     try {
       player.stop();
       player.performanceAudition = null;
+      player.performanceCandidate = null;
     } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
     showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
@@ -4987,6 +5062,7 @@ export class PreviewPlayer {
     this.playbackView = null;
     this.playbackSong = null;
     this.performanceAudition = null;
+    this.performanceCandidate = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
   }
@@ -5329,6 +5405,7 @@ export class PreviewPlayer {
   async endPerformanceAB() {
     const position = this.currentSongTime();
     this.performanceAudition = null;
+    this.performanceCandidate = null;
     await this.returnToCanonicalSong({ positionSeconds: position, resume: false });
     return true;
   }
@@ -6713,6 +6790,9 @@ function toggleFullscreen() {
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
   $("#performanceAbCurrent")?.addEventListener("click", () => void auditionPerformanceDebugger("current"));
   $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
+  $("#performanceAbValidate")?.addEventListener("click", () => void validatePerformanceDebuggerCandidate());
+  $("#performanceAbAccept")?.addEventListener("click", () => void acceptPerformanceDebuggerCandidate());
+  $("#performanceAbReject")?.addEventListener("click", () => void rejectPerformanceDebuggerCandidate());
   $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
   debuggerDialog?.addEventListener("click", (event) => {
     if (event.target !== debuggerDialog) return;
