@@ -47,13 +47,14 @@ export function createWorkspaceController({
       button.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
         event.preventDefault();
-        const current = Math.max(0, buttons.indexOf(button));
+        const group = buttons.filter((candidate) => candidate.parentElement === button.parentElement);
+        const current = Math.max(0, group.indexOf(button));
         const nextIndex = event.key === "Home"
           ? 0
           : event.key === "End"
-            ? buttons.length - 1
-            : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-        activate(buttons[nextIndex]?.dataset.workspace, { focus: true });
+            ? group.length - 1
+            : (current + (event.key === "ArrowRight" ? 1 : -1) + group.length) % group.length;
+        activate(group[nextIndex]?.dataset.workspace, { focus: true });
       });
       button.tabIndex = index === 0 ? 0 : -1;
     });
