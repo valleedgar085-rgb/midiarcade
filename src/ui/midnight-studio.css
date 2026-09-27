@@ -1,0 +1,790 @@
+/* MIDNIGHT STUDIO CREATE UI FINAL PASS
+   Matches the new Create screen mockup:
+   - Large artwork hero at top
+   - Compact now-playing row after scroll
+   - Song cards + create-song panel
+   - Fixed mobile bottom nav
+   ───────────────────────────────────────────── */
+
+:root {
+  --midnight-bg: #08090d;
+  --midnight-card: #121319;
+  --midnight-card-2: #161720;
+  --midnight-border: rgba(255, 255, 255, 0.09);
+  --midnight-border-strong: rgba(255, 255, 255, 0.16);
+  --midnight-text: #ffffff;
+  --midnight-muted: #a1a1aa;
+  --midnight-dim: #71717a;
+  --midnight-red: #ff174d;
+  --midnight-red-2: #ff2e4d;
+  --midnight-green: #22c55e;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: var(--midnight-bg) !important;
+  color: var(--midnight-text) !important;
+  -webkit-font-smoothing: antialiased;
+}
+
+body:has(#tab-create.is-active) {
+  background:
+    radial-gradient(circle at 50% -10%, rgba(255, 46, 77, 0.14), transparent 32%),
+    radial-gradient(circle at 20% 10%, rgba(45, 212, 191, 0.05), transparent 24%),
+    var(--midnight-bg) !important;
+}
+
+body:has(#tab-create.is-active) .app-shell {
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--midnight-bg) !important;
+}
+
+body:has(#tab-create.is-active) main {
+  padding: 0 16px calc(140px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+svg {
+  max-width: 28px !important;
+  max-height: 28px !important;
+}
+
+.menu-dropdown[aria-hidden="true"],
+.menu-dropdown:not(.is-open) {
+  display: none !important;
+}
+
+/* Header */
+body:has(#tab-create.is-active) .topbar {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 80 !important;
+  height: 74px !important;
+  padding: max(12px, env(safe-area-inset-top, 0px)) 18px 8px !important;
+  border: 0 !important;
+  background: linear-gradient(180deg, #08090d 0%, rgba(8, 9, 13, 0.94) 100%) !important;
+}
+
+body:has(#tab-create.is-active) .brand {
+  gap: 9px !important;
+}
+
+body:has(#tab-create.is-active) .brand strong {
+  font-size: 1.28rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.04em !important;
+  color: #fff !important;
+  background: none !important;
+  -webkit-text-fill-color: initial !important;
+}
+
+body:has(#tab-create.is-active) .brand strong::first-letter {
+  color: #fff;
+}
+
+body:has(#tab-create.is-active) .brand small,
+body:has(#tab-create.is-active) .session-status,
+body:has(#tab-create.is-active) #undoButton,
+body:has(#tab-create.is-active) #redoButton,
+body:has(#tab-create.is-active) .guide-button,
+body:has(#tab-create.is-active) .version-chip,
+body:has(#tab-create.is-active) #tabNavShell .nav-dock-toggle {
+  display: none !important;
+}
+
+body:has(#tab-create.is-active) .brand-mark {
+  width: 30px !important;
+  height: 28px !important;
+}
+
+body:has(#tab-create.is-active) .brand-mark i {
+  background: var(--midnight-red) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 0 14px rgba(255, 46, 77, 0.35) !important;
+  display: block !important;
+}
+
+body:has(#tab-create.is-active) .topbar-actions {
+  margin-left: auto !important;
+}
+
+body:has(#tab-create.is-active) .menu-button {
+  width: 42px !important;
+  height: 42px !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--midnight-muted) !important;
+}
+
+body:has(#tab-create.is-active) .menu-button b {
+  display: none !important;
+}
+
+/* Create layout */
+#tab-create {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 0 !important;
+}
+
+#tab-create > .home-command,
+#tab-create .workflow-panel,
+#tab-create .dna-integrated-card {
+  display: none !important;
+}
+
+#tab-create .create-console {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+}
+
+/* Top hero artwork state */
+#tab-create .song-showcase {
+  position: relative !important;
+  min-height: calc(100svh - 156px) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-end !important;
+  padding: 20px 20px 118px !important;
+  border: 0 !important;
+  border-radius: 0 0 28px 28px !important;
+  background:
+    linear-gradient(180deg, rgba(8, 9, 13, 0.08) 0%, rgba(8, 9, 13, 0.1) 36%, rgba(8, 9, 13, 0.94) 88%),
+    radial-gradient(circle at 50% 42%, rgba(255, 46, 77, 0.18), transparent 38%),
+    #08090d !important;
+  box-shadow: none !important;
+  transition: min-height 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              padding 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.38s ease,
+              box-shadow 0.38s ease,
+              border-color 0.38s ease !important;
+}
+
+#tab-create .song-showcase::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 96px 0 0 !important;
+  width: auto !important;
+  height: auto !important;
+  z-index: 0 !important;
+  background:
+    linear-gradient(180deg, transparent 0%, rgba(8, 9, 13, 0.2) 56%, rgba(8, 9, 13, 0.96) 100%),
+    var(--create-cover-art, url("./assets/brand/icon-512-v2.png")) center top / cover no-repeat !important;
+  opacity: 0.98 !important;
+  transform: scale(1.02) !important;
+  border-radius: 0 !important;
+  will-change: inset, width, height, border-radius, opacity, transform;
+  transition: inset 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              width 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              height 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              border-radius 0.38s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.38s ease,
+              transform 0.38s ease !important;
+}
+
+#tab-create .song-showcase::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: auto 0 0 !important;
+  height: 46% !important;
+  z-index: 1 !important;
+  background: linear-gradient(180deg, transparent, #08090d 88%) !important;
+  pointer-events: none !important;
+  opacity: 1 !important;
+  transition: opacity 0.28s ease !important;
+}
+
+
+#tab-create .song-showcase > * {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+#tab-create .showcase-art {
+  display: none !important;
+}
+
+#tab-create .showcase-copy {
+  display: contents !important;
+}
+
+#tab-create .showcase-copy > .eyebrow {
+  display: none !important;
+}
+
+#tab-create .title-row {
+  display: block !important;
+}
+
+#tab-create .title-row .tiny-button {
+  display: none !important;
+}
+
+#tab-create .title-row h1 {
+  margin: 4px 0 4px !important;
+  color: #fff !important;
+  font-size: clamp(2.35rem, 11vw, 3.4rem) !important;
+  font-weight: 900 !important;
+  line-height: 0.96 !important;
+  letter-spacing: -0.06em !important;
+}
+
+#tab-create .title-row h1::before {
+  content: "CURRENT PROJECT" !important;
+  display: block !important;
+  margin: 0 0 8px !important;
+  color: rgba(255, 255, 255, 0.66) !important;
+  font-family: var(--mn-mono, monospace) !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.15em !important;
+}
+
+#tab-create #songSummary {
+  max-width: 30ch !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 1rem !important;
+  line-height: 1.35 !important;
+}
+
+#tab-create .song-facts {
+  order: 5 !important;
+  display: flex !important;
+  gap: 7px !important;
+  margin: 10px 0 0 !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+}
+
+#tab-create .song-facts::-webkit-scrollbar {
+  display: none !important;
+}
+
+#tab-create .song-facts span {
+  flex: 0 0 auto !important;
+  min-height: 30px !important;
+  padding: 6px 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.11) !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
+  font-size: 0.75rem !important;
+}
+
+#tab-create .showcase-actions {
+  order: 7 !important;
+  display: flex !important;
+  justify-content: center !important;
+  margin: 28px 0 0 !important;
+}
+
+#tab-create .showcase-play {
+  width: 72px !important;
+  height: 72px !important;
+  min-height: 72px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: 999px !important;
+  background: var(--midnight-red) !important;
+  border: 0 !important;
+  box-shadow:
+    0 14px 40px rgba(255, 23, 77, 0.42),
+    0 0 0 14px rgba(255, 255, 255, 0.035),
+    0 0 0 28px rgba(255, 255, 255, 0.02) !important;
+}
+
+#tab-create .showcase-play strong {
+  display: none !important;
+}
+
+#tab-create .showcase-play-icon {
+  width: 0 !important;
+  height: 0 !important;
+  margin-left: 5px !important;
+  border-top: 13px solid transparent !important;
+  border-bottom: 13px solid transparent !important;
+  border-left: 20px solid #fff !important;
+  background: transparent !important;
+}
+
+#tab-create .showcase-arc-wrap,
+#tab-create .song-showcase .taste-actions,
+#tab-create .song-showcase .create-live-controls {
+  display: none !important;
+}
+
+/* Scrolled state: compact now-playing header with smooth animated album cover */
+#tab-create.is-scrolled .song-showcase {
+  position: sticky !important;
+  top: 74px !important;
+  z-index: 70 !important;
+  min-height: 72px !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 8px 12px 8px 90px !important;
+  margin: 0 0 8px !important;
+  border: 1px solid var(--midnight-border) !important;
+  border-radius: 16px !important;
+  background: rgba(18, 19, 25, 0.94) !important;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(22px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.15) !important;
+}
+
+#tab-create.is-scrolled .song-showcase::before {
+  position: absolute !important;
+  top: 8px !important;
+  left: 10px !important;
+  bottom: auto !important;
+  right: auto !important;
+  width: 68px !important;
+  height: 54px !important;
+  border-radius: 10px !important;
+  background:
+    linear-gradient(180deg, rgba(8, 9, 13, 0.04), rgba(8, 9, 13, 0.24)),
+    var(--create-cover-art, url("./assets/brand/icon-192-v2.png")) center / cover no-repeat !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+#tab-create.is-scrolled .song-showcase::after {
+  opacity: 0 !important;
+}
+
+#tab-create.is-scrolled .title-row h1::before,
+#tab-create.is-scrolled #songSummary,
+#tab-create.is-scrolled #factBars,
+#tab-create.is-scrolled #factDuration,
+#tab-create.is-scrolled #factRhythm {
+  opacity: 0 !important;
+  max-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  transition: opacity 0.2s ease, max-height 0.3s ease !important;
+}
+
+#tab-create.is-scrolled .title-row h1 {
+  margin: 0 !important;
+  font-size: 1.1rem !important;
+  line-height: 1.15 !important;
+  letter-spacing: -0.03em !important;
+  transition: font-size 0.38s cubic-bezier(0.16, 1, 0.3, 1), margin 0.35s ease !important;
+}
+
+#tab-create.is-scrolled .title-row h1::after {
+  content: none !important;
+}
+
+#tab-create.is-scrolled .song-facts {
+  order: initial !important;
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 4px !important;
+  margin: 4px 0 0 !important;
+  overflow: hidden !important;
+}
+
+#tab-create.is-scrolled .song-facts span {
+  min-height: 18px !important;
+  padding: 2px 6px !important;
+  font-size: 0.6rem !important;
+}
+
+#tab-create.is-scrolled .showcase-actions {
+  margin: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+#tab-create.is-scrolled .showcase-play {
+  width: 50px !important;
+  height: 50px !important;
+  min-height: 50px !important;
+  box-shadow: 0 8px 20px rgba(255, 23, 77, 0.36) !important;
+  transition: all 0.38s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#tab-create.is-scrolled .showcase-play-icon {
+  border-top-width: 9px !important;
+  border-bottom-width: 9px !important;
+  border-left-width: 14px !important;
+}
+
+
+/* Your songs strip placeholder style from existing sections/cards */
+#tab-create .song-creator-panel::before {
+  content: "Your songs";
+  display: block;
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 1.18rem;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+}
+
+#preGenSection {
+  padding: 14px !important;
+  border-radius: 18px !important;
+  background: rgba(18, 19, 25, 0.94) !important;
+  border: 1px solid var(--midnight-border) !important;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.42) !important;
+}
+
+#preGenSection .creator-heading {
+  display: block !important;
+  margin-bottom: 12px !important;
+}
+
+#preGenSection .creator-heading .eyebrow,
+#preGenSection .creator-heading .section-description,
+#preGenSection .creator-heading-actions,
+#preGenSection .genre-pocket,
+#preGenSection .genre-guidance,
+#preGenSection .creator-recipe-side,
+#preGenSection .generation-intent {
+  display: none !important;
+}
+
+#preGenSection .creator-heading h2 {
+  margin: 0 !important;
+  color: #fff !important;
+  font-size: 1.25rem !important;
+  font-weight: 850 !important;
+  letter-spacing: -0.04em !important;
+}
+
+#preGenSection .creator-heading h2::before {
+  content: "Create a song";
+}
+
+#preGenSection .creator-heading h2 {
+  font-size: 0 !important;
+}
+
+#preGenSection .creator-heading h2::before {
+  font-size: 1.25rem !important;
+}
+
+#preGenSection .creator-grid,
+#preGenSection .creator-main-controls {
+  display: block !important;
+}
+
+#preGenSection .genre-direction {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#preGenSection .genre-direction {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+#preGenSection .select-control,
+#preGenSection .shape-controls,
+#preGenSection .generation-envelope-select {
+  min-height: 58px !important;
+  padding: 10px 12px !important;
+  border: 1px solid var(--midnight-border) !important;
+  border-radius: 12px !important;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)) !important;
+}
+
+#preGenSection .select-control span {
+  color: var(--midnight-muted) !important;
+  font-size: 0.7rem !important;
+}
+
+#preGenSection .select-control span small {
+  display: none !important;
+}
+
+#preGenSection select {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 2px 0 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  color: #fff !important;
+  font-size: 0.9rem !important;
+  font-weight: 750 !important;
+}
+
+#preGenSection .secondary-genre-control {
+  display: none !important;
+}
+
+#preGenSection .shape-controls {
+  grid-column: 1 / -1 !important;
+  display: block !important;
+}
+
+#preGenSection .shape-controls > summary {
+  min-height: 40px !important;
+  padding: 0 !important;
+  color: #fff !important;
+}
+
+#preGenSection .shape-controls > summary span small {
+  color: var(--midnight-muted) !important;
+}
+
+#preGenSection .shape-controls > summary span strong {
+  color: #fff !important;
+}
+
+#preGenSection .generation-actions-bar {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 10px !important;
+  margin-top: 12px !important;
+  padding-top: 0 !important;
+  border: 0 !important;
+}
+
+#preGenSection .generation-button {
+  min-height: 58px !important;
+  border-radius: 14px !important;
+}
+
+#preGenSection .generation-new {
+  background: linear-gradient(135deg, var(--midnight-red), #ff315b) !important;
+  border: 0 !important;
+  box-shadow: 0 12px 30px rgba(255, 23, 77, 0.34) !important;
+}
+
+#preGenSection .generation-new .action-copy small,
+#preGenSection .generation-new .action-copy em,
+#preGenSection .generation-new .action-icon,
+#preGenSection .generation-new kbd {
+  display: none !important;
+}
+
+#preGenSection .generation-new .action-copy strong {
+  color: #fff !important;
+  font-size: 0 !important;
+}
+
+#preGenSection .generation-new .action-copy strong::before {
+  content: "Generate song";
+  font-size: 0.98rem !important;
+}
+
+#preGenSection .generation-new::after {
+  content: "→";
+  color: #fff;
+  font-size: 1.4rem;
+  font-weight: 400;
+}
+
+#preGenSection .generation-similar {
+  display: flex !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+  border: 1px solid var(--midnight-border) !important;
+  box-shadow: none !important;
+}
+
+#preGenSection .generation-similar .action-copy small,
+#preGenSection .generation-similar .action-copy em,
+#preGenSection .generation-similar kbd {
+  display: none !important;
+}
+
+#preGenSection .generation-similar .action-copy strong {
+  color: #fff !important;
+  font-size: 0 !important;
+}
+
+#preGenSection .generation-similar .action-copy strong::before {
+  content: "3 variations";
+  font-size: 0.92rem !important;
+}
+
+/* Bottom nav */
+body:has(#tab-create.is-active) #tabNavShell {
+  position: fixed !important;
+  inset: auto 12px max(8px, env(safe-area-inset-bottom, 0px)) 12px !important;
+  z-index: 100 !important;
+  height: 70px !important;
+  border: 1px solid var(--midnight-border) !important;
+  border-radius: 16px !important;
+  background: rgba(18, 19, 25, 0.96) !important;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(24px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.2) !important;
+}
+
+body:has(#tab-create.is-active) .tab-nav {
+  height: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+}
+
+body:has(#tab-create.is-active) .tab-btn {
+  height: 70px !important;
+  min-height: 70px !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+body:has(#tab-create.is-active) .tab-btn span {
+  color: currentColor !important;
+  font-size: 0.68rem !important;
+  font-weight: 650 !important;
+  text-transform: none !important;
+}
+
+body:has(#tab-create.is-active) .tab-btn svg {
+  width: 25px !important;
+  height: 25px !important;
+  color: currentColor !important;
+}
+
+body:has(#tab-create.is-active) .tab-btn.is-active {
+  color: var(--midnight-red) !important;
+}
+
+body:has(#tab-create.is-active) .tab-btn.is-active::after {
+  width: 34px !important;
+  height: 3px !important;
+  bottom: 6px !important;
+  border-radius: 999px !important;
+  background: var(--midnight-red) !important;
+  box-shadow: 0 0 10px rgba(255, 46, 77, 0.35) !important;
+  content: "" !important;
+  position: absolute !important;
+}
+
+/* Desktop/tablet containment */
+@media (min-width: 700px) {
+  body:has(#tab-create.is-active) .app-shell {
+    max-width: 520px;
+    min-height: 100svh;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  body:has(#tab-create.is-active) main {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  body:has(#tab-create.is-active) main {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  #tab-create .song-showcase {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  #tab-create .title-row h1 {
+    font-size: clamp(2.05rem, 10vw, 2.7rem) !important;
+  }
+
+  #preGenSection .genre-direction {
+    gap: 8px !important;
+  }
+}
+
+/* Base resets & other panels */
+.panel,
+#tab-mix .panel,
+#tab-finish .panel,
+#preGenSection,
+.hero-panel,
+.song-showcase,
+.workflow-panel,
+.dna-integrated-card,
+.dna-style-card,
+.dna-cell,
+.dna-palette,
+.now-playing,
+.export-area,
+.transport-center,
+.section-shaper,
+.shape-focus-bar,
+.shape-director-panel,
+.section-editor,
+.export-setup,
+.finish-cover,
+.finish-facts,
+.smart-mix-console,
+.attitude-strip,
+.track-card {
+  background: #121319 !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 20px !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35) !important;
+}
+
+:is(h1, h2, h3, h4, h5, h6, strong, b) {
+  color: #ffffff !important;
+  text-shadow: none !important;
+}
+
+.eyebrow {
+  color: #ff2e4d !important;
+}
+
+.eyebrow span {
+  background: #ff2e4d !important;
+}
+
+.section-description, #songSummary, .menu-item, p, span, small {
+  color: #9ca3af !important;
+}
+
+:is(select, input[type="text"], input[type="number"], .song-facts span, .workflow-steps button) {
+  background: #161720 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+}
+
+.showcase-play,
+.generation-new,
+.play-button,
+.export-button,
+.midnight-btn-primary,
+#preGenSection .generation-new,
+button.is-primary {
+  background: #ff2e4d !important;
+  border-color: #ff2e4d !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 24px rgba(255, 46, 77, 0.35) !important;
+}
+
+:is(.small-button, .tiny-button, .showcase-action, .guided-mode-button) {
+  background: #161720 !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+  border-radius: 12px !important;
+}
+
+input[type="range"] {
+  accent-color: #ff2e4d !important;
+}
