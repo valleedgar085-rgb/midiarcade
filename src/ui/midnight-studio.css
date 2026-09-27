@@ -1255,7 +1255,7 @@ main#top {
   color: var(--midnight-muted) !important;
 }
 
-#compactCreatePlayButton {
+.compact-create-play-button {
   width: 44px !important;
   height: 44px !important;
   min-width: 44px !important;
