@@ -227,22 +227,46 @@ function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
   if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
+
   let isScrolled = false;
+
+  const reset = () => {
+    if (!isScrolled && !createPanel.classList.contains("is-scrolled")) return;
+    isScrolled = false;
+    createPanel.classList.remove("is-scrolled");
+  };
+
   const update = () => {
-    const scrollY = Number(ownerWindow.scrollY || 0);
-    if (!isScrolled && scrollY > 140) {
+    const active = !createPanel.hidden && createPanel.classList.contains("is-active");
+    if (!active) {
+      reset();
+      return;
+    }
+
+    const documentScroll = Number(
+      rootDocument?.documentElement?.scrollTop
+      || rootDocument?.body?.scrollTop
+      || 0
+    );
+    const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
+
+    if (!isScrolled && scrollY > 168) {
       isScrolled = true;
       createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 80) {
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
+    } else if (isScrolled && scrollY < 96) {
+      reset();
     }
   };
+
   update();
   ownerWindow.addEventListener("scroll", update, { passive: true });
   ownerWindow.addEventListener("resize", update, { passive: true });
-}
 
+  if (typeof MutationObserver !== "undefined") {
+    const observer = new MutationObserver(update);
+    observer.observe(createPanel, { attributes: true, attributeFilter: ["hidden", "class"] });
+  }
+}
 
 export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   if (!rootDocument?.querySelector) return false;
