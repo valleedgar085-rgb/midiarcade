@@ -1,3 +1,5 @@
+import { createProfessionalGenerationGauntletSong } from "./professional-gauntlet-song.js";
+
 const DB_RECORD_SCHEMA = "midi-arcade/generation-record@1";
 
 function clone(value) {
@@ -240,12 +242,16 @@ export function createGenerationDatabaseRecord({
     };
   });
 
+  const gauntletSong = createProfessionalGenerationGauntletSong(song);
   const trackRows = [];
-  const musicalEvents = [];
+  const trackIdBySource = new Map();
+
   for (const [trackIndex, track] of song.tracks.entries()) {
     const role = text(track?.id ?? track?.role, `track-${trackIndex}`);
+    const sourceTrackId = text(track?.id ?? track?.trackId ?? track?.name, role);
     const trackId = `${songId}:${generationRunId}:track:${role}`;
     const pitches = (track?.notes ?? []).map((note) => integer(note?.pitch, null)).filter((pitch) => pitch != null);
+    trackIdBySource.set(sourceTrackId, trackId);
     trackRows.push({
       id: trackId,
       song_id: songId,
@@ -261,27 +267,32 @@ export function createGenerationDatabaseRecord({
       soloed: boolInt(track?.soloed, 0),
       track_json: safeJson(track),
     });
-
-    for (const [eventIndex, note] of (track?.notes ?? []).entries()) {
-      const pitch = integer(note?.pitch, null);
-      musicalEvents.push({
-        id: `${trackId}:event:${eventIndex}`,
-        track_id: trackId,
-        section_id: text(note?.sectionId, null) ?? findSectionId(sectionRows, note?.start),
-        event_type: text(note?.eventType, "note"),
-        start_beat: finite(note?.start, 0),
-        duration_beats: Math.max(0, finite(note?.duration, 0)),
-        pitch,
-        velocity: integer(note?.velocity, null),
-        probability: Math.min(1, Math.max(0, finite(note?.probability, 1))),
-        articulation: text(note?.articulation, null),
-        microtiming_ms: finite(note?.microtimingMs ?? note?.microtiming_ms, 0),
-        source: text(note?.source, "composer"),
-        locked: boolInt(note?.locked, 0),
-        event_json: safeJson(note),
-      });
-    }
   }
+
+  const sectionIdBySource = new Map(
+    sectionRows.map((section) => [section.source_section_id, section.id]),
+  );
+  const musicalEvents = gauntletSong.musicalEvents.map((event, eventIndex) => {
+    const trackId = trackIdBySource.get(event.trackId)
+      ?? `${songId}:${generationRunId}:track:${event.roleId || "unknown"}`;
+    return {
+      id: `${generationRunId}:event:${eventIndex}`,
+      track_id: trackId,
+      section_id: sectionIdBySource.get(text(event.sectionId, null))
+        ?? findSectionId(sectionRows, event.performed?.startBeat ?? event.time),
+      event_type: text(event.eventType, "note"),
+      start_beat: finite(event.performed?.startBeat ?? event.time, 0),
+      duration_beats: Math.max(0, finite(event.performed?.durationBeats ?? event.duration, 0)),
+      pitch: integer(event.performed?.renderedMidiPitch ?? event.renderedMidiPitch, null),
+      velocity: integer(event.performed?.velocity ?? event.velocity, null),
+      probability: Math.min(1, Math.max(0, finite(event.intent?.probability ?? event.probability, 1))),
+      articulation: text(event.performed?.articulation ?? event.articulation, null),
+      microtiming_ms: finite(event.performed?.microtimingMs ?? event.microtimingMs, 0),
+      source: text(event.intent?.source, "composer"),
+      locked: boolInt(event.intent?.locked ?? event.locked, 0),
+      event_json: safeJson(event),
+    };
+  });
 
   const cleanSections = sectionRows.map(({ _startBeat, _endBeat, ...row }) => row);
   const harmony = clone(song?.harmony ?? []);
@@ -384,6 +395,7 @@ export function createGenerationDatabaseRecord({
     }),
     sections: Object.freeze(cleanSections),
     tracks: Object.freeze(trackRows),
+    musicalEventSchema: gauntletSong.musicalEventSchema,
     musicalEvents: Object.freeze(musicalEvents),
     stages: Object.freeze(persistedStages),
     debuggerEvents: Object.freeze(debuggerEvents),
