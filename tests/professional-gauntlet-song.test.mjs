@@ -55,6 +55,9 @@ test("Professional Generation GauntletSong exposes one canonical musical authori
     assert.ok(event.intent);
     assert.ok(event.canonical);
     assert.ok(event.performed);
+    assert.ok(event.sourceRef);
+    assert.ok(Number.isInteger(event.sourceRef.trackIndex));
+    assert.ok(Number.isInteger(event.sourceRef.noteIndex));
   }
 
   assert.equal(validation.passed, true, validation.issues.join(", "));
