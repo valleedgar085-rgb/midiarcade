@@ -3914,7 +3914,7 @@ async function copyGenerationDebuggerReport() {
   }
   const payload = JSON.stringify({
     app: "MIDI Arcade",
-    version: "1.2.2",
+    version: "1.2.3",
     capturedAt: new Date().toISOString(),
     workerActive: generationExecutor.usingWorker,
     runs,
