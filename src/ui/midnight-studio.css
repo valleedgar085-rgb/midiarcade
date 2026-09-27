@@ -129,7 +129,7 @@ body:has(#tab-create.is-active) .menu-button b {
 }
 
 /* Create layout */
-#tab-create {
+#tab-create.is-active {
   display: flex !important;
   flex-direction: column !important;
   gap: 12px !important;
@@ -787,4 +787,171 @@ button.is-primary {
 
 input[type="range"] {
   accent-color: #ff2e4d !important;
+}
+
+
+/* ANDROID UI STABILITY V2 · single Create player, hard tab isolation */
+.tab-panel[hidden],
+.tab-panel[aria-hidden="true"],
+.tab-panel:not(.is-active) {
+  display: none !important;
+}
+
+#tab-create:not(.is-active) {
+  display: none !important;
+}
+
+#tab-create.is-active {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Use the real album artwork. Do not animate a pseudo-element wallpaper. */
+#tab-create .song-showcase {
+  min-height: auto !important;
+  overflow: visible !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  padding: 18px 16px 96px !important;
+  border-radius: 0 0 24px 24px !important;
+  background: #08090d !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transition: none !important;
+}
+
+#tab-create .song-showcase::before,
+#tab-create .song-showcase::after {
+  content: none !important;
+  display: none !important;
+}
+
+#tab-create .showcase-art {
+  display: grid !important;
+  width: min(88vw, 360px) !important;
+  height: auto !important;
+  max-width: 360px !important;
+  aspect-ratio: 1 / 1 !important;
+  margin: 8px auto 18px !important;
+  border-radius: 24px !important;
+  background-position: center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  overflow: hidden !important;
+  transform: translateZ(0) !important;
+  -webkit-backface-visibility: hidden !important;
+  backface-visibility: hidden !important;
+  will-change: auto !important;
+  transition: none !important;
+}
+
+#tab-create .showcase-copy {
+  display: block !important;
+  width: 100% !important;
+}
+
+/* One DOM player changes mode at a threshold. No duplicate fixed mini-player. */
+#tab-create.is-scrolled .song-showcase {
+  position: sticky !important;
+  top: calc(66px + env(safe-area-inset-top, 0px)) !important;
+  z-index: 70 !important;
+  min-height: 72px !important;
+  display: grid !important;
+  grid-template-columns: 56px minmax(0, 1fr) 46px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px 10px !important;
+  margin: 0 0 10px !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 16px !important;
+  background: #121319 !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.42) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  transform: none !important;
+}
+
+#tab-create.is-scrolled .showcase-art {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  margin: 0 !important;
+  border-radius: 11px !important;
+  aspect-ratio: 1 / 1 !important;
+}
+
+#tab-create.is-scrolled .showcase-copy {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  min-width: 0 !important;
+}
+
+#tab-create.is-scrolled .title-row {
+  min-width: 0 !important;
+}
+
+#tab-create.is-scrolled .title-row h1 {
+  margin: 0 !important;
+  font-size: 1rem !important;
+  line-height: 1.1 !important;
+  letter-spacing: -.025em !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#tab-create.is-scrolled .title-row h1::before,
+#tab-create.is-scrolled #songSummary,
+#tab-create.is-scrolled .song-facts,
+#tab-create.is-scrolled .showcase-copy > .eyebrow {
+  display: none !important;
+}
+
+#tab-create.is-scrolled .showcase-actions {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  margin: 0 !important;
+  align-self: center !important;
+}
+
+#tab-create.is-scrolled .showcase-play {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  transition: none !important;
+}
+
+#tab-create.is-scrolled .showcase-play-icon {
+  border-top-width: 8px !important;
+  border-bottom-width: 8px !important;
+  border-left-width: 12px !important;
+}
+
+/* Avoid Android WebView compositor churn on the navigation surfaces. */
+.mobile-dock,
+#tabNavShell {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (max-width: 760px) {
+  #tab-create .song-showcase {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  #tab-create .showcase-art {
+    width: min(90vw, 360px) !important;
+  }
+
+  #tab-create.is-scrolled .showcase-art {
+    width: 56px !important;
+  }
 }
