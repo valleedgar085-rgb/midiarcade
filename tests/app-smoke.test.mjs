@@ -226,6 +226,10 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "refreshDebugger",
     "copyDebuggerReport",
     "clearDebuggerHistory",
+    "performanceAbLab",
+    "performanceAbCurrent",
+    "performanceAbPerformed",
+    "performanceAbEnd",
   ]);
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
@@ -241,7 +245,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
   assert.deepEqual(
     [...appRuntimeMountedIds],
-    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory"],
+    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory", "performanceAbLab", "performanceAbCurrent", "performanceAbPerformed", "performanceAbEnd"],
     "app runtime selector exceptions must remain narrow and explicit",
   );
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
