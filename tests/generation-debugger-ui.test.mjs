@@ -16,9 +16,16 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.match(html, /id="performanceAbLab"/);
   assert.match(html, /id="performanceAbCurrent"/);
   assert.match(html, /id="performanceAbPerformed"/);
+  assert.match(html, /id="performanceAbValidate"/);
+  assert.match(html, /id="performanceAbAccept"[^>]*disabled/);
+  assert.match(html, /id="performanceAbReject"[^>]*disabled/);
   assert.match(html, /id="performanceAbEnd"/);
   assert.match(app, /auditionPerformanceAB\(mode/);
   assert.match(app, /createPerformanceAuditionSong\(song/);
+  assert.match(app, /import\("\.\/ui\/performance-promotion-controller\.js"\)/);
+  assert.match(app, /performanceDebuggerAction\("validate"\)/);
+  assert.match(app, /performanceDebuggerAction\("accept"\)/);
+  assert.match(app, /performanceDebuggerAction\("reject"\)/);
   assert.match(app, /generationExecutor\.diagnosticsSnapshot\(\)/);
   assert.match(app, /generationExecutor\.clearDiagnostics\(\)/);
   assert.match(app, /function openGenerationDebugger\(\)/);
