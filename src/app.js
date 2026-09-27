@@ -4911,15 +4911,8 @@ export function releaseScreenWakeLock() {
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      void requestScreenWakeLock();
-    } else {
-      releaseScreenWakeLock();
-    }
+    if (document.visibilityState !== "visible") releaseScreenWakeLock();
   });
-  if (document.visibilityState === "visible") {
-    void requestScreenWakeLock();
-  }
 }
 
 export class PreviewPlayer {
@@ -6769,8 +6762,8 @@ async function init() {
       showToast(`Your last song was restored. Solo is still active on ${soloNames.join(", ")}.`);
     } else if (restored) showToast("Your last song and live take were restored.");
     discoverMidiDevices({ requestAccess: false });
-    // Prune old MIDI exports at startup (fire-and-forget).
-    pruneMidiExportsCache().catch(() => {});
+    // Native export-cache pruning runs only after an export. Avoid Filesystem bridge
+    // maintenance during Android startup, where many stat calls can stall WebView.
   } catch (error) {
     console.error(error);
     showToast("The composition engine could not start. Refresh to try again.");
