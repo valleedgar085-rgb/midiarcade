@@ -507,10 +507,35 @@ test("browser app initializes against the engine contract", async () => {
   globalThis.HTMLInputElement = MockElement;
   globalThis.HTMLSelectElement = MockElement;
   globalThis.HTMLTextAreaElement = MockElement;
+  const workspaceButtons = [
+    ["#mobileCreate", "create"],
+    ["#mobileArrange", "arrange"],
+    ["#mobileMix", "mix"],
+    ["#mobileFinish", "finish"],
+  ].map(([selector, workspace]) => {
+    const element = elementFor(selector);
+    element.dataset.workspace = workspace;
+    return element;
+  });
+  const workspacePanels = [
+    ["#tab-create", "create"],
+    ["#tab-arrange", "arrange"],
+    ["#tab-mix", "mix"],
+    ["#tab-finish", "finish"],
+  ].map(([selector, workspacePanel]) => {
+    const element = elementFor(selector);
+    element.dataset.workspacePanel = workspacePanel;
+    return element;
+  });
+
   globalThis.document = {
     body: new MockElement(),
     querySelector: elementFor,
-    querySelectorAll() { return []; },
+    querySelectorAll(selector) {
+      if (selector === "[data-workspace]") return workspaceButtons;
+      if (selector === "[data-workspace-panel]") return workspacePanels;
+      return [];
+    },
     addEventListener() {},
     createElement() { return new MockElement(); },
   };
