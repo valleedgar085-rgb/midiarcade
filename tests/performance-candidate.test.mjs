@@ -22,6 +22,21 @@ function generatedSong() {
   });
 }
 
+test("Trap performance candidate fails closed until listener benefit is proven", { timeout: 120_000 }, () => {
+  const song = generatedSong();
+  song.genre = "trap";
+  song.meta.genre = "trap";
+  const transaction = createPerformanceCandidate(song, {
+    humanize: 1,
+    seed: "trap-listener-benefit-unproven",
+  });
+
+  assert.equal(transaction.status, "rejected");
+  assert.equal(transaction.validation.valid, false);
+  assert.ok(transaction.validation.issues.includes("performance:listener-benefit-unproven"));
+  assert.equal(transaction.attempts.length, 0);
+});
+
 test("performance candidate is explicit, deterministic, and does not mutate the source", { timeout: 120_000 }, () => {
   const song = generatedSong();
   const before = structuredClone(song);
