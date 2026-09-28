@@ -1,6 +1,14 @@
 const LAIDBACK_GENRES = new Set(["neoSoul", "loFiHipHop", "rnbSoul"]);
 const GRID_GENRES = new Set(["house", "techno", "synthwave", "trap"]);
 
+const GENRE_PERFORMANCE_SCALE = Object.freeze({
+  house: Object.freeze({
+    timing: 0.15,
+    duration: 0.45,
+    velocity: 0.65,
+  }),
+});
+
 const ROLE_TIMING_RANGE = Object.freeze({
   drums: 0.003,
   bass: 0.004,
@@ -216,9 +224,10 @@ function performEvent(event, {
     renderedMidiPitch: Math.round(finite(event?.renderedMidiPitch, 60)),
     velocity: Math.round(clamp(event?.velocity, 1, 127)),
   };
-  const timingDeltaBeats = timingPolicy(event, genre, amount, seed);
-  const durationScale = durationPolicy(event, amount, seed);
-  const velocityDelta = velocityPolicy(event, amount, seed);
+  const performanceScale = GENRE_PERFORMANCE_SCALE[genre] ?? { timing: 1, duration: 1, velocity: 1 };
+  const timingDeltaBeats = timingPolicy(event, genre, amount * performanceScale.timing, seed);
+  const durationScale = durationPolicy(event, amount * performanceScale.duration, seed);
+  const velocityDelta = velocityPolicy(event, amount * performanceScale.velocity, seed);
   const minimumStart = Math.max(0, finite(orderBounds?.minStart, 0));
   const maximumStart = Math.min(
     Math.max(0, totalBeats - 1 / 960),
