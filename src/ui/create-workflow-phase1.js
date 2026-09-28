@@ -228,12 +228,21 @@ function setupCreateScrollState(rootDocument, createPanel) {
   if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
   let isScrolled = false;
+  let collapseLockUntil = 0;
   const update = () => {
     const scrollY = Number(ownerWindow.scrollY || 0);
+    const now = typeof performance !== "undefined" && typeof performance.now === "function"
+      ? performance.now()
+      : Date.now();
     if (!isScrolled && scrollY > 140) {
       isScrolled = true;
+      collapseLockUntil = now + 650;
       createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 80) {
+    } else if (isScrolled && scrollY < 20 && now >= collapseLockUntil) {
+      // Only expand again when the user has intentionally returned to the top.
+      // The compact header removes a large amount of layout height; without
+      // this lock the resulting scroll-position correction can immediately
+      // toggle the hero open again and create the visible shrink/expand loop.
       isScrolled = false;
       createPanel.classList.remove("is-scrolled");
     }
