@@ -5313,7 +5313,7 @@ export class PreviewPlayer {
       return this.auditionSong(song, { startSeconds: position });
     }
     if (mode !== "performance") throw new RangeError("Unknown A/B mode");
-    const { createPerformanceAuditionSong } = await import("./core/performance-audition.js");
+    const { createPerformanceAuditionSong } = await import("./performance-audition-entry.js");
     const pair = createPerformanceAuditionSong(song, {
       humanize,
       seed: `${song.seed ?? song.id ?? "song"}:performance-ab`,
