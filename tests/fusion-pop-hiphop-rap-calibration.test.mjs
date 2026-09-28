@@ -99,12 +99,16 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
       });
 
       const label = `${primary}+${secondary} ${seed}`;
+      const creativeDimensions = ["groove", "motif", "storyArc", "transitions", "harmonicJourney", "phraseResolution", "drumVariety", "genreAuthenticity"];
+      const weakestCreative = creativeDimensions
+        .map((name) => [name, finite(song?.meta?.scoreDetails?.subscores?.[name])])
+        .sort((left, right) => left[1] - right[1] || left[0].localeCompare(right[0]))[0];
       assert.equal(song.meta.isFusion, true);
       assert.equal(song.meta.secondaryGenre, secondary);
       assert.equal(fused.scaleFit, 1);
       assert.match(fused.producerStatus, /passed|best-available/);
       assert.ok(fused.score >= 90, `${label} score=${fused.score}`);
-      assert.ok(fused.floor >= 75, `${label} floor=${fused.floor} subscores=${JSON.stringify(song?.meta?.scoreDetails?.subscores ?? {})}`);
+      assert.ok(fused.floor >= 75, `${label} floor=${fused.floor} weakest=${weakestCreative?.[0]}:${weakestCreative?.[1]}`);
       assert.ok(
         fused.groove >= 90 && grooveDelta >= -8,
         `${label} groove=${fused.groove} parentDelta=${grooveDelta}`,
