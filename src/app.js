@@ -839,9 +839,10 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
       ? autoGenerationValue(id, seed, profile, fallback)
       : readNumber(`#${id}`, fallback);
     const learned = tasteAverages[id];
-    return state.autoControls.has(id) && Number.isFinite(learned)
+    const value = state.autoControls.has(id) && Number.isFinite(learned)
       ? selected * 0.72 + learned * 0.28
       : selected;
+    return id === "complexityControl" ? value * (1.4 - value * 0.004) : value;
   };
   const complexity = generationValue("complexityControl", 54) / 100;
   const selectedKey = $("#keyControl").value;
@@ -3872,9 +3873,9 @@ function renderGenerationDebugger() {
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
   const audition = player.performanceAudition;
-  const trap = songGenreId() === "trap";
-  $("#performanceAbPerformed").disabled = trap;
-  setText("#performanceAbStatus", trap
+  const abOff = /^(trap|hipHop)$/.test(songGenreId());
+  $("#performanceAbPerformed").disabled = abOff;
+  setText("#performanceAbStatus", abOff
     ? "Trap B paused."
     : audition?.mode === "performance"
       ? `B · ${Math.round((audition.humanize ?? 0.65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
