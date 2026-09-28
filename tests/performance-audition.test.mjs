@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createPerformanceAuditionSong } from "../src/core/performance-audition.js";
+import { createPerformanceAuditionSong, performanceAuditionEligibility } from "../src/core/performance-audition.js";
 
 function fixtureSong() {
   return {
@@ -60,6 +60,20 @@ function fixtureSong() {
     ],
   };
 }
+
+test("Trap A/B is paused after repeated listener tests found no audible benefit", () => {
+  const song = fixtureSong();
+  song.genre = "trap";
+  song.meta.genre = "trap";
+
+  const eligibility = performanceAuditionEligibility(song);
+  assert.equal(eligibility.allowed, false);
+  assert.equal(eligibility.reason, "listener-benefit-unproven");
+  assert.throws(
+    () => createPerformanceAuditionSong(song, { humanize: 1 }),
+    /listener-benefit-unproven/,
+  );
+});
 
 test("performance A/B audition creates a preview-only copy without mutating the canonical song", () => {
   const song = fixtureSong();
