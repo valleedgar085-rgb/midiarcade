@@ -43,6 +43,7 @@ export function normalizeSampleManifest(manifest = {}) {
       snare: Object.freeze(normalizeList(roles.snare)),
       clap: Object.freeze(normalizeList(roles.clap)),
       hat: Object.freeze(normalizeList(roles.hat)),
+      hatAccent: Object.freeze(normalizeList(roles.hatAccent)),
       openHat: Object.freeze(normalizeList(roles.openHat)),
       cymbal: Object.freeze(normalizeList(roles.cymbal)),
       tom: Object.freeze(normalizeList(roles.tom)),
