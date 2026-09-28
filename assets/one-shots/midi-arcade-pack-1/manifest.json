@@ -1,13 +1,126 @@
 {
   "id": "midi-arcade-pack-1",
   "roles": {
-    "kick": [],
-    "snare": [],
-    "clap": [],
-    "hat": [],
-    "openHat": [],
+    "kick": [
+      {
+        "path": "kicks/hip-hop-kick_90bpm.wav",
+        "gain": 1
+      },
+      {
+        "path": "kicks/hip-hop-kick_100bpm_B_major.wav",
+        "gain": 0.96
+      },
+      {
+        "path": "kicks/heavy-hip-hop-kick-one-shot_169bpm.wav",
+        "gain": 0.9
+      },
+      {
+        "path": "kicks/sharp-punchy-hip-hop-kick-one-shot_G_major.wav",
+        "gain": 0.94
+      },
+      {
+        "path": "kicks/90s-hip-hop-layered-kick-one-shot_F#.wav",
+        "gain": 0.92
+      }
+    ],
+    "snare": [
+      {
+        "path": "snares/trap-snare-one-shot.wav",
+        "gain": 0.95
+      },
+      {
+        "path": "snares/trap-snare-1.wav",
+        "gain": 0.78
+      },
+      {
+        "path": "snares/short-trap-snare-one-shot_C_minor.wav",
+        "gain": 1
+      },
+      {
+        "path": "snares/hip-hop-snare.wav",
+        "gain": 0.9
+      },
+      {
+        "path": "snares/hard-punchy-trap-snare-one-shot_A_minor.wav",
+        "gain": 0.86
+      }
+    ],
+    "clap": [
+      {
+        "path": "claps/hip-hop-clap_B_minor.wav",
+        "gain": 0.86
+      },
+      {
+        "path": "claps/raw-clap_C_major.wav",
+        "gain": 0.94
+      },
+      {
+        "path": "claps/basic-trap-clap-one-shot_C.wav",
+        "gain": 0.98
+      },
+      {
+        "path": "claps/trap-clap-hit-one-shot_90bpm_C_minor.wav",
+        "gain": 0.92
+      },
+      {
+        "path": "claps/clap-fx_G_major.wav",
+        "gain": 0.78
+      }
+    ],
+    "hat": [
+      {
+        "path": "hats/trap-type-hi-hat-one-hit.wav",
+        "gain": 0.92
+      },
+      {
+        "path": "hats/closed-hi-hat-one-shot-high.wav",
+        "gain": 0.72
+      }
+    ],
+    "hatAccent": [
+      {
+        "path": "hats/trap-hi-hat-roll_E_major.wav",
+        "gain": 0.72
+      }
+    ],
+    "openHat": [
+      {
+        "path": "hats/basic-open-hi-hat-one-shot.wav",
+        "gain": 0.82
+      },
+      {
+        "path": "hats/short-punchy-dry-open-hi-hat-one-shot_C_minor.wav",
+        "gain": 0.9
+      }
+    ],
     "cymbal": [],
     "tom": [],
-    "bass808": []
+    "bass808": [
+      {
+        "path": "808s/808_A_major.wav",
+        "rootMidi": 33,
+        "gain": 0.86
+      },
+      {
+        "path": "808s/808_B_minor.wav",
+        "rootMidi": 35,
+        "gain": 0.88
+      },
+      {
+        "path": "808s/808-sub-bass-one-shot_95bpm_C_major.wav",
+        "rootMidi": 36,
+        "gain": 0.82
+      },
+      {
+        "path": "808s/short-simple-808-bass-one-shot_E_minor.wav",
+        "rootMidi": 40,
+        "gain": 0.88
+      },
+      {
+        "path": "808s/heavy-808_C.wav",
+        "rootMidi": 36,
+        "gain": 0.74
+      }
+    ]
   }
 }
