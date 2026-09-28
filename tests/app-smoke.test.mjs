@@ -19,6 +19,7 @@ import { qualityTier } from "../src/ui/copy-catalog.js";
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const performancePromotionControlsSource = await readFile(new URL("../src/ui/performance-promotion-controls.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
@@ -141,8 +142,9 @@ test("preview transitions and the persistent instrument spotlight stay determini
   );
 });
 
-test("phrase performance is interpreted at the preview boundary", () => {
-  assert.match(appSource, /renderPhrasePerformance\(note\)/);
+test("phrase performance is interpreted once at the preview boundary", () => {
+  assert.match(appSource, /resolvePerformedNote\(note\)/);
+  assert.match(appSource, /performanceTransformForNote\(note, renderPhrasePerformance\(note\)\)/);
   assert.match(appSource, /phrasePerformance\.durationScale/);
   assert.match(appSource, /phrasePerformance\.velocityDelta/);
 });
@@ -225,13 +227,19 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "refreshDebugger",
     "copyDebuggerReport",
     "clearDebuggerHistory",
+    "performanceAbStatus",
+    "performanceAbAccept",
+    "performanceAbReject",
   ]);
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
     const createMounted = createRuntimeMountedIds.has(id)
       && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
     const appMounted = appRuntimeMountedIds.has(id)
-      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource);
+      && (
+        new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource)
+        || new RegExp(`id=["']${id}["']`).test(performancePromotionControlsSource)
+      );
     assert.ok(
       createMounted || appMounted,
       `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
@@ -240,7 +248,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
   assert.deepEqual(
     [...appRuntimeMountedIds],
-    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory"],
+    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory", "performanceAbStatus", "performanceAbAccept", "performanceAbReject"],
     "app runtime selector exceptions must remain narrow and explicit",
   );
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));
@@ -499,10 +507,35 @@ test("browser app initializes against the engine contract", async () => {
   globalThis.HTMLInputElement = MockElement;
   globalThis.HTMLSelectElement = MockElement;
   globalThis.HTMLTextAreaElement = MockElement;
+  const workspaceButtons = [
+    ["#mobileCreate", "create"],
+    ["#mobileArrange", "arrange"],
+    ["#mobileMix", "mix"],
+    ["#mobileFinish", "finish"],
+  ].map(([selector, workspace]) => {
+    const element = elementFor(selector);
+    element.dataset.workspace = workspace;
+    return element;
+  });
+  const workspacePanels = [
+    ["#tab-create", "create"],
+    ["#tab-arrange", "arrange"],
+    ["#tab-mix", "mix"],
+    ["#tab-finish", "finish"],
+  ].map(([selector, workspacePanel]) => {
+    const element = elementFor(selector);
+    element.dataset.workspacePanel = workspacePanel;
+    return element;
+  });
+
   globalThis.document = {
     body: new MockElement(),
     querySelector: elementFor,
-    querySelectorAll() { return []; },
+    querySelectorAll(selector) {
+      if (selector === "[data-workspace]") return workspaceButtons;
+      if (selector === "[data-workspace-panel]") return workspacePanels;
+      return [];
+    },
     addEventListener() {},
     createElement() { return new MockElement(); },
   };
@@ -552,11 +585,35 @@ test("browser app initializes against the engine contract", async () => {
   assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
-  assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
+  assert.match(htmlSource, /id="mobileCreate"[^>]*data-workspace="create"[\s\S]*?id="mobileArrange"[^>]*data-workspace="arrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[^>]*data-workspace="mix"[\s\S]*?id="mobileFinish"[^>]*data-workspace="finish"/, "mobile navigation must bind all four real workspaces around Play");
   assert.match(htmlSource, /id="mobileSectionJump"[\s\S]*?id="mobileSectionJumpList"/, "mobile playback needs a compact live-section surface");
   assert.doesNotMatch(htmlSource, /id="mobileJam"/, "the retired Jam workspace must not remain as a dead mobile action");
   assert.match(cssSource, /\.tab-nav-shell\{[\s\S]*?position:fixed;[\s\S]*?bottom:var\(--transport-h\)/, "desktop workspace navigation must stay docked above transport");
-  assert.match(cssSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)\{display:none\}/, "mobile navigation must collapse without losing its restore handle");
+  assert.match(cssSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)\{display:none\}/, "legacy global collapse behavior remains bounded to the base stylesheet");
+  const midnightSource = await readFile(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
+  assert.match(midnightSource, /@media \(max-width: 760px\)[\s\S]*?\.mobile-dock,[\s\S]*?display:\s*grid\s*!important/, "mobile workspace dock must be explicitly visible on phones and small tablets");
+  assert.match(midnightSource, /body\.nav-dock-collapsed \.mobile-dock button:not\(\.mobile-dock-toggle\)[\s\S]*?display:\s*flex\s*!important/, "mobile workspace buttons must remain reachable even if the desktop dock was collapsed");
+  assert.match(midnightSource, /#tab-create\.is-active\s*\{[\s\S]*?display:\s*flex\s*!important/, "Create may only force display while it is the active workspace");
+  assert.doesNotMatch(midnightSource, /(?:^|\n)#tab-create\s*\{[\s\S]{0,120}?display:\s*flex\s*!important/, "inactive Create must never override the workspace hidden state");
+  assert.match(midnightSource, /\.tab-panel\[hidden\],[\s\S]*?display:\s*none\s*!important/, "inactive workspaces must be CSS-isolated even against theme overrides");
+
+  elementFor("#mobileArrange").dispatch("click");
+  assert.equal(elementFor("#mobileArrange").getAttribute("aria-selected"), "true");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must disappear when Shape is active");
+  assert.equal(elementFor("#tab-create").getAttribute("aria-hidden"), "true");
+  assert.equal(elementFor("#tab-arrange").hidden, false);
+  elementFor("#mobileMix").dispatch("click");
+  assert.equal(elementFor("#mobileMix").getAttribute("aria-selected"), "true");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Mix is active");
+  assert.equal(elementFor("#tab-mix").hidden, false);
+  elementFor("#mobileFinish").dispatch("click");
+  assert.equal(elementFor("#mobileFinish").getAttribute("aria-selected"), "true");
+  assert.equal(elementFor("#tab-create").hidden, true, "Create must stay hidden when Finish is active");
+  assert.equal(elementFor("#tab-finish").hidden, false);
+  elementFor("#mobileCreate").dispatch("click");
+  assert.equal(elementFor("#mobileCreate").getAttribute("aria-selected"), "true");
+  assert.equal(elementFor("#tab-create").hidden, false);
+  assert.equal(elementFor("#tab-create").getAttribute("aria-hidden"), "false");
   assert.match(appSource, /function renderMobileSectionJump\(\)[\s\S]*?data-mobile-section/, "live section controls must render from the generated arrangement");
   assert.match(appSource, /export function queueMobileSectionJump[\s\S]*?calculateNextQueuedSection/, "mobile section jumps must use safe musical boundaries");
   assert.equal(app.queueMobileSectionJump("missing-section"), false);

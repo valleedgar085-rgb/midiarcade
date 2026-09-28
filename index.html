@@ -94,7 +94,7 @@
           </section>
           <div class="create-console" aria-label="Now playing and song controls">
           <section class="hero-panel song-showcase panel" id="heroPanel" aria-labelledby="songTitle">
-            <div class="showcase-art" id="showcaseArt" data-cover-style="eclipse" aria-hidden="true">
+            <div class="showcase-art" id="showcaseArt" data-cover-style="eclipse" role="button" tabindex="0" aria-label="Play current song">
               <div class="showcase-cover-shape showcase-cover-shape-a"></div>
               <div class="showcase-cover-shape showcase-cover-shape-b"></div>
               <div class="showcase-orbit showcase-orbit-outer"></div>
@@ -214,6 +214,15 @@
               </div>
             </details>
           </section>
+
+          <aside class="create-compact-player" id="createCompactPlayer" role="button" tabindex="-1" aria-hidden="true" aria-label="Play current song">
+            <span class="create-compact-cover" id="createCompactCover" aria-hidden="true"></span>
+            <span class="create-compact-copy">
+              <strong id="createCompactTitle">Midnight Polaroid</strong>
+              <small id="createCompactMeta">D DORIAN · 84 BPM</small>
+            </span>
+            <span class="create-compact-play-glyph" aria-hidden="true"></span>
+          </aside>
 
           <details class="workflow-panel panel" id="workflowPanel" aria-labelledby="workflowPanelTitle">
             <summary class="workflow-disclosure">
@@ -855,14 +864,14 @@
       </div>
       <nav class="mobile-dock" id="mobileDock" aria-label="Studio navigation">
         <button class="mobile-dock-toggle" id="mobileDockToggle" type="button" aria-expanded="true" aria-controls="mobileDock" aria-label="Hide workspace navigation" title="Hide navigation"><span aria-hidden="true">⌄</span></button>
-        <button id="mobileCreate" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
-        <button id="mobileArrange" type="button"><span aria-hidden="true">≋</span><small>Shape</small></button>
+        <button id="mobileCreate" data-workspace="create" type="button"><span aria-hidden="true">✦</span><small>Create</small></button>
+        <button id="mobileArrange" data-workspace="arrange" type="button"><span aria-hidden="true">≋</span><small>Shape</small></button>
         <button class="mobile-play" id="mobilePlayPause" type="button">
           <svg id="mobilePlayIcon" viewBox="0 0 24 24" aria-hidden="true"><polygon points="5 3 19 12 5 21 5 3" /></svg>
           <small id="mobilePlayText">Play</small>
         </button>
-        <button id="mobileMix" type="button"><span aria-hidden="true">≡</span><small>Mix</small></button>
-        <button id="mobileFinish" type="button"><span aria-hidden="true">⇩</span><small>Finish</small></button>
+        <button id="mobileMix" data-workspace="mix" type="button"><span aria-hidden="true">≡</span><small>Mix</small></button>
+        <button id="mobileFinish" data-workspace="finish" type="button"><span aria-hidden="true">⇩</span><small>Finish</small></button>
       </nav>
     </div>
 

@@ -1,3 +1,4 @@
+// Android UI stabilization validation.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -127,4 +128,24 @@ test("Create-specific CSS stays outside the protected global stylesheet budget a
   assert.match(build, /<style>\$\{creatorStyles\.code\}<\/style><style>\$\{createWorkflowStyles\.code\}<\/style>/);
   assert.match(pkg.scripts.dev, /npm run build/);
   assert.match(pkg.scripts.dev, /--directory www/);
+});
+
+
+test("Create scroll treatment only transforms the real artwork and toggles a separate compact player", () => {
+  assert.match(presentation, /--create-art-scale/);
+  assert.match(presentation, /requestAnimationFrame/);
+  assert.match(presentation, /scrollY > 132/);
+  assert.match(presentation, /scrollY > 72/);
+  assert.match(presentation, /#createCompactPlayer/);
+  assert.doesNotMatch(presentation, /--create-cover-lift/);
+  assert.doesNotMatch(presentation, /--create-cover-opacity/);
+});
+
+test("mobile Create uses the real album art and a non-layout-changing compact player", () => {
+  const midnight = fs.readFileSync(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
+  assert.match(midnight, /#tab-create \.song-showcase::before\s*\{[\s\S]*?content:\s*none\s*!important/);
+  assert.match(midnight, /#tab-create \.showcase-art\s*\{[\s\S]*?display:\s*grid\s*!important[\s\S]*?var\(--create-art-scale/);
+  assert.match(midnight, /\.create-compact-player\s*\{[\s\S]*?position:\s*fixed[\s\S]*?opacity:\s*0/);
+  assert.match(midnight, /#tab-create\.is-scrolled \.create-compact-player\s*\{[\s\S]*?opacity:\s*1[\s\S]*?pointer-events:\s*auto/);
+  assert.doesNotMatch(midnight, /#tab-create\.is-scrolled \.song-showcase\s*\{[\s\S]{0,600}?min-height:\s*72px/);
 });

@@ -314,7 +314,11 @@ test("workspace controller owns accessible tab and panel state", () => {
   assert.equal(buttons[2].attributes.get("aria-selected"), "true");
   assert.equal(buttons[0].attributes.get("aria-selected"), "false");
   assert.equal(panels[2].hidden, false);
+  assert.equal(panels[2].inert, false);
+  assert.equal(panels[2].attributes.get("aria-hidden"), "false");
   assert.equal(panels[0].hidden, true);
+  assert.equal(panels[0].inert, true);
+  assert.equal(panels[0].attributes.get("aria-hidden"), "true");
   buttons[2].dispatch("keydown", { key: "ArrowRight" });
   assert.equal(controller.activeWorkspace, "finish");
   assert.equal(buttons[3].focused, true);

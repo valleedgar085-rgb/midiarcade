@@ -227,18 +227,55 @@ function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
   if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
-  let isScrolled = false;
-  const update = () => {
-    const scrollY = Number(ownerWindow.scrollY || 0);
-    if (!isScrolled && scrollY > 140) {
-      isScrolled = true;
-      createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 80) {
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
+
+  const compactPlayer = rootDocument.querySelector?.("#createCompactPlayer");
+  let compact = false;
+  let frame = 0;
+
+  const reset = () => {
+    compact = false;
+    createPanel.classList.remove("is-scrolled");
+    createPanel.style?.setProperty?.("--create-art-scale", "1");
+    if (compactPlayer) {
+      compactPlayer.setAttribute("aria-hidden", "true");
+      compactPlayer.tabIndex = -1;
     }
   };
-  update();
+
+  const apply = () => {
+    frame = 0;
+    const active = !createPanel.hidden && createPanel.classList.contains("is-active");
+    if (!active) {
+      reset();
+      return;
+    }
+
+    const documentScroll = Number(rootDocument?.documentElement?.scrollTop || rootDocument?.body?.scrollTop || 0);
+    const scrollY = Math.max(0, Number(ownerWindow.scrollY || documentScroll || 0));
+    const progress = Math.max(0, Math.min(1, scrollY / 180));
+    createPanel.style?.setProperty?.("--create-art-scale", (1 - progress * 0.08).toFixed(3));
+
+    const nextCompact = compact ? scrollY > 72 : scrollY > 132;
+    if (nextCompact !== compact) {
+      compact = nextCompact;
+      createPanel.classList.toggle("is-scrolled", compact);
+      if (compactPlayer) {
+        compactPlayer.setAttribute("aria-hidden", String(!compact));
+        compactPlayer.tabIndex = compact ? 0 : -1;
+      }
+    }
+  };
+
+  const update = () => {
+    if (frame) return;
+    if (typeof ownerWindow.requestAnimationFrame === "function") {
+      frame = ownerWindow.requestAnimationFrame(apply);
+    } else {
+      apply();
+    }
+  };
+
+  reset();
   ownerWindow.addEventListener("scroll", update, { passive: true });
   ownerWindow.addEventListener("resize", update, { passive: true });
 }
