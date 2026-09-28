@@ -2,6 +2,24 @@ import { applyPerformanceEngine } from "./performance-engine.js";
 import { createPerformanceShadowReport } from "./performance-shadow.js";
 import { createProfessionalGenerationGauntletSong } from "./professional-gauntlet-song.js";
 
+const LISTENER_BLOCKED_GENRES = new Set(["trap"]);
+
+export function performanceAuditionEligibility(song) {
+  const genre = String(song?.meta?.genre ?? song?.genre ?? "").trim();
+  if (LISTENER_BLOCKED_GENRES.has(genre)) {
+    return Object.freeze({
+      allowed: false,
+      genre,
+      reason: "listener-benefit-unproven",
+    });
+  }
+  return Object.freeze({
+    allowed: true,
+    genre,
+    reason: "audition-available",
+  });
+}
+
 function clone(value) {
   if (typeof structuredClone === "function") return structuredClone(value);
   return JSON.parse(JSON.stringify(value));
@@ -48,6 +66,11 @@ export function createPerformanceAuditionSong(song, {
 } = {}) {
   if (!song || !Array.isArray(song?.tracks)) {
     throw new TypeError("createPerformanceAuditionSong requires a generated song");
+  }
+
+  const eligibility = performanceAuditionEligibility(song);
+  if (!eligibility.allowed) {
+    throw new Error(`Performance audition blocked: ${eligibility.reason}`);
   }
 
   const report = createPerformanceShadowReport(song, { humanize, seed });
