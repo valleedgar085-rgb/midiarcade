@@ -35,6 +35,13 @@ async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs =
   throw new Error(`Generation did not settle after generationCount ${previousGenerationCount}.`);
 }
 
+test("Create Complexity slider strengthens user input without changing engine defaults", () => {
+  assert.match(
+    appSource,
+    /const rawComplexity = generationValue\("complexityControl", 54\) \/ 100;[\s\S]*?const complexity = clamp\(rawComplexity \* \(1\.4 - rawComplexity \* 0\.4\), 0, 1\);/,
+  );
+});
+
 test("Create unifies now playing with the essential song controls", () => {
   assert.match(htmlSource, /class="create-console"[\s\S]*?id="heroPanel"[\s\S]*?id="preGenSection"/);
   assert.match(htmlSource, /NOW PLAYING &amp; CREATING/);
