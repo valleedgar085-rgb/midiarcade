@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
-import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
+import { bundledDrumSamplePath, drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -107,6 +107,23 @@ test("A5 Finish exposes track list, section journey, and explicit default handof
   const exportFlow = appSource.match(/async function exportSong\(\)[\s\S]*?function expressionPoints/)?.[0] ?? "";
   assert.match(exportFlow, /buildExportSongSnapshot\(\)/);
   assert.match(exportFlow, /prepareMidiExport\(clone, currentExportSetup\(\)\)/);
+});
+
+test("bundled Hip-Hop drum kits map and preload real offline one-shots", async () => {
+  assert.equal(bundledDrumSamplePath("basement-knock", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
+  assert.equal(bundledDrumSamplePath("basement-knock", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 39), "./assets/audio/drums/cc0-soulful-vintage/clap.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 42), "./assets/audio/drums/cc0-soulful-vintage/hat.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 46), "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 49), null);
+
+  const cache = new Map();
+  const context = { decodeAudioData: async (bytes) => ({ duration: 0.2, bytes: bytes.byteLength }) };
+  const fetcher = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+  await preloadDrumSampleKit(context, "basement-knock", cache, fetcher);
+  assert.equal(cache.size, 5);
+  assert.equal(drumSampleForPitch(cache, "basement-knock", 36).duration, 0.2);
+  assert.equal(drumSampleForPitch(cache, "basement-knock", 49), null);
 });
 
 test("preview drum characters respond musically to velocity without losing bounds", () => {
