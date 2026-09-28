@@ -30,7 +30,6 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope, scheduleDrumSampleVoice } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
-import { createPerformanceAuditionSong } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -5314,6 +5313,7 @@ export class PreviewPlayer {
       return this.auditionSong(song, { startSeconds: position });
     }
     if (mode !== "performance") throw new RangeError("Unknown A/B mode");
+    const { createPerformanceAuditionSong } = await import("./core/performance-audition.js");
     const pair = createPerformanceAuditionSong(song, {
       humanize,
       seed: `${song.seed ?? song.id ?? "song"}:performance-ab`,
