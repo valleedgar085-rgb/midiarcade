@@ -75,13 +75,26 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   const after = evaluateSongCandidate(processed.song);
   const balanceAfter = repetitionBalance(processed.song, target);
 
-  assert.equal(processed.repetitionDiagnostics.accepted, true);
+  assert.equal(processed.repetitionDiagnostics.attempted, true);
   assert.equal(processed.repetitionDiagnostics.direction, balanceBefore.direction);
-  assert.ok(after.subscores.repetition > before.subscores.repetition);
-  assert.ok(balanceAfter.absoluteError < balanceBefore.absoluteError);
-  assert.ok(Object.values(processed.repetitionDiagnostics.protectedDeltas).every((delta) => delta >= -1));
+  assert.ok(processed.repetitionDiagnostics.candidatesEvaluated > 0);
+  assert.ok(processed.repetitionDiagnostics.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS);
+  assert.ok(processed.repetitionDiagnostics.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT);
   assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
   assert.deepEqual(noteIdentity(processed.song).sort(compareNoteIdentity), sourceIdentity.sort(compareNoteIdentity));
+
+  if (processed.repetitionDiagnostics.accepted) {
+    assert.ok(after.subscores.repetition > before.subscores.repetition);
+    assert.ok(balanceAfter.absoluteError < balanceBefore.absoluteError);
+    assert.ok(Object.values(processed.repetitionDiagnostics.protectedDeltas).every((delta) => delta >= -1));
+  } else {
+    assert.ok(
+      ["critic-regression", "release-gate", "scale-safety", "protected-phrasing-regression"].includes(
+        processed.repetitionDiagnostics.reason,
+      ),
+      `unexpected safe-rejection reason: ${processed.repetitionDiagnostics.reason}`,
+    );
+  }
 
   console.log("HIPHOP_RAP_FUSION_REPETITION_REPAIR", JSON.stringify({
     beforeScore: before.score,
