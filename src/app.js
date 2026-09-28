@@ -30,7 +30,7 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
-import { createPerformanceAuditionSong } from "./core/performance-audition.js";
+import { createPerformanceAuditionSong, performanceAuditionEligibility } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -3872,9 +3872,19 @@ function renderGenerationDebugger() {
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
   const audition = player.performanceAudition;
-  setText("#performanceAbStatus", audition?.mode === "performance"
-    ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-    : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
+  const performanceEligibility = performanceAuditionEligibility(state.song);
+  const performanceButton = $("#performanceAbPerformed");
+  if (performanceButton) {
+    performanceButton.disabled = !performanceEligibility.allowed;
+    performanceButton.title = performanceEligibility.allowed
+      ? "Preview Performance Engine v1"
+      : "Trap Performance B is paused because listener benefit has not been proven.";
+  }
+  setText("#performanceAbStatus", !performanceEligibility.allowed
+    ? "A only · Trap Performance B paused after repeated listener tests found no audible benefit."
+    : audition?.mode === "performance"
+      ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+      : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3956,6 +3966,12 @@ async function copyGenerationDebuggerReport() {
 
 async function auditionPerformanceDebugger(mode) {
   if (!state.song) return showToast("Generate a song first."), false;
+  const eligibility = performanceAuditionEligibility(state.song);
+  if (mode === "performance" && !eligibility.allowed) {
+    showToast("Trap Performance B is paused — repeated listening tests found no audible improvement yet.");
+    renderGenerationDebugger();
+    return false;
+  }
   try {
     await player.auditionPerformanceAB(mode, { humanize: 0.65 });
     renderGenerationDebugger();
