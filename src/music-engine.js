@@ -9174,7 +9174,11 @@ function chooseOneShotKit(config, preferred = null) {
   if (requested) return requested;
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
   const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
-  const palette = choices.length ? choices : ONE_SHOT_KITS;
+  const hipHopIds = config.genre === "hipHop" || config.genre === "rap"
+    ? new Set(["basement-knock", "dusty-tape"])
+    : null;
+  const genreChoices = hipHopIds ? choices.filter((kit) => hipHopIds.has(kit.id)) : [];
+  const palette = genreChoices.length ? genreChoices : choices.length ? choices : ONE_SHOT_KITS;
   return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
 }
 
