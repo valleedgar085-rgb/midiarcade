@@ -54,7 +54,8 @@ test("Hip-Hop bass relationship is authored by Groove DNA rather than kick cloni
     const lanes = grooveDNAConductorLanes(dna, bar);
     const kick = new Set(lanes.anchors.map((beat) => beat.toFixed(3)));
     if (lanes.bassPulses.some((beat) => !kick.has(beat.toFixed(3)))) independentBars += 1;
-    assert.ok(lanes.bassPulses.length <= 8, "bass relationship should stay conversational, not machine-gun dense");
+    assert.ok(lanes.bassPulses.length <= 3, "body Hip-Hop bass should stay conversational, not machine-gun dense");
+    assert.ok(lanes.chordPulses.length <= 2, "body Hip-Hop chords should leave vocal and drum space");
   }
   assert.ok(independentBars >= 1, "at least one bar should contain a bass reply rather than pure kick cloning");
 });
