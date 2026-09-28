@@ -27,7 +27,7 @@ import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.
 import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessionAutosaveController, decodePersistedSession } from "./core/session-runtime.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
-import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope, scheduleDrumSampleVoice } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { createPerformanceAuditionSong } from "./core/performance-audition.js";
@@ -4968,6 +4968,7 @@ export class PreviewPlayer {
     this.delayReturn = null;
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
+    this.drumSampleBuffers = new Map();
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -5148,6 +5149,7 @@ export class PreviewPlayer {
     this.delayReturn = null;
     this.trackBuses.clear();
     this.noiseBuffers.clear();
+    this.drumSampleBuffers.clear();
     this.periodicWaves.clear();
   }
 
@@ -5345,6 +5347,7 @@ export class PreviewPlayer {
     const requestGeneration = ++this.playRequestGeneration;
     try {
       await this.ensureContext();
+      await preloadDrumSampleKit(this.context, song?.oneShotKit?.id, this.drumSampleBuffers);
     } catch (error) {
       if (requestGeneration === this.playRequestGeneration) showToast(error.message);
       return false;
@@ -5866,6 +5869,15 @@ export class PreviewPlayer {
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const voice = kit.preview;
     const character = previewDrumCharacter(voice, event.pitch, event.velocity, event.start ?? when);
+    const sample = drumSampleForPitch(this.drumSampleBuffers, kit.id, event.pitch);
+    if (sample) {
+      const nodes = new Set();
+      const output = this.createDrumOutput(event, character, nodes, 0.06);
+      const source = scheduleDrumSampleVoice(context, sample, character, mixGain, when, output, nodes);
+      if ([35, 36].includes(event.pitch)) this.applyKickSidechain(when);
+      this.registerScheduledVoice([source], nodes, event, when);
+      return;
+    }
     if ([35, 36].includes(event.pitch)) {
       this.applyKickSidechain(when);
       const oscillator = context.createOscillator();
