@@ -1137,7 +1137,7 @@ test("deep producer search evaluates a larger bounded candidate pool", () => {
   assertValidNotes(song);
 });
 
-test("Hip-Hop generation prefers the two bundled real-audio drum kits", () => {
+test("Hip-Hop generation prefers dedicated Hip-Hop drum palettes", () => {
   const first = engine.generateNew({ genre: "hipHop", seed: "hiphop-real-kit-a", bars: 8, candidateCount: 1 });
   const second = engine.generateNew({
     genre: "hipHop",
@@ -1146,7 +1146,7 @@ test("Hip-Hop generation prefers the two bundled real-audio drum kits", () => {
     candidateCount: 1,
     excludeOneShotKitIds: [first.oneShotKit.id],
   });
-  const allowed = new Set(["basement-knock", "dusty-tape"]);
+  const allowed = new Set(["hiphop-pocket", "hiphop-heavy", "basement-knock", "dusty-tape"]);
   assert.ok(allowed.has(first.oneShotKit.id));
   assert.ok(allowed.has(second.oneShotKit.id));
   assert.notEqual(second.oneShotKit.id, first.oneShotKit.id);
