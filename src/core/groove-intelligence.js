@@ -98,26 +98,26 @@ function genreId(value) {
 export const GENRE_GROOVE_GRAMMARS = Object.freeze({
   hipHop: Object.freeze({
     id: "hip-hop-pocket",
-    philosophy: "kick-displacement-snare-anchor-rest-pocket",
+    philosophy: "backbeat-first-displaced-kicks-bass-replies-and-breathing-pocket",
     base: Object.freeze({
       kick: Object.freeze([0, 3, 7, 10, 14]),
       snare: Object.freeze([4, 12]),
       hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
       percussion: Object.freeze([6, 11, 15]),
     }),
-    probability: Object.freeze({ kick: 0.78, snare: 1, hat: 0.9, percussion: 0.48 }),
+    probability: Object.freeze({ kick: 0.88, snare: 1, hat: 0.94, percussion: 0.56 }),
     locked: Object.freeze({ kick: Object.freeze([0]), snare: Object.freeze([4, 12]), hat: Object.freeze([]), percussion: Object.freeze([]) }),
-    density: Object.freeze({ kick: 0.92, snare: 1, hat: 0.9, percussion: 0.7 }),
+    density: Object.freeze({ kick: 1.02, snare: 1, hat: 0.98, percussion: 0.78 }),
     transforms: Object.freeze([
-      Object.freeze({ lane: "kick", type: "rotateEvery", every: 2, amount: 1, chance: 0.34 }),
-      Object.freeze({ lane: "hat", type: "dropEvery", every: 4, chance: 0.28 }),
+      Object.freeze({ lane: "kick", type: "rotateEvery", every: 2, amount: 1, chance: 0.42 }),
+      Object.freeze({ lane: "hat", type: "dropEvery", every: 4, chance: 0.18 }),
     ]),
     relationships: Object.freeze({
-      bass: Object.freeze({ source: "kick", mode: "lock-and-answer", lock: 0.72, answerDelayBeats: 0.5, syncopation: 0.58 }),
-      chords: Object.freeze({ source: "snare", mode: "space-around-backbeat", offsetBeats: -0.25, syncopation: 0.42 }),
-      lead: Object.freeze({ source: "snare", mode: "phrase-around-pocket", offsetBeats: 0.25, syncopation: 0.52 }),
+      bass: Object.freeze({ source: "kick", mode: "lock-and-answer", lock: 0.62, answerDelayBeats: 0.25, syncopation: 0.66 }),
+      chords: Object.freeze({ source: "snare", mode: "space-around-backbeat", offsetBeats: -0.25, syncopation: 0.5 }),
+      lead: Object.freeze({ source: "snare", mode: "phrase-around-pocket", offsetBeats: 0.25, syncopation: 0.62 }),
     }),
-    humanization: Object.freeze({ timing: 0.035, velocity: 0.12, swing: 0.16, laidBackBeats: 0.012 }),
+    humanization: Object.freeze({ timing: 0.042, velocity: 0.14, swing: 0.2, laidBackBeats: 0.018 }),
     polyrhythm: Object.freeze({ percussionSteps: 12, pulses: 5 }),
   }),
   trap: Object.freeze({
@@ -891,6 +891,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.kick,
         probability: grammar.probability.kick,
+        density: grammar.density.kick,
       }),
       snare: Object.freeze({
         required: grammar.locked.snare,
@@ -898,6 +899,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.snare,
         probability: grammar.probability.snare,
+        density: grammar.density.snare,
       }),
       hat: Object.freeze({
         required: grammar.locked.hat,
@@ -905,6 +907,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.hat,
         probability: grammar.probability.hat,
+        density: grammar.density.hat,
       }),
       percussion: Object.freeze({
         required: grammar.locked.percussion,
@@ -912,6 +915,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.percussion,
         probability: grammar.probability.percussion,
+        density: grammar.density.percussion,
       }),
     }),
     relationships: grammar.relationships,

@@ -35,6 +35,7 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
@@ -256,11 +257,11 @@ export const GENRE_PROFILES = deepFreeze({
     id: "hipHop", label: "Hip-Hop", bpm: { min: 82, max: 108, default: 94 },
     preferredScales: ["minor", "dorian", "minorPentatonic", "majorPentatonic"],
     grooveWeights: {
-      drumGroove: { backbeat: 3.5, halfTime: 2.5, breakbeat: 1.7, electro: 0.8, fourFloor: 0.1 },
-      bassGroove: { syncopated: 3.2, rootFifth: 2.2, pulse: 1.1, walking: 0.55 },
-      chordMotion: { sustained: 2.6, offbeat: 1.7, pulse: 1.1, arpeggio: 0.55 },
+      drumGroove: { backbeat: 5, halfTime: 1.4, breakbeat: 2.4, electro: 0.6, fourFloor: 0.05 },
+      bassGroove: { syncopated: 3.8, rootFifth: 2.4, pulse: 0.8, walking: 0.4 },
+      chordMotion: { sustained: 3, offbeat: 1.9, pulse: 0.9, arpeggio: 0.45 },
     },
-    swing: 0.2, syncopation: 0.54, humanize: 0.3, chordExtensions: 0.46, harmonicRhythm: 0.27,
+    swing: 0.22, syncopation: 0.6, humanize: 0.32, chordExtensions: 0.46, harmonicRhythm: 0.27,
     instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [54, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91, 92] },
     tripletChance: 0.38, snareRollChance: 0.24, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.4, phraseBars: 4 },
@@ -877,7 +878,7 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.1, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.9 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.88 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
@@ -9166,13 +9167,38 @@ export const ONE_SHOT_KITS = deepFreeze([
   },
 ]);
 
-function chooseOneShotKit(config, preferred = null) {
+function chooseOneShotKit(config, preferred = null, style = null) {
   const preferredId = typeof preferred === "string" ? preferred : preferred?.id;
   const requestedId = preferredId || config.oneShotKitId;
   const requested = ONE_SHOT_KITS.find((kit) => kit.id === requestedId);
   if (requested) return requested;
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
   const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
+  const hipHop = config.genre === "hipHop" || config.genre === "rap";
+  if (hipHop) {
+    const palette = choices.filter((kit) => ["basement-knock", "dusty-tape"].includes(kit.id));
+    if (palette.length) {
+      const energy = clamp(finite(config.energy, 0.7), 0, 1);
+      const swing = clamp(finite(config.swing, 0.18), 0, 0.5);
+      const tempoNorm = clamp((finite(config.tempo, 94) - 76) / 36, 0, 1);
+      const laidBack = style?.rhythmIdentity?.timingPocket === "laidBack";
+      const breakbeat = style?.drumGroove === "breakbeat";
+      const dustyScore =
+        (1 - energy) * 0.44
+        + swing * 0.72
+        + (1 - tempoNorm) * 0.24
+        + (laidBack ? 0.18 : 0)
+        + (breakbeat ? 0.08 : 0);
+      const basementScore =
+        energy * 0.5
+        + tempoNorm * 0.28
+        + (1 - swing) * 0.18
+        + (laidBack ? 0 : 0.08);
+      return dustyScore > basementScore
+        ? palette.find((kit) => kit.id === "dusty-tape") ?? palette[0]
+        : palette.find((kit) => kit.id === "basement-knock") ?? palette[0];
+    }
+  }
   const palette = choices.length ? choices : ONE_SHOT_KITS;
   return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
 }
@@ -9926,11 +9952,11 @@ function compose(config, options = {}) {
     validCompositionRouteId(options.compositionRoute?.id ?? options.compositionRoute)
       ?? candidateCompositionRoute(config.seed, 0),
   );
-  const oneShotKit = chooseOneShotKit(config, options.oneShotKit);
   const baseStructure = options.structure
     ?? createStructure(config, rootRng.fork("structure"));
   const style = options.style
     ?? createStyle(config, rootRng.fork("style"));
+  const oneShotKit = chooseOneShotKit(config, options.oneShotKit, style);
   const songBlueprint = options.preserveAuthorities && options.songBlueprint
     ? clone(options.songBlueprint)
     : createSongBlueprint(
@@ -10950,7 +10976,22 @@ export function evaluateSongCandidate(song) {
     const chord = harmonyAt(song.harmony ?? [], note.start);
     return chord?.tones?.includes(mod(note.pitch, 12));
   }).length / Math.max(1, strongMelody.length);
-  const harmonic = clamp(Math.round(scaleFit * 62 + chordAnchors * 38), 20, 100);
+  const tonalCritic = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony ?? [],
+    {
+      keyPc: finite(song.meta.keyPc, 0),
+      scaleIntervals: song.meta.scaleIntervals ?? [],
+      beatsPerBar: barBeats,
+    },
+    song.structure ?? [],
+  );
+  const harmonic = clamp(Math.round(
+    scaleFit * 35
+    + chordAnchors * 20
+    + finite(tonalCritic.strongChordFit, 1) * 20
+    + finite(tonalCritic.selectedTonicAlignment, 1) * 25
+  ), 20, 100);
 
   const downbeatBars = new Set();
   for (const note of kicks) {
@@ -11100,6 +11141,9 @@ export function evaluateSongCandidate(song) {
     diagnostics: {
       scaleFit: round(scaleFit),
       chordAnchorFit: round(chordAnchors),
+      strongChordFit: round(finite(tonalCritic.strongChordFit, 1)),
+      selectedTonicAlignment: round(finite(tonalCritic.selectedTonicAlignment, 1)),
+      detectedTonicPc: tonalCritic.detectedTonicPc,
       bassKickLock: round(bassLock),
       motifRepetition: round(repetitionRatio),
       counterpointCollision: round(collisionRatio),
@@ -11310,17 +11354,30 @@ export function evaluateSectionOutcomeQuality(song) {
   }
 
   const contrasts = pairs.map((pair) => pair.contrast);
+  const orderedContrasts = [...contrasts].sort((left, right) => left - right);
   const averageContrast = average(contrasts, 0);
   const weakestContrast = Math.min(...contrasts);
+  const middle = Math.floor(orderedContrasts.length / 2);
+  const medianContrast = orderedContrasts.length % 2
+    ? orderedContrasts[middle]
+    : average([orderedContrasts[middle - 1], orderedContrasts[middle]], 0);
   const strongPairRatio = pairs.filter((pair) => pair.contrast >= 0.12).length / pairs.length;
   const weakPairs = pairs.filter((pair) => pair.contrast < 0.07);
   const weakestPair = [...pairs].sort((left, right) => left.contrast - right.contrast)[0] ?? null;
+  const openingPair = String(sections[0]?.name ?? "").toLowerCase() === "intro"
+    ? pairs.find((pair) => pair.fromSectionId === sections[0]?.id) ?? null
+    : null;
+  const openingContrast = openingPair?.contrast ?? 1;
   const passed = averageContrast >= 0.115
+    && medianContrast >= 0.09
+    && openingContrast >= 0.08
     && strongPairRatio >= 0.6
     && weakPairs.length <= Math.max(1, Math.floor(pairs.length * 0.25));
   const score = clamp(Math.round(
-    clamp(averageContrast / 0.22, 0, 1) * 60
-    + clamp(weakestContrast / 0.12, 0, 1) * 20
+    clamp(averageContrast / 0.22, 0, 1) * 45
+    + clamp(weakestContrast / 0.12, 0, 1) * 15
+    + clamp(medianContrast / 0.16, 0, 1) * 10
+    + clamp(openingContrast / 0.14, 0, 1) * 10
     + strongPairRatio * 20
   ), 0, 100);
 
@@ -11330,6 +11387,9 @@ export function evaluateSectionOutcomeQuality(song) {
     reason: passed ? "distinct-section-jobs" : "sections-too-similar",
     score,
     averageContrast: round(averageContrast),
+    medianContrast: round(medianContrast),
+    openingContrast: round(openingContrast),
+    openingPair,
     weakestContrast: round(weakestContrast),
     strongPairRatio: round(strongPairRatio),
     comparablePairs: pairs.length,
@@ -15078,16 +15138,17 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     ), 0.65, 1.4);
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
-      const phrasePerformance = renderPhrasePerformance(note);
-      const pitch = canonicalMidiPitch(note.pitch);
+      const performedNote = resolvePerformedNote(note);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
+      const pitch = canonicalMidiPitch(performedNote.pitch);
       const velocity = clamp(Math.round(
-        (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+        (finite(performedNote.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
       ), 1, 127);
-      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+      const onTick = clamp(Math.round(finite(performedNote.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
       const offTick = clamp(
         Math.max(onTick + 1, Math.round((
-          finite(note.start, 0)
-          + finite(note.duration, 0.25) * gateScale * phrasePerformance.durationScale
+          finite(performedNote.start, 0)
+          + finite(performedNote.duration, 0.25) * gateScale * phrasePerformance.durationScale
         ) * ppq)),
         1,
         totalTicks,
@@ -15178,14 +15239,17 @@ export function createMidiExportReport(song, options = {}) {
       conductorTrack: true,
       uniqueChannels: new Set(trackReports.map((track) => track.channel)).size === trackReports.length,
       drumChannel10: trackReports.every((track) => track.id !== "drums" || track.channel === 10),
-      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => (
-        Number.isFinite(note.pitch)
-        && Number.isFinite(note.start)
-        && Number.isFinite(note.duration)
-        && note.pitch >= 0 && note.pitch <= 127
-        && note.start >= 0 && note.duration > 0
-        && note.start + note.duration <= song.meta.totalBeats + 1e-6
-      ))),
+      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => {
+        const performedNote = resolvePerformedNote(note);
+        return (
+          Number.isFinite(performedNote.pitch)
+          && Number.isFinite(performedNote.start)
+          && Number.isFinite(performedNote.duration)
+          && performedNote.pitch >= 0 && performedNote.pitch <= 127
+          && performedNote.start >= 0 && performedNote.duration > 0
+          && performedNote.start + performedNote.duration <= song.meta.totalBeats + 1e-6
+        );
+      })),
     },
   };
 }

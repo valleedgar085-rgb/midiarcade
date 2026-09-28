@@ -25,10 +25,12 @@ test("preview and MIDI export share one canonical rendered-pitch authority", () 
   const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
   const engineSource = fs.readFileSync(new URL("../src/music-engine.js", import.meta.url), "utf8");
 
-  assert.match(appSource, /pitch:\s*canonicalMidiPitch\(notePitch\(note\)\)/);
+  assert.match(appSource, /const performedNote = resolvePerformedNote\(note\)/);
+  assert.match(appSource, /pitch:\s*canonicalMidiPitch\(performedNote\.pitch\)/);
   assert.match(appSource, /const targetFrequency = midiPitchToFrequency\(event\.pitch\)/);
   assert.doesNotMatch(appSource, /clamp\(event\.pitch,\s*24,\s*108\)/);
-  assert.match(engineSource, /const pitch = canonicalMidiPitch\(note\.pitch\)/);
+  assert.match(engineSource, /const performedNote = resolvePerformedNote\(note\)/);
+  assert.match(engineSource, /const pitch = canonicalMidiPitch\(performedNote\.pitch\)/);
 
   assert.equal(canonicalMidiPitch(12), 12);
   assert.equal(canonicalMidiPitch(120), 120);

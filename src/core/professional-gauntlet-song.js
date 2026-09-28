@@ -1,5 +1,10 @@
 import { cloneValue } from "./clone-value.js";
 import { canonicalMidiPitch } from "./pitch-contract.js";
+import {
+  CANONICAL_MUSICAL_EVENT_SCHEMA,
+  createCanonicalMusicalEvent,
+  validateCanonicalMusicalEvent,
+} from "./canonical-musical-event.js";
 
 export const PROFESSIONAL_GAUNTLET_ROLE_IDS = Object.freeze([
   "drums",
@@ -292,7 +297,7 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
   const beatsPerBar = beatsPerBarOf(song);
   const events = [];
 
-  for (const track of tracks) {
+  for (const [trackIndex, track] of tracks.entries()) {
     const trackId = normalizedTrackId(track);
     const roleId = normalizedRoleId(track);
     for (const [noteIndex, note] of (track?.notes ?? []).entries()) {
@@ -303,7 +308,7 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
       const harmony = activeHarmony(harmonyTimeline, time);
       const motif = eventMotifId(note, roleId, section, time, beatsPerBar);
       const phraseRole = eventPhraseRole(note, roleId, section);
-      events.push(Object.freeze({
+      events.push(createCanonicalMusicalEvent({
         id: `${trackId || roleId}:${noteIndex}:${time}`,
         trackId,
         roleId,
@@ -326,6 +331,9 @@ function normalizeMusicalEvents(song, sections, harmonyTimeline) {
         phraseRole: phraseRole.value,
         phraseRoleSource: phraseRole.source,
         articulation: inferredArticulation(note),
+        sourceTrackIndex: trackIndex,
+        sourceNoteIndex: noteIndex,
+        note,
       }));
     }
   }
@@ -343,7 +351,10 @@ function normalizedIntent(song, intent = null) {
     genre: song?.meta?.genre ?? song?.genre ?? null,
     key: song?.meta?.key ?? null,
     scale: song?.meta?.scale ?? null,
-    bpm: finite(song?.meta?.bpm, null),
+    bpm: finite(
+      song?.meta?.bpm,
+      finite(song?.meta?.tempo, finite(song?.bpm, finite(song?.tempo, null))),
+    ),
     bars: finite(song?.meta?.bars, null),
     energyArc: cloneValue(source?.energyArc ?? null),
     contrast: finite(source?.contrast, null),
@@ -386,6 +397,7 @@ export function createProfessionalGenerationGauntletSong(song, {
     grooveTimeline,
     sections,
     instrumentRoles,
+    musicalEventSchema: CANONICAL_MUSICAL_EVENT_SCHEMA,
     musicalEvents,
   });
 }
@@ -417,8 +429,10 @@ export function validateProfessionalGenerationGauntletSong(gauntletSong) {
       && Array.isArray(gauntletSong.grooveTimeline)
       && Array.isArray(gauntletSong.sections)
       && gauntletSong.instrumentRoles
+      && gauntletSong.musicalEventSchema === CANONICAL_MUSICAL_EVENT_SCHEMA
       && Array.isArray(gauntletSong.musicalEvents)
     ),
+    canonicalEventContract: events.every((event) => validateCanonicalMusicalEvent(event).passed),
     roleAuthorityComplete: PROFESSIONAL_GAUNTLET_ROLE_IDS.every((roleId) => roles[roleId]?.id === roleId),
     timelinesOrdered: isSortedByTime(harmony) && isSortedByTime(groove) && isSortedByTime(sections) && isSortedByTime(events),
     eventTimingFinite: events.every((event) => (

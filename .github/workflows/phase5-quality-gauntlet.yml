@@ -8,8 +8,11 @@ on:
       - "src/core/**"
       - "scripts/benchmark-generation.mjs"
       - "scripts/benchmark-ensemble-coordination.mjs"
+      - "scripts/benchmark-performance-shadow.mjs"
       - "tests/generation-benchmark.test.mjs"
       - "tests/song-quality-gauntlet.test.mjs"
+      - "tests/performance-shadow.test.mjs"
+      - "tests/performance-candidate.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
   workflow_dispatch:
 
@@ -36,6 +39,8 @@ jobs:
         run: node --test tests/ensemble-coordination-authority.test.mjs
       - name: Run section completion authority regression tests
         run: node --test tests/section-completion-authority.test.mjs
+      - name: Run performance candidate promotion regression tests
+        run: node --test tests/performance-candidate.test.mjs
       - name: Run fixed-seed ensemble intelligence matrix
         run: |
           node scripts/benchmark-ensemble-coordination.mjs \
@@ -48,6 +53,21 @@ jobs:
         with:
           name: ensemble-intelligence-matrix
           path: /tmp/ensemble-intelligence-matrix.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Run performance shadow matrix
+        run: |
+          node scripts/benchmark-performance-shadow.mjs \
+            --seeds 2 \
+            --bars 16 \
+            --humanize 0.65 \
+            --json /tmp/performance-shadow-matrix.json
+      - name: Upload performance shadow matrix
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-shadow-matrix
+          path: /tmp/performance-shadow-matrix.json
           if-no-files-found: error
           retention-days: 30
       - name: Run 4-seed all-genre quality gauntlet

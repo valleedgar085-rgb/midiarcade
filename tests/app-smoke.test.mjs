@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
-import { previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
+import { bundledDrumSamplePath, drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
@@ -19,6 +19,7 @@ import { qualityTier } from "../src/ui/copy-catalog.js";
 const htmlSource = await readFile(new URL("../index.html", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 const createPresentationSource = await readFile(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
+const performanceAbControlsSource = await readFile(new URL("../src/ui/performance-ab-controls.js", import.meta.url), "utf8");
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
@@ -33,6 +34,13 @@ async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs =
   }
   throw new Error(`Generation did not settle after generationCount ${previousGenerationCount}.`);
 }
+
+test("Create Complexity slider strengthens user input without changing engine defaults", () => {
+  assert.match(
+    appSource,
+    /const rawComplexity = generationValue\("complexityControl", 54\) \/ 100;[\s\S]*?const complexity = clamp\(rawComplexity \* \(1\.4 - rawComplexity \* 0\.4\), 0, 1\);/,
+  );
+});
 
 test("Create unifies now playing with the essential song controls", () => {
   assert.match(htmlSource, /class="create-console"[\s\S]*?id="heroPanel"[\s\S]*?id="preGenSection"/);
@@ -101,6 +109,23 @@ test("A5 Finish exposes track list, section journey, and explicit default handof
   assert.match(exportFlow, /prepareMidiExport\(clone, currentExportSetup\(\)\)/);
 });
 
+test("bundled Hip-Hop drum kits map and preload real offline one-shots", async () => {
+  assert.equal(bundledDrumSamplePath("basement-knock", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
+  assert.equal(bundledDrumSamplePath("basement-knock", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 39), "./assets/audio/drums/cc0-soulful-vintage/clap.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 42), "./assets/audio/drums/cc0-soulful-vintage/hat.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 46), "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 49), null);
+
+  const cache = new Map();
+  const context = { decodeAudioData: async (bytes) => ({ duration: 0.2, bytes: bytes.byteLength }) };
+  const fetcher = async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+  await preloadDrumSampleKit(context, "basement-knock", cache, fetcher);
+  assert.equal(cache.size, 5);
+  assert.equal(drumSampleForPitch(cache, "basement-knock", 36).duration, 0.2);
+  assert.equal(drumSampleForPitch(cache, "basement-knock", 49), null);
+});
+
 test("preview drum characters respond musically to velocity without losing bounds", () => {
   for (const kit of ONE_SHOT_KITS) {
     const quietSnare = previewDrumCharacter(kit.preview, 38, 32, 4.5);
@@ -141,8 +166,9 @@ test("preview transitions and the persistent instrument spotlight stay determini
   );
 });
 
-test("phrase performance is interpreted at the preview boundary", () => {
-  assert.match(appSource, /renderPhrasePerformance\(note\)/);
+test("phrase performance is interpreted once at the preview boundary", () => {
+  assert.match(appSource, /resolvePerformedNote\(note\)/);
+  assert.match(appSource, /performanceTransformForNote\(note, renderPhrasePerformance\(note\)\)/);
   assert.match(appSource, /phrasePerformance\.durationScale/);
   assert.match(appSource, /phrasePerformance\.velocityDelta/);
 });
@@ -225,13 +251,20 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
     "refreshDebugger",
     "copyDebuggerReport",
     "clearDebuggerHistory",
+    "performanceAbLab",
+    "performanceAbCurrent",
+    "performanceAbPerformed",
+    "performanceAbEnd",
   ]);
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
     const createMounted = createRuntimeMountedIds.has(id)
       && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
     const appMounted = appRuntimeMountedIds.has(id)
-      && new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource);
+      && (
+        new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource + "\n" + performanceAbControlsSource)
+        || new RegExp(`id=["']${id}["']`).test(performanceAbControlsSource)
+      );
     assert.ok(
       createMounted || appMounted,
       `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
@@ -240,7 +273,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
   assert.deepEqual(
     [...appRuntimeMountedIds],
-    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory"],
+    ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory", "performanceAbLab", "performanceAbCurrent", "performanceAbPerformed", "performanceAbEnd"],
     "app runtime selector exceptions must remain narrow and explicit",
   );
   for (const genre of Object.keys(GENRE_PROFILES)) assert.match(htmlSource, new RegExp(`value="${genre}"`));

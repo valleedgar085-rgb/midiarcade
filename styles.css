@@ -4680,3 +4680,49 @@ input[type=range]{accent-color:var(--figma-orange)}
   .create-console > .hero-panel{padding-bottom:0!important}
   .showcase-art + .showcase-copy{display:contents}
 }
+
+
+/* PERFORMANCE A/B — debugger-only preview laboratory */
+.performance-ab-lab{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:16px;
+  margin-top:16px;
+  padding:14px;
+  border:1px solid rgba(88,230,217,.24);
+  border-radius:var(--radius);
+  background:linear-gradient(135deg,rgba(88,230,217,.08),rgba(157,111,255,.06));
+}
+.performance-ab-copy small{
+  display:block;
+  margin-bottom:4px;
+  font-family:var(--font-mono);
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.16em;
+  color:var(--teal);
+}
+.performance-ab-copy strong{display:block;font-size:13px}
+.performance-ab-copy p{
+  margin-top:4px;
+  max-width:68ch;
+  color:var(--text-2);
+  font-size:11px;
+  line-height:1.45;
+}
+.performance-ab-actions{
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:8px;
+}
+#performanceAbPerformed{
+  border-color:rgba(88,230,217,.38);
+  color:var(--teal);
+}
+@media (max-width:700px){
+  .performance-ab-lab{grid-template-columns:1fr}
+  .performance-ab-actions{justify-content:stretch}
+  .performance-ab-actions .small-button{flex:1;justify-content:center;min-height:44px}
+}
