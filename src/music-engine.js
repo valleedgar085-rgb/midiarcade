@@ -4298,6 +4298,11 @@ const DRUM_FILL_VOCABULARIES = deepFreeze({
     { id: "acoustic-snare-tom-answer", pitches: [38, 45, 47, 50], positions: [0, 0.375, 0.625, 0.875] },
     { id: "acoustic-floor-launch", pitches: [41, 45, 38, 49], positions: [0, 0.25, 0.625, 0.875] },
   ],
+  hipHop: [
+    { id: "hiphop-ghost-pickup", pitches: [37, 42, 38], positions: [0.125, 0.5, 0.875] },
+    { id: "hiphop-hat-snare-breath", pitches: [42, 46, 38], positions: [0, 0.5, 0.875] },
+    { id: "hiphop-kick-reply", pitches: [36, 42, 38], positions: [0, 0.625, 0.875] },
+  ],
   pocket: [
     { id: "pocket-ghost-turn", pitches: [37, 38, 45, 38], positions: [0, 0.375, 0.625, 0.875] },
     { id: "pocket-tom-conversation", pitches: [45, 50, 47, 38], positions: [0, 0.25, 0.625, 0.875] },
@@ -4306,6 +4311,7 @@ const DRUM_FILL_VOCABULARIES = deepFreeze({
 });
 
 function drumFillVocabularyForGenre(genre) {
+  if (["hipHop", "rap"].includes(genre)) return DRUM_FILL_VOCABULARIES.hipHop;
   if (["house", "techno", "synthwave"].includes(genre)) return DRUM_FILL_VOCABULARIES.electronic;
   if (["trap", "drill", "drumBass"].includes(genre)) return DRUM_FILL_VOCABULARIES.bassMusic;
   if (["rock", "country", "pop"].includes(genre)) return DRUM_FILL_VOCABULARIES.acoustic;
@@ -4518,7 +4524,10 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       && config.drumFills > 0.001
       && rollFigures < maximumRolls;
     const rollProbability = config.rollAmount * config.drumFills * (0.3 + config.energy * 0.38 + config.complexity * 0.38) * (importantBoundary ? 1.35 : 0.72);
-    const useRoll = boundary && rollFigures < maximumRolls && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
+    const useRoll = !["hipHop", "rap"].includes(config.genre)
+      && boundary
+      && rollFigures < maximumRolls
+      && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
     if (usePreDropPunctuation) {
       const burstStart = Math.max(0, barBeats - 1);
       const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
@@ -4730,7 +4739,11 @@ function generateBass(
 
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
     for (let index = 0; index < offsets.length; index += 1) {
-      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      if (
+        index > 0
+        && !(grooveConductor && ["hipHop", "rap"].includes(config.genre))
+        && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))
+      ) continue;
       const absoluteStart = chord.start + offsets[index];
       const barOffset = round(mod(absoluteStart, barBeats), 4);
       const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
@@ -4908,13 +4921,25 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config,
       ? Math.max(0, config.tracks.bass.octave - 1)
       : config.tracks.bass.octave;
     const destination = rootMidi(nextChord, bassOctave);
+    const barPlan = grooveBar(grooveConductor, fill.bar);
+    const authorizedBassStarts = (barPlan?.bassPulses ?? [])
+      .map((offset) => fill.bar * barBeats + offset);
+    const hipHopPocket = ["hipHop", "rap"].includes(config.genre);
     const candidates = bass
-      .filter((note) => !assignedBassAnswers.has(note) && note.start >= boundary - 1.0 && note.start < boundary - 0.04)
+      .filter((note) => (
+        !assignedBassAnswers.has(note)
+        && note.start >= boundary - 1.0
+        && note.start < boundary - 0.04
+        && (
+          !hipHopPocket
+          || authorizedBassStarts.some((beat) => Math.abs(beat - note.start) <= 0.03)
+        )
+      ))
       .sort((left, right) => right.start - left.start);
     let answer = candidates[0];
     if (!answer) {
+      if (hipHopPocket) continue;
       const pickupStart = round(Math.max(fillStart, boundary - 0.75), 2);
-      const barPlan = grooveBar(grooveConductor, fill.bar);
       const localPickup = pickupStart - fill.bar * barBeats;
       if ((barPlan?.spaces ?? []).some((space) => Math.abs(space - localPickup) <= 0.01)) continue;
       answer = {
@@ -5282,6 +5307,7 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
   let triggers = 0;
   for (const layer of arrangementProfile.optionalLayers ?? []) {
     if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (["hipHop", "rap"].includes(config.genre) && layer.trackId === "drums") continue;
     if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
     for (const section of structure) {
       if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
@@ -5633,7 +5659,10 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
     } else if (style.chordMotion === "offbeat") {
       offsets = [0.5, 1.5, 2.5, 3.5].filter((offset) => offset < chord.duration - 0.05);
       if (!offsets.length) offsets = [0];
-    } else if (style.chordMotion === "arpeggio") {
+    } else if (
+      style.chordMotion === "arpeggio"
+      && !(grooveConductor && ["hipHop", "rap"].includes(config.genre))
+    ) {
       const step = config.complexity > 0.58 ? 0.25 : 0.5;
       for (let offset = 0, index = 0; offset < chord.duration - 0.05; offset += step, index += 1) {
         if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.12, 0.98))) continue;
@@ -5673,7 +5702,11 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
     if (conductedOffsets.length && style.chordMotion !== "sustained") offsets = conductedOffsets;
 
     for (let index = 0; index < offsets.length; index += 1) {
-      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
+      if (
+        index > 0
+        && !(conductedOffsets.length && ["hipHop", "rap"].includes(config.genre))
+        && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))
+      ) continue;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
       for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
@@ -8440,6 +8473,7 @@ function runPocketCohesionPass(sourceTracks, structure, grooveConductor = null, 
         .filter((beat) => Math.abs(beat - note.start) <= 0.065)
         .sort((left, right) => Math.abs(left - note.start) - Math.abs(right - note.start))[0];
       const fallback = Number.isFinite(intended)
+        || (grooveConductor && ["hipHop", "rap"].includes(config?.genre))
         ? null
         : anchors
           .filter((beat) => Math.abs(beat - note.start) <= 0.065)
