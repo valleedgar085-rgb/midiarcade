@@ -85,4 +85,9 @@ test("Hip-Hop engine source does not reintroduce post-DNA rhythm writers", () =>
   assert.match(source, /if \(hipHopPocket\) continue;/);
   assert.match(source, /!\(grooveConductor && \["hipHop", "rap"\]\.includes\(config\.genre\)\)/);
   assert.match(source, /DRUM_FILL_VOCABULARIES\.hipHop/);
+  assert.match(
+    source,
+    /preDropPunctuation:\s*true,[\s\S]{0,120}transitionFeature:/,
+    "DNA-safe Hip-Hop transition punctuation must keep blueprint provenance",
+  );
 });
