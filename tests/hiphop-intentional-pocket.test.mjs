@@ -69,7 +69,7 @@ test("Hip-Hop pocket anchors kick/bass and keeps structural landings tight", () 
   assert.equal(result.metrics.intentionalPocket, true);
 });
 
-test("Hip-Hop backbeat is deliberately late while hats create controlled push-pull", () => {
+test("Hip-Hop drums stay on grid when the producer requests a tight pocket", () => {
   const result = applyPerformanceEngine(hipHopSong(), {
     humanize: 1,
     seed: "pocket-b",
@@ -79,12 +79,9 @@ test("Hip-Hop backbeat is deliberately late while hats create controlled push-pu
   const hatA = byId(result, "hat-a").performed;
   const hatB = byId(result, "hat-b").performed;
 
-  assert.equal(snare.microtimingMs, 12);
-  assert.ok(snare.microtimingMs >= 6 && snare.microtimingMs <= 15);
-  assert.ok(hatA.microtimingMs > 0);
-  assert.ok(hatB.microtimingMs < 0);
-  assert.ok(Math.abs(hatA.microtimingMs) <= 10);
-  assert.ok(Math.abs(hatB.microtimingMs) <= 10);
+  assert.equal(snare.microtimingMs, 0);
+  assert.equal(hatA.microtimingMs, 0);
+  assert.equal(hatB.microtimingMs, 0);
 });
 
 test("Hip-Hop velocity follows rhythmic intent instead of uniform random drift", () => {

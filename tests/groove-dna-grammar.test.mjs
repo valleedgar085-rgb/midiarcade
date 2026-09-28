@@ -219,10 +219,10 @@ test("generated House uses Groove DNA kick and hat lanes", () => {
   }
 });
 
-test("Groove DNA metadata no longer automatically disables humanization", () => {
+test("Groove DNA metadata no longer automatically disables humanization outside tight Hip-Hop rhythm lanes", () => {
   const song = generateNew({
     seed: "groove-metadata-humanization",
-    genre: "hipHop",
+    genre: "neoSoul",
     bars: 8,
     candidateCount: 1,
     humanize: 0.7,

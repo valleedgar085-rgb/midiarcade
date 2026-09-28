@@ -878,7 +878,7 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.88 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0, durationScale: 0.88 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
@@ -4729,8 +4729,12 @@ function generateBass(
     }
 
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
+    const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
+    const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
     for (let index = 0; index < offsets.length; index += 1) {
-      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      // Keep a dependable statement/reply bass line without restoring the
+      // unbounded all-pulse behavior that can overload mobile playback.
+      if (index >= guaranteedPulseCount && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
       const absoluteStart = chord.start + offsets[index];
       const barOffset = round(mod(absoluteStart, barBeats), 4);
       const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
@@ -7132,17 +7136,11 @@ export function genreMicroTimingOffset({
   exactSubdivision = false,
 } = {}) {
   if (exactSubdivision) return 0;
-  const beat = finite(start, 0);
   const lane = String(trackId ?? "");
   const id = String(genre ?? "");
   if (id === "hipHop") {
-    if (lane === "drums") {
-      if ([38, 39].includes(Math.round(finite(pitch, -1)))) return 0.012;
-      if ([42, 44, 46].includes(Math.round(finite(pitch, -1)))) {
-        return Math.floor(beat * 4 + 1e-6) % 2 === 0 ? -0.005 : 0.005;
-      }
-      return 0;
-    }
+    if (lane === "drums" || lane === "bass") return 0;
+    const beat = finite(start, 0);
     if (lane === "melody") return 0.008 + (Math.floor(beat / 2) % 2 === 0 ? -0.002 : 0.002);
     if (lane === "counterpoint") return -0.006;
     if (lane === "chords") return 0.004;
@@ -7167,7 +7165,11 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
   const felt = [];
   const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
   for (const note of rawNotes) {
-    const exactSubdivision = note.preserveSubdivision === true || note.preserveTiming === true;
+    // Hip-Hop kick, snare, hat, and bass patterns are authored together.
+    // Do not add a second random performance offset after that relationship
+    // is already established by Groove DNA.
+    const lockedHipHopRhythm = config.genre === "hipHop" && ["drums", "bass"].includes(trackId);
+    const exactSubdivision = lockedHipHopRhythm || note.preserveSubdivision === true || note.preserveTiming === true;
     const eighthPosition = mod(note.start, 1);
     const isOffEighth = Math.abs(eighthPosition - 0.5) < 0.035;
     const swingDelay = !exactSubdivision && isOffEighth ? config.swing * settings.feel * (1 / 6) : 0;
