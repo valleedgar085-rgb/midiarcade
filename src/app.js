@@ -3927,37 +3927,12 @@ function clearGenerationDebugger() {
 }
 
 async function copyGenerationDebuggerReport() {
-  const runs = generationExecutor.diagnosticsSnapshot();
-  if (!runs.length) {
-    showToast("Generate a song first so the debugger has a run to copy.");
-    return;
-  }
-  const payload = JSON.stringify({
-    app: "MIDI Arcade",
-    version: "1.2.3",
-    capturedAt: new Date().toISOString(),
+  const { copyGenerationDebuggerReport: copy } = await import("./ui/debugger-copy.js");
+  return copy({
+    runs: generationExecutor.diagnosticsSnapshot(),
     workerActive: generationExecutor.usingWorker,
-    runs,
-  }, null, 2);
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(payload);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = payload;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
-    showToast("Debugger report copied.");
-  } catch (error) {
-    console.warn("Could not copy debugger report", error);
-    showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
-  }
+    toast: showToast,
+  });
 }
 
 function chooseNewGenrePrograms(seed) {
