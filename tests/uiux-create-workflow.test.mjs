@@ -4,6 +4,7 @@ import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta.url), "utf8");
+const midnightCss = fs.readFileSync(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const contract = fs.readFileSync(new URL("../src/ui/create-control-contract.js", import.meta.url), "utf8");
 const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
@@ -119,6 +120,16 @@ test("Create gives desktop and mobile a clear action hierarchy", () => {
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?body:has\(#tab-create\.is-active\) \.topbar \.session-status[\s\S]*?display:\s*none/);
   assert.match(css, /@media \(max-width: 600px\)[\s\S]*?#tab-create \.create-live-controls\s*\{[\s\S]*?grid-template-columns:\s*1fr 1fr/);
   assert.match(css, /#tab-create \.taste-actions\s*\{[\s\S]*?opacity:\s*0\.72/);
+});
+
+test("Create hero collapse preserves document flow and mobile centering", () => {
+  assert.match(presentation, /create-showcase-collapse-spacer/);
+  assert.match(presentation, /expandedHeight - compactHeight/);
+  assert.match(presentation, /insertAdjacentElement\("afterend", spacer\)/);
+  assert.match(midnightCss, /#tab-create \.create-showcase-collapse-spacer\s*\{[\s\S]*?height:\s*0/);
+  assert.match(midnightCss, /body:has\(#tab-create\.is-active\) \.app-shell\s*\{[\s\S]*?width:\s*min\(100%, 520px\)/);
+  assert.match(midnightCss, /body:has\(#tab-create\.is-active\) main\s*\{[\s\S]*?overflow-x:\s*clip/);
+  assert.doesNotMatch(midnightCss, /#tab-create \.song-showcase\s*\{[\s\S]*?transition:\s*min-height/);
 });
 
 test("Create-specific CSS stays outside the protected global stylesheet budget and dev serves the built UI", () => {

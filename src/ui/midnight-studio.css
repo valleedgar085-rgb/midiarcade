@@ -43,12 +43,17 @@ body:has(#tab-create.is-active) {
 }
 
 body:has(#tab-create.is-active) .app-shell {
+  width: min(100%, 520px);
   max-width: 520px;
-  margin: 0 auto;
+  min-width: 0;
+  margin-inline: auto;
   background: var(--midnight-bg) !important;
 }
 
 body:has(#tab-create.is-active) main {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
   padding: 0 16px calc(140px + env(safe-area-inset-bottom, 0px)) !important;
 }
 
@@ -164,12 +169,13 @@ body:has(#tab-create.is-active) .menu-button b {
     radial-gradient(circle at 50% 42%, rgba(255, 46, 77, 0.18), transparent 38%),
     #08090d !important;
   box-shadow: none !important;
-  transition: min-height 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              padding 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              border-radius 0.38s cubic-bezier(0.16, 1, 0.3, 1),
-              background 0.38s ease,
-              box-shadow 0.38s ease,
-              border-color 0.38s ease !important;
+  /* Layout dimensions switch immediately; the spacer preserves document flow.
+     Only visual properties animate so Android/WebView does not chase a moving
+     scroll anchor while the hero becomes the compact player. */
+  transition: border-radius 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.28s ease,
+              box-shadow 0.28s ease,
+              border-color 0.28s ease !important;
 }
 
 #tab-create .song-showcase::before {
@@ -324,6 +330,14 @@ body:has(#tab-create.is-active) .menu-button b {
 #tab-create .song-showcase .taste-actions,
 #tab-create .song-showcase .create-live-controls {
   display: none !important;
+}
+
+#tab-create .create-showcase-collapse-spacer {
+  height: 0;
+  flex: 0 0 auto;
+  min-width: 0;
+  pointer-events: none;
+  transition: none !important;
 }
 
 /* Scrolled state: compact now-playing header with smooth animated album cover */

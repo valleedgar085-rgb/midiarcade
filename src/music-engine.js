@@ -9117,6 +9117,14 @@ const GM2_DRUM_KIT_NAMES = {
  */
 export const ONE_SHOT_KITS = deepFreeze([
   {
+    id: "midi-arcade-pack-1",
+    name: "MIDI Arcade Hip-Hop + Trap Pack 1",
+    genres: ["hipHop", "rap", "trap", "drill", "loFiHipHop"],
+    sampleManifest: "./assets/one-shots/midi-arcade-pack-1/manifest.json",
+    oneShots: { kick: "Pack 1 Kicks", snare: "Pack 1 Snares", clap: "Pack 1 Claps", hat: "Pack 1 Hats", openHat: "Pack 1 Hats", cymbal: "Pack 1 Hats", tom: "Pack 1 Percussion", bass808: "Pack 1 Tuned 808s" },
+    preview: { kickStart: 148, kickEnd: 37, kickDecay: 0.31, kickWave: "sine", clickPitch: 2600, clickLevel: 0.038, snareFilter: 1880, snareTone: 164, snareDecay: 0.18, hatFilter: 6900, hatDecay: 0.042, openHatDecay: 0.24, cymbalFilter: 5200, cymbalDecay: 0.54, tomTune: 0.9, noiseColor: 0.88 },
+  },
+  {
     id: "velvet-room",
     name: "Velvet Room One-Shots",
     oneShots: { kick: "Velvet 22", snare: "Room Snap", clap: "Soft Stack", hat: "Silk Hat", openHat: "Silk Open", cymbal: "Warm Crash", tom: "Maple Tom" },
@@ -9172,8 +9180,9 @@ function chooseOneShotKit(config, preferred = null) {
   const requested = ONE_SHOT_KITS.find((kit) => kit.id === requestedId);
   if (requested) return requested;
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
-  const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
-  const palette = choices.length ? choices : ONE_SHOT_KITS;
+  const eligible = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
+  const genrePreferred = eligible.filter((kit) => Array.isArray(kit.genres) && kit.genres.includes(config.genre));
+  const palette = genrePreferred.length ? genrePreferred : (eligible.length ? eligible : ONE_SHOT_KITS);
   return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
 }
 
