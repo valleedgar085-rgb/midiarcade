@@ -9167,18 +9167,39 @@ export const ONE_SHOT_KITS = deepFreeze([
   },
 ]);
 
-function chooseOneShotKit(config, preferred = null) {
+function chooseOneShotKit(config, preferred = null, style = null) {
   const preferredId = typeof preferred === "string" ? preferred : preferred?.id;
   const requestedId = preferredId || config.oneShotKitId;
   const requested = ONE_SHOT_KITS.find((kit) => kit.id === requestedId);
   if (requested) return requested;
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
   const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
-  const hipHopIds = config.genre === "hipHop" || config.genre === "rap"
-    ? new Set(["basement-knock", "dusty-tape"])
-    : null;
-  const genreChoices = hipHopIds ? choices.filter((kit) => hipHopIds.has(kit.id)) : [];
-  const palette = genreChoices.length ? genreChoices : choices.length ? choices : ONE_SHOT_KITS;
+  const hipHop = config.genre === "hipHop" || config.genre === "rap";
+  if (hipHop) {
+    const palette = choices.filter((kit) => ["basement-knock", "dusty-tape"].includes(kit.id));
+    if (palette.length) {
+      const energy = clamp(finite(config.energy, 0.7), 0, 1);
+      const swing = clamp(finite(config.swing, 0.18), 0, 0.5);
+      const tempoNorm = clamp((finite(config.tempo, 94) - 76) / 36, 0, 1);
+      const laidBack = style?.rhythmIdentity?.timingPocket === "laidBack";
+      const breakbeat = style?.drumGroove === "breakbeat";
+      const dustyScore =
+        (1 - energy) * 0.44
+        + swing * 0.72
+        + (1 - tempoNorm) * 0.24
+        + (laidBack ? 0.18 : 0)
+        + (breakbeat ? 0.08 : 0);
+      const basementScore =
+        energy * 0.5
+        + tempoNorm * 0.28
+        + (1 - swing) * 0.18
+        + (laidBack ? 0 : 0.08);
+      return dustyScore > basementScore
+        ? palette.find((kit) => kit.id === "dusty-tape") ?? palette[0]
+        : palette.find((kit) => kit.id === "basement-knock") ?? palette[0];
+    }
+  }
+  const palette = choices.length ? choices : ONE_SHOT_KITS;
   return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
 }
 
@@ -9931,11 +9952,11 @@ function compose(config, options = {}) {
     validCompositionRouteId(options.compositionRoute?.id ?? options.compositionRoute)
       ?? candidateCompositionRoute(config.seed, 0),
   );
-  const oneShotKit = chooseOneShotKit(config, options.oneShotKit);
   const baseStructure = options.structure
     ?? createStructure(config, rootRng.fork("structure"));
   const style = options.style
     ?? createStyle(config, rootRng.fork("style"));
+  const oneShotKit = chooseOneShotKit(config, options.oneShotKit, style);
   const songBlueprint = options.preserveAuthorities && options.songBlueprint
     ? clone(options.songBlueprint)
     : createSongBlueprint(

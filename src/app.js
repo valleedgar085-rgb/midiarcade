@@ -30,7 +30,6 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope, scheduleDrumSampleVoice } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
-import { createPerformanceAuditionSong } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -67,7 +66,6 @@ import {
 } from "./ui/session-preferences.js";
 import { createRenderCoordinator } from "./ui/render-coordinator.js";
 import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-view.js";
-import { ensurePerformanceAbControls } from "./ui/performance-ab-controls.js";
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
@@ -3828,7 +3826,6 @@ function ensureGenerationDebuggerControls() {
     $(".debugger-section-heading", dialog)?.append(refresh);
   }
 
-  ensurePerformanceAbControls(dialog);
 
   const actions = $(".debugger-actions", dialog);
   if (actions && !$("#copyDebuggerReport")) {
@@ -3872,14 +3869,6 @@ function renderGenerationDebugger() {
     : "Score and seed will appear after generation.");
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
-  const audition = player.performanceAudition;
-  const trap = songGenreId() === "trap";
-  $("#performanceAbPerformed").disabled = trap;
-  setText("#performanceAbStatus", trap
-    ? "B paused."
-    : audition?.mode === "performance"
-      ? `B · ${Math.round((audition.humanize ?? 0.65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-      : audition ? "A" : "A · B preview");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3908,15 +3897,27 @@ function renderGenerationDebugger() {
     capturedRuns: runs.length,
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
-    performanceAudition: player.performanceAudition,
     latest,
   }, null, 2);
 }
 
-function openGenerationDebugger() {
+async function openGenerationDebugger() {
   renderGenerationDebugger();
   const dialog = $("#debuggerDialog");
-  if (dialog && !dialog.open) dialog.showModal();
+  if (!dialog) return;
+  try {
+    const { mountPerformanceAbDebugger } = await import("./ui/performance-ab-runtime.js");
+    mountPerformanceAbDebugger({
+      dialog,
+      player,
+      getSong: () => state.song,
+      render: renderGenerationDebugger,
+      toast: showToast,
+    });
+  } catch (error) {
+    console.warn("Performance A/B debugger unavailable", error);
+  }
+  if (!dialog.open) dialog.showModal();
 }
 
 function clearGenerationDebugger() {
@@ -3926,57 +3927,12 @@ function clearGenerationDebugger() {
 }
 
 async function copyGenerationDebuggerReport() {
-  const runs = generationExecutor.diagnosticsSnapshot();
-  if (!runs.length) {
-    showToast("Generate a song first so the debugger has a run to copy.");
-    return;
-  }
-  const payload = JSON.stringify({
-    app: "MIDI Arcade",
-    version: "1.2.3",
-    capturedAt: new Date().toISOString(),
+  const { copyGenerationDebuggerReport: copy } = await import("./ui/debugger-copy.js");
+  return copy({
+    runs: generationExecutor.diagnosticsSnapshot(),
     workerActive: generationExecutor.usingWorker,
-    runs,
-  }, null, 2);
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(payload);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = payload;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
-    showToast("Debugger report copied.");
-  } catch (error) {
-    console.warn("Could not copy debugger report", error);
-    showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
-  }
-}
-
-async function auditionPerformanceDebugger(mode) {
-  if (!state.song) return showToast("Generate a song first."), false;
-  try {
-    await player.auditionPerformanceAB(mode, { humanize: 0.65 });
-    renderGenerationDebugger();
-    showToast(mode === "performance" ? "B preview active." : "A current song active.");
-    return true;
-  } catch (error) {
-    console.error("A/B failed", error);
-    showToast("A/B blocked.");
-    renderGenerationDebugger();
-    return false;
-  }
-}
-
-async function endPerformanceDebugger() {
-  await player.endPerformanceAB();
-  renderGenerationDebugger();
+    toast: showToast,
+  });
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -5308,37 +5264,6 @@ export class PreviewPlayer {
     return this.play();
   }
 
-  async auditionPerformanceAB(mode, { humanize = 0.65, startSeconds } = {}) {
-    const song = state.song;
-    if (!song) return false;
-    const position = clamp(
-      Number.isFinite(Number(startSeconds)) ? Number(startSeconds) : this.currentSongTime(),
-      0,
-      totalSeconds(song),
-    );
-    if (mode === "current") {
-      this.performanceAudition = { mode, report: this.performanceAudition?.report ?? null };
-      return this.auditionSong(song, { startSeconds: position });
-    }
-    if (mode !== "performance") throw new RangeError("Unknown A/B mode");
-    const pair = createPerformanceAuditionSong(song, {
-      humanize,
-      seed: `${song.seed ?? song.id ?? "song"}:performance-ab`,
-    });
-    this.performanceAudition = {
-      mode,
-      humanize: pair.performanceSong.performanceAudition.humanize,
-      report: pair.report,
-    };
-    return this.auditionSong(pair.performanceSong, { startSeconds: position });
-  }
-
-  async endPerformanceAB() {
-    const position = this.currentSongTime();
-    this.performanceAudition = null;
-    await this.returnToCanonicalSong({ positionSeconds: position, resume: false });
-    return true;
-  }
 
   async play() {
     const song = this.playbackSong ?? state.song;
@@ -6727,20 +6652,12 @@ function toggleFullscreen() {
   const debuggerDialog = $("#debuggerDialog");
   $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
   $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
-  $("#closeDebugger")?.addEventListener("click", () => {
-    if (player.performanceAudition) void player.endPerformanceAB();
-    debuggerDialog?.close();
-  });
+  $("#closeDebugger")?.addEventListener("click", () => debuggerDialog?.close());
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
-  $("#performanceAbCurrent")?.addEventListener("click", () => void auditionPerformanceDebugger("current"));
-  $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
-  $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
   debuggerDialog?.addEventListener("click", (event) => {
-    if (event.target !== debuggerDialog) return;
-    if (player.performanceAudition) void player.endPerformanceAB();
-    debuggerDialog.close();
+    if (event.target === debuggerDialog) debuggerDialog.close();
   });
 
   document.addEventListener("keydown", (event) => {

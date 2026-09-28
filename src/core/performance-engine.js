@@ -177,8 +177,87 @@ function articulationFor(event, durationScale) {
   return existing;
 }
 
-function timingPolicy(event, genre, amount, seed) {
-  if (amount <= 0 || event?.intent?.locked) return 0;
+function eventStartBeat(event) {
+  return finite(event?.canonical?.startBeat, event?.time);
+}
+
+function beatKey(value) {
+  return round(finite(value, 0), 6).toFixed(6);
+}
+
+function nearModulo(value, modulo, target = 0, tolerance = 1e-6) {
+  const wrapped = ((finite(value, 0) % modulo) + modulo) % modulo;
+  return Math.abs(wrapped - target) <= tolerance
+    || Math.abs(wrapped - modulo - target) <= tolerance;
+}
+
+function millisecondsToBeats(milliseconds, bpm) {
+  return finite(milliseconds, 0) * Math.max(1, finite(bpm, 120)) / 60000;
+}
+
+function timingAnchorIds(events, beatsPerBar = 4) {
+  const anchors = new Set();
+  const kickIdsByBeat = new Map();
+
+  for (const event of events) {
+    const id = String(event?.id ?? "");
+    const phraseRole = String(event?.phraseRole ?? "");
+    const start = eventStartBeat(event);
+    const family = drumFamily(event);
+
+    if (
+      event?.intent?.locked
+      || event?.intent?.timingLocked
+      || event?.transitionHandoffRole
+      || ["resolution", "landing", "payoff"].includes(phraseRole)
+    ) {
+      anchors.add(id);
+    }
+
+    if (event?.roleId === "drums" && family === "kick") {
+      const key = beatKey(start);
+      if (!kickIdsByBeat.has(key)) kickIdsByBeat.set(key, []);
+      kickIdsByBeat.get(key).push(id);
+      if (nearModulo(start, Math.max(1, beatsPerBar), 0)) anchors.add(id);
+    }
+  }
+
+  for (const event of events) {
+    if (event?.roleId !== "bass") continue;
+    const ids = kickIdsByBeat.get(beatKey(eventStartBeat(event)));
+    if (!ids?.length) continue;
+    anchors.add(String(event?.id ?? ""));
+    for (const id of ids) anchors.add(id);
+  }
+
+  return anchors;
+}
+
+function hipHopTimingMilliseconds(event) {
+  const family = drumFamily(event);
+  const start = eventStartBeat(event);
+  const sixteenthIndex = ((Math.round(start * 4) % 4) + 4) % 4;
+
+  if (event?.roleId === "drums") {
+    if (family === "kick") return 0;
+    if (family === "snare" || family === "clap") return 12;
+    if (family === "hat") return [-6, 4, 6, -4][sixteenthIndex];
+    return [-4, 3, 5, -2][sixteenthIndex];
+  }
+
+  if (event?.roleId === "bass") return 2;
+  return null;
+}
+
+function timingPolicy(event, genre, bpm, amount, seed, timingAnchor = false) {
+  if (amount <= 0 || event?.intent?.locked || timingAnchor) return 0;
+
+  if (genre === "hipHop") {
+    const deliberateMilliseconds = hipHopTimingMilliseconds(event);
+    if (deliberateMilliseconds != null) {
+      return round(millisecondsToBeats(deliberateMilliseconds * amount, bpm));
+    }
+  }
 
   let deliberate = 0;
   if (LAIDBACK_GENRES.has(genre) && (event?.roleId === "bass" || isSnare(event))) {
@@ -205,8 +284,27 @@ function durationPolicy(event, amount, seed) {
   return clamp(1 + (phraseMotion + localMotion + phraseShape) * amount, 0.72, 1.24);
 }
 
-function velocityPolicy(event, amount, seed) {
+function hipHopVelocityDelta(event) {
+  const family = drumFamily(event);
+  if (event?.roleId !== "drums") return null;
+
+  const start = eventStartBeat(event);
+  const sixteenthIndex = ((Math.round(start * 4) % 4) + 4) % 4;
+
+  if (family === "kick") return nearModulo(start, 2, 0) ? 4 : 1;
+  if (family === "snare" || family === "clap") return 6;
+  if (family === "hat") return [4, -8, -2, -6][sixteenthIndex];
+  return [-2, 2, -4, 1][sixteenthIndex];
+}
+
+function velocityPolicy(event, genre, amount, seed) {
   if (amount <= 0 || event?.intent?.locked) return 0;
+
+  if (genre === "hipHop") {
+    const deliberateDelta = hipHopVelocityDelta(event);
+    if (deliberateDelta != null) return deliberateDelta * amount;
+  }
+
   const range = ROLE_VELOCITY_RANGE[event?.roleId] ?? 3;
   const phraseMotion = signedPhase(`${seed}|velocity|${correlatedPhraseKey(event)}`) * range * 0.55;
   const localMotion = signedPhase(`${seed}|velocity|${event?.id}`) * range * 0.45;
@@ -219,6 +317,7 @@ function performEvent(event, {
   amount,
   seed,
   totalBeats,
+  timingAnchor = false,
   orderBounds = null,
 }) {
   if (amount <= 0 || event?.intent?.locked) return event;
@@ -230,9 +329,16 @@ function performEvent(event, {
     velocity: Math.round(clamp(event?.velocity, 1, 127)),
   };
   const performanceScale = GENRE_PERFORMANCE_SCALE[genre] ?? { timing: 1, duration: 1, velocity: 1 };
-  const timingDeltaBeats = timingPolicy(event, genre, amount * performanceScale.timing, seed);
+  const timingDeltaBeats = timingPolicy(
+    event,
+    genre,
+    bpm,
+    amount * performanceScale.timing,
+    seed,
+    timingAnchor,
+  );
   const durationScale = durationPolicy(event, amount * performanceScale.duration, seed);
-  const velocityDelta = velocityPolicy(event, amount * performanceScale.velocity, seed);
+  const velocityDelta = velocityPolicy(event, genre, amount * performanceScale.velocity, seed);
   const minimumStart = Math.max(0, finite(orderBounds?.minStart, 0));
   const maximumStart = Math.min(
     Math.max(0, totalBeats - 1 / 960),
@@ -286,7 +392,12 @@ export function applyPerformanceEngine(gauntletSong, {
   const genre = String(gauntletSong?.intent?.genre ?? "unknown");
   const bpm = clamp(gauntletSong?.intent?.bpm ?? 120, 30, 300);
   const totalBeats = Math.max(1 / 960, finite(gauntletSong?.totalBeats, 1));
+  const beatsPerBar = Math.max(1, finite(
+    gauntletSong?.intent?.beatsPerBar,
+    gauntletSong?.beatsPerBar ?? 4,
+  ));
   const orderBounds = orderBoundsForEvents(gauntletSong.musicalEvents, totalBeats);
+  const timingAnchors = timingAnchorIds(gauntletSong.musicalEvents, beatsPerBar);
   const events = Object.freeze(
     gauntletSong.musicalEvents.map((event) => performEvent(event, {
       genre,
@@ -294,12 +405,14 @@ export function applyPerformanceEngine(gauntletSong, {
       amount,
       seed,
       totalBeats,
+      timingAnchor: timingAnchors.has(String(event?.id ?? "")),
       orderBounds: orderBounds.get(String(event?.id ?? "")) ?? null,
     })),
   );
 
   const changed = events.filter((event, index) => event !== gauntletSong.musicalEvents[index]);
   const timingDeltas = changed.map((event) => Math.abs(finite(event?.performed?.timingDeltaBeats, 0)));
+  const microtimingMilliseconds = changed.map((event) => Math.abs(finite(event?.performed?.microtimingMs, 0)));
 
   return Object.freeze({
     version: 1,
@@ -313,6 +426,9 @@ export function applyPerformanceEngine(gauntletSong, {
       totalEvents: events.length,
       changedEvents: changed.length,
       maxTimingDeltaBeats: timingDeltas.length ? round(Math.max(...timingDeltas)) : 0,
+      maxMicrotimingMs: microtimingMilliseconds.length ? round(Math.max(...microtimingMilliseconds), 3) : 0,
+      intentionalPocket: genre === "hipHop",
+      protectedTimingAnchors: timingAnchors.size,
       preservedLockedEvents: gauntletSong.musicalEvents.filter((event) => event?.intent?.locked).length,
     }),
   });

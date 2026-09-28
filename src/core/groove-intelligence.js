@@ -891,6 +891,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.kick,
         probability: grammar.probability.kick,
+        density: grammar.density.kick,
       }),
       snare: Object.freeze({
         required: grammar.locked.snare,
@@ -898,6 +899,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.snare,
         probability: grammar.probability.snare,
+        density: grammar.density.snare,
       }),
       hat: Object.freeze({
         required: grammar.locked.hat,
@@ -905,6 +907,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.hat,
         probability: grammar.probability.hat,
+        density: grammar.density.hat,
       }),
       percussion: Object.freeze({
         required: grammar.locked.percussion,
@@ -912,6 +915,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.percussion,
         probability: grammar.probability.percussion,
+        density: grammar.density.percussion,
       }),
     }),
     relationships: grammar.relationships,
