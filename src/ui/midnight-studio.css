@@ -326,6 +326,14 @@ body:has(#tab-create.is-active) .menu-button b {
   display: none !important;
 }
 
+#tab-create .create-showcase-collapse-spacer {
+  height: 0;
+  flex: 0 0 auto;
+  min-width: 0;
+  pointer-events: none;
+  transition: none !important;
+}
+
 /* Scrolled state: compact now-playing header with smooth animated album cover */
 #tab-create.is-scrolled .song-showcase {
   position: sticky !important;
