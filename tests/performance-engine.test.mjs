@@ -84,10 +84,29 @@ test("laid-back snare and bass receive deliberate lag while grid genres stay tig
       `${id} should preserve the deliberate laid-back pocket`,
     );
     assert.ok(
-      Math.abs(gridEvent.performed.timingDeltaBeats) <= 0.004,
-      `${id} should stay tightly attenuated in a four-on-the-floor grid genre`,
+      Math.abs(gridEvent.performed.timingDeltaBeats) <= 0.0006,
+      `${id} should remain almost grid-locked in House`,
     );
   }
+});
+
+test("House performance keeps timing nearly locked while still shaping duration or velocity", () => {
+  const source = song("house");
+  const result = applyPerformanceEngine(source, { humanize: 1, seed: "house-conservative-audition" });
+
+  const changed = result.events.filter((performed, index) => performed !== source.musicalEvents[index]);
+  assert.ok(changed.length > 0, "House B should still make a subtle performance change");
+  assert.ok(
+    changed.every((entry) => Math.abs(entry.performed.timingDeltaBeats) <= 0.0006),
+    "House should not loosen the four-on-the-floor grid",
+  );
+  assert.ok(
+    changed.some((entry) => (
+      Math.abs(entry.performed.durationDeltaBeats) > 1e-6
+      || Math.abs(entry.performed.velocityDelta) > 0
+    )),
+    "House B should focus on note length or hit strength instead of timing drift",
+  );
 });
 
 test("performance engine preserves pitch, locked events, and song bounds", () => {
