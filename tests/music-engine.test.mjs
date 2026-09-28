@@ -1101,7 +1101,7 @@ test("every generation chooses a different one-shot kit unless one is explicitly
   for (const key of ["kick", "snare", "clap", "hat", "openHat", "cymbal", "tom"]) {
     assert.match(next.oneShotKit.oneShots[key], /\S/);
   }
-  assert.match(next.idea.soundPalette.find((entry) => entry.trackId === "drums").name, new RegExp(next.oneShotKit.name));
+  assert.ok(next.idea.soundPalette.find((entry) => entry.trackId === "drums").name.includes(next.oneShotKit.name));
 });
 
 test("a different new seed changes every instrument pattern", () => {
