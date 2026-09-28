@@ -28,6 +28,7 @@ import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessi
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import { normalizeSampleManifest, resolve808SampleEntry, resolveDrumSampleEntry, resolveSampleUrl } from "./core/sample-one-shots.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
@@ -4932,6 +4933,9 @@ export class PreviewPlayer {
     this.delayReturn = null;
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
+    this.sampleManifests = new Map();
+    this.sampleBuffers = new Map();
+    this.sampleLoadFailures = new Set();
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -5281,6 +5285,8 @@ export class PreviewPlayer {
       return false;
     }
     if (requestGeneration !== this.playRequestGeneration || this.playing) return this.playing;
+    await this.preloadOneShotKit(oneShotKitForSong(song));
+    if (requestGeneration !== this.playRequestGeneration || this.playing) return this.playing;
     void requestScreenWakeLock();
     if (this.master?.gain) {
       const now = this.context.currentTime;
@@ -5564,6 +5570,97 @@ export class PreviewPlayer {
     return trackedNodes;
   }
 
+  async loadSampleBuffer(url) {
+    if (!url || !this.context) return null;
+    if (this.sampleBuffers.has(url)) return this.sampleBuffers.get(url);
+    if (this.sampleLoadFailures.has(url)) return null;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Sample request failed: ${response.status}`);
+      const encoded = await response.arrayBuffer();
+      const decoded = await this.context.decodeAudioData(encoded.slice(0));
+      this.sampleBuffers.set(url, decoded);
+      return decoded;
+    } catch {
+      this.sampleLoadFailures.add(url);
+      return null;
+    }
+  }
+
+  async preloadOneShotKit(kit) {
+    if (!kit?.sampleManifest || !this.context || typeof fetch !== "function") return null;
+    if (this.sampleManifests.has(kit.id)) return this.sampleManifests.get(kit.id);
+    try {
+      const response = await fetch(kit.sampleManifest);
+      if (!response.ok) return null;
+      const manifest = normalizeSampleManifest(await response.json());
+      this.sampleManifests.set(kit.id, manifest);
+      const paths = Object.values(manifest.roles).flat().map((entry) => entry.path);
+      await Promise.all(paths.map((path) => this.loadSampleBuffer(resolveSampleUrl(kit.sampleManifest, path))));
+      return manifest;
+    } catch {
+      return null;
+    }
+  }
+
+  sampleManifestForKit(kit) {
+    return kit?.id ? this.sampleManifests.get(kit.id) ?? null : null;
+  }
+
+  scheduleSampleDrum(event, when, kit, character, mixGain) {
+    const manifest = this.sampleManifestForKit(kit);
+    const entry = resolveDrumSampleEntry(manifest, event.pitch, `${event.start ?? event.time ?? 0}:${event.velocity}`);
+    if (!entry) return false;
+    const url = resolveSampleUrl(kit.sampleManifest, entry.path);
+    const buffer = this.sampleBuffers.get(url);
+    if (!buffer) return false;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const nodes = new Set([source, gain]);
+    const output = this.createDrumOutput(event, character, nodes, character.kind === "cymbal" ? 0.42 : character.kind.includes("hat") ? 0.15 : 0.28);
+    source.buffer = buffer;
+    const entryGain = clamp(Number(entry.gain ?? 1), 0.25, 2);
+    const peak = Math.max(0.0002, character.amplitude * mixGain * entryGain * 0.72);
+    const duration = Math.min(buffer.duration, character.kind === "hat" ? Math.max(0.035, character.duration) : buffer.duration);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(peak, when + PREVIEW_TRANSITION.startSeconds);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(PREVIEW_TRANSITION.startSeconds + 0.01, duration));
+    source.connect(gain).connect(output);
+    source.start(when);
+    source.stop(when + Math.max(0.02, duration) + 0.01);
+    this.registerScheduledVoice([source], nodes, event, when);
+    return true;
+  }
+
+  scheduleSample808(event, when) {
+    const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
+    const manifest = this.sampleManifestForKit(kit);
+    const entry = resolve808SampleEntry(manifest, event.pitch, `${event.time ?? 0}:${event.velocity}`);
+    if (!entry) return false;
+    const url = resolveSampleUrl(kit.sampleManifest, entry.path);
+    const buffer = this.sampleBuffers.get(url);
+    if (!buffer) return false;
+    const source = this.context.createBufferSource();
+    const gain = this.context.createGain();
+    const nodes = new Set([source, gain]);
+    source.buffer = buffer;
+    const rootMidi = Number.isFinite(Number(entry.rootMidi)) ? Number(entry.rootMidi) : event.pitch;
+    source.playbackRate.value = clamp(2 ** ((Number(event.pitch) - rootMidi) / 12), 0.5, 2);
+    const entryGain = clamp(Number(entry.gain ?? 1), 0.25, 2);
+    const peak = Math.max(0.0002, (Number(event.velocity) / 127) * clamp(Number(event.mixGain ?? 1), 0, 1) * entryGain * 0.45);
+    const attack = PREVIEW_TRANSITION.startSeconds;
+    const hold = Math.min(Math.max(0.05, Number(event.duration ?? 0.2)), buffer.duration / source.playbackRate.value);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(peak, when + attack);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(attack + 0.02, hold));
+    this.connectPreviewOutput(gain, event, -0.08, 0.05, nodes);
+    source.connect(gain);
+    source.start(when);
+    source.stop(when + Math.max(0.04, hold) + 0.01);
+    this.registerScheduledVoice([source], nodes, event, when);
+    return true;
+  }
+
   noiseBufferForKit(kit) {
     if (this.noiseBuffers.has(kit.id)) return this.noiseBuffers.get(kit.id);
     const context = this.context;
@@ -5604,6 +5701,7 @@ export class PreviewPlayer {
   }
 
   scheduleEvent(event, when) {
+    if (event.id === "bass" && this.scheduleSample808(event, when)) return;
     if (event.id === "drums") {
       this.scheduleDrum(event, when);
       return;
@@ -5797,6 +5895,10 @@ export class PreviewPlayer {
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const voice = kit.preview;
     const character = previewDrumCharacter(voice, event.pitch, event.velocity, event.start ?? when);
+    if (this.scheduleSampleDrum(event, when, kit, character, mixGain)) {
+      if ([35, 36].includes(event.pitch)) this.applyKickSidechain(when);
+      return;
+    }
     if ([35, 36].includes(event.pitch)) {
       this.applyKickSidechain(when);
       const oscillator = context.createOscillator();
