@@ -27,12 +27,12 @@ test("Hip-Hop pocket locks the fuller backbeat-first calibration from listener f
   assert.ok(GENRE_MELODY_GRAMMARS.hipHop.leapChance < 0.16);
 });
 
-test("Hip-Hop micro timing keeps kick and bass anchored while creating controlled push-pull", () => {
+test("Hip-Hop rhythm lanes stay on the authored grid", () => {
   assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "bass", start: 1 }), 0);
   assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 36, start: 1 }), 0);
-  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 38, start: 1 }) > 0);
-  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1 }) < 0);
-  assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1.25 }) > 0);
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 38, start: 1 }), 0);
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1 }), 0);
+  assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 42, start: 1.25 }), 0);
   assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "melody", start: 2 }) > 0);
   assert.ok(genreMicroTimingOffset({ genre: "hipHop", trackId: "counterpoint", start: 2 }) < 0);
   assert.equal(genreMicroTimingOffset({ genre: "hipHop", trackId: "drums", pitch: 38, start: 1, exactSubdivision: true }), 0);

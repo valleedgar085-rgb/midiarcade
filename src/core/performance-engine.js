@@ -234,18 +234,7 @@ function timingAnchorIds(events, beatsPerBar = 4) {
 }
 
 function hipHopTimingMilliseconds(event) {
-  const family = drumFamily(event);
-  const start = eventStartBeat(event);
-  const sixteenthIndex = ((Math.round(start * 4) % 4) + 4) % 4;
-
-  if (event?.roleId === "drums") {
-    if (family === "kick") return 0;
-    if (family === "snare" || family === "clap") return 12;
-    if (family === "hat") return [-6, 4, 6, -4][sixteenthIndex];
-    return [-4, 3, 5, -2][sixteenthIndex];
-  }
-
-  if (event?.roleId === "bass") return 2;
+  if (event?.roleId === "drums" || event?.roleId === "bass") return 0;
   return null;
 }
 
