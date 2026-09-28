@@ -58,18 +58,42 @@ export function drumSampleForPitch(cache, kitId, pitch) {
   return cache?.get(`${kitId}:${drumKind(pitch)}`) ?? null;
 }
 
+export function drumSampleEnvelope(character, bufferDuration) {
+  const kind = String(character?.kind ?? "snare");
+  const sourceDuration = Math.max(0.018, Number(bufferDuration) || 0.08);
+  const naturalDuration = kind === "kick"
+    ? Number(character?.kickDecay ?? character?.duration ?? 0.2)
+    : Number(character?.duration ?? 0.12);
+  const limits = kind === "kick"
+    ? { min: 0.14, max: 0.46, scale: 1.08, release: 0.55 }
+    : kind === "open-hat"
+      ? { min: 0.11, max: 0.36, scale: 1.05, release: 0.3 }
+      : kind === "hat"
+        ? { min: 0.028, max: 0.085, scale: 1.02, release: 0.2 }
+        : ["snare", "clap"].includes(kind)
+          ? { min: 0.085, max: 0.3, scale: 1.08, release: 0.34 }
+          : { min: 0.06, max: 0.32, scale: 1.05, release: 0.35 };
+  const duration = Math.min(
+    sourceDuration,
+    clamp(naturalDuration * limits.scale, limits.min, limits.max),
+  );
+  const attack = Math.min(0.002, duration * 0.08);
+  const releaseStart = clamp(duration * limits.release, attack, Math.max(attack, duration - 0.006));
+  return Object.freeze({ duration, attack, releaseStart });
+}
+
 export function scheduleDrumSampleVoice(context, buffer, character, mixGain, when, destination, nodes) {
   if (!context?.createBufferSource || !buffer || !destination) return null;
   const source = context.createBufferSource();
   const gain = context.createGain();
-  const duration = clamp(Number(buffer.duration) || 0.08, 0.018, 1.5);
   const kind = String(character?.kind ?? "snare");
+  const envelope = drumSampleEnvelope(character, buffer.duration);
+  const duration = envelope.duration;
   const level = kind === "kick" ? 0.42 : ["snare", "clap"].includes(kind) ? 0.34 : 0.22;
   const peak = Math.max(0.0002, Number(character?.amplitude ?? 1) * Number(mixGain ?? 1) * level);
-  const tail = Math.max(0.004, duration - 0.012);
   gain.gain.setValueAtTime(0.0001, when);
-  gain.gain.exponentialRampToValueAtTime(peak, when + 0.002);
-  gain.gain.setValueAtTime(peak, when + tail);
+  gain.gain.exponentialRampToValueAtTime(peak, when + envelope.attack);
+  gain.gain.setValueAtTime(peak, when + envelope.releaseStart);
   gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
   source.buffer = buffer;
   source.connect(gain).connect(destination);
