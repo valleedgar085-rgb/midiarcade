@@ -4538,7 +4538,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           start + burstStart + index * burstStep,
           eventVelocity(config, settings, intensity, preDropRng.fork(`hat-burst-${index}`), 0.52 + index * 0.11),
           0.055,
-          { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+          {
+            rhythmicFeature: "pre-drop-hat-burst",
+            preDropPunctuation: true,
+            transitionFeature: transition?.type ?? "launch",
+          },
         );
       });
       hit(
@@ -4546,7 +4550,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         start + Math.min(barBeats - 0.125, burstStart + burstStep * 3),
         eventVelocity(config, settings, intensity, preDropRng.fork("snare-pickup"), 0.92),
         0.08,
-        { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+        {
+          rhythmicFeature: "pre-drop-snare-pickup",
+          preDropPunctuation: true,
+          transitionFeature: transition?.type ?? "launch",
+        },
       );
       preDropPunctuationFigures += 1;
     } else if (useRoll) {
@@ -4626,6 +4634,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     ));
     if (!cleanTail || notes.some((note) => note.preDropPunctuation && note.start >= barStart && note.start < section.endBeat)) continue;
     const lookaheadRng = rng.fork(`pre-drop-lookahead-${section.id}`);
+    const lookaheadTransition = transitionFromSection(songBlueprint, section);
     const important = config.energy >= 0.72 && config.complexity >= 0.58 && config.drumFills >= 0.35;
     const force = important && preDropPunctuationFigures === 0;
     const probability = clamp(settings.variation * (0.22 + config.energy * 0.28 + config.complexity * 0.18), 0, 0.68);
@@ -4639,7 +4648,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         tailStart + index * burstStep,
         eventVelocity(config, settings, intensity, lookaheadRng.fork(`hat-${index}`), 0.52 + index * 0.11),
         0.055,
-        { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+        {
+          rhythmicFeature: "pre-drop-hat-burst",
+          preDropPunctuation: true,
+          transitionFeature: lookaheadTransition?.type ?? "launch",
+        },
       );
     });
     hit(
@@ -4647,7 +4660,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       Math.min(section.endBeat - 0.125, tailStart + burstStep * 3),
       eventVelocity(config, settings, intensity, lookaheadRng.fork("snare"), 0.92),
       0.08,
-      { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+      {
+        rhythmicFeature: "pre-drop-snare-pickup",
+        preDropPunctuation: true,
+        transitionFeature: lookaheadTransition?.type ?? "launch",
+      },
     );
     preDropPunctuationFigures += 1;
   }
