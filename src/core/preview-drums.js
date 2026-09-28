@@ -4,6 +4,23 @@ const TOM_PITCHES = new Set([41, 43, 45, 47, 48, 50]);
 const HAT_PITCHES = new Set([42, 44, 46]);
 const CYMBAL_PITCHES = new Set([49, 51, 52, 55, 57, 59]);
 
+const BUNDLED_DRUM_SAMPLES = Object.freeze({
+  "basement-knock": Object.freeze({
+    kick: "./assets/audio/drums/cc0-bounce/kick.wav",
+    snare: "./assets/audio/drums/cc0-bounce/snare.wav",
+    clap: "./assets/audio/drums/cc0-bounce/clap.wav",
+    hat: "./assets/audio/drums/cc0-bounce/hat.wav",
+    "open-hat": "./assets/audio/drums/cc0-bounce/open-hat.wav",
+  }),
+  "dusty-tape": Object.freeze({
+    kick: "./assets/audio/drums/cc0-soulful-vintage/kick.wav",
+    snare: "./assets/audio/drums/cc0-soulful-vintage/snare.wav",
+    clap: "./assets/audio/drums/cc0-soulful-vintage/clap.wav",
+    hat: "./assets/audio/drums/cc0-soulful-vintage/hat.wav",
+    "open-hat": "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav",
+  }),
+});
+
 function drumKind(pitch) {
   if (pitch === 35 || pitch === 36) return "kick";
   if (TOM_PITCHES.has(pitch)) return "tom";
@@ -13,6 +30,32 @@ function drumKind(pitch) {
   if (pitch === 37) return "rim";
   if (pitch === 39) return "clap";
   return "snare";
+}
+
+export function bundledDrumSamplePath(kitId, pitch) {
+  return BUNDLED_DRUM_SAMPLES[String(kitId)]?.[drumKind(pitch)] ?? null;
+}
+
+export async function preloadDrumSampleKit(context, kitId, cache = new Map(), fetcher = globalThis.fetch) {
+  const files = BUNDLED_DRUM_SAMPLES[String(kitId)];
+  if (!context?.decodeAudioData || !files || typeof fetcher !== "function") return cache;
+  await Promise.all(Object.entries(files).map(async ([kind, path]) => {
+    const key = `${kitId}:${kind}`;
+    if (cache.has(key)) return;
+    try {
+      const response = await fetcher(path);
+      if (!response || ("ok" in response && !response.ok)) throw new Error("sample-fetch-failed");
+      const bytes = await response.arrayBuffer();
+      cache.set(key, await context.decodeAudioData(bytes.slice(0)));
+    } catch {
+      cache.set(key, null);
+    }
+  }));
+  return cache;
+}
+
+export function drumSampleForPitch(cache, kitId, pitch) {
+  return cache?.get(`${kitId}:${drumKind(pitch)}`) ?? null;
 }
 
 function signedVariation(pitch, variationSeed) {
