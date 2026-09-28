@@ -1,5 +1,5 @@
 import { cloneValue } from "./clone-value.js";
-import { createPerformanceAuditionSong } from "./performance-audition.js";
+import { createPerformanceAuditionSong, performanceAuditionEligibility } from "./performance-audition.js";
 import {
   createProfessionalGenerationGauntletSong,
   validateProfessionalGenerationGauntletSong,
@@ -118,6 +118,24 @@ export function createPerformanceCandidate(song, {
         valid: false,
         issues: Object.freeze(["performance:invalid-song"]),
         checks: Object.freeze({}),
+      }),
+    });
+  }
+
+  const eligibility = performanceAuditionEligibility(song);
+  if (!eligibility.allowed) {
+    return Object.freeze({
+      version: 1,
+      id: "performance-candidate-transaction-v1",
+      status: "rejected",
+      before: Object.freeze(cloneValue(song)),
+      attempts: Object.freeze([]),
+      validation: Object.freeze({
+        valid: false,
+        issues: Object.freeze([`performance:${eligibility.reason}`]),
+        checks: Object.freeze({
+          listenerBenefitValidated: false,
+        }),
       }),
     });
   }
