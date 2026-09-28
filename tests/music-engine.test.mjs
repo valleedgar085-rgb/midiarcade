@@ -1831,7 +1831,9 @@ test("complexity control has roughly twenty percent more musical influence witho
   const middle = engine.normalizeConfig({ genre: "hipHop", complexity: 0.5 });
   const high = engine.normalizeConfig({ genre: "hipHop", complexity: 0.8 });
   const max = engine.normalizeConfig({ genre: "hipHop", complexity: 1 });
+  const untouchedDefault = engine.normalizeConfig({ genre: "pop" });
 
+  assert.equal(untouchedDefault.complexity, engine.DEFAULT_CONFIG.complexity);
   assert.equal(middle.complexity, 0.6);
   assert.ok(low.complexity > 0.25);
   assert.ok(high.complexity > 0.8 && high.complexity < 1);
