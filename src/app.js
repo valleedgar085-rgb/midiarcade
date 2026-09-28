@@ -3875,10 +3875,10 @@ function renderGenerationDebugger() {
   const trap = songGenreId() === "trap";
   $("#performanceAbPerformed").disabled = trap;
   setText("#performanceAbStatus", trap
-    ? "A only · Trap B paused."
+    ? "Trap B paused."
     : audition?.mode === "performance"
-      ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-      : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
+      ? `B · ${Math.round((audition.humanize ?? 0.65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+      : audition ? "A active" : "A current · B preview-only");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
