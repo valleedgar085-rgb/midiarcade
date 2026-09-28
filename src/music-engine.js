@@ -10951,7 +10951,22 @@ export function evaluateSongCandidate(song) {
     const chord = harmonyAt(song.harmony ?? [], note.start);
     return chord?.tones?.includes(mod(note.pitch, 12));
   }).length / Math.max(1, strongMelody.length);
-  const harmonic = clamp(Math.round(scaleFit * 62 + chordAnchors * 38), 20, 100);
+  const tonalCritic = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony ?? [],
+    {
+      keyPc: finite(song.meta.keyPc, 0),
+      scaleIntervals: song.meta.scaleIntervals ?? [],
+      beatsPerBar: barBeats,
+    },
+    song.structure ?? [],
+  );
+  const harmonic = clamp(Math.round(
+    scaleFit * 35
+    + chordAnchors * 20
+    + finite(tonalCritic.strongChordFit, 1) * 20
+    + finite(tonalCritic.selectedTonicAlignment, 1) * 25
+  ), 20, 100);
 
   const downbeatBars = new Set();
   for (const note of kicks) {
@@ -11101,6 +11116,9 @@ export function evaluateSongCandidate(song) {
     diagnostics: {
       scaleFit: round(scaleFit),
       chordAnchorFit: round(chordAnchors),
+      strongChordFit: round(finite(tonalCritic.strongChordFit, 1)),
+      selectedTonicAlignment: round(finite(tonalCritic.selectedTonicAlignment, 1)),
+      detectedTonicPc: tonalCritic.detectedTonicPc,
       bassKickLock: round(bassLock),
       motifRepetition: round(repetitionRatio),
       counterpointCollision: round(collisionRatio),
@@ -11311,17 +11329,30 @@ export function evaluateSectionOutcomeQuality(song) {
   }
 
   const contrasts = pairs.map((pair) => pair.contrast);
+  const orderedContrasts = [...contrasts].sort((left, right) => left - right);
   const averageContrast = average(contrasts, 0);
   const weakestContrast = Math.min(...contrasts);
+  const middle = Math.floor(orderedContrasts.length / 2);
+  const medianContrast = orderedContrasts.length % 2
+    ? orderedContrasts[middle]
+    : average([orderedContrasts[middle - 1], orderedContrasts[middle]], 0);
   const strongPairRatio = pairs.filter((pair) => pair.contrast >= 0.12).length / pairs.length;
   const weakPairs = pairs.filter((pair) => pair.contrast < 0.07);
   const weakestPair = [...pairs].sort((left, right) => left.contrast - right.contrast)[0] ?? null;
+  const openingPair = String(sections[0]?.name ?? "").toLowerCase() === "intro"
+    ? pairs.find((pair) => pair.fromSectionId === sections[0]?.id) ?? null
+    : null;
+  const openingContrast = openingPair?.contrast ?? 1;
   const passed = averageContrast >= 0.115
+    && medianContrast >= 0.09
+    && openingContrast >= 0.08
     && strongPairRatio >= 0.6
     && weakPairs.length <= Math.max(1, Math.floor(pairs.length * 0.25));
   const score = clamp(Math.round(
-    clamp(averageContrast / 0.22, 0, 1) * 60
-    + clamp(weakestContrast / 0.12, 0, 1) * 20
+    clamp(averageContrast / 0.22, 0, 1) * 45
+    + clamp(weakestContrast / 0.12, 0, 1) * 15
+    + clamp(medianContrast / 0.16, 0, 1) * 10
+    + clamp(openingContrast / 0.14, 0, 1) * 10
     + strongPairRatio * 20
   ), 0, 100);
 
@@ -11331,6 +11362,9 @@ export function evaluateSectionOutcomeQuality(song) {
     reason: passed ? "distinct-section-jobs" : "sections-too-similar",
     score,
     averageContrast: round(averageContrast),
+    medianContrast: round(medianContrast),
+    openingContrast: round(openingContrast),
+    openingPair,
     weakestContrast: round(weakestContrast),
     strongPairRatio: round(strongPairRatio),
     comparablePairs: pairs.length,
