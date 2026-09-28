@@ -11,7 +11,6 @@ import {
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
-import { createPerformancePromotion } from "./performance-promotion.js";
 
 
 function supportsCommittedAuthorityRefresh(song) {
@@ -339,6 +338,7 @@ export function createGenerationExecutor({
         && performanceRequest?.enabled === true
         && selectedResult?.song
       ) {
+        const { createPerformancePromotion } = await import("./performance-promotion.js");
         const sourceSong = selectedResult.song;
         const promotionSeed = String(
           performanceRequest.seed
