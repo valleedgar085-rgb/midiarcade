@@ -3875,11 +3875,9 @@ function renderGenerationDebugger() {
   const audition = player.performanceAudition;
   const trap = songGenreId() === "trap";
   $("#performanceAbPerformed").disabled = trap;
-  setText("#performanceAbStatus", trap
-    ? "B paused."
-    : audition?.mode === "performance"
-      ? `B · ${Math.round((audition.humanize ?? 0.65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-      : audition ? "A" : "A · B preview");
+  setText("#performanceAbStatus", trap ? "B paused." : audition?.mode === "performance"
+    ? `B · ${Math.round((audition.humanize ?? .65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
+    : audition ? "A" : "A · B preview");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
@@ -3962,7 +3960,7 @@ async function copyGenerationDebuggerReport() {
 async function auditionPerformanceDebugger(mode) {
   if (!state.song) return showToast("Generate a song first."), false;
   try {
-    await player.auditionPerformanceAB(mode, { humanize: 0.65 });
+    await player.auditionPerformanceAB(mode, { humanize: .65 });
     renderGenerationDebugger();
     showToast(mode === "performance" ? "B preview active." : "A current song active.");
     return true;
@@ -3972,11 +3970,6 @@ async function auditionPerformanceDebugger(mode) {
     renderGenerationDebugger();
     return false;
   }
-}
-
-async function endPerformanceDebugger() {
-  await player.endPerformanceAB();
-  renderGenerationDebugger();
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -5336,8 +5329,7 @@ export class PreviewPlayer {
   async endPerformanceAB() {
     const position = this.currentSongTime();
     this.performanceAudition = null;
-    await this.returnToCanonicalSong({ positionSeconds: position, resume: false });
-    return true;
+    return this.returnToCanonicalSong({ positionSeconds: position, resume: false });
   }
 
   async play() {
@@ -6736,7 +6728,7 @@ function toggleFullscreen() {
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
   $("#performanceAbCurrent")?.addEventListener("click", () => void auditionPerformanceDebugger("current"));
   $("#performanceAbPerformed")?.addEventListener("click", () => void auditionPerformanceDebugger("performance"));
-  $("#performanceAbEnd")?.addEventListener("click", () => void endPerformanceDebugger());
+  $("#performanceAbEnd")?.addEventListener("click", () => void player.endPerformanceAB().then(renderGenerationDebugger));
   debuggerDialog?.addEventListener("click", (event) => {
     if (event.target !== debuggerDialog) return;
     if (player.performanceAudition) void player.endPerformanceAB();
