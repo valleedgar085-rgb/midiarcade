@@ -30,8 +30,10 @@ function configFor(primary, secondary, seed) {
     variation: 0.52,
     evolution: 0.58,
     surprise: 0.28,
-    // This file isolates signed repetition surgery; phrase refinement has
-    // its own integration coverage in the fusion quality calibration.
+    // This file isolates signed repetition surgery; keep that stage explicit
+    // even when adaptive defaults change elsewhere in the generator.
+    repetitionRefinement: true,
+    // Phrase refinement has its own integration coverage in the fusion quality calibration.
     phraseResolutionRefinement: false,
   }, { kind: "new" });
   return applyOutputQualityEvolution(adapted, { kind: "new" });
