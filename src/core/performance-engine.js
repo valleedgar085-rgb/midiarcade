@@ -7,6 +7,11 @@ const GENRE_PERFORMANCE_SCALE = Object.freeze({
     duration: 0.45,
     velocity: 0.65,
   }),
+  trap: Object.freeze({
+    timing: 0.35,
+    duration: 1.15,
+    velocity: 1.2,
+  }),
 });
 
 const ROLE_TIMING_RANGE = Object.freeze({
