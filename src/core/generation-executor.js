@@ -338,66 +338,15 @@ export function createGenerationExecutor({
         && performanceRequest?.enabled === true
         && selectedResult?.song
       ) {
-        const { createPerformancePromotion } = await import("./performance-promotion.js");
-        const sourceSong = selectedResult.song;
-        const promotionSeed = String(
-          performanceRequest.seed
-          ?? `${sourceSong?.seed ?? sourceSong?.id ?? "performance"}:validated-performance`
-        );
-        const promotion = createPerformancePromotion(sourceSong, {
-          humanize: performanceRequest.humanize ?? 0.65,
-          seed: promotionSeed,
-        });
-
-        if (promotion.status === "promoted" && promotion.after) {
-          const promotedSong = supportsCommittedAuthorityRefresh(promotion.after)
-            ? refreshCommittedGenerationDiagnostics(promotion.after, qualityConfig)
-            : promotion.after;
-          const authorityRegression = supportsCommittedAuthorityRefresh(sourceSong)
-            ? committedAuthorityRegression(sourceSong, promotedSong)
-            : Object.freeze({ passed: true, reasons: Object.freeze([]) });
-          const release = evaluateSongReleaseGate(promotedSong);
-          const accepted = authorityRegression.passed && release.passed;
-          performancePromotion = Object.freeze({
-            requested: true,
-            accepted,
-            status: accepted ? "promoted" : "rejected-after-refresh",
-            selectedHumanize: promotion.candidate?.selectedHumanize ?? null,
-            requestedHumanize: promotion.candidate?.requestedHumanize ?? null,
-            candidateValidation: promotion.validation,
-            authorityRegression,
-            releasePassed: release.passed,
-            releaseFailures: Object.freeze([...(release.failures ?? [])]),
-          });
-          if (accepted) {
-            selectedResult = {
-              ...selectedResult,
-              song: promotedSong,
-              performancePromotion,
-            };
-          } else {
-            selectedResult = {
-              ...selectedResult,
-              performancePromotion,
-            };
-          }
-        } else {
-          performancePromotion = Object.freeze({
-            requested: true,
-            accepted: false,
-            status: "candidate-rejected",
-            selectedHumanize: promotion.candidate?.selectedHumanize ?? null,
-            requestedHumanize: promotion.candidate?.requestedHumanize ?? null,
-            candidateValidation: promotion.validation,
-            authorityRegression: null,
-            releasePassed: null,
-            releaseFailures: Object.freeze([]),
-          });
-          selectedResult = {
-            ...selectedResult,
-            performancePromotion,
-          };
-        }
+        const { runPerformancePromotionStage } = await import("./performance-promotion-stage.js");
+        ({ selectedResult, performancePromotion } = runPerformancePromotionStage(selectedResult, {
+          performanceRequest,
+          qualityConfig,
+          supportsCommittedAuthorityRefresh,
+          refreshCommittedGenerationDiagnostics,
+          committedAuthorityRegression,
+          evaluateSongReleaseGate,
+        }));
       }
 
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
