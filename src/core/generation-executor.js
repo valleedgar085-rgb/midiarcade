@@ -11,6 +11,7 @@ import {
   diagnoseGenerationOutcome,
   selectSelfCorrectedResult,
 } from "./generation-self-correction.js";
+import { createPerformancePromotion } from "./performance-promotion.js";
 
 
 function supportsCommittedAuthorityRefresh(song) {
@@ -331,11 +332,80 @@ export function createGenerationExecutor({
       } else if (refreshCommittedAuthorities && preQualitySong && preQualityResult?.song !== preQualitySong) {
         selectedResult = { ...preQualityResult, song: preQualitySong };
       }
+      let performancePromotion = null;
+      const performanceRequest = config?.performancePromotion;
+      if (
+        ["new", "similar"].includes(kind)
+        && performanceRequest?.enabled === true
+        && selectedResult?.song
+      ) {
+        const sourceSong = selectedResult.song;
+        const promotionSeed = String(
+          performanceRequest.seed
+          ?? `${sourceSong?.seed ?? sourceSong?.id ?? "performance"}:validated-performance`
+        );
+        const promotion = createPerformancePromotion(sourceSong, {
+          humanize: performanceRequest.humanize ?? 0.65,
+          seed: promotionSeed,
+        });
+
+        if (promotion.status === "promoted" && promotion.after) {
+          const promotedSong = supportsCommittedAuthorityRefresh(promotion.after)
+            ? refreshCommittedGenerationDiagnostics(promotion.after, qualityConfig)
+            : promotion.after;
+          const authorityRegression = supportsCommittedAuthorityRefresh(sourceSong)
+            ? committedAuthorityRegression(sourceSong, promotedSong)
+            : Object.freeze({ passed: true, reasons: Object.freeze([]) });
+          const release = evaluateSongReleaseGate(promotedSong);
+          const accepted = authorityRegression.passed && release.passed;
+          performancePromotion = Object.freeze({
+            requested: true,
+            accepted,
+            status: accepted ? "promoted" : "rejected-after-refresh",
+            selectedHumanize: promotion.candidate?.selectedHumanize ?? null,
+            requestedHumanize: promotion.candidate?.requestedHumanize ?? null,
+            candidateValidation: promotion.validation,
+            authorityRegression,
+            releasePassed: release.passed,
+            releaseFailures: Object.freeze([...(release.failures ?? [])]),
+          });
+          if (accepted) {
+            selectedResult = {
+              ...selectedResult,
+              song: promotedSong,
+              performancePromotion,
+            };
+          } else {
+            selectedResult = {
+              ...selectedResult,
+              performancePromotion,
+            };
+          }
+        } else {
+          performancePromotion = Object.freeze({
+            requested: true,
+            accepted: false,
+            status: "candidate-rejected",
+            selectedHumanize: promotion.candidate?.selectedHumanize ?? null,
+            requestedHumanize: promotion.candidate?.requestedHumanize ?? null,
+            candidateValidation: promotion.validation,
+            authorityRegression: null,
+            releasePassed: null,
+            releaseFailures: Object.freeze([]),
+          });
+          selectedResult = {
+            ...selectedResult,
+            performancePromotion,
+          };
+        }
+      }
+
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       flightRecorder.mark(flightId, "finalize", {
         repairAuthority,
         committedQuality,
         resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
+        performancePromotion,
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
         returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
         densityRefinement: stageDiagnostics.densityRefinement ?? acceptedDiagnostics.densityRefinement ?? null,
