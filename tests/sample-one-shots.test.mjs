@@ -23,11 +23,13 @@ test("sample choice is deterministic for the same musical event", () => {
     id: "test-pack",
     roles: {
       kick: ["kick-a.wav", "kick-b.wav", "kick-c.wav"],
+      hatAccent: ["hat-roll.wav"],
     },
   });
   const first = resolveDrumSampleEntry(manifest, 36, "bar-2-beat-1");
   const second = resolveDrumSampleEntry(manifest, 36, "bar-2-beat-1");
   assert.deepEqual(first, second);
+  assert.equal(manifest.roles.hatAccent[0].path, "hat-roll.wav");
 });
 
 test("tuned 808 selection prefers the nearest root note", () => {
