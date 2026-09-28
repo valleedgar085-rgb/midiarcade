@@ -181,6 +181,9 @@ test("Trap and Hip-Hop are not variants of the same kick/snare/hat skeleton", ()
   assert.notDeepEqual(hipHopBars, trapBars);
   assert.equal(trap.relationships.bass.mode, "808-interlock");
   assert.equal(hipHop.relationships.bass.mode, "lock-and-answer");
+  assert.ok(hipHop.relationships.bass.lock < 0.7, "Hip-Hop bass should answer kicks instead of cloning them");
+  assert.ok(hipHop.grammar.hat.density >= 0.98, "Hip-Hop hats should maintain a fuller pocket");
+  assert.ok(hipHop.humanization.swing >= 0.2, "Hip-Hop pocket should retain audible swing");
 });
 
 test("Neo-Soul publishes elastic rhythm-section relationships rather than hard kick cloning", () => {
