@@ -2,7 +2,7 @@ import { applyPerformanceEngine } from "./performance-engine.js";
 import { createPerformanceShadowReport } from "./performance-shadow.js";
 import { createProfessionalGenerationGauntletSong } from "./professional-gauntlet-song.js";
 
-const LISTENER_BLOCKED_GENRES = new Set(["trap"]);
+const LISTENER_BLOCKED_GENRES = new Set(["trap", "hipHop"]);
 
 export function performanceAuditionEligibility(song) {
   const genre = String(song?.meta?.genre ?? song?.genre ?? "").trim();
