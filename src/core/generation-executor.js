@@ -49,6 +49,12 @@ function committedAuthorityRegression(beforeSong, afterSong) {
   if (Number(afterTonal.scaleFit ?? 0) + 1e-9 < Number(beforeTonal.scaleFit ?? 0)) {
     reasons.push("tonal-scale-regression");
   }
+  if (Number(afterTonal.strongChordFit ?? 0) + 0.02 < Number(beforeTonal.strongChordFit ?? 0)) {
+    reasons.push("tonal-chord-fit-regression");
+  }
+  if (Number(afterTonal.selectedTonicAlignment ?? 0) + 0.02 < Number(beforeTonal.selectedTonicAlignment ?? 0)) {
+    reasons.push("tonal-center-regression");
+  }
   if (Number(afterTonal.harshStrongNotes ?? 0) > Number(beforeTonal.harshStrongNotes ?? 0)) {
     reasons.push("tonal-context-regression");
   }
