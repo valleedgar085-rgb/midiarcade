@@ -9118,18 +9118,6 @@ const GM2_DRUM_KIT_NAMES = {
  */
 export const ONE_SHOT_KITS = deepFreeze([
   {
-    id: "hiphop-pocket",
-    name: "Hip-Hop Pocket One-Shots",
-    oneShots: { kick: "Layered 90s Kick", snare: "Hip-Hop Body Snare", clap: "Raw Pocket Clap", hat: "Short Closed Hat", openHat: "Dry Open Hat", cymbal: "Dark Crash", tom: "Low Pocket Tom" },
-    preview: { kickStart: 134, kickEnd: 46, kickDecay: 0.25, kickWave: "sine", clickPitch: 2350, clickLevel: 0.041, snareFilter: 1780, snareTone: 172, snareDecay: 0.23, hatFilter: 7200, hatDecay: 0.043, openHatDecay: 0.175, cymbalFilter: 4300, cymbalDecay: 0.58, tomTune: 0.82, noiseColor: 0.74 },
-  },
-  {
-    id: "hiphop-heavy",
-    name: "Hip-Hop Heavy One-Shots",
-    oneShots: { kick: "Heavy Hip-Hop Kick", snare: "Punch Snare", clap: "Wide Hip-Hop Clap", hat: "Tight Hat", openHat: "Open Hat", cymbal: "Dark Crash", tom: "Heavy Tom" },
-    preview: { kickStart: 148, kickEnd: 40, kickDecay: 0.31, kickWave: "sine", clickPitch: 2850, clickLevel: 0.048, snareFilter: 2050, snareTone: 188, snareDecay: 0.19, hatFilter: 7600, hatDecay: 0.038, openHatDecay: 0.22, cymbalFilter: 4700, cymbalDecay: 0.62, tomTune: 0.8, noiseColor: 0.82 },
-  },
-  {
     id: "velvet-room",
     name: "Velvet Room One-Shots",
     oneShots: { kick: "Velvet 22", snare: "Room Snap", clap: "Soft Stack", hat: "Silk Hat", openHat: "Silk Open", cymbal: "Warm Crash", tom: "Maple Tom" },
@@ -9187,7 +9175,7 @@ function chooseOneShotKit(config, preferred = null) {
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
   const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
   const hipHopIds = config.genre === "hipHop" || config.genre === "rap"
-    ? new Set(["hiphop-pocket", "hiphop-heavy", "basement-knock", "dusty-tape"])
+    ? new Set(["basement-knock", "dusty-tape"])
     : null;
   const genreChoices = hipHopIds ? choices.filter((kit) => hipHopIds.has(kit.id)) : [];
   const palette = genreChoices.length ? genreChoices : choices.length ? choices : ONE_SHOT_KITS;
