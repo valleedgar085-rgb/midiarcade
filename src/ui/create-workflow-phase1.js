@@ -225,31 +225,64 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
 
 function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;
-  if (!ownerWindow?.addEventListener || !createPanel?.classList || createPanel.dataset.createScrollState === "ready") return;
+  const showcase = createPanel?.querySelector?.(".song-showcase");
+  if (!ownerWindow?.addEventListener || !createPanel?.classList || !showcase || createPanel.dataset.createScrollState === "ready") return;
   createPanel.dataset.createScrollState = "ready";
+
+  let spacer = createPanel.querySelector(".create-showcase-collapse-spacer");
+  if (!spacer && typeof rootDocument?.createElement === "function") {
+    spacer = rootDocument.createElement("div");
+    spacer.className = "create-showcase-collapse-spacer";
+    spacer.setAttribute("aria-hidden", "true");
+    showcase.insertAdjacentElement("afterend", spacer);
+  }
+
   let isScrolled = false;
-  let collapseLockUntil = 0;
+  let expandedHeight = 0;
+  let viewportHeightAtCollapse = Number(ownerWindow.innerHeight || 0);
+  const readShowcaseHeight = () => Math.max(
+    0,
+    Number(showcase.getBoundingClientRect?.().height || showcase.offsetHeight || 0),
+  );
+  const setSpacerHeight = (height) => {
+    if (spacer?.style) spacer.style.height = `${Math.max(0, Math.round(height))}px`;
+  };
+  const syncCollapsedSpace = () => {
+    if (!isScrolled) return setSpacerHeight(0);
+    const compactHeight = readShowcaseHeight();
+    setSpacerHeight(expandedHeight - compactHeight);
+  };
+  const collapse = () => {
+    expandedHeight = readShowcaseHeight();
+    viewportHeightAtCollapse = Number(ownerWindow.innerHeight || 0);
+    isScrolled = true;
+    createPanel.classList.add("is-scrolled");
+    // Preserve the hero's original document-flow height while the visible
+    // player becomes compact. This prevents Android/WebView scroll anchoring
+    // from jumping the page sideways/upward during the collapse.
+    syncCollapsedSpace();
+  };
+  const expand = () => {
+    isScrolled = false;
+    createPanel.classList.remove("is-scrolled");
+    setSpacerHeight(0);
+  };
   const update = () => {
     const scrollY = Number(ownerWindow.scrollY || 0);
-    const now = typeof performance !== "undefined" && typeof performance.now === "function"
-      ? performance.now()
-      : Date.now();
-    if (!isScrolled && scrollY > 140) {
-      isScrolled = true;
-      collapseLockUntil = now + 650;
-      createPanel.classList.add("is-scrolled");
-    } else if (isScrolled && scrollY < 20 && now >= collapseLockUntil) {
-      // Only expand again when the user has intentionally returned to the top.
-      // The compact header removes a large amount of layout height; without
-      // this lock the resulting scroll-position correction can immediately
-      // toggle the hero open again and create the visible shrink/expand loop.
-      isScrolled = false;
-      createPanel.classList.remove("is-scrolled");
-    }
+    if (!isScrolled && scrollY > 140) collapse();
+    else if (isScrolled && scrollY < 20) expand();
   };
+  const handleResize = () => {
+    if (!isScrolled) return update();
+    const viewportHeight = Number(ownerWindow.innerHeight || 0);
+    expandedHeight = Math.max(0, expandedHeight + (viewportHeight - viewportHeightAtCollapse));
+    viewportHeightAtCollapse = viewportHeight;
+    syncCollapsedSpace();
+  };
+
   update();
   ownerWindow.addEventListener("scroll", update, { passive: true });
-  ownerWindow.addEventListener("resize", update, { passive: true });
+  ownerWindow.addEventListener("resize", handleResize, { passive: true });
 }
 
 
