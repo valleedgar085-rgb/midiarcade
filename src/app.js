@@ -28,7 +28,7 @@ import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessi
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
-import { normalizeSampleManifest, resolve808SampleEntry, resolveDrumSampleEntry, resolveSampleUrl } from "./core/sample-one-shots.js";
+import { normalizeSampleManifest, resolve808SampleEntry, resolveDrumSampleEntry, resolveSampleEntry, resolveSampleUrl } from "./core/sample-one-shots.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
@@ -4719,6 +4719,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
         articulation: String(note.articulation || "natural"),
+        rhythmicFeature: String(note.rhythmicFeature || ""),
         glideFromSemitones: Number.isFinite(Number(note.glideFromSemitones)) ? Number(note.glideFromSemitones) : 0,
         glideDuration: Math.max(0, Number(note.glideBeats || 0) * secondsPerBeat),
       };
@@ -5609,7 +5610,11 @@ export class PreviewPlayer {
 
   scheduleSampleDrum(event, when, kit, character, mixGain) {
     const manifest = this.sampleManifestForKit(kit);
-    const entry = resolveDrumSampleEntry(manifest, event.pitch, `${event.start ?? event.time ?? 0}:${event.velocity}`);
+    const sampleSeed = `${event.start ?? event.time ?? 0}:${event.velocity}`;
+    const isHatRoll = [42, 44].includes(Number(event.pitch)) && /roll/i.test(String(event.rhythmicFeature || ""));
+    const entry = isHatRoll
+      ? (resolveSampleEntry(manifest, "hatAccent", sampleSeed) ?? resolveDrumSampleEntry(manifest, event.pitch, sampleSeed))
+      : resolveDrumSampleEntry(manifest, event.pitch, sampleSeed);
     if (!entry) return false;
     const url = resolveSampleUrl(kit.sampleManifest, entry.path);
     const buffer = this.sampleBuffers.get(url);
