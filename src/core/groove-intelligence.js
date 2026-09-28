@@ -709,6 +709,34 @@ function shapeOpeningLaneSteps(steps, lane, gridSteps, openingBoundary) {
   return uniqueSorted(steps);
 }
 
+function boundedRelationshipSteps(steps, limit) {
+  const ordered = uniqueSorted(steps);
+  const max = Math.max(1, Math.round(finite(limit, ordered.length)));
+  if (ordered.length <= max) return ordered;
+  if (max === 1) return [ordered[0]];
+  const selected = [ordered[0], ordered.at(-1)];
+  while (selected.length < max) {
+    const candidates = ordered.filter((step) => !selected.includes(step));
+    if (!candidates.length) break;
+    const next = candidates
+      .map((step) => ({
+        step,
+        distance: Math.min(...selected.map((chosen) => Math.abs(chosen - step))),
+      }))
+      .sort((a, b) => b.distance - a.distance || a.step - b.step)[0];
+    selected.push(next.step);
+  }
+  return uniqueSorted(selected);
+}
+
+function hipHopRelationshipLimit(role, section) {
+  const roleName = sectionRole(section);
+  if (role === "bass") return roleName === "payoff" ? 4 : roleName === "intro" ? 2 : 3;
+  if (role === "chords") return roleName === "payoff" ? 3 : 2;
+  if (role === "lead") return roleName === "payoff" ? 4 : 3;
+  return Infinity;
+}
+
 function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed, { wrap = true } = {}) {
   if (relationship.mode === "riff-lock") {
     // Rock's chord lane is a guitar strum/riff clock, so give it a steady
@@ -870,7 +898,7 @@ export function createGrooveDNA(input = {}, {
 
     const relationships = {};
     for (const [role, relationship] of Object.entries(grammar.relationships)) {
-      const steps = relationshipSteps(
+      const authoredSteps = relationshipSteps(
         lanePlans,
         relationship,
         beatsPerStep,
@@ -878,6 +906,9 @@ export function createGrooveDNA(input = {}, {
         `${seed}:${genre}:${bar}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
+      const steps = genre === "hipHop"
+        ? boundedRelationshipSteps(authoredSteps, hipHopRelationshipLimit(role, section))
+        : authoredSteps;
       relationships[role] = Object.freeze({
         ...relationship,
         steps: Object.freeze(steps),
