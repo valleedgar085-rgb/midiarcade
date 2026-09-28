@@ -9,9 +9,9 @@ test("real Hip-Hop drum samples gate noisy tails by drum role", () => {
   const snare = drumSampleEnvelope({ kind: "snare", duration: 0.18 }, 1.2);
   const kick = drumSampleEnvelope({ kind: "kick", kickDecay: 0.29 }, 1.2);
 
-  assert.ok(closedHat.duration <= 0.085);
-  assert.ok(openHat.duration <= 0.36);
-  assert.ok(snare.duration <= 0.3);
+  assert.ok(closedHat.duration <= 0.065);
+  assert.ok(openHat.duration <= 0.3);
+  assert.ok(snare.duration <= 0.24);
   assert.ok(kick.duration <= 0.46);
   assert.ok(closedHat.releaseStart < closedHat.duration);
   assert.ok(snare.releaseStart < snare.duration);
