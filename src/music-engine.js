@@ -1262,7 +1262,9 @@ export function normalizeConfig(input = {}) {
   const chordPath = normalizeChordPath(input.chordPath, defaultChordPathForGenre(primaryGenre));
   const energy = unit(input.energy, DEFAULT_CONFIG.energy);
   const rawComplexity = unit(input.complexity, DEFAULT_CONFIG.complexity);
-  const complexity = round(clamp(rawComplexity * (1.4 - rawComplexity * 0.4), 0, 1));
+  const complexity = input.complexity == null
+    ? rawComplexity
+    : round(clamp(rawComplexity * (1.4 - rawComplexity * 0.4), 0, 1));
   const surprise = unit(input.surprise, DEFAULT_CONFIG.surprise);
   const mood = typeof input.mood === "string" && ["calm", "neutral", "intense"].includes(input.mood)
     ? input.mood
