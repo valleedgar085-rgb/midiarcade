@@ -1137,6 +1137,21 @@ test("deep producer search evaluates a larger bounded candidate pool", () => {
   assertValidNotes(song);
 });
 
+test("Hip-Hop generation prefers the two bundled real-audio drum kits", () => {
+  const first = engine.generateNew({ genre: "hipHop", seed: "hiphop-real-kit-a", bars: 8, candidateCount: 1 });
+  const second = engine.generateNew({
+    genre: "hipHop",
+    seed: "hiphop-real-kit-b",
+    bars: 8,
+    candidateCount: 1,
+    excludeOneShotKitIds: [first.oneShotKit.id],
+  });
+  const allowed = new Set(["basement-knock", "dusty-tape"]);
+  assert.ok(allowed.has(first.oneShotKit.id));
+  assert.ok(allowed.has(second.oneShotKit.id));
+  assert.notEqual(second.oneShotKit.id, first.oneShotKit.id);
+});
+
 test("every generation chooses a different one-shot kit unless one is explicitly requested", () => {
   const first = engine.generateNew({ ...CONFIG, seed: "one-shot-first" });
   const next = engine.generateNew({
