@@ -1,24 +1,20 @@
 # MIDI Arcade Hip-Hop + Trap Pack 1
 
-This directory is the runtime home for the user-provided one-shot pack.
+Runtime target: `assets/one-shots/midi-arcade-pack-1/`
 
-The app reads `manifest.json` and preloads any listed WAV files before preview playback. If a file is absent, invalid, or fails to decode, MIDI Arcade automatically uses the existing procedural preview voice instead.
+Pack inventory:
+- 5 kicks
+- 5 snares
+- 5 claps
+- 2 closed hats
+- 2 open hats
+- 1 dedicated trap-roll accent
+- 5 tuned 808s
 
-Expected manifest roles:
+Playback rules:
+- Normal closed/open hat notes use single-hit hat samples.
+- `hatAccent` is reserved for notes explicitly marked as a roll.
+- Tuned 808 roots use A1=33, B1=35, C2=36, E2=40 and are pitch-shifted to the requested bass note.
+- If any WAV is absent or fails to decode, preview playback falls back to MIDI Arcade's existing procedural drum/bass voice rather than failing.
 
-- kick
-- snare
-- clap
-- hat
-- openHat
-- cymbal
-- tom
-- bass808
-
-Each role accepts either a string path or an object such as:
-
-```json
-{ "path": "808s/808-c.wav", "rootMidi": 36, "gain": 0.9 }
-```
-
-The uploaded Pack 1 ZIP still needs to be reattached so its exact WAV filenames can be copied here and entered in the manifest.
+The source pack has been validated as 44.1 kHz WAV audio and the exact file mapping is stored in `manifest.json`.
