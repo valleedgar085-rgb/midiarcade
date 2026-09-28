@@ -30,7 +30,7 @@ import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
-import { createPerformanceAuditionSong, performanceAuditionEligibility } from "./core/performance-audition.js";
+import { createPerformanceAuditionSong } from "./core/performance-audition.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -3872,10 +3872,10 @@ function renderGenerationDebugger() {
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
   const audition = player.performanceAudition;
-  const performanceAllowed = performanceAuditionEligibility(state.song).allowed;
-  $("#performanceAbPerformed").disabled = !performanceAllowed;
-  setText("#performanceAbStatus", !performanceAllowed
-    ? "A only · Trap B paused; no listener benefit yet."
+  const trap = songGenreId() === "trap";
+  $("#performanceAbPerformed").disabled = trap;
+  setText("#performanceAbStatus", trap
+    ? "A only · Trap B paused."
     : audition?.mode === "performance"
       ? `B active · ${Math.round((audition.humanize ?? 0.65) * 100)}% · max ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
       : audition ? "A active · canonical song" : "A current · B preview-only · nothing committed");
