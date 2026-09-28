@@ -1,0 +1,13 @@
+{
+  "id": "midi-arcade-pack-1",
+  "roles": {
+    "kick": [],
+    "snare": [],
+    "clap": [],
+    "hat": [],
+    "openHat": [],
+    "cymbal": [],
+    "tom": [],
+    "bass808": []
+  }
+}
