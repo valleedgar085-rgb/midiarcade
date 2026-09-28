@@ -5629,7 +5629,17 @@ export class PreviewPlayer {
     source.buffer = buffer;
     const entryGain = clamp(Number(entry.gain ?? 1), 0.25, 2);
     const peak = Math.max(0.0002, character.amplitude * mixGain * entryGain * 0.72);
-    const duration = Math.min(buffer.duration, character.kind === "hat" ? Math.max(0.035, character.duration) : buffer.duration);
+    const sampleTailCap = ({
+      kick: Math.max(0.12, character.kickDecay),
+      snare: clamp(character.duration * 1.15, 0.08, 0.32),
+      clap: clamp(character.duration * 1.2, 0.09, 0.34),
+      rim: clamp(character.duration, 0.04, 0.14),
+      hat: clamp(character.duration, 0.025, 0.12),
+      "open-hat": clamp(character.duration, 0.08, 0.36),
+      cymbal: clamp(character.duration, 0.15, 0.7),
+      tom: clamp(character.duration, 0.08, 0.3),
+    })[character.kind] ?? clamp(character.duration, 0.05, 0.32);
+    const duration = Math.min(buffer.duration, sampleTailCap);
     gain.gain.setValueAtTime(0.0001, when);
     gain.gain.exponentialRampToValueAtTime(peak, when + PREVIEW_TRANSITION.startSeconds);
     gain.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(PREVIEW_TRANSITION.startSeconds + 0.01, duration));
@@ -5641,6 +5651,11 @@ export class PreviewPlayer {
   }
 
   scheduleSample808(event, when) {
+    // Short bass notes sound unnaturally chopped when a full 808 one-shot is
+    // retriggered for every MIDI articulation. Keep those on the lightweight
+    // synth preview and reserve the real 808 samples for notes long enough to
+    // carry their body.
+    if (Number(event.duration ?? 0) < 0.18) return false;
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const manifest = this.sampleManifestForKit(kit);
     const runtime = this.sampleRuntime;
