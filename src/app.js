@@ -28,7 +28,6 @@ import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessi
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
 import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
-import { normalizeSampleManifest, resolve808SampleEntry, resolveDrumSampleEntry, resolveSampleEntry, resolveSampleUrl } from "./core/sample-one-shots.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
@@ -4935,6 +4934,7 @@ export class PreviewPlayer {
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
     this.sampleManifests = new Map();
+    this.sampleRuntime = null;
     this.sampleBuffers = new Map();
     this.sampleLoadFailures = new Set();
     this.periodicWaves = new Map();
@@ -5594,10 +5594,11 @@ export class PreviewPlayer {
     try {
       const response = await fetch(kit.sampleManifest);
       if (!response.ok) return null;
-      const manifest = normalizeSampleManifest(await response.json());
+      this.sampleRuntime ??= await import("./core/sample-one-shots.js");
+      const manifest = this.sampleRuntime.normalizeSampleManifest(await response.json());
       this.sampleManifests.set(kit.id, manifest);
       const paths = Object.values(manifest.roles).flat().map((entry) => entry.path);
-      await Promise.all(paths.map((path) => this.loadSampleBuffer(resolveSampleUrl(kit.sampleManifest, path))));
+      await Promise.all(paths.map((path) => this.loadSampleBuffer(this.sampleRuntime.resolveSampleUrl(kit.sampleManifest, path))));
       return manifest;
     } catch {
       return null;
@@ -5612,11 +5613,13 @@ export class PreviewPlayer {
     const manifest = this.sampleManifestForKit(kit);
     const sampleSeed = `${event.start ?? event.time ?? 0}:${event.velocity}`;
     const isHatRoll = [42, 44].includes(Number(event.pitch)) && /roll/i.test(String(event.rhythmicFeature || ""));
+    const runtime = this.sampleRuntime;
+    if (!runtime) return false;
     const entry = isHatRoll
-      ? (resolveSampleEntry(manifest, "hatAccent", sampleSeed) ?? resolveDrumSampleEntry(manifest, event.pitch, sampleSeed))
-      : resolveDrumSampleEntry(manifest, event.pitch, sampleSeed);
+      ? (runtime.resolveSampleEntry(manifest, "hatAccent", sampleSeed) ?? runtime.resolveDrumSampleEntry(manifest, event.pitch, sampleSeed))
+      : runtime.resolveDrumSampleEntry(manifest, event.pitch, sampleSeed);
     if (!entry) return false;
-    const url = resolveSampleUrl(kit.sampleManifest, entry.path);
+    const url = runtime.resolveSampleUrl(kit.sampleManifest, entry.path);
     const buffer = this.sampleBuffers.get(url);
     if (!buffer) return false;
     const source = this.context.createBufferSource();
@@ -5640,9 +5643,11 @@ export class PreviewPlayer {
   scheduleSample808(event, when) {
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const manifest = this.sampleManifestForKit(kit);
-    const entry = resolve808SampleEntry(manifest, event.pitch, `${event.time ?? 0}:${event.velocity}`);
+    const runtime = this.sampleRuntime;
+    if (!runtime) return false;
+    const entry = runtime.resolve808SampleEntry(manifest, event.pitch, `${event.time ?? 0}:${event.velocity}`);
     if (!entry) return false;
-    const url = resolveSampleUrl(kit.sampleManifest, entry.path);
+    const url = runtime.resolveSampleUrl(kit.sampleManifest, entry.path);
     const buffer = this.sampleBuffers.get(url);
     if (!buffer) return false;
     const source = this.context.createBufferSource();
