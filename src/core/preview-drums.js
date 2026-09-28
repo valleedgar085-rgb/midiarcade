@@ -58,6 +58,28 @@ export function drumSampleForPitch(cache, kitId, pitch) {
   return cache?.get(`${kitId}:${drumKind(pitch)}`) ?? null;
 }
 
+export function scheduleDrumSampleVoice(context, buffer, character, mixGain, when, destination, nodes) {
+  if (!context?.createBufferSource || !buffer || !destination) return null;
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  const duration = clamp(Number(buffer.duration) || 0.08, 0.018, 1.5);
+  const kind = String(character?.kind ?? "snare");
+  const level = kind === "kick" ? 0.42 : ["snare", "clap"].includes(kind) ? 0.34 : 0.22;
+  const peak = Math.max(0.0002, Number(character?.amplitude ?? 1) * Number(mixGain ?? 1) * level);
+  const tail = Math.max(0.004, duration - 0.012);
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(peak, when + 0.002);
+  gain.gain.setValueAtTime(peak, when + tail);
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+  source.buffer = buffer;
+  source.connect(gain).connect(destination);
+  nodes?.add(source);
+  nodes?.add(gain);
+  source.start(when);
+  source.stop(when + duration + 0.005);
+  return source;
+}
+
 function signedVariation(pitch, variationSeed) {
   let value = (Math.trunc(Number(variationSeed) * 1000) ^ (pitch * 2654435761)) >>> 0;
   value = Math.imul(value ^ (value >>> 16), 2246822507) >>> 0;
