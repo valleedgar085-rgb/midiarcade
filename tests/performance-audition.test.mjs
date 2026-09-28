@@ -61,18 +61,20 @@ function fixtureSong() {
   };
 }
 
-test("Trap A/B is paused after repeated listener tests found no audible benefit", () => {
-  const song = fixtureSong();
-  song.genre = "trap";
-  song.meta.genre = "trap";
+test("listener-rejected Trap and Hip-Hop A/B passes stay paused", () => {
+  for (const genre of ["trap", "hipHop"]) {
+    const song = fixtureSong();
+    song.genre = genre;
+    song.meta.genre = genre;
 
-  const eligibility = performanceAuditionEligibility(song);
-  assert.equal(eligibility.allowed, false);
-  assert.equal(eligibility.reason, "listener-benefit-unproven");
-  assert.throws(
-    () => createPerformanceAuditionSong(song, { humanize: 1 }),
-    /listener-benefit-unproven/,
-  );
+    const eligibility = performanceAuditionEligibility(song);
+    assert.equal(eligibility.allowed, false);
+    assert.equal(eligibility.reason, "listener-benefit-unproven");
+    assert.throws(
+      () => createPerformanceAuditionSong(song, { humanize: 1 }),
+      /listener-benefit-unproven/,
+    );
+  }
 });
 
 test("performance A/B audition creates a preview-only copy without mutating the canonical song", () => {
