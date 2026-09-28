@@ -1826,6 +1826,18 @@ test("idea engine rotates phrase shapes, motif lengths, timing pockets, and onse
   }
 });
 
+test("complexity control has roughly twenty percent more musical influence without flattening its top end", () => {
+  const low = engine.normalizeConfig({ genre: "hipHop", complexity: 0.25 });
+  const middle = engine.normalizeConfig({ genre: "hipHop", complexity: 0.5 });
+  const high = engine.normalizeConfig({ genre: "hipHop", complexity: 0.8 });
+  const max = engine.normalizeConfig({ genre: "hipHop", complexity: 1 });
+
+  assert.equal(middle.complexity, 0.6);
+  assert.ok(low.complexity > 0.25);
+  assert.ok(high.complexity > 0.8 && high.complexity < 1);
+  assert.equal(max.complexity, 1);
+});
+
 test("tripletAmount and rollAmount normalize, persist, and zero disables every tagged force path", () => {
   const profileDefaults = engine.normalizeConfig({ genre: "trap", seed: "control-defaults" });
   assert.equal(profileDefaults.tripletAmount, engine.GENRE_PROFILES.trap.tripletChance);
