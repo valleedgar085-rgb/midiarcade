@@ -109,6 +109,29 @@ test("House performance keeps timing nearly locked while still shaping duration 
   );
 });
 
+test("Trap performance stays grid-safe while making B more audible through duration and velocity", () => {
+  const source = song("trap");
+  const result = applyPerformanceEngine(source, { humanize: 1, seed: "trap-performance-audition" });
+
+  const changed = result.events.filter((performed, index) => performed !== source.musicalEvents[index]);
+  assert.ok(changed.length > 0, "Trap B should make a real performance change");
+  assert.ok(
+    changed.every((entry) => Math.abs(entry.performed.timingDeltaBeats) <= 0.0015),
+    "Trap should keep timing tight enough to protect the 808 pocket",
+  );
+  assert.ok(
+    changed.some((entry) => Math.abs(entry.performed.durationDeltaBeats) >= 0.01),
+    "Trap B should make note-length shaping audible",
+  );
+  assert.ok(
+    changed.some((entry) => Math.abs(entry.performed.velocityDelta) >= 2),
+    "Trap B should make hit-strength shaping audible",
+  );
+  for (const [index, performed] of result.events.entries()) {
+    assert.equal(performed.renderedMidiPitch, source.musicalEvents[index].renderedMidiPitch);
+  }
+});
+
 test("performance engine preserves pitch, locked events, and song bounds", () => {
   const source = song();
   const result = applyPerformanceEngine(source, { humanize: 1 });
