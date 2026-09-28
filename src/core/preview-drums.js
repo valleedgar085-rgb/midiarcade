@@ -67,11 +67,11 @@ export function drumSampleEnvelope(character, bufferDuration) {
   const limits = kind === "kick"
     ? { min: 0.14, max: 0.46, scale: 1.08, release: 0.55 }
     : kind === "open-hat"
-      ? { min: 0.11, max: 0.36, scale: 1.05, release: 0.3 }
+      ? { min: 0.1, max: 0.3, scale: 0.94, release: 0.24 }
       : kind === "hat"
-        ? { min: 0.028, max: 0.085, scale: 1.02, release: 0.2 }
+        ? { min: 0.024, max: 0.065, scale: 0.9, release: 0.16 }
         : ["snare", "clap"].includes(kind)
-          ? { min: 0.085, max: 0.3, scale: 1.08, release: 0.34 }
+          ? { min: 0.075, max: 0.24, scale: 0.96, release: 0.28 }
           : { min: 0.06, max: 0.32, scale: 1.05, release: 0.35 };
   const duration = Math.min(
     sourceDuration,
