@@ -27,8 +27,9 @@ import { getScaleChordGuide as deriveScaleChordGuide } from "./core/scale-guide.
 import { applyPersistedSessionState, createPersistedSessionSnapshot, createSessionAutosaveController, decodePersistedSession } from "./core/session-runtime.js";
 import { appendWithinLimit, compactRecentSongs } from "./core/generation-memory.js";
 import { applyGenerationTheme } from "./core/generation-theme.js";
-import { previewDrumCharacter, previewDrumEnvelope } from "./core/preview-drums.js";
+import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope, scheduleDrumSampleVoice } from "./core/preview-drums.js";
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
@@ -840,7 +841,8 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
       ? selected * 0.72 + learned * 0.28
       : selected;
   };
-  const complexity = generationValue("complexityControl", 54) / 100;
+  const rawComplexity = generationValue("complexityControl", 54) / 100;
+  const complexity = clamp(rawComplexity * (1.4 - rawComplexity * 0.4), 0, 1);
   const selectedKey = $("#keyControl").value;
   const selectedMode = $("#modeControl").value;
   const selectedBars = $("#barsControl").value;
@@ -1990,7 +1992,9 @@ function renderSongShowcase() {
     cover.dataset.coverStyle = "original";
     const coverUrl = coverArtworkDataUrl({ ...state.song, title }, { variation: 0 });
     const heroPanel = $("#heroPanel");
+    const compactArt = $("#compactCreateArt");
     if (heroPanel) heroPanel.style.setProperty("--create-cover-art", `url("${coverUrl}")`);
+    if (compactArt) compactArt.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.backgroundImage = `url("${coverUrl}")`;
     cover.style.setProperty("--cover-hue", coverHue);
     cover.style.setProperty("--cover-hue-2", secondHue);
@@ -2142,6 +2146,8 @@ function renderSummary() {
   $("#factBars").textContent = `${bars} BARS`;
   $("#factDuration").textContent = duration;
   $("#factRhythm").textContent = rhythmFact;
+  if ($("#compactCreateTitle")) $("#compactCreateTitle").textContent = title;
+  if ($("#compactCreateMeta")) $("#compactCreateMeta").textContent = `${generatedGenreLabel} · ${key} ${modeLabel} · ${Math.round(bpm)} BPM`;
   $("#totalTime").textContent = duration;
   $("#seedLabel").textContent = `SEED ${formatSeed(seed)}`;
   $("#dnaValue").textContent = String(82 + (hashNumber(seed) % 14));
@@ -3820,6 +3826,7 @@ function ensureGenerationDebuggerControls() {
     $(".debugger-section-heading", dialog)?.append(refresh);
   }
 
+
   const actions = $(".debugger-actions", dialog);
   if (actions && !$("#copyDebuggerReport")) {
     const copy = document.createElement("button");
@@ -3894,10 +3901,23 @@ function renderGenerationDebugger() {
   }, null, 2);
 }
 
-function openGenerationDebugger() {
+async function openGenerationDebugger() {
   renderGenerationDebugger();
   const dialog = $("#debuggerDialog");
-  if (dialog && !dialog.open) dialog.showModal();
+  if (!dialog) return;
+  try {
+    const { mountPerformanceAbDebugger } = await import("./ui/performance-ab-runtime.js");
+    mountPerformanceAbDebugger({
+      dialog,
+      player,
+      getSong: () => state.song,
+      render: renderGenerationDebugger,
+      toast: showToast,
+    });
+  } catch (error) {
+    console.warn("Performance A/B debugger unavailable", error);
+  }
+  if (!dialog.open) dialog.showModal();
 }
 
 function clearGenerationDebugger() {
@@ -3907,37 +3927,12 @@ function clearGenerationDebugger() {
 }
 
 async function copyGenerationDebuggerReport() {
-  const runs = generationExecutor.diagnosticsSnapshot();
-  if (!runs.length) {
-    showToast("Generate a song first so the debugger has a run to copy.");
-    return;
-  }
-  const payload = JSON.stringify({
-    app: "MIDI Arcade",
-    version: "1.2.3",
-    capturedAt: new Date().toISOString(),
+  const { copyGenerationDebuggerReport: copy } = await import("./ui/debugger-copy.js");
+  return copy({
+    runs: generationExecutor.diagnosticsSnapshot(),
     workerActive: generationExecutor.usingWorker,
-    runs,
-  }, null, 2);
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(payload);
-    } else {
-      const textarea = document.createElement("textarea");
-      textarea.value = payload;
-      textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.append(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
-    }
-    showToast("Debugger report copied.");
-  } catch (error) {
-    console.warn("Could not copy debugger report", error);
-    showToast("Copy failed. Open Raw diagnostic JSON and select it manually.");
-  }
+    toast: showToast,
+  });
 }
 
 function chooseNewGenrePrograms(seed) {
@@ -3984,7 +3979,10 @@ async function runGeneration(kind, options = {}) {
     if (!options.skipHistory && state.history.length) restoreHistory({ captureFuture: false, announce: false });
   });
   try {
-    try { player.stop(); } catch (_) { /* ignore player errors */ }
+    try {
+      player.stop();
+      player.performanceAudition = null;
+    } catch (_) { /* ignore player errors */ }
     if (!options.skipHistory) pushHistory(createHistorySnapshot());
     showGenerationActivity(copy.busy, { threadCopy: copy.thread, kind });
 
@@ -4673,9 +4671,10 @@ export function buildPreviewEvents(song = state.song, options = {}) {
     );
     const automation = Array.isArray(track.automation) ? track.automation : [];
     return trackNotes(track).map((note) => {
-      const startBeat = Math.max(0, noteStart(note));
-      const durationBeats = Math.max(0.01, noteDuration(note));
-      const phrasePerformance = renderPhrasePerformance(note);
+      const performedNote = resolvePerformedNote(note);
+      const startBeat = Math.max(0, performedNote.start);
+      const durationBeats = Math.max(0.01, performedNote.duration);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
       const baseReverb = clamp(Number(settings.reverb ?? defaults.reverb ?? 0.2), 0, 1);
       const automatedReverb = controllerValueAtBeat(automation, 91, startBeat, baseReverb * 127) / 127;
       const brightnessCc = controllerValueAtBeat(automation, 74, startBeat, 64);
@@ -4693,7 +4692,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const expressionStart = expressionCurve[0]?.value ?? 1;
       const expressionEnd = expressionCurve.at(-1)?.value ?? expressionStart;
       const baseVelocity = clamp(
-        (noteVelocity(note) + phrasePerformance.velocityDelta) * velocityScale,
+        (performedNote.velocity + phrasePerformance.velocityDelta) * velocityScale,
         1,
         127,
       );
@@ -4701,7 +4700,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         id,
         oneShotKitId,
         program: Number(track.program ?? uiSettings.program ?? 0),
-        pitch: canonicalMidiPitch(notePitch(note)),
+        pitch: canonicalMidiPitch(performedNote.pitch),
         velocity: clamp(baseVelocity * expressionStart, 1, 127),
         baseVelocity,
         time: startBeat * secondsPerBeat,
@@ -4717,7 +4716,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         cutoff: clamp(Number(settings.cutoff ?? defaults.cutoff ?? 8000) * brightnessScale * spotlight.cutoff, 1000, 14000),
         resonance: clamp(Number(settings.resonance ?? defaults.resonance ?? 0.2), 0, 1),
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
-        articulation: String(note.articulation || "natural"),
+        articulation: String(performedNote.articulation || "natural"),
         glideFromSemitones: Number.isFinite(Number(note.glideFromSemitones)) ? Number(note.glideFromSemitones) : 0,
         glideDuration: Math.max(0, Number(note.glideBeats || 0) * secondsPerBeat),
       };
@@ -4911,15 +4910,8 @@ export function releaseScreenWakeLock() {
 
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      void requestScreenWakeLock();
-    } else {
-      releaseScreenWakeLock();
-    }
+    if (document.visibilityState !== "visible") releaseScreenWakeLock();
   });
-  if (document.visibilityState === "visible") {
-    void requestScreenWakeLock();
-  }
 }
 
 export class PreviewPlayer {
@@ -4932,6 +4924,7 @@ export class PreviewPlayer {
     this.delayReturn = null;
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
+    this.drumSampleBuffers = new Map();
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -4955,6 +4948,7 @@ export class PreviewPlayer {
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
     this.playbackSong = null;
+    this.performanceAudition = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
   }
@@ -5111,6 +5105,7 @@ export class PreviewPlayer {
     this.delayReturn = null;
     this.trackBuses.clear();
     this.noiseBuffers.clear();
+    this.drumSampleBuffers.clear();
     this.periodicWaves.clear();
   }
 
@@ -5269,6 +5264,7 @@ export class PreviewPlayer {
     return this.play();
   }
 
+
   async play() {
     const song = this.playbackSong ?? state.song;
     if (!song) return false;
@@ -5276,6 +5272,7 @@ export class PreviewPlayer {
     const requestGeneration = ++this.playRequestGeneration;
     try {
       await this.ensureContext();
+      await preloadDrumSampleKit(this.context, song?.oneShotKit?.id, this.drumSampleBuffers);
     } catch (error) {
       if (requestGeneration === this.playRequestGeneration) showToast(error.message);
       return false;
@@ -5797,6 +5794,15 @@ export class PreviewPlayer {
     const kit = ONE_SHOT_KIT_BY_ID.get(event.oneShotKitId) ?? oneShotKitForSong();
     const voice = kit.preview;
     const character = previewDrumCharacter(voice, event.pitch, event.velocity, event.start ?? when);
+    const sample = drumSampleForPitch(this.drumSampleBuffers, kit.id, event.pitch);
+    if (sample) {
+      const nodes = new Set();
+      const output = this.createDrumOutput(event, character, nodes, 0.06);
+      const source = scheduleDrumSampleVoice(context, sample, character, mixGain, when, output, nodes);
+      if ([35, 36].includes(event.pitch)) this.applyKickSidechain(when);
+      this.registerScheduledVoice([source], nodes, event, when);
+      return;
+    }
     if ([35, 36].includes(event.pitch)) {
       this.applyKickSidechain(when);
       const oscillator = context.createOscillator();
@@ -6235,6 +6241,12 @@ function toggleFullscreen() {
     renderGenerationIntent();
     showToast(`${genreLabel(id, profile)} rules are ready at ${Math.round(range.default)} BPM. Generate to hear the new world.`);
   });
+  $("#secondaryGenreControl")?.addEventListener("change", () => {
+    const secondary = selectedSecondaryGenreId();
+    renderGenerationIntent();
+    scheduleSessionSave();
+    showToast(secondary ? `Fusion partner staged: ${genreLabel(secondary)}.` : "Fusion partner cleared. The next song will use one primary genre.");
+  });
 
   $("#modeControl")?.addEventListener("change", () => {
     $("#modeControl").value === "auto" ? state.autoControls.add("modeControl") : state.autoControls.delete("modeControl");
@@ -6463,7 +6475,7 @@ function toggleFullscreen() {
     event.currentTarget.classList.toggle("is-active", active);
     event.currentTarget.setAttribute("aria-pressed", String(active));
     event.currentTarget.querySelector("span").textContent = active ? "Essentials" : "Advanced";
-    for (const details of $$(".shape-controls, .creator-recipe-side, .advanced-controls")) {
+    for (const details of $(".phase1-advanced-direction, .shape-controls, .creator-recipe-side, .advanced-controls")) {
       details.open = active;
     }
     showToast(active ? "Advanced song-shaping controls are open." : "Back to the focused essentials.");
@@ -6769,8 +6781,8 @@ async function init() {
       showToast(`Your last song was restored. Solo is still active on ${soloNames.join(", ")}.`);
     } else if (restored) showToast("Your last song and live take were restored.");
     discoverMidiDevices({ requestAccess: false });
-    // Prune old MIDI exports at startup (fire-and-forget).
-    pruneMidiExportsCache().catch(() => {});
+    // Native export-cache pruning runs only after an export. Avoid Filesystem bridge
+    // maintenance during Android startup, where many stat calls can stall WebView.
   } catch (error) {
     console.error(error);
     showToast("The composition engine could not start. Refresh to try again.");

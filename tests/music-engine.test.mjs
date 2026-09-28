@@ -127,6 +127,58 @@ function assertAllGeneratedPitchesInScale(song) {
   }
 }
 
+test("MIDI export uses finalized performed note values exactly once", () => {
+  const song = {
+    title: "Performed authority",
+    genre: "pop",
+    meta: {
+      tempo: 120,
+      ppq: 480,
+      totalBeats: 4,
+      beatsPerBar: 4,
+      timeSignature: [4, 4],
+      keyPc: 0,
+      scale: "major",
+      scaleIntervals: [0, 2, 4, 5, 7, 9, 11],
+    },
+    structure: [],
+    harmony: [],
+    tracks: [{
+      id: "melody",
+      name: "Melody",
+      channel: 0,
+      program: 80,
+      settings: {},
+      automation: [],
+      notes: [{
+        start: 0,
+        duration: 2,
+        pitch: 60,
+        velocity: 40,
+        phrasePerformanceDelta: 12,
+        phrasePerformanceDurationScale: 1.8,
+        performed: {
+          startBeat: 1.25,
+          durationBeats: 0.5,
+          renderedMidiPitch: 72,
+          velocity: 100,
+          articulation: "accent",
+          microtimingMs: -8,
+        },
+      }],
+    }],
+  };
+
+  const chunks = midiTrackChunks(engine.encodeMidi(song));
+  const events = midiChannelEvents(chunks[1]);
+  const noteOn = events.find((event) => (event.status & 0xf0) === 0x90);
+  const noteOff = events.find((event) => (event.status & 0xf0) === 0x80);
+
+  assert.equal(noteOn.tick, 600, "performed startBeat 1.25 must become tick 600");
+  assert.deepEqual(noteOn.data, [72, 100], "performed pitch/velocity must reach MIDI unchanged");
+  assert.equal(noteOff.tick, 840, "performed 0.5-beat duration must end at tick 840 without double scaling");
+});
+
 test("seeded new-song generation is deterministic and structurally complete", () => {
   const first = engine.generateNew(CONFIG);
   const second = engine.generateNew(CONFIG);
@@ -1083,6 +1135,21 @@ test("deep producer search evaluates a larger bounded candidate pool", () => {
   assert.equal(search.baseCandidateCount, 6);
   assert.ok(search.candidatesEvaluated >= 6 && search.candidatesEvaluated <= 12);
   assertValidNotes(song);
+});
+
+test("Hip-Hop generation prefers dedicated Hip-Hop drum palettes", () => {
+  const first = engine.generateNew({ genre: "hipHop", seed: "hiphop-real-kit-a", bars: 8, candidateCount: 1 });
+  const second = engine.generateNew({
+    genre: "hipHop",
+    seed: "hiphop-real-kit-b",
+    bars: 8,
+    candidateCount: 1,
+    excludeOneShotKitIds: [first.oneShotKit.id],
+  });
+  const allowed = new Set(["basement-knock", "dusty-tape"]);
+  assert.ok(allowed.has(first.oneShotKit.id));
+  assert.ok(allowed.has(second.oneShotKit.id));
+  assert.notEqual(second.oneShotKit.id, first.oneShotKit.id);
 });
 
 test("every generation chooses a different one-shot kit unless one is explicitly requested", () => {

@@ -35,6 +35,7 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
@@ -256,11 +257,11 @@ export const GENRE_PROFILES = deepFreeze({
     id: "hipHop", label: "Hip-Hop", bpm: { min: 82, max: 108, default: 94 },
     preferredScales: ["minor", "dorian", "minorPentatonic", "majorPentatonic"],
     grooveWeights: {
-      drumGroove: { backbeat: 3.5, halfTime: 2.5, breakbeat: 1.7, electro: 0.8, fourFloor: 0.1 },
-      bassGroove: { syncopated: 3.2, rootFifth: 2.2, pulse: 1.1, walking: 0.55 },
-      chordMotion: { sustained: 2.6, offbeat: 1.7, pulse: 1.1, arpeggio: 0.55 },
+      drumGroove: { backbeat: 5, halfTime: 1.4, breakbeat: 2.4, electro: 0.6, fourFloor: 0.05 },
+      bassGroove: { syncopated: 3.8, rootFifth: 2.4, pulse: 0.8, walking: 0.4 },
+      chordMotion: { sustained: 3, offbeat: 1.9, pulse: 0.9, arpeggio: 0.45 },
     },
-    swing: 0.2, syncopation: 0.54, humanize: 0.3, chordExtensions: 0.46, harmonicRhythm: 0.27,
+    swing: 0.22, syncopation: 0.6, humanize: 0.32, chordExtensions: 0.46, harmonicRhythm: 0.27,
     instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [54, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91, 92] },
     tripletChance: 0.38, snareRollChance: 0.24, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.4, phraseBars: 4 },
@@ -877,7 +878,7 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.1, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.9 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.88 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
@@ -4297,6 +4298,11 @@ const DRUM_FILL_VOCABULARIES = deepFreeze({
     { id: "acoustic-snare-tom-answer", pitches: [38, 45, 47, 50], positions: [0, 0.375, 0.625, 0.875] },
     { id: "acoustic-floor-launch", pitches: [41, 45, 38, 49], positions: [0, 0.25, 0.625, 0.875] },
   ],
+  hipHop: [
+    { id: "hiphop-ghost-pickup", pitches: [37, 42, 38], positions: [0.125, 0.5, 0.875] },
+    { id: "hiphop-hat-snare-breath", pitches: [42, 46, 38], positions: [0, 0.5, 0.875] },
+    { id: "hiphop-kick-reply", pitches: [36, 42, 38], positions: [0, 0.625, 0.875] },
+  ],
   pocket: [
     { id: "pocket-ghost-turn", pitches: [37, 38, 45, 38], positions: [0, 0.375, 0.625, 0.875] },
     { id: "pocket-tom-conversation", pitches: [45, 50, 47, 38], positions: [0, 0.25, 0.625, 0.875] },
@@ -4305,6 +4311,7 @@ const DRUM_FILL_VOCABULARIES = deepFreeze({
 });
 
 function drumFillVocabularyForGenre(genre) {
+  if (["hipHop", "rap"].includes(genre)) return DRUM_FILL_VOCABULARIES.hipHop;
   if (["house", "techno", "synthwave"].includes(genre)) return DRUM_FILL_VOCABULARIES.electronic;
   if (["trap", "drill", "drumBass"].includes(genre)) return DRUM_FILL_VOCABULARIES.bassMusic;
   if (["rock", "country", "pop"].includes(genre)) return DRUM_FILL_VOCABULARIES.acoustic;
@@ -4517,7 +4524,10 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       && config.drumFills > 0.001
       && rollFigures < maximumRolls;
     const rollProbability = config.rollAmount * config.drumFills * (0.3 + config.energy * 0.38 + config.complexity * 0.38) * (importantBoundary ? 1.35 : 0.72);
-    const useRoll = boundary && rollFigures < maximumRolls && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
+    const useRoll = !["hipHop", "rap"].includes(config.genre)
+      && boundary
+      && rollFigures < maximumRolls
+      && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
     if (usePreDropPunctuation) {
       const burstStart = Math.max(0, barBeats - 1);
       const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
@@ -4528,7 +4538,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
           start + burstStart + index * burstStep,
           eventVelocity(config, settings, intensity, preDropRng.fork(`hat-burst-${index}`), 0.52 + index * 0.11),
           0.055,
-          { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+          {
+            rhythmicFeature: "pre-drop-hat-burst",
+            preDropPunctuation: true,
+            transitionFeature: transition?.type ?? "launch",
+          },
         );
       });
       hit(
@@ -4536,7 +4550,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         start + Math.min(barBeats - 0.125, burstStart + burstStep * 3),
         eventVelocity(config, settings, intensity, preDropRng.fork("snare-pickup"), 0.92),
         0.08,
-        { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+        {
+          rhythmicFeature: "pre-drop-snare-pickup",
+          preDropPunctuation: true,
+          transitionFeature: transition?.type ?? "launch",
+        },
       );
       preDropPunctuationFigures += 1;
     } else if (useRoll) {
@@ -4616,6 +4634,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     ));
     if (!cleanTail || notes.some((note) => note.preDropPunctuation && note.start >= barStart && note.start < section.endBeat)) continue;
     const lookaheadRng = rng.fork(`pre-drop-lookahead-${section.id}`);
+    const lookaheadTransition = transitionFromSection(songBlueprint, section);
     const important = config.energy >= 0.72 && config.complexity >= 0.58 && config.drumFills >= 0.35;
     const force = important && preDropPunctuationFigures === 0;
     const probability = clamp(settings.variation * (0.22 + config.energy * 0.28 + config.complexity * 0.18), 0, 0.68);
@@ -4629,7 +4648,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
         tailStart + index * burstStep,
         eventVelocity(config, settings, intensity, lookaheadRng.fork(`hat-${index}`), 0.52 + index * 0.11),
         0.055,
-        { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+        {
+          rhythmicFeature: "pre-drop-hat-burst",
+          preDropPunctuation: true,
+          transitionFeature: lookaheadTransition?.type ?? "launch",
+        },
       );
     });
     hit(
@@ -4637,7 +4660,11 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       Math.min(section.endBeat - 0.125, tailStart + burstStep * 3),
       eventVelocity(config, settings, intensity, lookaheadRng.fork("snare"), 0.92),
       0.08,
-      { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+      {
+        rhythmicFeature: "pre-drop-snare-pickup",
+        preDropPunctuation: true,
+        transitionFeature: lookaheadTransition?.type ?? "launch",
+      },
     );
     preDropPunctuationFigures += 1;
   }
@@ -4729,7 +4756,11 @@ function generateBass(
 
     const nextChord = harmony[(eventIndex + 1) % harmony.length];
     for (let index = 0; index < offsets.length; index += 1) {
-      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      if (
+        index > 0
+        && !(grooveConductor && ["hipHop", "rap"].includes(config.genre))
+        && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))
+      ) continue;
       const absoluteStart = chord.start + offsets[index];
       const barOffset = round(mod(absoluteStart, barBeats), 4);
       const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
@@ -4907,13 +4938,25 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config,
       ? Math.max(0, config.tracks.bass.octave - 1)
       : config.tracks.bass.octave;
     const destination = rootMidi(nextChord, bassOctave);
+    const barPlan = grooveBar(grooveConductor, fill.bar);
+    const authorizedBassStarts = (barPlan?.bassPulses ?? [])
+      .map((offset) => fill.bar * barBeats + offset);
+    const hipHopPocket = ["hipHop", "rap"].includes(config.genre);
     const candidates = bass
-      .filter((note) => !assignedBassAnswers.has(note) && note.start >= boundary - 1.0 && note.start < boundary - 0.04)
+      .filter((note) => (
+        !assignedBassAnswers.has(note)
+        && note.start >= boundary - 1.0
+        && note.start < boundary - 0.04
+        && (
+          !hipHopPocket
+          || authorizedBassStarts.some((beat) => Math.abs(beat - note.start) <= 0.03)
+        )
+      ))
       .sort((left, right) => right.start - left.start);
     let answer = candidates[0];
     if (!answer) {
+      if (hipHopPocket) continue;
       const pickupStart = round(Math.max(fillStart, boundary - 0.75), 2);
-      const barPlan = grooveBar(grooveConductor, fill.bar);
       const localPickup = pickupStart - fill.bar * barBeats;
       if ((barPlan?.spaces ?? []).some((space) => Math.abs(space - localPickup) <= 0.01)) continue;
       answer = {
@@ -5281,6 +5324,7 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
   let triggers = 0;
   for (const layer of arrangementProfile.optionalLayers ?? []) {
     if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (["hipHop", "rap"].includes(config.genre) && layer.trackId === "drums") continue;
     if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
     for (const section of structure) {
       if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
@@ -5632,7 +5676,10 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
     } else if (style.chordMotion === "offbeat") {
       offsets = [0.5, 1.5, 2.5, 3.5].filter((offset) => offset < chord.duration - 0.05);
       if (!offsets.length) offsets = [0];
-    } else if (style.chordMotion === "arpeggio") {
+    } else if (
+      style.chordMotion === "arpeggio"
+      && !(grooveConductor && ["hipHop", "rap"].includes(config.genre))
+    ) {
       const step = config.complexity > 0.58 ? 0.25 : 0.5;
       for (let offset = 0, index = 0; offset < chord.duration - 0.05; offset += step, index += 1) {
         if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.12, 0.98))) continue;
@@ -5672,7 +5719,11 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
     if (conductedOffsets.length && style.chordMotion !== "sustained") offsets = conductedOffsets;
 
     for (let index = 0; index < offsets.length; index += 1) {
-      if (index > 0 && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))) continue;
+      if (
+        index > 0
+        && !(conductedOffsets.length && ["hipHop", "rap"].includes(config.genre))
+        && !rng.bool(clamp(settings.density * intensity, 0.1, 0.98))
+      ) continue;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const duration = Math.max(0.1, nextOffset - offsets[index] - (style.chordMotion === "sustained" ? 0.02 : 0.08));
       for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
@@ -8439,6 +8490,7 @@ function runPocketCohesionPass(sourceTracks, structure, grooveConductor = null, 
         .filter((beat) => Math.abs(beat - note.start) <= 0.065)
         .sort((left, right) => Math.abs(left - note.start) - Math.abs(right - note.start))[0];
       const fallback = Number.isFinite(intended)
+        || (grooveConductor && ["hipHop", "rap"].includes(config?.genre))
         ? null
         : anchors
           .filter((beat) => Math.abs(beat - note.start) <= 0.065)
@@ -9166,13 +9218,38 @@ export const ONE_SHOT_KITS = deepFreeze([
   },
 ]);
 
-function chooseOneShotKit(config, preferred = null) {
+function chooseOneShotKit(config, preferred = null, style = null) {
   const preferredId = typeof preferred === "string" ? preferred : preferred?.id;
   const requestedId = preferredId || config.oneShotKitId;
   const requested = ONE_SHOT_KITS.find((kit) => kit.id === requestedId);
   if (requested) return requested;
   const excluded = new Set(config.excludeOneShotKitIds ?? []);
   const choices = ONE_SHOT_KITS.filter((kit) => !excluded.has(kit.id));
+  const hipHop = config.genre === "hipHop" || config.genre === "rap";
+  if (hipHop) {
+    const palette = choices.filter((kit) => ["basement-knock", "dusty-tape"].includes(kit.id));
+    if (palette.length) {
+      const energy = clamp(finite(config.energy, 0.7), 0, 1);
+      const swing = clamp(finite(config.swing, 0.18), 0, 0.5);
+      const tempoNorm = clamp((finite(config.tempo, 94) - 76) / 36, 0, 1);
+      const laidBack = style?.rhythmIdentity?.timingPocket === "laidBack";
+      const breakbeat = style?.drumGroove === "breakbeat";
+      const dustyScore =
+        (1 - energy) * 0.44
+        + swing * 0.72
+        + (1 - tempoNorm) * 0.24
+        + (laidBack ? 0.18 : 0)
+        + (breakbeat ? 0.08 : 0);
+      const basementScore =
+        energy * 0.5
+        + tempoNorm * 0.28
+        + (1 - swing) * 0.18
+        + (laidBack ? 0 : 0.08);
+      return dustyScore > basementScore
+        ? palette.find((kit) => kit.id === "dusty-tape") ?? palette[0]
+        : palette.find((kit) => kit.id === "basement-knock") ?? palette[0];
+    }
+  }
   const palette = choices.length ? choices : ONE_SHOT_KITS;
   return palette[hashSeed(`${config.seed}::one-shot-kit`) % palette.length];
 }
@@ -9926,11 +10003,11 @@ function compose(config, options = {}) {
     validCompositionRouteId(options.compositionRoute?.id ?? options.compositionRoute)
       ?? candidateCompositionRoute(config.seed, 0),
   );
-  const oneShotKit = chooseOneShotKit(config, options.oneShotKit);
   const baseStructure = options.structure
     ?? createStructure(config, rootRng.fork("structure"));
   const style = options.style
     ?? createStyle(config, rootRng.fork("style"));
+  const oneShotKit = chooseOneShotKit(config, options.oneShotKit, style);
   const songBlueprint = options.preserveAuthorities && options.songBlueprint
     ? clone(options.songBlueprint)
     : createSongBlueprint(
@@ -10950,7 +11027,22 @@ export function evaluateSongCandidate(song) {
     const chord = harmonyAt(song.harmony ?? [], note.start);
     return chord?.tones?.includes(mod(note.pitch, 12));
   }).length / Math.max(1, strongMelody.length);
-  const harmonic = clamp(Math.round(scaleFit * 62 + chordAnchors * 38), 20, 100);
+  const tonalCritic = analyzeTonalIntegrity(
+    song.tracks,
+    song.harmony ?? [],
+    {
+      keyPc: finite(song.meta.keyPc, 0),
+      scaleIntervals: song.meta.scaleIntervals ?? [],
+      beatsPerBar: barBeats,
+    },
+    song.structure ?? [],
+  );
+  const harmonic = clamp(Math.round(
+    scaleFit * 35
+    + chordAnchors * 20
+    + finite(tonalCritic.strongChordFit, 1) * 20
+    + finite(tonalCritic.selectedTonicAlignment, 1) * 25
+  ), 20, 100);
 
   const downbeatBars = new Set();
   for (const note of kicks) {
@@ -11100,6 +11192,9 @@ export function evaluateSongCandidate(song) {
     diagnostics: {
       scaleFit: round(scaleFit),
       chordAnchorFit: round(chordAnchors),
+      strongChordFit: round(finite(tonalCritic.strongChordFit, 1)),
+      selectedTonicAlignment: round(finite(tonalCritic.selectedTonicAlignment, 1)),
+      detectedTonicPc: tonalCritic.detectedTonicPc,
       bassKickLock: round(bassLock),
       motifRepetition: round(repetitionRatio),
       counterpointCollision: round(collisionRatio),
@@ -11310,17 +11405,30 @@ export function evaluateSectionOutcomeQuality(song) {
   }
 
   const contrasts = pairs.map((pair) => pair.contrast);
+  const orderedContrasts = [...contrasts].sort((left, right) => left - right);
   const averageContrast = average(contrasts, 0);
   const weakestContrast = Math.min(...contrasts);
+  const middle = Math.floor(orderedContrasts.length / 2);
+  const medianContrast = orderedContrasts.length % 2
+    ? orderedContrasts[middle]
+    : average([orderedContrasts[middle - 1], orderedContrasts[middle]], 0);
   const strongPairRatio = pairs.filter((pair) => pair.contrast >= 0.12).length / pairs.length;
   const weakPairs = pairs.filter((pair) => pair.contrast < 0.07);
   const weakestPair = [...pairs].sort((left, right) => left.contrast - right.contrast)[0] ?? null;
+  const openingPair = String(sections[0]?.name ?? "").toLowerCase() === "intro"
+    ? pairs.find((pair) => pair.fromSectionId === sections[0]?.id) ?? null
+    : null;
+  const openingContrast = openingPair?.contrast ?? 1;
   const passed = averageContrast >= 0.115
+    && medianContrast >= 0.09
+    && openingContrast >= 0.08
     && strongPairRatio >= 0.6
     && weakPairs.length <= Math.max(1, Math.floor(pairs.length * 0.25));
   const score = clamp(Math.round(
-    clamp(averageContrast / 0.22, 0, 1) * 60
-    + clamp(weakestContrast / 0.12, 0, 1) * 20
+    clamp(averageContrast / 0.22, 0, 1) * 45
+    + clamp(weakestContrast / 0.12, 0, 1) * 15
+    + clamp(medianContrast / 0.16, 0, 1) * 10
+    + clamp(openingContrast / 0.14, 0, 1) * 10
     + strongPairRatio * 20
   ), 0, 100);
 
@@ -11330,6 +11438,9 @@ export function evaluateSectionOutcomeQuality(song) {
     reason: passed ? "distinct-section-jobs" : "sections-too-similar",
     score,
     averageContrast: round(averageContrast),
+    medianContrast: round(medianContrast),
+    openingContrast: round(openingContrast),
+    openingPair,
     weakestContrast: round(weakestContrast),
     strongPairRatio: round(strongPairRatio),
     comparablePairs: pairs.length,
@@ -15078,16 +15189,17 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
     ), 0.65, 1.4);
     const totalTicks = Math.round(song.meta.totalBeats * ppq);
     for (const note of track.notes ?? []) {
-      const phrasePerformance = renderPhrasePerformance(note);
-      const pitch = canonicalMidiPitch(note.pitch);
+      const performedNote = resolvePerformedNote(note);
+      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
+      const pitch = canonicalMidiPitch(performedNote.pitch);
       const velocity = clamp(Math.round(
-        (finite(note.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+        (finite(performedNote.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
       ), 1, 127);
-      const onTick = clamp(Math.round(finite(note.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+      const onTick = clamp(Math.round(finite(performedNote.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
       const offTick = clamp(
         Math.max(onTick + 1, Math.round((
-          finite(note.start, 0)
-          + finite(note.duration, 0.25) * gateScale * phrasePerformance.durationScale
+          finite(performedNote.start, 0)
+          + finite(performedNote.duration, 0.25) * gateScale * phrasePerformance.durationScale
         ) * ppq)),
         1,
         totalTicks,
@@ -15178,14 +15290,17 @@ export function createMidiExportReport(song, options = {}) {
       conductorTrack: true,
       uniqueChannels: new Set(trackReports.map((track) => track.channel)).size === trackReports.length,
       drumChannel10: trackReports.every((track) => track.id !== "drums" || track.channel === 10),
-      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => (
-        Number.isFinite(note.pitch)
-        && Number.isFinite(note.start)
-        && Number.isFinite(note.duration)
-        && note.pitch >= 0 && note.pitch <= 127
-        && note.start >= 0 && note.duration > 0
-        && note.start + note.duration <= song.meta.totalBeats + 1e-6
-      ))),
+      boundedNotes: tracks.every((track) => (track.notes ?? []).every((note) => {
+        const performedNote = resolvePerformedNote(note);
+        return (
+          Number.isFinite(performedNote.pitch)
+          && Number.isFinite(performedNote.start)
+          && Number.isFinite(performedNote.duration)
+          && performedNote.pitch >= 0 && performedNote.pitch <= 127
+          && performedNote.start >= 0 && performedNote.duration > 0
+          && performedNote.start + performedNote.duration <= song.meta.totalBeats + 1e-6
+        );
+      })),
     },
   };
 }

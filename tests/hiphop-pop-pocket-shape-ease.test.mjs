@@ -12,15 +12,18 @@ import {
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 
-test("Hip-Hop pocket keeps its calibrated writing budget while timing feel changes independently", () => {
+test("Hip-Hop pocket locks the fuller backbeat-first calibration from listener feedback", () => {
   const profile = GENRE_PROFILES.hipHop;
-  assert.equal(profile.swing, 0.2);
-  assert.equal(profile.humanize, 0.3);
+  assert.equal(profile.swing, 0.22);
+  assert.equal(profile.humanize, 0.32);
+  assert.equal(profile.syncopation, 0.6);
   assert.equal(profile.tripletChance, 0.38);
   assert.equal(profile.snareRollChance, 0.24);
   assert.equal(profile.arrangement.fillFrequency, 0.4);
-  assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "sparseEcho"]);
-  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.9);
+  assert.ok(profile.grooveWeights.drumGroove.backbeat > profile.grooveWeights.drumGroove.halfTime * 3);
+  assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "questionAnswer", "sparseEcho"]);
+  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.restBias, 0.05);
+  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.88);
   assert.ok(GENRE_MELODY_GRAMMARS.hipHop.leapChance < 0.16);
 });
 

@@ -98,26 +98,52 @@ function genreId(value) {
 export const GENRE_GROOVE_GRAMMARS = Object.freeze({
   hipHop: Object.freeze({
     id: "hip-hop-pocket",
-    philosophy: "kick-displacement-snare-anchor-rest-pocket",
+    philosophy: "backbeat-first-displaced-kicks-bass-replies-and-breathing-pocket",
     base: Object.freeze({
       kick: Object.freeze([0, 3, 7, 10, 14]),
       snare: Object.freeze([4, 12]),
       hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
       percussion: Object.freeze([6, 11, 15]),
     }),
-    probability: Object.freeze({ kick: 0.78, snare: 1, hat: 0.9, percussion: 0.48 }),
+    probability: Object.freeze({ kick: 0.92, snare: 1, hat: 0.97, percussion: 0.48 }),
     locked: Object.freeze({ kick: Object.freeze([0]), snare: Object.freeze([4, 12]), hat: Object.freeze([]), percussion: Object.freeze([]) }),
-    density: Object.freeze({ kick: 0.92, snare: 1, hat: 0.9, percussion: 0.7 }),
-    transforms: Object.freeze([
-      Object.freeze({ lane: "kick", type: "rotateEvery", every: 2, amount: 1, chance: 0.34 }),
-      Object.freeze({ lane: "hat", type: "dropEvery", every: 4, chance: 0.28 }),
-    ]),
-    relationships: Object.freeze({
-      bass: Object.freeze({ source: "kick", mode: "lock-and-answer", lock: 0.72, answerDelayBeats: 0.5, syncopation: 0.58 }),
-      chords: Object.freeze({ source: "snare", mode: "space-around-backbeat", offsetBeats: -0.25, syncopation: 0.42 }),
-      lead: Object.freeze({ source: "snare", mode: "phrase-around-pocket", offsetBeats: 0.25, syncopation: 0.52 }),
+    density: Object.freeze({ kick: 0.98, snare: 1, hat: 1.04, percussion: 0.66 }),
+    phrase: Object.freeze({
+      bars: 4,
+      lanes: Object.freeze({
+        kick: Object.freeze([
+          Object.freeze([0, 3, 7, 10, 14]),
+          Object.freeze([0, 3, 6, 10, 15]),
+          Object.freeze([0, 2, 7, 11, 14]),
+          Object.freeze([0, 3, 7, 10, 15]),
+        ]),
+        snare: Object.freeze([
+          Object.freeze([4, 12]),
+          Object.freeze([4, 12]),
+          Object.freeze([4, 12]),
+          Object.freeze([4, 12]),
+        ]),
+        hat: Object.freeze([
+          Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+          Object.freeze([0, 2, 4, 7, 8, 10, 12, 14]),
+          Object.freeze([0, 2, 3, 4, 6, 8, 10, 11, 12, 14]),
+          Object.freeze([0, 2, 4, 6, 8, 10, 12, 14, 15]),
+        ]),
+        percussion: Object.freeze([
+          Object.freeze([7, 15]),
+          Object.freeze([6, 11]),
+          Object.freeze([7, 14]),
+          Object.freeze([11, 15]),
+        ]),
+      }),
     }),
-    humanization: Object.freeze({ timing: 0.035, velocity: 0.12, swing: 0.16, laidBackBeats: 0.012 }),
+    transforms: Object.freeze([]),
+    relationships: Object.freeze({
+      bass: Object.freeze({ source: "kick", mode: "lock-and-answer", lock: 0.58, answerDelayBeats: 0.5, syncopation: 0.54 }),
+      chords: Object.freeze({ source: "snare", mode: "space-around-backbeat", offsetBeats: -0.25, syncopation: 0.5 }),
+      lead: Object.freeze({ source: "snare", mode: "phrase-around-pocket", offsetBeats: 0.25, syncopation: 0.62 }),
+    }),
+    humanization: Object.freeze({ timing: 0.042, velocity: 0.14, swing: 0.2, laidBackBeats: 0.018 }),
     polyrhythm: Object.freeze({ percussionSteps: 12, pulses: 5 }),
   }),
   trap: Object.freeze({
@@ -514,6 +540,17 @@ function grammarForGenre(genre) {
   return GENRE_GROOVE_GRAMMARS[genreId(genre)] ?? GENRE_GROOVE_GRAMMARS.general;
 }
 
+function phraseBaseSteps(grammar, lane, bar, section, gridSteps) {
+  const phraseBars = Math.max(1, Math.round(finite(grammar?.phrase?.bars, 0)));
+  const patterns = grammar?.phrase?.lanes?.[lane];
+  if (!phraseBars || !Array.isArray(patterns) || !patterns.length) {
+    return scaleSteps(grammar.base[lane], gridSteps);
+  }
+  const localBar = Math.max(0, bar - Math.max(0, Math.round(finite(section?.startBar, 0))));
+  const phraseIndex = localBar % Math.min(phraseBars, patterns.length);
+  return scaleSteps(patterns[phraseIndex] ?? grammar.base[lane], gridSteps);
+}
+
 function applyProbability(steps, probability, lockedSteps, seed) {
   const locked = new Set((lockedSteps ?? []).map((value) => round(value, 4)));
   return uniqueSorted(steps.filter((step) => (
@@ -618,6 +655,12 @@ function applyTransforms(steps, transforms, {
 
 function sectionDensityMultiplier(genre, section) {
   const role = sectionRole(section);
+  if (genre === "hipHop") {
+    if (role === "payoff") return 1.1;
+    if (role === "contrast") return 0.88;
+    if (role === "intro") return 0.68;
+    if (role === "outro") return 0.72;
+  }
   if (genre === "pop") {
     if (role === "prechorus") return 1.14;
     if (role === "payoff") return 1.28;
@@ -664,6 +707,34 @@ function shapeOpeningLaneSteps(steps, lane, gridSteps, openingBoundary) {
   }
   if (lane === "percussion") return uniqueSorted(steps.filter((step) => step >= lateQuarter - 1e-6));
   return uniqueSorted(steps);
+}
+
+function boundedRelationshipSteps(steps, limit) {
+  const ordered = uniqueSorted(steps);
+  const max = Math.max(1, Math.round(finite(limit, ordered.length)));
+  if (ordered.length <= max) return ordered;
+  if (max === 1) return [ordered[0]];
+  const selected = [ordered[0], ordered.at(-1)];
+  while (selected.length < max) {
+    const candidates = ordered.filter((step) => !selected.includes(step));
+    if (!candidates.length) break;
+    const next = candidates
+      .map((step) => ({
+        step,
+        distance: Math.min(...selected.map((chosen) => Math.abs(chosen - step))),
+      }))
+      .sort((a, b) => b.distance - a.distance || a.step - b.step)[0];
+    selected.push(next.step);
+  }
+  return uniqueSorted(selected);
+}
+
+function hipHopRelationshipLimit(role, section) {
+  const roleName = sectionRole(section);
+  if (role === "bass") return roleName === "payoff" ? 4 : roleName === "intro" ? 2 : 3;
+  if (role === "chords") return roleName === "payoff" ? 3 : 2;
+  if (role === "lead") return roleName === "payoff" ? 4 : 3;
+  return Infinity;
 }
 
 function relationshipSteps(lanes, relationship, beatsPerStep, gridSteps, seed, { wrap = true } = {}) {
@@ -755,7 +826,7 @@ export function createGrooveDNA(input = {}, {
       );
       const optionalSteps = scaleSteps(cellPolicy.lanes[lane], gridSteps);
       const baseSteps = sanitizeLaneSteps(
-        scaleSteps(grammar.base[lane], gridSteps),
+        phraseBaseSteps(grammar, lane, bar, section, gridSteps),
         optionalSteps,
         requiredSteps,
         protectedSteps,
@@ -779,7 +850,9 @@ export function createGrooveDNA(input = {}, {
         * (0.72 + densityControl * 0.56)
         * sectionDensityMultiplier(genre, section)
         * transformed.densityMultiplier;
-      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps]);
+      const transformAuthorizedSteps = genre === "hipHop"
+        ? uniqueSorted([...transformed.steps, ...requiredSteps])
+        : uniqueSorted([...optionalSteps, ...transformed.steps]);
       const densitySteps = applyDensity(
         transformed.steps,
         factor,
@@ -788,7 +861,7 @@ export function createGrooveDNA(input = {}, {
         protectedSteps,
         `${seed}:${genre}:${bar}:${lane}:density`,
       );
-      const variationAmount = genre === "jazz"
+      const variationAmount = ["jazz", "hipHop"].includes(genre)
         ? 0
         : Math.round(variation * (lane === "hat" ? 2 : 1));
       const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
@@ -825,7 +898,7 @@ export function createGrooveDNA(input = {}, {
 
     const relationships = {};
     for (const [role, relationship] of Object.entries(grammar.relationships)) {
-      const steps = relationshipSteps(
+      const authoredSteps = relationshipSteps(
         lanePlans,
         relationship,
         beatsPerStep,
@@ -833,6 +906,9 @@ export function createGrooveDNA(input = {}, {
         `${seed}:${genre}:${bar}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
+      const steps = genre === "hipHop"
+        ? boundedRelationshipSteps(authoredSteps, hipHopRelationshipLimit(role, section))
+        : authoredSteps;
       relationships[role] = Object.freeze({
         ...relationship,
         steps: Object.freeze(steps),
@@ -891,6 +967,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.kick,
         probability: grammar.probability.kick,
+        density: grammar.density.kick,
       }),
       snare: Object.freeze({
         required: grammar.locked.snare,
@@ -898,6 +975,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.snare,
         probability: grammar.probability.snare,
+        density: grammar.density.snare,
       }),
       hat: Object.freeze({
         required: grammar.locked.hat,
@@ -905,6 +983,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.hat,
         probability: grammar.probability.hat,
+        density: grammar.density.hat,
       }),
       percussion: Object.freeze({
         required: grammar.locked.percussion,
@@ -912,6 +991,7 @@ export function createGrooveDNA(input = {}, {
         protected: cellPolicy.protectedSpaces,
         base: grammar.base.percussion,
         probability: grammar.probability.percussion,
+        density: grammar.density.percussion,
       }),
     }),
     relationships: grammar.relationships,
