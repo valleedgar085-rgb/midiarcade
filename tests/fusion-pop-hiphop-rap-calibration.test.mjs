@@ -104,7 +104,7 @@ test("Pop, Hip-Hop and Rap fusion calibration protects parent-relative musical q
       assert.equal(fused.scaleFit, 1);
       assert.match(fused.producerStatus, /passed|best-available/);
       assert.ok(fused.score >= 90, `${label} score=${fused.score}`);
-      assert.ok(fused.floor >= 75, `${label} floor=${fused.floor}`);
+      assert.ok(fused.floor >= 75, `${label} floor=${fused.floor} subscores=${JSON.stringify(song?.meta?.scoreDetails?.subscores ?? {})}`);
       assert.ok(
         fused.groove >= 90 && grooveDelta >= -8,
         `${label} groove=${fused.groove} parentDelta=${grooveDelta}`,
