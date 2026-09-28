@@ -843,7 +843,8 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
       ? selected * 0.72 + learned * 0.28
       : selected;
   };
-  const complexity = generationValue("complexityControl", 54) / 100;
+  const rawComplexity = generationValue("complexityControl", 54) / 100;
+  const complexity = clamp(rawComplexity * (1.4 - rawComplexity * 0.4), 0, 1);
   const selectedKey = $("#keyControl").value;
   const selectedMode = $("#modeControl").value;
   const selectedBars = $("#barsControl").value;
@@ -3875,10 +3876,10 @@ function renderGenerationDebugger() {
   const trap = songGenreId() === "trap";
   $("#performanceAbPerformed").disabled = trap;
   setText("#performanceAbStatus", trap
-    ? "Trap B paused."
+    ? "B paused."
     : audition?.mode === "performance"
       ? `B · ${Math.round((audition.humanize ?? 0.65) * 100)}% · ${audition.report?.metrics?.timing?.maxAbsMs ?? 0} ms`
-      : audition ? "A active" : "A current · B preview-only");
+      : audition ? "A" : "A · B preview");
 
   const empty = $("#debuggerEmpty");
   if (empty) empty.hidden = Boolean(latest);
