@@ -257,11 +257,11 @@ export const GENRE_PROFILES = deepFreeze({
     id: "hipHop", label: "Hip-Hop", bpm: { min: 82, max: 108, default: 94 },
     preferredScales: ["minor", "dorian", "minorPentatonic", "majorPentatonic"],
     grooveWeights: {
-      drumGroove: { backbeat: 3.5, halfTime: 2.5, breakbeat: 1.7, electro: 0.8, fourFloor: 0.1 },
-      bassGroove: { syncopated: 3.2, rootFifth: 2.2, pulse: 1.1, walking: 0.55 },
-      chordMotion: { sustained: 2.6, offbeat: 1.7, pulse: 1.1, arpeggio: 0.55 },
+      drumGroove: { backbeat: 5, halfTime: 1.4, breakbeat: 2.4, electro: 0.6, fourFloor: 0.05 },
+      bassGroove: { syncopated: 3.8, rootFifth: 2.4, pulse: 0.8, walking: 0.4 },
+      chordMotion: { sustained: 3, offbeat: 1.9, pulse: 0.9, arpeggio: 0.45 },
     },
-    swing: 0.2, syncopation: 0.54, humanize: 0.3, chordExtensions: 0.46, harmonicRhythm: 0.27,
+    swing: 0.22, syncopation: 0.6, humanize: 0.32, chordExtensions: 0.46, harmonicRhythm: 0.27,
     instrumentPrograms: { drums: [0, 8, 24, 25], bass: [38, 39, 33, 34], chords: [4, 5, 16, 89], melody: [54, 73, 80, 81], counterpoint: [25, 53, 73, 85], pad: [88, 89, 91, 92] },
     tripletChance: 0.38, snareRollChance: 0.24, halfTime: false,
     arrangement: { form: "verse-chorus", chorusLift: 0.14, fillFrequency: 0.4, phraseBars: 4 },
@@ -878,7 +878,7 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "sparseEcho"], contours: ["pedalLaunch", "wave"], restBias: 0.1, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.9 },
+  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.88 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
