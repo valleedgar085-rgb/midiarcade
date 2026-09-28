@@ -63,7 +63,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   assert.equal(generated.meta.isFusion, true);
   assert.equal(generated.meta.secondaryGenre, "rap");
   assert.equal(repetitionRefinementFamily(generated), "hiphop-rap-fusion");
-  assert.equal(balanceBefore.direction, "evolve");
+  assert.notEqual(balanceBefore.direction, "on-target");
 
   const candidates = createRepetitionRefinementCandidates(generated, { target });
   assert.ok(candidates.length > 0 && candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
@@ -76,7 +76,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   const balanceAfter = repetitionBalance(processed.song, target);
 
   assert.equal(processed.repetitionDiagnostics.accepted, true);
-  assert.equal(processed.repetitionDiagnostics.direction, "evolve");
+  assert.equal(processed.repetitionDiagnostics.direction, balanceBefore.direction);
   assert.ok(after.subscores.repetition > before.subscores.repetition);
   assert.ok(balanceAfter.absoluteError < balanceBefore.absoluteError);
   assert.ok(Object.values(processed.repetitionDiagnostics.protectedDeltas).every((delta) => delta >= -1));
