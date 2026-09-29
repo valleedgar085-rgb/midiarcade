@@ -6760,15 +6760,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       }
       if (!kept.length && notes.length && producerRole !== "rest") {
         const fallbackNotes = notes.filter((note) => {
-          const protectedAnchor = note.phraseAnchor
-            || note.resolutionRole
-            || note.transitionRole
-            || note.transitionFeature
-            || note.transitionHandoffRole
-            || note.memoryRole
-            || note.motifHandoffRole
-            || note.ensembleAccent
-            || note.finalAssemblyRole;
+          const protectedAnchor = isProtectedArrangementNote(note);
           if (protectedAnchor) return true;
           if (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6) return false;
           if (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6) return false;
@@ -10362,6 +10354,7 @@ function compose(config, options = {}) {
     rockPowerChordRepair.tracks,
     harmony,
     {
+      genre: config.genre,
       keyPc: config.keyPc,
       scaleIntervals: config.scaleIntervals,
       beatsPerBar: beatsPerBar(config),
@@ -13158,6 +13151,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     producerIntentEnforcement.tracks,
     song.harmony,
     {
+      genre: config.genre,
       keyPc: config.keyPc,
       scaleIntervals: config.scaleIntervals,
       beatsPerBar: beatsPerBar(config),
