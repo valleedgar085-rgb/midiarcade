@@ -21,6 +21,11 @@ import {
   MAX_MELODY_CONTINUITY_CANDIDATES,
 } from "./melody-continuity-refinement.js";
 import {
+  createMelodyPhraseCandidates,
+  MAX_MELODY_PHRASE_CANDIDATES,
+} from "./melody-phrase-refinement.js";
+import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
+import {
   createRegisterHealthCandidates,
   MAX_REGISTER_HEALTH_CANDIDATES,
 } from "./register-health-refinement.js";
@@ -38,6 +43,7 @@ import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
+const MELODY_PHRASE_ATTEMPT_CEILING = 78;
 const FUSION_PERFORMANCE_FLOOR = 84;
 const REGISTER_PROTECTED_DIMENSIONS = Object.freeze([
   "phraseResolution", "repetition", "memory", "motif", "separation",
@@ -1011,6 +1017,133 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
   return { song: selected.song, diagnostics };
 }
 
+function compareMelodyPhraseAssessments(left, right) {
+  const phraseDelta = right.phraseScoreDelta - left.phraseScoreDelta;
+  if (Math.abs(phraseDelta) > 1e-9) return phraseDelta;
+  const scoreDelta = right.scoreDelta - left.scoreDelta;
+  if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+  return left.candidateIndex - right.candidateIndex;
+}
+
+function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const scoreDelta = finite(after?.score) - finite(before?.score);
+  const floorDelta = creativeFloor(after) - beforeFloor;
+  const dimensions = Object.keys(before?.subscores ?? {});
+  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const accepted = Boolean(
+    release?.passed
+    && scaleSafe
+    && candidate.phraseScoreDelta >= 3
+    && scoreDelta >= -0.5
+    && floorDelta >= -0.5
+    && protectedSafe
+  );
+  return {
+    ...candidate,
+    after,
+    release,
+    scoreDelta,
+    floorDelta,
+    protectedDeltas: dimensionDeltas,
+    protectedSafe,
+    accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : candidate.phraseScoreDelta < 3 ? "phrase-gain-too-small"
+          : !protectedSafe ? "protected-dimension-regression"
+            : scoreDelta < -0.5 || floorDelta < -0.5 ? "full-song-regression"
+              : accepted ? "melody-phrase-win" : "critic-regression",
+  };
+}
+
+export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  if (config.melodyPhraseRefinement !== true || config.isFusion === true || Boolean(config.secondaryGenre)) {
+    return { song, diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES) };
+  }
+
+  const phraseBefore = evaluateMelodyPhraseIntelligence(song);
+  if (phraseBefore.passed && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING) {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES, "already-strong", {
+        beforePhraseScore: phraseBefore.score,
+      }),
+    };
+  }
+
+  const candidates = createMelodyPhraseCandidates(song);
+  if (!candidates.length) {
+    return {
+      song,
+      diagnostics: Object.freeze({
+        attempted: true,
+        accepted: false,
+        changed: false,
+        reason: "no-improving-melody-phrase-candidate",
+        candidatesEvaluated: 0,
+        candidateLimit: MAX_MELODY_PHRASE_CANDIDATES,
+        candidateIds: [],
+      }),
+    };
+  }
+
+  const before = evaluateCandidate(song);
+  const beforeFloor = creativeFloor(before);
+  const assessments = candidates.map((candidate) => assessMelodyPhraseCandidate(
+    candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate,
+  ));
+  const candidateIds = assessments.map(({ id }) => id);
+  const accepted = assessments.filter(({ accepted: isAccepted }) => isAccepted)
+    .sort(compareMelodyPhraseAssessments);
+  const selected = accepted[0] ?? [...assessments].sort(compareMelodyPhraseAssessments)[0];
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted: Boolean(selected?.accepted),
+    changed: Boolean(selected?.accepted && selected?.changedNotes),
+    reason: selected?.reason ?? "critic-regression",
+    id: selected?.id ?? null,
+    changedNotes: finite(selected?.changedNotes),
+    weakestSectionId: selected?.weakestSectionId ?? null,
+    candidatesEvaluated: assessments.length,
+    candidateLimit: MAX_MELODY_PHRASE_CANDIDATES,
+    candidateIds,
+    beforePhraseScore: finite(selected?.beforePhraseScore),
+    afterPhraseScore: finite(selected?.afterPhraseScore),
+    phraseScoreDelta: finite(selected?.phraseScoreDelta),
+    beforeScore: round(before?.score),
+    afterScore: round(selected?.after?.score),
+    scoreDelta: round(selected?.scoreDelta),
+    floorDelta: round(selected?.floorDelta),
+    protectedDeltas: Object.fromEntries(
+      Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
+    ),
+  });
+  if (!accepted.length) return { song, diagnostics };
+
+  selected.song.outputQualityEvolution = {
+    ...(selected.song.outputQualityEvolution ?? {}),
+    melodyPhraseRefinement: {
+      accepted: true,
+      changedNotes: diagnostics.changedNotes,
+      phraseScoreDelta: diagnostics.phraseScoreDelta,
+      scoreDelta: diagnostics.scoreDelta,
+      candidatesEvaluated: diagnostics.candidatesEvaluated,
+    },
+  };
+  selected.song.meta = acceptedMetadata(
+    selected.song,
+    selected.after,
+    selected.release,
+    "melodyPhraseRefinement",
+    diagnostics,
+  );
+  return { song: selected.song, diagnostics };
+}
+
 export function applySongOutputQualityPipeline(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
@@ -1031,6 +1164,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, registerConfig, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
+    { id: "melodyPhraseRefinement", run: (current) => applyMelodyPhraseRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
     // Genre identity is the final note-writing stage. Transition FX runs after it
@@ -1053,6 +1187,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
+    melodyPhraseDiagnostics: diagnostics.melodyPhraseRefinement,
     bassContinuityDiagnostics: diagnostics.bassContinuityRefinement,
     ensembleContinuityDiagnostics: diagnostics.ensembleContinuityRefinement,
     transitionFxDiagnostics: diagnostics.transitionFxRefinement,
@@ -1076,6 +1211,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
+    ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],
     ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
