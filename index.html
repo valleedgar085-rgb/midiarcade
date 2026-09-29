@@ -545,7 +545,7 @@
               <div>
                 <p class="eyebrow">SHAPE</p>
                 <h2 id="arrangementTitle">Shape your song</h2>
-                <p class="section-description">Select a section from the song map, shape its musical feel, then open note detail only when you need precision.</p>
+                <p class="section-description">Tap a section, choose an instrument, then edit its notes or musical feel.</p>
               </div>
               <div class="arrangement-tools">
                 <button class="small-button" id="reorderButton" type="button">
@@ -565,6 +565,7 @@
                   <span><i></i><strong>SONG STRUCTURE</strong><small id="shapeMapSummary">Select a section to begin</small></span>
                   <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
+                <details class="shape-map-detail"><summary>Show detailed map <small>Harmony · instrument lanes</small></summary></details>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
@@ -588,6 +589,10 @@
                     <button id="sectionShaperPlay" type="button" aria-label="Play selected section">▶</button>
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
+                  <button class="section-edit-primary" type="button" data-section-action="edit">
+                    <span><small>PIANO ROLL</small><strong>Edit notes</strong></span>
+                    <b aria-hidden="true">→</b>
+                  </button>
                   <div class="shaper-group-heading">
                     <span><small>SECTION FEEL</small><strong>Shape this moment</strong></span>
                     <em>Auto keeps the original musical intent</em>
@@ -645,10 +650,6 @@
                     </div>
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
-                  <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PIANO ROLL</small><strong>Edit note detail</strong></span>
-                    <b aria-hidden="true">→</b>
-                  </button>
                   <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>More tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
                     <div class="section-quick-actions" aria-label="Section actions"><button type="button" data-section-action="queue-jump">⚡ Queue Jump</button><button type="button" data-section-action="simplify">Create space</button><button type="button" data-section-action="build">Add a build</button><button type="button" data-section-action="variations">Try variations</button><button type="button" data-section-action="duplicate">Duplicate section</button></div>
                     <div class="section-order-actions" aria-label="Move selected section"><button type="button" data-section-action="earlier">← Earlier</button><button type="button" data-section-action="later">Later →</button></div>
