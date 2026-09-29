@@ -682,6 +682,9 @@ const SCALE_ALIASES = {
 };
 
 const CHORD_PATH_ALIASES = {
+  hiphop: "hipHop",
+  hiphopsample: "hipHop",
+  sample: "hipHop",
   soul: "soul",
   soulful: "soul",
   pop: "pop",
@@ -814,6 +817,14 @@ export const GENRE_PROGRESSION_GRAMMARS = deepFreeze({
 });
 
 export const CHORD_PATH_PROGRESSION_GRAMMARS = deepFreeze({
+  hipHop: {
+    // Keep a small harmonic loop under the drums and 808. The lead is a
+    // texture here, not a pop topline that needs a new chord every bar.
+    verse: [[0, 0, 5, 0], [0, 5, 0, 6], [0, 0, 3, 0]],
+    chorus: [[0, 5, 0, 3], [0, 0, 6, 0]],
+    bridge: [[0, 6, 0, 5], [0, 3, 0, 6]],
+    cadence: [6, 0],
+  },
   soul: {
     verse: [[0, 3, 1, 4], [1, 4, 0, 5], [5, 1, 0, 4]],
     chorus: [[3, 4, 0, 5], [0, 2, 1, 4]],
@@ -878,7 +889,7 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
-  hipHop: { phraseShapes: ["syncopatedLoop", "questionAnswer", "sparseEcho"], contours: ["pedalLaunch", "wave", "fallRebound"], restBias: 0.05, leapChance: 0.12, ornamentChance: 0, durationScale: 0.88 },
+  hipHop: { phraseShapes: ["sparseEcho"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.05, ornamentChance: 0, durationScale: 1.12 },
   rap: { phraseShapes: ["sparseEcho", "questionAnswer"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.2, leapChance: 0.12, ornamentChance: 0.06, durationScale: 0.8 },
   trap: { phraseShapes: ["sparseEcho", "staircase"], contours: ["pedalLaunch", "fallRebound"], restBias: 0.14, leapChance: 0.24, ornamentChance: 0.08, durationScale: 0.78 },
   house: { phraseShapes: ["syncopatedLoop", "staircase"], contours: ["wave", "climbFall"], restBias: 0.04, leapChance: 0.18, ornamentChance: 0.08, durationScale: 0.82 },
@@ -1099,7 +1110,8 @@ function normalizeCreativeSpotlightRotation(value) {
 }
 
 export function defaultChordPathForGenre(genre) {
-  if (["neoSoul", "hipHop", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
+  if (genre === "hipHop") return "hipHop";
+  if (["neoSoul", "loFiHipHop", "rnbSoul", "afrobeats"].includes(genre)) return "soul";
   if (["jazz", "ambient"].includes(genre)) return "jazz";
   if (["rap", "trap", "drill"].includes(genre)) return "trap";
   if (["house", "techno", "drumBass", "synthwave", "reggaeton"].includes(genre)) return "house";
@@ -1827,6 +1839,7 @@ function creativeReturnFeaturedTrack(section, config, occurrence) {
 }
 
 function featuredTrackForSection(section, plan, config, occurrence = 0) {
+  if (["hipHop", "rap"].includes(config.genre)) return "bass";
   if (section.name === "intro" || ["breakdown", "outro"].includes(section.name)) return "pad";
   if (section.name === "bridge") return "counterpoint";
   if (section.name === "solo") return occurrence % 2 ? "melody" : "counterpoint";
@@ -1903,6 +1916,7 @@ function answerTrackForForeground(foregroundTrack, section, config) {
   if (foregroundTrack === "melody") return "counterpoint";
   if (foregroundTrack === "counterpoint") return "melody";
   if (["bass", "drums"].includes(foregroundTrack)) {
+    if (["hipHop", "rap"].includes(config.genre)) return "counterpoint";
     return ["house", "techno", "drumBass", "trap", "drill"].includes(config.genre)
       ? "chords"
       : "melody";
@@ -2561,6 +2575,11 @@ function genreProgressionChoices(config, harmonicSection, familyChoices) {
     Array.from({ length: clamp(Math.round(finite(goal.weight, 1) * 2), 1, 4) }, () => goal.progression)
   )) : [];
   if (!genreChoices.length && !pathChoices.length && !weightedGoals.length) return familyChoices;
+  if (config.chordPath === "hipHop" && pathChoices.length) {
+    // This path is intentionally a loop, not a blend with broad pop-style
+    // progressions. Keep the beat centered on one tonal world.
+    return [...pathChoices, ...pathChoices, ...pathChoices, ...weightedGoals];
+  }
   // Weight genre and requested harmonic-path vocabulary ahead of the broader tonal fallback.
   return [...weightedGoals, ...genreChoices, ...genreChoices, ...pathChoices, ...pathChoices, ...familyChoices];
 }
@@ -3170,7 +3189,8 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   let degree = rng.pick([0, 2, 4]);
   const homeDegree = degree;
   let previousMotion = 0;
-  while (cursor < lengthBeats - 0.125 && events.length < 20) {
+  const motifEventCap = config.genre === "hipHop" ? 7 : 20;
+  while (cursor < lengthBeats - 0.125 && events.length < motifEventCap) {
     const cellIndex = events.length % durations.length;
     const duration = Math.min(durations[cellIndex] * melodyGrammar.durationScale, lengthBeats - cursor);
     const progress = cursor / Math.max(lengthBeats, 0.001);
