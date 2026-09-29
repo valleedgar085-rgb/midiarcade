@@ -4119,3 +4119,38 @@ body .app-shell, body main#top, body .tab-panel.is-active {
 #tab-arrange .shape-map-column:has(.shape-map-detail[open]) .section-strip-row .timeline-track-label { display: flex !important; }
 
 body .panel { background-color: #121a22 !important; color: #edf3f6 !important; }
+
+/* Shape focus: quiet instrument-colored edges, without animated glow. */
+#tab-arrange #threadTrackButton {
+  border-color: color-mix(in srgb,var(--thread-color,#58c9bb) 65%,transparent) !important;
+  background: linear-gradient(145deg,color-mix(in srgb,var(--thread-color,#58c9bb) 11%,#141c24),#141c24) !important;
+  box-shadow: inset 0 2px 0 color-mix(in srgb,var(--thread-color,#58c9bb) 60%,transparent),0 0 16px color-mix(in srgb,var(--thread-color,#58c9bb) 12%,transparent) !important;
+}
+#tab-arrange #threadTrackButton small { color: color-mix(in srgb,var(--thread-color,#58c9bb) 70%,white) !important; }
+#tab-arrange .editor-track-tabs { padding: 10px 4px 14px !important; }
+#tab-arrange .editor-track-tabs button[aria-selected="true"] {
+  border-color: var(--tab-color,#58c9bb) !important;
+  background: color-mix(in srgb,var(--tab-color,#58c9bb) 14%,#141c24) !important;
+  color: #f4f8fa !important;
+  box-shadow: inset 0 -3px 0 var(--tab-color,#58c9bb),0 0 12px color-mix(in srgb,var(--tab-color,#58c9bb) 18%,transparent) !important;
+}
+#tab-arrange .editor-track-tabs button[aria-selected="true"] i {
+  box-shadow: 0 0 7px color-mix(in srgb,var(--tab-color,#58c9bb) 45%,transparent);
+}
+#tab-arrange .editor-track-tabs button[aria-selected="false"] { color: #aab7c3 !important; }
+#tab-arrange .shape-map-column .timeline-row.is-focus-track .timeline-track-label {
+  color: #ecf4f7 !important;
+  border-left: 3px solid var(--track-color,#58c9bb) !important;
+  background: color-mix(in srgb,var(--track-color,#58c9bb) 10%,#111820) !important;
+}
+#tab-arrange .shape-map-column .timeline-row.is-focus-track .timeline-clip.active {
+  border-color: var(--track-color,#58c9bb) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb,var(--track-color,#58c9bb) 35%,transparent),0 0 10px color-mix(in srgb,var(--track-color,#58c9bb) 12%,transparent) !important;
+}
+#tab-arrange #sectionEditor .piano-roll-shell {
+  border-color: color-mix(in srgb,var(--editor-color,#58c9bb) 50%,#263340) !important;
+  box-shadow: 0 0 18px color-mix(in srgb,var(--editor-color,#58c9bb) 8%,transparent) !important;
+}
+#tab-arrange :is(.editor-track-tab,#threadTrackButton,.timeline-clip):focus-visible {
+  outline: 2px solid #e2f4f0 !important; outline-offset: 3px;
+}
