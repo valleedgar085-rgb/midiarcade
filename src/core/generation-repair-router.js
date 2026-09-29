@@ -48,6 +48,7 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   registerHealthRefinement: ["register"],
   fusionPerformanceRefinement: ["ensemble", "groove"],
   melodyContinuityRefinement: ["phrase", "ensemble", "harmony"],
+  melodyPhraseRefinement: ["phrase", "harmony", "ensemble"],
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
   genreIdentityRefinement: ["groove", "ensemble"],
