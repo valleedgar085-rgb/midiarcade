@@ -181,7 +181,7 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   updateCreatePath(createPanel);
 
   const nowPlayingLabel = createPanel.querySelector(".song-showcase .showcase-copy>.eyebrow");
-  if (nowPlayingLabel) nowPlayingLabel.innerHTML = '<span></span> CURRENT SONG';
+  if (nowPlayingLabel) nowPlayingLabel.innerHTML = '<span></span> CURRENT PROJECT';
 
   const tasteLabel = createPanel.querySelector(".taste-actions > span");
   if (tasteLabel) tasteLabel.textContent = "Teach Producer Brain from this song";
@@ -221,6 +221,39 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   if (advancedText) advancedText.textContent = "Show advanced";
 
   upgradeWorkflowCopy(createPanel);
+}
+
+
+function mountFigmaCreateChrome(rootDocument, createPanel) {
+  if (typeof rootDocument?.createElement !== "function") return;
+
+  const brandSubtitle = rootDocument.querySelector?.(".brand small");
+  if (brandSubtitle) brandSubtitle.textContent = "Edgar's studio";
+
+  const showcaseActions = createPanel.querySelector(".showcase-actions");
+  if (showcaseActions && !createPanel.querySelector("#createContinueButton")) {
+    const button = rootDocument.createElement("button");
+    button.className = "create-continue-button";
+    button.id = "createContinueButton";
+    button.type = "button";
+    button.innerHTML = "<span>Continue creating</span><b aria-hidden=\"true\">→</b>";
+    button.addEventListener("click", () => {
+      createPanel.querySelector("#preGenSection")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    });
+    showcaseActions.insertAdjacentElement("afterend", button);
+  }
+
+  const compact = createPanel.querySelector("#compactCreatePlayer");
+  if (compact && !createPanel.querySelector("#compactCreatePlay")) {
+    const play = rootDocument.createElement("button");
+    play.className = "compact-create-play";
+    play.id = "compactCreatePlay";
+    play.type = "button";
+    play.setAttribute("aria-label", "Play current song");
+    play.innerHTML = '<span aria-hidden="true"></span>';
+    play.addEventListener("click", () => createPanel.querySelector("#showcasePlayButton")?.click?.());
+    compact.append(play);
+  }
 }
 
 function setupCreateScrollState(rootDocument, createPanel) {
@@ -282,6 +315,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   consolidateAdvancedDirection(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);
+  mountFigmaCreateChrome(rootDocument, createPanel);
   setupCreateScrollState(rootDocument, createPanel);
   return true;
 }
