@@ -263,13 +263,20 @@ export function createSpecialistDirectorPlan(song) {
     throw new TypeError("createSpecialistDirectorPlan requires a generated source song");
   }
   const gauntletSong = createProfessionalGenerationGauntletSong(song);
+  const sourceGrooveDNA = song?.grooveConductor?.grooveDNA;
+  const usesPopReferenceCharacter = sourceGrooveDNA?.grammarId === "pop-pulse-lift"
+    && sourceGrooveDNA?.characterId
+    && sourceGrooveDNA.characterId !== sourceGrooveDNA.grammarId;
   const grooveDNA = createGrooveDNA({
     seed: song?.seed,
     genre: song?.meta?.genre ?? gauntletSong?.intent?.genre,
+    tempo: song?.meta?.tempo,
+    popReferenceEnabled: Boolean(usesPopReferenceCharacter),
     bars: song?.meta?.bars,
     beatsPerBar: song?.meta?.beatsPerBar,
-    complexity: song?.meta?.complexity ?? 0.58,
-    variation: song?.meta?.variation ?? 0.48,
+    complexity: song?.settings?.complexity ?? song?.meta?.complexity ?? 0.58,
+    variation: song?.settings?.variation ?? song?.meta?.variation ?? 0.48,
+    tripletAmount: song?.settings?.tripletAmount ?? 0,
   }, { structure: song?.structure ?? song?.sections ?? [] });
   const specialists = SPECIALIST_MUSICIAN_ORDER.map((id) => {
     const definition = specialistMusicianDefinition(id);

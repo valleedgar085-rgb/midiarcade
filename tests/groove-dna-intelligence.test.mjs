@@ -119,6 +119,7 @@ test("Pop reference characters switch between bass-forward and rhythmic-lift poc
   const common = {
     seed: "pop-reference-characters",
     genre: "pop",
+    popReferenceEnabled: true,
     bars: 4,
     beatsPerBar: 4,
     complexity: 0.68,
@@ -139,6 +140,26 @@ test("Pop reference characters switch between bass-forward and rhythmic-lift poc
   assert.equal(bassForward.relationships.bass.mode, "bass-forward-lock-and-answer");
   assert.equal(rhythmicLift.relationships.bass.mode, "syncopated-pop-reply");
   assert.ok(rhythmicLift.grammar.percussion.base.includes(11));
+});
+
+test("Pop reference characters require explicit authority", () => {
+  const legacy = createGrooveDNA({
+    seed: "pop-reference-explicit-authority",
+    genre: "pop",
+    tempo: 85,
+    bars: 4,
+  }, { structure: STRUCTURE });
+  const reference = createGrooveDNA({
+    seed: "pop-reference-explicit-authority",
+    genre: "pop",
+    tempo: 85,
+    bars: 4,
+    popReferenceEnabled: true,
+  }, { structure: STRUCTURE });
+
+  assert.equal(legacy.characterId, legacy.grammarId);
+  assert.equal(reference.characterId, "bass-forward-half-time");
+  assert.notDeepEqual(legacy.grammar.kick.base, reference.grammar.kick.base);
 });
 
 test("generated Pop publishes its reference-informed pocket to the whole ensemble", () => {
@@ -210,4 +231,26 @@ test("specialist Director publishes the same Groove DNA to the whole band", () =
     assert.equal(specialist.context.grooveDNA.id, "groove-dna-v1");
     assert.equal(specialist.context.grooveDNA.grammarId, plan.grooveDNA.grammarId);
   }
+});
+
+test("specialist Director preserves the source Pop reference character", () => {
+  const song = engine.generateNew({
+    seed: "groove-specialist-pop-reference",
+    genre: "pop",
+    tempo: 85,
+    bars: 8,
+    complexity: 0.71,
+    variation: 0.64,
+    candidateCount: 1,
+    professionalUpgrade: true,
+  });
+  const plan = createSpecialistDirectorPlan(song);
+
+  assert.equal(song.grooveConductor.grooveDNA.characterId, "bass-forward-half-time");
+  assert.equal(plan.grooveDNA.characterId, song.grooveConductor.grooveDNA.characterId);
+  assert.equal(plan.grooveDNA.relationships.bass.mode, "bass-forward-lock-and-answer");
+  assert.deepEqual(
+    plan.grooveDNA.bars[0].relationships.bass.pulses,
+    song.grooveConductor.bars[0].bassPulses,
+  );
 });
