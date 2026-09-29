@@ -3715,3 +3715,303 @@ body:has(#tab-arrange.is-active) .tab-btn {
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* MOBILE SHELL CONSISTENCY + FINAL CREATE POLISH */
+@media (max-width: 680px) {
+  body:has(#tab-create.is-active) .topbar,
+  body:has(#tab-arrange.is-active) .topbar,
+  body:has(#tab-mix.is-active) .topbar,
+  body:has(#tab-finish.is-active) .topbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 120 !important;
+    width: 100% !important;
+    min-height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    height: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    padding: env(safe-area-inset-top, 0px) 14px 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.065) !important;
+    background: rgba(8,9,13,.985) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  body:has(#tab-create.is-active) .brand,
+  body:has(#tab-arrange.is-active) .brand,
+  body:has(#tab-mix.is-active) .brand,
+  body:has(#tab-finish.is-active) .brand {
+    gap: 9px !important;
+    min-width: 0 !important;
+  }
+
+  body:has(#tab-create.is-active) .brand-mark,
+  body:has(#tab-arrange.is-active) .brand-mark,
+  body:has(#tab-mix.is-active) .brand-mark,
+  body:has(#tab-finish.is-active) .brand-mark {
+    width: 24px !important;
+    height: 24px !important;
+    display: grid !important;
+    grid-template-columns: repeat(4,1fr) !important;
+    gap: 2px !important;
+  }
+
+  body:has(#tab-create.is-active) .brand-mark i,
+  body:has(#tab-arrange.is-active) .brand-mark i,
+  body:has(#tab-mix.is-active) .brand-mark i,
+  body:has(#tab-finish.is-active) .brand-mark i {
+    display: block !important;
+    background: #ff3158 !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+  }
+
+  body:has(#tab-create.is-active) .brand strong,
+  body:has(#tab-arrange.is-active) .brand strong,
+  body:has(#tab-mix.is-active) .brand strong,
+  body:has(#tab-finish.is-active) .brand strong {
+    display: block !important;
+    color: #f8f9fb !important;
+    background: none !important;
+    -webkit-text-fill-color: initial !important;
+    font-size: .96rem !important;
+    font-weight: 830 !important;
+    line-height: 1 !important;
+    letter-spacing: -.025em !important;
+    white-space: nowrap !important;
+  }
+
+  body:has(#tab-create.is-active) .brand small,
+  body:has(#tab-arrange.is-active) .brand small,
+  body:has(#tab-mix.is-active) .brand small,
+  body:has(#tab-finish.is-active) .brand small {
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) :is(.session-status,#undoButton,#redoButton,#helpButton,.version-chip),
+  body:has(#tab-arrange.is-active) :is(.session-status,#undoButton,#redoButton,#helpButton,.version-chip),
+  body:has(#tab-mix.is-active) :is(.session-status,#undoButton,#redoButton,#helpButton,.version-chip),
+  body:has(#tab-finish.is-active) :is(.session-status,#undoButton,#redoButton,#helpButton,.version-chip) {
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) .topbar-actions,
+  body:has(#tab-arrange.is-active) .topbar-actions,
+  body:has(#tab-mix.is-active) .topbar-actions,
+  body:has(#tab-finish.is-active) .topbar-actions {
+    margin-left: auto !important;
+    gap: 0 !important;
+  }
+
+  body:has(#tab-create.is-active) #menuButton,
+  body:has(#tab-arrange.is-active) #menuButton,
+  body:has(#tab-mix.is-active) #menuButton,
+  body:has(#tab-finish.is-active) #menuButton {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    display: grid !important;
+    place-items: center !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 10px !important;
+    background: transparent !important;
+    color: #d5d9e0 !important;
+  }
+
+  body:has(#tab-create.is-active) #menuButton svg,
+  body:has(#tab-arrange.is-active) #menuButton svg,
+  body:has(#tab-mix.is-active) #menuButton svg,
+  body:has(#tab-finish.is-active) #menuButton svg {
+    display: block !important;
+    width: 20px !important;
+    height: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    stroke: currentColor !important;
+  }
+
+  body:has(#tab-create.is-active) #menuButton b,
+  body:has(#tab-arrange.is-active) #menuButton b,
+  body:has(#tab-mix.is-active) #menuButton b,
+  body:has(#tab-finish.is-active) #menuButton b {
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) #menuButton::before,
+  body:has(#tab-arrange.is-active) #menuButton::before,
+  body:has(#tab-mix.is-active) #menuButton::before,
+  body:has(#tab-finish.is-active) #menuButton::before,
+  body:has(#tab-create.is-active) #menuButton::after,
+  body:has(#tab-arrange.is-active) #menuButton::after,
+  body:has(#tab-mix.is-active) #menuButton::after,
+  body:has(#tab-finish.is-active) #menuButton::after {
+    content: none !important;
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell,
+  body:has(#tab-arrange.is-active) #tabNavShell,
+  body:has(#tab-mix.is-active) #tabNavShell,
+  body:has(#tab-finish.is-active) #tabNavShell {
+    display: block !important;
+    position: sticky !important;
+    top: calc(56px + env(safe-area-inset-top, 0px)) !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    z-index: 115 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 48px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-bottom: 1px solid rgba(255,255,255,.065) !important;
+    border-radius: 0 !important;
+    background: rgba(14,17,23,.985) !important;
+    box-shadow: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell .tab-nav,
+  body:has(#tab-arrange.is-active) #tabNavShell .tab-nav,
+  body:has(#tab-mix.is-active) #tabNavShell .tab-nav,
+  body:has(#tab-finish.is-active) #tabNavShell .tab-nav {
+    position: static !important;
+    width: 100% !important;
+    height: 48px !important;
+    display: grid !important;
+    grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell .tab-btn,
+  body:has(#tab-arrange.is-active) #tabNavShell .tab-btn,
+  body:has(#tab-mix.is-active) #tabNavShell .tab-btn,
+  body:has(#tab-finish.is-active) #tabNavShell .tab-btn {
+    position: relative !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    padding: 0 8px !important;
+    border: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    color: #7f8793 !important;
+    font-size: .69rem !important;
+    font-weight: 690 !important;
+    letter-spacing: .015em !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell .tab-btn svg,
+  body:has(#tab-arrange.is-active) #tabNavShell .tab-btn svg,
+  body:has(#tab-mix.is-active) #tabNavShell .tab-btn svg,
+  body:has(#tab-finish.is-active) #tabNavShell .tab-btn svg {
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell .tab-btn.is-active,
+  body:has(#tab-arrange.is-active) #tabNavShell .tab-btn.is-active,
+  body:has(#tab-mix.is-active) #tabNavShell .tab-btn.is-active,
+  body:has(#tab-finish.is-active) #tabNavShell .tab-btn.is-active {
+    color: #fff !important;
+    border-bottom-color: #ff3158 !important;
+  }
+
+  body:has(#tab-create.is-active) #tabNavShell .tab-btn.is-active::after,
+  body:has(#tab-arrange.is-active) #tabNavShell .tab-btn.is-active::after,
+  body:has(#tab-mix.is-active) #tabNavShell .tab-btn.is-active::after,
+  body:has(#tab-finish.is-active) #tabNavShell .tab-btn.is-active::after {
+    display: none !important;
+    content: none !important;
+  }
+
+  body:has(#tab-create.is-active) #navDockToggle,
+  body:has(#tab-arrange.is-active) #navDockToggle,
+  body:has(#tab-mix.is-active) #navDockToggle,
+  body:has(#tab-finish.is-active) #navDockToggle,
+  body:has(.tab-panel.is-active) .mobile-dock {
+    display: none !important;
+  }
+
+  body:has(#tab-create.is-active) main#top,
+  body:has(#tab-arrange.is-active) main#top {
+    padding-top: 10px !important;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom,0px)) !important;
+  }
+
+  #tab-create.has-compact-player #compactCreatePlayer {
+    top: calc(112px + env(safe-area-inset-top,0px)) !important;
+  }
+
+  #tab-arrange .section-editor.is-open {
+    inset: calc(104px + env(safe-area-inset-top,0px)) 0 env(safe-area-inset-bottom,0px) !important;
+  }
+}
+
+/* Final Create polish: stronger project focus, calmer controls, cleaner spacing. */
+#tab-create #heroPanel.song-showcase {
+  padding-top: 12px !important;
+}
+
+#tab-create .showcase-art {
+  margin-bottom: 22px !important;
+}
+
+#tab-create .showcase-copy > .eyebrow {
+  margin-bottom: 8px !important;
+  color: #8e96a2 !important;
+  font-size: .62rem !important;
+  letter-spacing: .13em !important;
+}
+
+#tab-create .song-facts {
+  margin-top: 16px !important;
+  padding-bottom: 15px !important;
+  border-bottom: 1px solid rgba(255,255,255,.065) !important;
+}
+
+#tab-create .showcase-actions {
+  margin-top: 22px !important;
+  margin-bottom: 14px !important;
+}
+
+#tab-create .create-continue-button {
+  min-height: 52px !important;
+  justify-content: flex-start !important;
+  padding: 0 17px !important;
+  border-color: rgba(255,255,255,.11) !important;
+  background: linear-gradient(180deg,#151922,#12161d) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+#tab-create .create-continue-button b {
+  margin-left: auto !important;
+  color: #ff5a76 !important;
+  font-size: 1.08rem !important;
+}
+
+#preGenSection.song-creator-panel {
+  margin-top: 10px !important;
+  border-color: rgba(255,255,255,.085) !important;
+}
+
+#preGenSection .creator-heading {
+  padding-bottom: 16px !important;
+}
+
+#preGenSection .genre-direction > .select-control,
+#preGenSection .create-live-controls > label {
+  background: linear-gradient(180deg,#171b24,#13171f) !important;
+}
+
+#preGenSection .generation-new {
+  box-shadow:
+    0 18px 40px rgba(255,23,71,.30),
+    0 6px 14px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.20) !important;
+}
