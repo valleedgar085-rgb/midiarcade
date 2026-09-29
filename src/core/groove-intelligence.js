@@ -383,6 +383,45 @@ export const GENRE_GROOVE_GRAMMARS = Object.freeze({
   }),
 });
 
+const POP_REFERENCE_CHARACTERS = Object.freeze({
+  rhythmicLift: Object.freeze({
+    id: "rhythmic-lift",
+    base: Object.freeze({
+      kick: Object.freeze([0, 3, 6, 10, 14]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([3, 7, 11, 15]),
+    }),
+    probability: Object.freeze({ kick: 0.92, snare: 1, hat: 0.94, percussion: 0.62 }),
+    density: Object.freeze({ kick: 1.02, snare: 1, hat: 0.94, percussion: 0.88 }),
+    relationships: Object.freeze({
+      bass: Object.freeze({ source: "kick", mode: "syncopated-pop-reply", lock: 0.68, answerDelayBeats: 0.25, syncopation: 0.64 }),
+      chords: Object.freeze({ source: "snare", mode: "vocal-space-comp", offsetBeats: -0.25, syncopation: 0.44 }),
+      lead: Object.freeze({ source: "snare", mode: "hook-around-vocal-space", offsetBeats: 0.25, syncopation: 0.52 }),
+    }),
+    humanization: Object.freeze({ timing: 0.014, velocity: 0.1, swing: 0.1, laidBackBeats: 0 }),
+    polyrhythm: Object.freeze({ percussionSteps: 16, pulses: 4 }),
+  }),
+  bassForward: Object.freeze({
+    id: "bass-forward-half-time",
+    base: Object.freeze({
+      kick: Object.freeze([0, 6, 10, 14]),
+      snare: Object.freeze([4, 12]),
+      hat: Object.freeze([0, 2, 4, 6, 8, 10, 12, 14]),
+      percussion: Object.freeze([7, 15]),
+    }),
+    probability: Object.freeze({ kick: 0.94, snare: 1, hat: 0.9, percussion: 0.42 }),
+    density: Object.freeze({ kick: 1.06, snare: 1, hat: 0.82, percussion: 0.56 }),
+    relationships: Object.freeze({
+      bass: Object.freeze({ source: "kick", mode: "bass-forward-lock-and-answer", lock: 0.78, answerDelayBeats: 0.25, syncopation: 0.58 }),
+      chords: Object.freeze({ source: "snare", mode: "vocal-space-comp", offsetBeats: -0.25, syncopation: 0.38 }),
+      lead: Object.freeze({ source: "snare", mode: "hook-around-vocal-space", offsetBeats: 0.25, syncopation: 0.46 }),
+    }),
+    humanization: Object.freeze({ timing: 0.018, velocity: 0.11, swing: 0.12, laidBackBeats: 0 }),
+    polyrhythm: Object.freeze({ percussionSteps: 16, pulses: 3 }),
+  }),
+});
+
 const GROOVE_CELL_POLICIES = Object.freeze({
   hipHop: Object.freeze({
     protectedSpaces: Object.freeze([5, 13]),
@@ -494,7 +533,20 @@ const GROOVE_CELL_POLICIES = Object.freeze({
   }),
 });
 
-function cellPolicyForGenre(genre) {
+const POP_REFERENCE_CELL_POLICY = Object.freeze({
+  protectedSpaces: Object.freeze([1, 9]),
+  lanes: Object.freeze({
+    kick: Object.freeze([0, 2, 3, 6, 8, 10, 11, 14]),
+    snare: Object.freeze([4, 5, 12, 13]),
+    hat: Object.freeze([0, 2, 3, 4, 6, 7, 8, 10, 11, 12, 14, 15]),
+    percussion: Object.freeze([3, 7, 11, 15]),
+  }),
+});
+
+function cellPolicyForGenre(genre, input = {}) {
+  if (genreId(genre) === "pop" && input?.popReferenceEnabled !== false) {
+    return POP_REFERENCE_CELL_POLICY;
+  }
   return GROOVE_CELL_POLICIES[genre] ?? GROOVE_CELL_POLICIES.general;
 }
 
@@ -510,8 +562,27 @@ function sanitizeLaneSteps(steps, allowedSteps, requiredSteps, protectedSteps) {
   ]);
 }
 
-function grammarForGenre(genre) {
-  return GENRE_GROOVE_GRAMMARS[genreId(genre)] ?? GENRE_GROOVE_GRAMMARS.general;
+export function popReferenceCharacterForTempo(tempo = 104) {
+  return finite(tempo, 104) <= 96
+    ? POP_REFERENCE_CHARACTERS.bassForward
+    : POP_REFERENCE_CHARACTERS.rhythmicLift;
+}
+
+function grammarForGenre(genre, input = {}) {
+  const id = genreId(genre);
+  const grammar = GENRE_GROOVE_GRAMMARS[id] ?? GENRE_GROOVE_GRAMMARS.general;
+  if (id !== "pop" || input?.popReferenceEnabled === false) return grammar;
+  const character = popReferenceCharacterForTempo(input?.tempo);
+  return Object.freeze({
+    ...grammar,
+    characterId: character.id,
+    base: character.base,
+    probability: character.probability,
+    density: character.density,
+    relationships: character.relationships,
+    humanization: character.humanization,
+    polyrhythm: character.polyrhythm,
+  });
 }
 
 function applyProbability(steps, probability, lockedSteps, seed) {
@@ -724,8 +795,8 @@ export function createGrooveDNA(input = {}, {
 } = {}) {
   const seed = String(input?.seed ?? "midi-arcade");
   const genre = genreId(input?.genre);
-  const grammar = grammarForGenre(genre);
-  const cellPolicy = cellPolicyForGenre(genre);
+  const grammar = grammarForGenre(genre, input);
+  const cellPolicy = cellPolicyForGenre(genre, input);
   const bars = Math.max(1, Math.round(finite(input?.bars, 8)));
   const beatsPerBar = Math.max(1, finite(input?.beatsPerBar, Array.isArray(input?.timeSignature) ? input.timeSignature[0] : 4));
   const gridSteps = Math.max(4, Math.round(beatsPerBar * 4));
@@ -871,6 +942,7 @@ export function createGrooveDNA(input = {}, {
     seed,
     genre,
     grammarId: grammar.id,
+    characterId: grammar.characterId ?? grammar.id,
     philosophy: grammar.philosophy,
     barCount: bars,
     beatsPerBar,

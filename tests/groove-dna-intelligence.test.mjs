@@ -5,6 +5,7 @@ import * as engine from "../src/music-engine.js";
 import {
   createGrooveDNA,
   grooveDNAConductorLanes,
+  popReferenceCharacterForTempo,
   validateGrooveDNA,
 } from "../src/core/groove-intelligence.js";
 import { createSpecialistDirectorPlan } from "../src/core/specialist-musicians.js";
@@ -112,6 +113,58 @@ test("Groove DNA publishes inter-instrument relationships for one shared pocket"
   assert.ok(lane.bassPulses.length > 0);
   assert.ok(lane.chordPulses.length > 0);
   assert.ok(lane.leadPulses.length > 0);
+});
+
+test("Pop reference characters switch between bass-forward and rhythmic-lift pockets by tempo", () => {
+  const common = {
+    seed: "pop-reference-characters",
+    genre: "pop",
+    bars: 4,
+    beatsPerBar: 4,
+    complexity: 0.68,
+    variation: 0.52,
+  };
+  const bassForward = createGrooveDNA({ ...common, tempo: 85 }, { structure: STRUCTURE });
+  const rhythmicLift = createGrooveDNA({ ...common, tempo: 109 }, { structure: STRUCTURE });
+
+  assert.equal(popReferenceCharacterForTempo(85).id, "bass-forward-half-time");
+  assert.equal(popReferenceCharacterForTempo(109).id, "rhythmic-lift");
+  assert.equal(bassForward.grammarId, "pop-pulse-lift");
+  assert.equal(rhythmicLift.grammarId, "pop-pulse-lift");
+  assert.equal(bassForward.characterId, "bass-forward-half-time");
+  assert.equal(rhythmicLift.characterId, "rhythmic-lift");
+  assert.deepEqual(bassForward.grammar.snare.required, [4, 12]);
+  assert.deepEqual(rhythmicLift.grammar.snare.required, [4, 12]);
+  assert.notDeepEqual(bassForward.grammar.kick.base, rhythmicLift.grammar.kick.base);
+  assert.equal(bassForward.relationships.bass.mode, "bass-forward-lock-and-answer");
+  assert.equal(rhythmicLift.relationships.bass.mode, "syncopated-pop-reply");
+  assert.ok(rhythmicLift.grammar.percussion.base.includes(11));
+});
+
+test("generated Pop publishes its reference-informed pocket to the whole ensemble", () => {
+  const bassForward = engine.generateNew({
+    seed: "pop-reference-bass-forward",
+    genre: "pop",
+    tempo: 85,
+    bars: 8,
+    candidateCount: 1,
+    professionalUpgrade: true,
+  });
+  const rhythmicLift = engine.generateNew({
+    seed: "pop-reference-rhythmic-lift",
+    genre: "pop",
+    tempo: 109,
+    bars: 8,
+    candidateCount: 1,
+    professionalUpgrade: true,
+  });
+
+  assert.equal(bassForward.grooveConductor.grooveDNA.characterId, "bass-forward-half-time");
+  assert.equal(rhythmicLift.grooveConductor.grooveDNA.characterId, "rhythmic-lift");
+  assert.ok(bassForward.grooveConductor.bars.every((bar) => bar.grooveDNA.characterId === "bass-forward-half-time"));
+  assert.ok(rhythmicLift.grooveConductor.bars.every((bar) => bar.grooveDNA.characterId === "rhythmic-lift"));
+  assert.equal(engine.evaluateSongCandidate(bassForward).diagnostics.syncopationTarget, 0.58);
+  assert.equal(engine.evaluateSongCandidate(rhythmicLift).diagnostics.syncopationTarget, 0.62);
 });
 
 test("music engine exposes Groove DNA through the shared conductor and drum lanes", () => {
