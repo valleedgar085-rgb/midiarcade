@@ -49,6 +49,7 @@ test("dense repeated filler does not receive a professional melody score", () =>
   }));
   const report = evaluateMelodyPhraseIntelligence(fixture(notes));
   assert.equal(report.passed, false);
+  assert.ok(report.weakestSection.metrics.motifIdentity < 0.5);
   assert.ok(report.weakestSection.metrics.contourMovement < 0.5);
   assert.ok(report.weakestSection.metrics.expressiveShape < 0.5);
 });
