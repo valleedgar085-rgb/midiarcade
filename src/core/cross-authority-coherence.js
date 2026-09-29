@@ -77,8 +77,14 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
     .filter((entry) => entry.sections)
     .map((entry) => ({ id: entry.id, signature: signature(entry.sections) }));
 
-  const specialistsShareGrooveDNA = !grooveDNASignature
-    || specialistGrooveSignatures.every((entry) => entry.signature === grooveDNASignature);
+  const directorGrooveDNASignature = specialistPlan?.grooveDNA
+    ? signature(specialistPlan.grooveDNA)
+    : grooveDNASignature;
+  const specialistsShareGrooveDNA = !directorGrooveDNASignature
+    || specialistGrooveSignatures.every((entry) => entry.signature === directorGrooveDNASignature);
+  const sourceMatchesDirectorGrooveDNA = !grooveDNASignature
+    || !directorGrooveDNASignature
+    || grooveDNASignature === directorGrooveDNASignature;
   if (!specialistsShareGrooveDNA) issues.push("specialist-groove-dna-drift");
 
   const specialistsShareHarmony = specialistHarmonySignatures.every(
@@ -153,6 +159,10 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
       harmony: harmonySignature,
       grooveTimeline: grooveTimelineSignature,
       grooveDNA: grooveDNASignature,
+      directorGrooveDNA: directorGrooveDNASignature,
+    }),
+    observations: Object.freeze({
+      sourceMatchesDirectorGrooveDNA,
     }),
     checks,
     grooveLock,
