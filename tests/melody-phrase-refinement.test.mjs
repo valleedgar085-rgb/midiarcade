@@ -105,6 +105,32 @@ test("melody phrase refinement accepts only a release-safe phrase improvement", 
   assert.deepEqual(result.song.tracks.find((track) => track.id === "bass"), song.tracks.find((track) => track.id === "bass"));
 });
 
+
+test("already-strong melody skips candidate audition", () => {
+  const song = sourceSong();
+  song.tracks.find((track) => track.id === "melody").notes = [
+    { start: 0.5, pitch: 64, duration: 0.5, velocity: 82 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 91 },
+    { start: 2.5, pitch: 69, duration: 0.5, velocity: 86 },
+    { start: 3.5, pitch: 67, duration: 0.75, velocity: 96 },
+    { start: 4.5, pitch: 69, duration: 0.5, velocity: 84 },
+    { start: 5.5, pitch: 72, duration: 0.25, velocity: 93 },
+    { start: 6.5, pitch: 74, duration: 0.5, velocity: 88 },
+    { start: 7.5, pitch: 72, duration: 0.75, velocity: 99 },
+  ];
+  const report = evaluateMelodyPhraseIntelligence(song);
+  assert.ok(report.score >= 78, JSON.stringify(report));
+  const result = applyMelodyPhraseRefinement(
+    song,
+    { melodyPhraseRefinement: true },
+    () => { throw new Error("strong melody should not invoke full candidate critic"); },
+    () => { throw new Error("strong melody should not invoke release gate"); },
+  );
+  assert.equal(result.song, song);
+  assert.equal(result.diagnostics.reason, "already-strong");
+  assert.equal(result.diagnostics.beforePhraseScore, report.score);
+});
+
 test("melody phrase refinement fails closed when release safety rejects the candidate", () => {
   const song = sourceSong();
   const result = applyMelodyPhraseRefinement(
