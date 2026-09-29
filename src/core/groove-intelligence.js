@@ -543,13 +543,6 @@ const POP_REFERENCE_CELL_POLICY = Object.freeze({
   }),
 });
 
-function cellPolicyForGenre(genre, input = {}) {
-  if (genreId(genre) === "pop" && input?.popReferenceEnabled !== false) {
-    return POP_REFERENCE_CELL_POLICY;
-  }
-  return GROOVE_CELL_POLICIES[genre] ?? GROOVE_CELL_POLICIES.general;
-}
-
 function sanitizeLaneSteps(steps, allowedSteps, requiredSteps, protectedSteps) {
   const allowed = new Set(uniqueSorted([...allowedSteps, ...requiredSteps]).map((step) => round(step, 4)));
   const protectedSet = new Set(uniqueSorted(protectedSteps).map((step) => round(step, 4)));
@@ -568,13 +561,9 @@ export function popReferenceCharacterForTempo(tempo = 104) {
     : POP_REFERENCE_CHARACTERS.rhythmicLift;
 }
 
-function grammarForGenre(genre, input = {}) {
-  const id = genreId(genre);
-  const grammar = GENRE_GROOVE_GRAMMARS[id] ?? GENRE_GROOVE_GRAMMARS.general;
-  if (id !== "pop" || input?.popReferenceEnabled === false) return grammar;
-  const character = popReferenceCharacterForTempo(input?.tempo);
+function popReferenceGrammar(character) {
   return Object.freeze({
-    ...grammar,
+    ...GENRE_GROOVE_GRAMMARS.pop,
     characterId: character.id,
     base: character.base,
     probability: character.probability,
@@ -583,6 +572,25 @@ function grammarForGenre(genre, input = {}) {
     humanization: character.humanization,
     polyrhythm: character.polyrhythm,
   });
+}
+
+const POP_REFERENCE_GRAMMARS = Object.freeze({
+  [POP_REFERENCE_CHARACTERS.bassForward.id]: popReferenceGrammar(POP_REFERENCE_CHARACTERS.bassForward),
+  [POP_REFERENCE_CHARACTERS.rhythmicLift.id]: popReferenceGrammar(POP_REFERENCE_CHARACTERS.rhythmicLift),
+});
+
+function grooveProfileForInput(genre, input = {}) {
+  const id = genreId(genre);
+  const grammar = GENRE_GROOVE_GRAMMARS[id] ?? GENRE_GROOVE_GRAMMARS.general;
+  const cellPolicy = GROOVE_CELL_POLICIES[id] ?? GROOVE_CELL_POLICIES.general;
+  if (id !== "pop" || input?.popReferenceEnabled !== true) {
+    return { grammar, cellPolicy };
+  }
+  const character = popReferenceCharacterForTempo(input?.tempo);
+  return {
+    grammar: POP_REFERENCE_GRAMMARS[character.id],
+    cellPolicy: POP_REFERENCE_CELL_POLICY,
+  };
 }
 
 function applyProbability(steps, probability, lockedSteps, seed) {
@@ -795,8 +803,7 @@ export function createGrooveDNA(input = {}, {
 } = {}) {
   const seed = String(input?.seed ?? "midi-arcade");
   const genre = genreId(input?.genre);
-  const grammar = grammarForGenre(genre, input);
-  const cellPolicy = cellPolicyForGenre(genre, input);
+  const { grammar, cellPolicy } = grooveProfileForInput(genre, input);
   const bars = Math.max(1, Math.round(finite(input?.bars, 8)));
   const beatsPerBar = Math.max(1, finite(input?.beatsPerBar, Array.isArray(input?.timeSignature) ? input.timeSignature[0] : 4));
   const gridSteps = Math.max(4, Math.round(beatsPerBar * 4));
