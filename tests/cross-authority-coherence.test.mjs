@@ -91,3 +91,18 @@ test("cross-authority gate rejects Groove DNA bars pointing at unknown sections"
   assert.equal(report.passed, false);
   assert.ok(report.issues.includes("groove-section-drift"));
 });
+
+
+test("relationship diagnostics remain read-only when ensemble contracts are unavailable", () => {
+  const source = song();
+  const before = structuredClone(source);
+  const report = evaluateCrossAuthorityCoherence(source);
+
+  assert.deepEqual(source, before);
+  assert.equal(report.ensemble.reason, "missing-ensemble-contracts");
+  assert.equal(report.checks.rhythmFoundationCoherent, true);
+  assert.equal(report.checks.harmonicSupportCoherent, true);
+  assert.equal(report.checks.leadDialogueCoherent, true);
+  assert.equal(report.checks.cadenceTeamCoherent, true);
+  assert.equal(report.checks.sectionEvolutionCoherent, true);
+});
