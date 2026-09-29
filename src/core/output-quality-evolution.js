@@ -152,6 +152,9 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     melodyContinuityRefinement: typeof source.melodyContinuityRefinement === "boolean"
       ? source.melodyContinuityRefinement
       : freshGeneration,
+    melodyPhraseRefinement: typeof source.melodyPhraseRefinement === "boolean"
+      ? source.melodyPhraseRefinement
+      : freshGeneration,
     bassContinuityRefinement: typeof source.bassContinuityRefinement === "boolean"
       ? source.bassContinuityRefinement
       : freshGeneration,
