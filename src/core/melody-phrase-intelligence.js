@@ -39,13 +39,18 @@ function contour(notes) {
   return notes.slice(1).map((note, index) => Math.sign(finite(note.pitch) - finite(notes[index].pitch)));
 }
 function contourIdentity(notes) {
-  if (notes.length < 4) return 0.6;
+  const directions = contour(notes);
+  const movementRatio = directions.length
+    ? directions.filter((direction) => direction !== 0).length / directions.length
+    : 0;
+  if (notes.length < 4) return clamp(0.45 + movementRatio * 0.2);
   const windows = [];
   for (let i = 0; i <= notes.length - 4; i += 1) windows.push(contour(notes.slice(i, i + 4)).join(","));
   const counts = new Map();
   for (const item of windows) counts.set(item, (counts.get(item) ?? 0) + 1);
   const repeated = [...counts.values()].filter((count) => count > 1).reduce((sum, count) => sum + count, 0);
-  return clamp(0.45 + repeated / Math.max(1, windows.length) * 0.55);
+  const repeatedRatio = repeated / Math.max(1, windows.length);
+  return clamp(0.25 + repeatedRatio * 0.45 + movementRatio * 0.3 - (1 - movementRatio) * 0.25);
 }
 function contourMovement(notes) {
   if (notes.length < 2) return 0.55;
