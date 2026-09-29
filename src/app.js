@@ -803,6 +803,7 @@ function autoTrackValue(id, key, seed, fallback) {
 
 function chordPathChoicesForGenre(genreId = selectedGenreId()) {
   const ordered = [defaultChordPathForGenre(genreId)];
+  if (genreId === "hipHop") return [...new Set([...ordered, "trap", "soul"])];
   return [...new Set([...ordered, "soul", "pop", "jazz", "trap", "house"])];
 }
 

@@ -1878,6 +1878,7 @@ test("tripletAmount and rollAmount normalize, persist, and zero disables every t
 
 test("defaultChordPathForGenre keeps genre-to-path defaults stable", () => {
   assert.equal(engine.defaultChordPathForGenre("neoSoul"), "soul");
+  assert.equal(engine.defaultChordPathForGenre("hipHop"), "hipHop");
   assert.equal(engine.defaultChordPathForGenre("jazz"), "jazz");
   assert.equal(engine.defaultChordPathForGenre("trap"), "trap");
   assert.equal(engine.defaultChordPathForGenre("house"), "house");

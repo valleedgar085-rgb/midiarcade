@@ -21,10 +21,10 @@ test("Hip-Hop pocket locks the fuller backbeat-first calibration from listener f
   assert.equal(profile.snareRollChance, 0.24);
   assert.equal(profile.arrangement.fillFrequency, 0.4);
   assert.ok(profile.grooveWeights.drumGroove.backbeat > profile.grooveWeights.drumGroove.halfTime * 3);
-  assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["syncopatedLoop", "questionAnswer", "sparseEcho"]);
-  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.restBias, 0.05);
-  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 0.88);
-  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.leapChance < 0.16);
+  assert.deepEqual(GENRE_MELODY_GRAMMARS.hipHop.phraseShapes, ["sparseEcho"]);
+  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.restBias, 0.2);
+  assert.equal(GENRE_MELODY_GRAMMARS.hipHop.durationScale, 1.12);
+  assert.ok(GENRE_MELODY_GRAMMARS.hipHop.leapChance <= 0.05);
 });
 
 test("Hip-Hop rhythm lanes stay on the authored grid", () => {
