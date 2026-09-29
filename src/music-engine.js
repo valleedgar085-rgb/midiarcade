@@ -886,6 +886,15 @@ export const GENRE_CRITIC_PROFILES = deepFreeze({
   synthPopRadio: { density: 28, repetition: 0.74, syncopation: 0.4, backbeats: 2, bassLock: 0.8 },
 });
 
+function criticProfileForSong(song = {}) {
+  const base = GENRE_CRITIC_PROFILES[song?.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  const characterId = song?.grooveConductor?.grooveDNA?.characterId;
+  if (song?.genre !== "pop") return base;
+  if (characterId === "bass-forward-half-time") return { ...base, syncopation: 0.58 };
+  if (characterId === "rhythmic-lift") return { ...base, syncopation: 0.62 };
+  return base;
+}
+
 /** Genre phrase vocabularies used before note rendering and performance feel. */
 export const GENRE_MELODY_GRAMMARS = deepFreeze({
   neoSoul: { phraseShapes: ["questionAnswer", "syncopatedLoop"], contours: ["arch", "wave", "fallRebound"], restBias: 0.08, leapChance: 0.2, ornamentChance: 0.2, durationScale: 1.05 },
@@ -4187,6 +4196,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   const grooveDNA = createGrooveDNA({
     seed: config.seed,
     genre: config.genre,
+    tempo: config.tempo,
+    popReferenceEnabled: config.professionalUpgrade && config.genre === "pop" && !config.secondaryGenre,
     bars: config.bars,
     beatsPerBar: barBeats,
     complexity: config.complexity,
@@ -4268,6 +4279,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       grooveDNA: {
         id: grooveDNA.id,
         grammarId: grooveDNA.grammarId,
+        characterId: grooveDNA.characterId,
         sectionRole: grooveDNA.bars?.[bar]?.sectionRole ?? null,
       },
       bassPulses,
@@ -4283,6 +4295,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       version: grooveDNA.version,
       id: grooveDNA.id,
       grammarId: grooveDNA.grammarId,
+      characterId: grooveDNA.characterId,
       philosophy: grooveDNA.philosophy,
       pipeline: [...grooveDNA.pipeline],
     },
@@ -10980,7 +10993,7 @@ export function evaluateSongCandidate(song) {
   const snares = drumNotes.filter((note) => [37, 38, 39, 40].includes(note.pitch));
   const barBeats = finite(song.meta.beatsPerBar, 4);
   const bars = Math.max(1, finite(song.meta.bars, song.bars ?? 1));
-  const criticProfile = GENRE_CRITIC_PROFILES[song.genre] ?? GENRE_CRITIC_PROFILES.pop;
+  const criticProfile = criticProfileForSong(song);
 
   const scalePc = new Set((song.meta.scaleIntervals ?? []).map((interval) => mod(interval + finite(song.meta.keyPc, 0), 12)));
   const scaleFit = pitchedNotes.length
