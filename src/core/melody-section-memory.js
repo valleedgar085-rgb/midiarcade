@@ -162,30 +162,22 @@ function relationshipFitness({
   metadataAccuracy,
 }) {
   const strength = clamp(recallStrength, 0, 1);
-  let target;
-  let tolerance;
-  if (relationship === "return") {
-    target = 0.62 + strength * 0.22;
-    tolerance = 0.26;
-  } else if (relationship === "recall") {
-    target = 0.45 + strength * 0.24;
-    tolerance = 0.32;
-  } else {
-    target = 0.3 + strength * 0.18;
-    tolerance = 0.34;
-  }
-  const familiarityFit = clamp(1 - Math.abs(familiarity - target) / tolerance);
-  const clonePenalty = relationship === "return"
-    ? clamp((cloneRisk - 0.92) / 0.08)
-    : clamp((cloneRisk - 0.82) / 0.18);
-  const contrastPenalty = relationship === "contrast" && familiarity > 0.76
-    ? clamp((familiarity - 0.76) / 0.24)
-    : 0;
+  const band = relationship === "return"
+    ? { min: 0.52 + strength * 0.18, max: 0.97 }
+    : relationship === "recall"
+      ? { min: 0.35 + strength * 0.18, max: 0.93 }
+      : { min: 0.18 + strength * 0.12, max: 0.76 };
+  const familiarityFit = familiarity < band.min
+    ? clamp(familiarity / Math.max(0.01, band.min))
+    : familiarity > band.max
+      ? clamp(1 - (familiarity - band.max) / Math.max(0.01, 1 - band.max))
+      : 1;
+  const cloneThreshold = relationship === "return" ? 0.92 : relationship === "recall" ? 0.88 : 0.78;
+  const clonePenalty = clamp((cloneRisk - cloneThreshold) / Math.max(0.01, 1 - cloneThreshold));
   return clamp(
     familiarityFit * 0.72
       + metadataAccuracy * 0.28
-      - clonePenalty * 0.48
-      - contrastPenalty * 0.35,
+      - clonePenalty * 0.48,
   );
 }
 
