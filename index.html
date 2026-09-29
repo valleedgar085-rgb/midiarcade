@@ -517,9 +517,9 @@
           <section class="creative-thread shape-focus-bar" id="creativeThread" aria-labelledby="creativeThreadTitle">
             <div class="thread-progress" id="threadProgress" aria-hidden="true"><i></i></div>
             <div class="thread-heading">
-              <p class="eyebrow">SHAPE FOCUS</p>
-              <h2 id="creativeThreadTitle">One musical decision at a time</h2>
-              <p id="threadRelationship">The full arrangement is shaping the selected instrument.</p>
+              <p class="eyebrow">CURRENT FOCUS</p>
+              <h2 id="creativeThreadTitle">Shape the song</h2>
+              <p id="threadRelationship">Choose a section, choose an instrument, then change only what matters.</p>
             </div>
             <div class="thread-path" aria-label="Current focus">
               <button class="thread-node song-node" id="threadSongButton" type="button">
@@ -543,9 +543,9 @@
           <section class="panel arrangement-panel shape-canvas" aria-labelledby="arrangementTitle">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">SHAPE WORKSPACE</p>
-                <h2 id="arrangementTitle">Direct the song, section by section</h2>
-                <p class="section-description">Start with a section block. Adjust its feel in the panel, then open note detail only when the musical idea needs precision.</p>
+                <p class="eyebrow">SHAPE</p>
+                <h2 id="arrangementTitle">Shape your song</h2>
+                <p class="section-description">Select a section from the song map, shape its musical feel, then open note detail only when you need precision.</p>
               </div>
               <div class="arrangement-tools">
                 <button class="small-button" id="reorderButton" type="button">
@@ -562,8 +562,8 @@
             <div class="shape-stage">
               <div class="shape-map-column">
                 <div class="shape-map-toolbar">
-                  <span><i></i><strong>FULL ARRANGEMENT</strong><small id="shapeMapSummary">Select a section to begin</small></span>
-                  <span class="shape-map-legend"><i></i> Energy and note activity</span>
+                  <span><i></i><strong>SONG STRUCTURE</strong><small id="shapeMapSummary">Select a section to begin</small></span>
+                  <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
@@ -589,8 +589,8 @@
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
                   <div class="shaper-group-heading">
-                    <span><small>SECTION CONTROLS</small><strong>Shape the feel</strong></span>
-                    <em>Leave any choice on Auto</em>
+                    <span><small>SECTION FEEL</small><strong>Shape this moment</strong></span>
+                    <em>Auto keeps the original musical intent</em>
                   </div>
                   <div class="section-macro-grid" aria-label="Section shape controls">
                     <label style="--shape-tone:#fb7185"><span>ENERGY <small>Impact and dynamics</small></span><select data-section-macro="energy" aria-label="Section energy"><option value="auto">Auto · follow arc</option><option value="low">Restrained</option><option value="balanced">Balanced</option><option value="high">Lifted</option></select></label>
@@ -602,7 +602,7 @@
 
                   <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
                     <div class="shape-director-heading">
-                      <span><small>SHAPE DIRECTOR</small><strong id="shapeDirectorTitle">Pick what feels better</strong></span>
+                      <span><small>SMART SHAPE</small><strong id="shapeDirectorTitle">Try a musical direction</strong></span>
                     </div>
                     <div class="shape-director-scope">
                       <label><span>WHAT TO CHANGE</span>
@@ -622,7 +622,7 @@
                       </label>
                     </div>
                     <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
-                      <span><small>BLUEPRINT + QUALITY JUDGE</small><strong id="shapeDirectorComposeLabel">Recompose with Blueprint</strong></span>
+                      <span><small>LOCAL RECOMPOSE</small><strong id="shapeDirectorComposeLabel">Try this direction</strong></span>
                       <b aria-hidden="true">↻</b>
                     </a>
                     <div class="shape-director-directions" id="shapeDirectorDirections" aria-label="Quick musical directions"></div>
@@ -646,7 +646,7 @@
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
                   <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PRECISION EDITING</small><strong>Edit notes</strong></span>
+                    <span><small>PIANO ROLL</small><strong>Edit note detail</strong></span>
                     <b aria-hidden="true">→</b>
                   </button>
                   <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>More tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
