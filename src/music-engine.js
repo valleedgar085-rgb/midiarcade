@@ -1839,7 +1839,7 @@ function creativeReturnFeaturedTrack(section, config, occurrence) {
 }
 
 function featuredTrackForSection(section, plan, config, occurrence = 0) {
-  if (["hipHop", "rap"].includes(config.genre)) return "bass";
+  if (config.genre === "hipHop") return "bass";
   if (section.name === "intro" || ["breakdown", "outro"].includes(section.name)) return "pad";
   if (section.name === "bridge") return "counterpoint";
   if (section.name === "solo") return occurrence % 2 ? "melody" : "counterpoint";
@@ -1916,7 +1916,7 @@ function answerTrackForForeground(foregroundTrack, section, config) {
   if (foregroundTrack === "melody") return "counterpoint";
   if (foregroundTrack === "counterpoint") return "melody";
   if (["bass", "drums"].includes(foregroundTrack)) {
-    if (["hipHop", "rap"].includes(config.genre)) return "counterpoint";
+    if (config.genre === "hipHop") return "counterpoint";
     return ["house", "techno", "drumBass", "trap", "drill"].includes(config.genre)
       ? "chords"
       : "melody";
