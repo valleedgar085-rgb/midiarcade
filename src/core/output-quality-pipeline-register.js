@@ -24,6 +24,7 @@ import {
   createMelodyPhraseCandidates,
   MAX_MELODY_PHRASE_CANDIDATES,
 } from "./melody-phrase-refinement.js";
+import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import {
   createRegisterHealthCandidates,
   MAX_REGISTER_HEALTH_CANDIDATES,
@@ -42,6 +43,7 @@ import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
+const MELODY_PHRASE_ATTEMPT_CEILING = 78;
 const FUSION_PERFORMANCE_FLOOR = 84;
 const REGISTER_PROTECTED_DIMENSIONS = Object.freeze([
   "phraseResolution", "repetition", "memory", "motif", "separation",
@@ -1061,6 +1063,16 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
 export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
   if (config.melodyPhraseRefinement !== true || config.isFusion === true || Boolean(config.secondaryGenre)) {
     return { song, diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES) };
+  }
+
+  const phraseBefore = evaluateMelodyPhraseIntelligence(song);
+  if (phraseBefore.passed && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING) {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES, "already-strong", {
+        beforePhraseScore: phraseBefore.score,
+      }),
+    };
   }
 
   const candidates = createMelodyPhraseCandidates(song);
