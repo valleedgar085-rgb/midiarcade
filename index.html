@@ -661,7 +661,7 @@
               <header class="editor-header">
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
-                  <p class="eyebrow">PRECISION EDITOR</p>
+                  <p class="eyebrow">SECTION · INSTRUMENT · NOTES</p>
                   <h3 id="sectionEditorTitle">Edit notes precisely</h3>
                   <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
                 </div>
@@ -671,6 +671,16 @@
                 </div>
               </header>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Instrument in piano roll"></div>
+              <div class="piano-roll-shell" id="pianoRollShell">
+                <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
+                <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
+                  <div class="piano-roll-grid" id="pianoRollGrid"></div>
+                </div>
+              </div>
+              <div class="velocity-lane" id="velocityLane" aria-label="Velocity lane" aria-hidden="true">
+                <div class="velocity-lane-header"><small>VELOCITY</small></div>
+                <div class="velocity-bars" id="velocityBars"></div>
+              </div>
               <div class="editor-musical-guide" id="editorMusicalGuide">
                 <div class="editor-guide-identity">
                   <small>HARMONY GUIDE</small>
@@ -704,22 +714,25 @@
                   <button type="button" data-editor-action="quantize">Quantize</button>
                   <button type="button" data-editor-action="humanize">Humanize</button>
                 </span>
+                <span class="editor-tool-cluster editor-note-length"><small>NOTE LENGTH</small><span class="editor-tool-group">
+                    <button type="button" data-editor-action="shorter" aria-label="Shorten selected notes">Shorter</button>
+                    <button type="button" data-editor-action="longer" aria-label="Lengthen selected notes">Longer</button>
+                  </span></span>
                 <label class="editor-velocity">NOTE VELOCITY <output id="editorVelocityValue">100 · strong</output>
                   <input id="editorVelocityControl" type="range" min="1" max="127" value="100" aria-label="Selected note velocity from 1 to 127" />
                   <small>MIDI 1–40 soft · 41–90 balanced · 91–127 strong</small>
                 </label>
               </div>
+              <section class="section-variation-lab" id="sectionVariationLab" aria-label="Section variation lab"></section>
               <details class="editor-advanced-tools">
                 <summary>
                   <span><small>ADVANCED NOTE TOOLS</small><strong>Move, resize, transpose or remove selected notes</strong></span>
                   <b aria-hidden="true">+</b>
                 </summary>
                 <div class="editor-advanced-tools-body" role="toolbar" aria-label="Advanced note editing tools">
-                  <span class="editor-tool-cluster"><small>POSITION &amp; LENGTH</small><span class="editor-tool-group">
+                  <span class="editor-tool-cluster"><small>POSITION</small><span class="editor-tool-group">
                     <button type="button" data-editor-action="nudge-left" aria-label="Nudge left">Left</button>
                     <button type="button" data-editor-action="nudge-right" aria-label="Nudge right">Right</button>
-                    <button type="button" data-editor-action="shorter" aria-label="Shorten">Shorter</button>
-                    <button type="button" data-editor-action="longer" aria-label="Lengthen">Longer</button>
                   </span></span>
                   <span class="editor-tool-cluster"><small>PITCH</small><span class="editor-tool-group tonal-tools">
                     <button type="button" data-editor-action="octave-down" aria-label="-12">-12</button>
@@ -737,17 +750,6 @@
                 <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Click notes to select - Shift-click adds - Double-click empty space to draw</small></span>
                 <label>ZOOM <input id="editorZoomControl" type="range" min="44" max="100" value="64" /></label>
               </div>
-              <div class="piano-roll-shell" id="pianoRollShell">
-                <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
-                <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
-                  <div class="piano-roll-grid" id="pianoRollGrid"></div>
-                </div>
-              </div>
-              <div class="velocity-lane" id="velocityLane" aria-label="Velocity lane" aria-hidden="true">
-                <div class="velocity-lane-header"><small>VELOCITY</small></div>
-                <div class="velocity-bars" id="velocityBars"></div>
-              </div>
-              <section class="section-variation-lab" id="sectionVariationLab" aria-label="Section variation lab"></section>
               <p class="editor-status" id="editorStatus" role="status" aria-live="polite">Choose a section, then select notes to edit.</p>
             </section>
           </section>

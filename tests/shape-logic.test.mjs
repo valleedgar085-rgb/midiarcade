@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   analyzeSectionRelationship,
+  classifyNoteRole,
   nearestScalePitch,
   transposeScaleStep,
 } from "../src/ui/shape-logic.js";
@@ -41,4 +42,15 @@ test("relationship analysis distinguishes locked attacks from breathing space an
     breathingNotes: 0,
     interlockRatio: 0,
   });
+});
+
+test("piano roll colors use the chord active at each note onset", () => {
+  const song = { meta: { key: "C", mode: "major" }, harmony: [
+    { start: 0, duration: 4, notes: [60, 64, 67] },
+    { start: 4, duration: 4, notes: [65, 69, 72] },
+  ] };
+  assert.equal(classifyNoteRole({ pitch: 60, start: 0 }, song).role, "root-tone");
+  assert.equal(classifyNoteRole({ pitch: 60, start: 4 }, song).role, "chord-tone");
+  assert.equal(classifyNoteRole({ pitch: 62, start: 0 }, song).role, "scale-tone");
+  assert.equal(classifyNoteRole({ pitch: 61, start: 0 }, song).role, "outside-tone");
 });

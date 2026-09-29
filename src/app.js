@@ -69,6 +69,7 @@ import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
+  classifyNoteRole,
   nearestScalePitch,
   transposeScaleStep,
 } from "./ui/shape-logic.js";
@@ -1182,7 +1183,7 @@ export function applyEditorAction(action) {
   }
   const selected = selectedEditorEntries(entries);
   if (!selected.length) {
-    renderSectionEditor("Select one or more notes first. Shift-click adds notes to the selection.");
+    renderSectionEditor("Select notes first. Shift-click adds more.");
     return false;
   }
   const range = editorBeatRange(section);
@@ -1244,7 +1245,7 @@ export function applyEditorAction(action) {
 function setEditorVelocity(value) {
   const selected = selectedEditorEntries();
   if (!selected.length) {
-    renderSectionEditor("Select notes before changing velocity.");
+    renderSectionEditor("Select notes first.");
     return false;
   }
   pushHistory();
@@ -1334,7 +1335,7 @@ function renderSectionEditor(message = "") {
   $("#sectionEditorTitle").textContent = `${section.name} · ${meta.name}`;
   $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · edits write directly into the exported MIDI`;
   $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
-  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · drawn and transposed notes stay in scale`;
+  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
   const relationship = analyzeSectionRelationship(
     entries.map(({ note }) => note),
@@ -1347,7 +1348,7 @@ function renderSectionEditor(message = "") {
     <span><small>RELATIONSHIP</small><strong>${relationshipLabel}</strong></span>
     <span><small>SHARED ATTACKS</small><strong>${relationship.sharedAttacks}</strong></span>
     <span><small>BREATHING NOTES</small><strong>${relationship.breathingNotes}</strong></span>
-    <span><small>GUIDE</small><strong>${state.editorOverlay === "none" ? "Hidden" : state.editorOverlay === "harmony" ? "Harmony" : "Partner + harmony"}</strong></span>`;
+    <span><small>GUIDE</small><strong>${state.editorOverlay === "none" ? "Hidden" : state.editorOverlay === "harmony" ? "Harmony" : "Both"}</strong></span>`;
 
   $("#editorTrackTabs").innerHTML = TRACK_ORDER.map((id) => {
     const trackObject = songTracks().find((candidate, index) => trackId(candidate, index) === id);
@@ -1396,6 +1397,11 @@ function renderSectionEditor(message = "") {
   $("#pianoRollGrid").style.setProperty("--bar-width", `${state.editorZoom * range.beatsPerBar}px`);
   $("#pianoRollGrid").style.setProperty("--subdivision-width", `${Math.max(4, state.editorZoom * grid)}px`);
   $("#pianoRollGrid").innerHTML = `<div class="piano-roll-editor-playhead" aria-hidden="true"><i></i></div>${guideRows}${partnerMarkup}${notesMarkup}`;
+  // Match velocity stems to the same beat positions as the note grid.
+  $("#velocityLane").setAttribute("aria-hidden", "false");
+  const velocityBars = $("#velocityBars");
+  velocityBars.innerHTML = `<div class="velocity-stems" style="width:${totalBeats * state.editorZoom}px">${entries.map(({ note, id }) => `<i class="velocity-stem${state.editorSelection.has(id) ? " is-selected" : ""}" style="left:${(noteStart(note) - range.start) * state.editorZoom}px;height:${noteVelocity(note) / 127 * 100}%"></i>`).join("")}</div>`;
+  velocityBars.scrollLeft = $("#pianoRollViewport").scrollLeft;
   $("#editorSelectionCount").textContent = `${selected.length} NOTE${selected.length === 1 ? "" : "S"} SELECTED`;
   const selectedVelocity = selected.length
     ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length)
@@ -1405,8 +1411,8 @@ function renderSectionEditor(message = "") {
   $("#editorGridControl").value = String(state.editorGrid);
   $("#editorZoomControl").value = state.editorZoom;
   $("#editorStatus").textContent = message || (entries.length
-    ? `${meta.name} in ${section.name}. Click a note, Shift-click for several, or double-click empty space to draw.`
-      : `No ${meta.name.toLowerCase()} notes are in ${section.name}. Double-click the grid to draw one.`);
+    ? `${meta.name} · tap to select; double-tap to draw.`
+      : `Empty ${meta.name} · double-tap to draw.`);
   renderSectionVariationLab(section);
   $$('[data-editor-action]', container).forEach((button) => {
     const tonalAction = ["octave-down", "pitch-down", "pitch-up", "octave-up"].includes(button.dataset.editorAction);
@@ -1434,7 +1440,7 @@ function renderSectionVariationLab(section = editorSection()) {
   const directionNames = ["Space", "Lift", "Contrast"];
   lab.innerHTML = variations?.length
     ? `
-      <div class="variation-lab-heading"><small>A/B SECTION LAB</small><strong>Compare complete musical directions</strong><p>Playback jumps to ${section.name}. Nothing is committed until you keep a choice.</p></div>
+      <div class="variation-lab-heading"><small>VARIATION · THIS SECTION</small><strong>Compare section ideas</strong><p>Audition ${section.name}, then keep a choice.</p></div>
       <div class="variation-actions variation-comparison" role="radiogroup" aria-label="Section variation choices">
         <button type="button" data-section-variation="0" class="${active === 0 ? "is-active" : ""}" role="radio" aria-checked="${active === 0}"><b>ORIGINAL</b><small>Current arrangement</small></button>
         ${variations.map((option, index) => {
@@ -1450,7 +1456,7 @@ function renderSectionVariationLab(section = editorSection()) {
         <button class="variation-keep" type="button" data-section-variation-keep>Keep ${active ? `Option ${String.fromCharCode(64 + active)}` : "original"}</button>
       </div>`
     : `
-      <div><small>A/B SECTION LAB</small><strong>Need a different version of this moment?</strong><p>Create three bounded alternatives without rewriting the rest of the song.</p></div>
+      <div><small>VARIATION · THIS SECTION</small><strong>Try another idea</strong><p>Three ideas for this section.</p></div>
       <button class="variation-explore" type="button" data-section-variation-explore>Explore 3 variations</button>`;
 }
 
@@ -2773,7 +2779,7 @@ function renderSectionShaper(message = "") {
     : averageVelocity <= 72 ? "restrained" : "balanced";
   $("#sectionShaperName").textContent = section.name;
   $("#sectionShaperMeta").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · ${energyLabel}`;
-  $("#sectionShaperStatus").textContent = message || "Auto follows the song’s composition blueprint. Choose only what you want to direct.";
+  $("#sectionShaperStatus").textContent = message || "Auto follows the song.";
   if (summary) summary.textContent = `${section.name} selected · ${section.bars} bars · ${energyLabel}`;
   $$("[data-section-macro]", shaper).forEach((control) => {
     control.value = values[control.dataset.sectionMacro] || "auto";
@@ -2788,15 +2794,15 @@ function renderSectionShaper(message = "") {
 }
 
 const ARRANGEMENT_ERROR_COPY = {
-  "invalid-song-shape": "This song is missing arrangement data required for that edit.",
-  "invalid-section-identity": "Two sections share an identity. Generate a related idea to rebuild the arrangement safely.",
-  "noncontiguous-sections": "The section timeline could not be realigned safely.",
-  "invalid-song-duration": "The song length and section map do not agree.",
-  "invalid-track-events": "A note falls outside the playable song range, so the edit was protected.",
-  "invalid-automation-events": "An automation point falls outside the song range, so the edit was protected.",
-  "invalid-harmony-events": "A harmony event falls outside the song range, so the edit was protected.",
-  "invalid-transform": "That section direction is not supported.",
-  "no-musical-change": "This section already matches that musical direction. No Undo step was added.",
+  "invalid-song-shape": "Arrangement data is missing.",
+  "invalid-section-identity": "Duplicate section IDs. Generate a related idea to rebuild.",
+  "noncontiguous-sections": "Section timing could not be aligned.",
+  "invalid-song-duration": "Song length and sections differ.",
+  "invalid-track-events": "A note is outside the song. Edit blocked.",
+  "invalid-automation-events": "Automation is outside the song. Edit blocked.",
+  "invalid-harmony-events": "Harmony is outside the song. Edit blocked.",
+  "invalid-transform": "Unsupported section direction.",
+  "no-musical-change": "This section already matches that musical direction. Unchanged.",
 };
 
 function commitArrangementCommand(command, message, { closeEditor = false, rejectedMessage = "" } = {}) {
@@ -6596,6 +6602,7 @@ function toggleFullscreen() {
   });
   $("#pianoRollViewport").addEventListener("scroll", (event) => {
     $("#pianoKeyboard").scrollTop = event.currentTarget.scrollTop;
+    $("#velocityBars").scrollLeft = event.currentTarget.scrollLeft;
   });
   $("#pianoRollViewport").addEventListener("keydown", (event) => {
     const action = {

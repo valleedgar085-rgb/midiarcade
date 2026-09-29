@@ -4015,3 +4015,37 @@ body:has(#tab-arrange.is-active) .tab-btn {
     0 6px 14px rgba(0,0,0,.22),
     inset 0 1px 0 rgba(255,255,255,.20) !important;
 }
+
+/* Shape musical controls and grid hierarchy. */
+#tab-arrange .section-macro-grid label:has([data-section-macro="density"]) {
+  grid-column: 1 / -1;
+  border-color: rgba(34,211,238,.4) !important;
+  background: linear-gradient(110deg,rgba(34,211,238,.09),#11151c) !important;
+}
+#tab-arrange .section-chip.active {
+  border-color: #ff5470 !important;
+  box-shadow: inset 0 3px #ff5470 !important;
+}
+#tab-arrange .editor-track-tabs { flex-wrap: nowrap; overflow-x: auto; }
+#tab-arrange .editor-track-tabs button { flex-shrink: 0; min-height: 44px; }
+#tab-arrange .editor-toolbar button,
+#tab-arrange .editor-toolbar select,
+#tab-arrange .editor-header-actions button { min-height: 44px !important; }
+#tab-arrange .editor-note-length { flex: 1 1 180px; }
+#tab-arrange .piano-note.root-tone { background: #fbbf24; color: #19120a; }
+#tab-arrange .piano-note.chord-tone { background: #22d3ee; color: #071519; }
+#tab-arrange .piano-note.scale-tone { background: #a78bfa; color: #130e20; }
+#tab-arrange .piano-note.is-selected { border-color: #fff; box-shadow: 0 0 0 2px #fff; }
+#tab-arrange .velocity-lane { height: 72px; border-radius: 0 0 12px 12px; }
+#tab-arrange .velocity-bars { display: block; position: relative; padding: 8px 0 0; overflow: hidden; }
+#tab-arrange .velocity-stems { position: relative; height: 100%; }
+#tab-arrange .velocity-stem { position: absolute; bottom: 0; width: 4px; background: #22d3ee; border-radius: 2px 2px 0 0; }
+#tab-arrange .velocity-stem.is-selected { background: #fff; }
+@media (max-width: 600px) {
+  #tab-arrange .editor-header { flex-wrap: wrap; gap: 8px; }
+  #tab-arrange .editor-header-actions { width: 100%; display: flex; gap: 8px; }
+  #tab-arrange .editor-header-actions button { flex: 1; }
+  #tab-arrange .editor-focus-orbit { display: none; }
+  #tab-arrange .shape-map-column .timeline-track-label { width: 64px; font-size: 9px; }
+  #tab-arrange .piano-roll-shell { min-height: 280px !important; }
+}
