@@ -2541,3 +2541,199 @@ body:has(#tab-create.is-active),
     min-height: 72px !important;
   }
 }
+
+
+/* FIGMA GENERATOR DETAIL PASS 2 · hierarchy + scope */
+#preGenSection .create-stage-heading {
+  position: relative !important;
+  margin: 18px 0 8px !important;
+  padding-left: 36px !important;
+}
+
+#preGenSection .create-stage-heading:first-child {
+  margin-top: 2px !important;
+}
+
+#preGenSection .create-stage-heading::before {
+  position: absolute !important;
+  left: 0 !important;
+  top: -1px !important;
+  width: 25px !important;
+  height: 25px !important;
+  display: grid !important;
+  place-items: center !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  border-radius: 8px !important;
+  background: #171b24 !important;
+  color: #7e8591 !important;
+  font-size: .62rem !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+}
+
+#preGenSection .create-stage-heading[data-create-stage="song"]::before { content: "1"; }
+#preGenSection .create-stage-heading[data-create-stage="feel"]::before { content: "2"; }
+#preGenSection .create-stage-heading[data-create-stage="structure"]::before { content: "3"; }
+#preGenSection .create-stage-heading[data-create-stage="generate"]::before { content: "4"; }
+
+#preGenSection .create-stage-heading .eyebrow {
+  margin: 0 0 2px !important;
+  color: #767e8a !important;
+  font-size: .56rem !important;
+  font-weight: 760 !important;
+  letter-spacing: .12em !important;
+}
+
+#preGenSection .create-stage-heading h3 {
+  color: #f4f6f8 !important;
+  font-size: .92rem !important;
+  font-weight: 680 !important;
+  line-height: 1.16 !important;
+  letter-spacing: -.018em !important;
+}
+
+#preGenSection .create-live-select:has(#barsControl) {
+  min-height: 78px !important;
+  border-color: rgba(255,255,255,.085) !important;
+  background:
+    radial-gradient(circle at 90% 10%, rgba(255,33,77,.07), transparent 36%),
+    #151922 !important;
+}
+
+#preGenSection .create-live-select:has(#barsControl) > span::after {
+  content: "Arrangement scale" !important;
+  display: block !important;
+  margin-top: 4px !important;
+  color: #646b76 !important;
+  font-size: .57rem !important;
+  font-weight: 540 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#preGenSection .create-live-select:has(#barsControl) select {
+  color: #fff !important;
+  font-size: .96rem !important;
+  font-weight: 680 !important;
+}
+
+#preGenSection .generator-scope {
+  margin-top: 16px !important;
+  padding: 12px !important;
+  border: 1px solid rgba(255,255,255,.07) !important;
+  border-radius: 14px !important;
+  background: linear-gradient(180deg,#151922,#12161d) !important;
+}
+
+#preGenSection .generator-scope-heading {
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  margin-bottom: 10px !important;
+}
+
+#preGenSection .generator-scope-heading span {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+#preGenSection .generator-scope-heading small {
+  color: #ff5773 !important;
+  font-size: .56rem !important;
+  font-weight: 820 !important;
+  line-height: 1 !important;
+  letter-spacing: .12em !important;
+}
+
+#preGenSection .generator-scope-heading strong {
+  color: #f7f8fa !important;
+  font-size: .88rem !important;
+  font-weight: 680 !important;
+  line-height: 1.15 !important;
+  letter-spacing: -.015em !important;
+}
+
+#preGenSection .generator-scope-heading em {
+  color: #727a86 !important;
+  font-size: .62rem !important;
+  font-style: normal !important;
+  font-weight: 540 !important;
+  white-space: nowrap !important;
+}
+
+#preGenSection .generator-role-chips {
+  display: flex !important;
+  gap: 6px !important;
+  overflow-x: auto !important;
+  padding-bottom: 1px !important;
+  scrollbar-width: none !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+#preGenSection .generator-role-chips::-webkit-scrollbar {
+  display: none !important;
+}
+
+#preGenSection .generator-role-chips span {
+  flex: 0 0 auto !important;
+  min-height: 29px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 0 9px !important;
+  border: 1px solid rgba(255,255,255,.075) !important;
+  border-radius: 999px !important;
+  background: #0e1218 !important;
+  color: #b6bcc6 !important;
+  font-size: .62rem !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+}
+
+#preGenSection .generator-role-chips span:first-child,
+#preGenSection .generator-role-chips span:nth-child(2) {
+  border-color: rgba(255,54,92,.18) !important;
+  background: rgba(255,33,77,.06) !important;
+  color: #e4a1ae !important;
+}
+
+#preGenSection .generation-actions-bar {
+  margin-top: 10px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+#preGenSection .generation-new {
+  min-height: 68px !important;
+}
+
+#preGenSection .generation-new .action-copy strong::before {
+  font-size: 1.03rem !important;
+}
+
+#preGenSection .generation-similar {
+  min-height: 52px !important;
+}
+
+#preGenSection .generation-similar .action-copy strong::before {
+  font-size: .86rem !important;
+}
+
+#preGenSection .generation-similar .action-icon {
+  width: 34px !important;
+  height: 34px !important;
+  flex-basis: 34px !important;
+}
+
+@media (max-width: 360px) {
+  #preGenSection .generator-scope-heading {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+  }
+
+  #preGenSection .generator-scope-heading em {
+    white-space: normal !important;
+  }
+}
