@@ -146,10 +146,10 @@
                 <label class="create-live-select">
                   <span>SONG LENGTH</span>
                   <select id="barsControl" aria-label="Song length">
-                    <option value="auto">Auto · choose length</option>
-                    <option value="16">16 bars</option><option value="24">24 bars</option>
-                    <option value="32" selected>32 bars</option><option value="48">48 bars</option>
-                    <option value="64">64 bars</option>
+                    <option value="auto">Auto · Producer chooses</option>
+                    <option value="16">16 bars · sketch</option><option value="24">24 bars · short</option>
+                    <option value="32" selected>32 bars · standard</option><option value="48">48 bars · full</option>
+                    <option value="64">64 bars · extended</option>
                   </select>
                 </label>
                 <label class="create-live-select">
@@ -476,6 +476,16 @@
                 <p id="generationIntentCopy">Change a setting to stage a new direction. Your current song stays untouched.</p>
               </div>
             </div>
+            <section class="generator-scope" aria-label="Generation scope">
+              <div class="generator-scope-heading">
+                <span><small>BUILD</small><strong>Full song</strong></span>
+                <em>Complete arrangement</em>
+              </div>
+              <div class="generator-role-chips" aria-label="Included musical roles">
+                <span>Drums</span><span>Bass</span><span>Chords</span><span>Lead</span>
+                <span>Counter</span><span>Arp</span><span>FX</span>
+              </div>
+            </section>
             <div class="generation-actions-bar" aria-label="Generation">
               <button class="generation-button generation-new" id="generateNew" type="button">
                 <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 3.5 21.2 14l10.3 4-10.3 4L18 32.5 14.8 22 4.5 18l10.3-4L18 3.5Z"/></svg></span>
