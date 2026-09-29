@@ -49,6 +49,27 @@ test("tonal integrity snaps literal scale escapes and only resolves harsh strong
   assert.ok(first.report.chordCorrections >= 2);
 });
 
+test("Hip-Hop strong melodic attacks resolve to the active chord without changing passing tones", () => {
+  const tracks = [baseTrack("melody", [
+    { pitch: 62, start: 0, duration: 0.4, phraseAnchor: true },
+    { pitch: 62, start: 0.5, duration: 0.4 },
+  ])];
+  const harmony = [{ start: 0, duration: 4, rootPc: 0, tones: [0, 4, 7] }];
+  const meta = {
+    genre: "hipHop",
+    keyPc: 0,
+    scaleIntervals: [0, 2, 4, 5, 7, 9, 11],
+    beatsPerBar: 4,
+  };
+  const structure = [{ id: "verse-1", startBeat: 0, endBeat: 4 }];
+
+  const result = refineTonalIntegrity(tracks, harmony, meta, structure);
+  const melody = result.tracks[0].notes;
+  assert.ok([0, 4, 7].includes(melody[0].pitch % 12));
+  assert.equal(melody[1].pitch, 62, "offbeat passing color should remain intact");
+  assert.equal(result.report.chordCorrections, 1);
+});
+
 test("tonal analysis independently reports the selected and detected tonal center", () => {
   const tracks = [
     baseTrack("melody", [

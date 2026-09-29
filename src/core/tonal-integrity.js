@@ -78,18 +78,21 @@ function isLongColorTone(note) {
   return finite(note?.duration, 0.25) >= 0.72;
 }
 
-function protectedTension(note) {
+function protectedStructuralTension(note) {
   return Boolean(
     note?.ensembleCadenceRole
     || note?.resolutionRole
     || note?.transitionRole
     || note?.transitionFeature
     || note?.transitionHandoffRole
-    || note?.phraseAnchor
     || note?.motifHandoffRole
     || note?.finalAssemblyRole
     || finite(note?.plannedTension, 0) >= 0.72
   );
+}
+
+function protectedTension(note) {
+  return Boolean(note?.phraseAnchor || protectedStructuralTension(note));
 }
 
 function sectionForBeat(structure = [], beat = 0) {
@@ -217,7 +220,12 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
       if (!["melody", "counterpoint"].includes(String(track.id))) continue;
       const chord = harmonyAt(harmony, finite(note?.start));
       const risk = tonalRiskFor(note, chord, scaleClasses);
-      if (!risk.risky) continue;
+      const hipHopStrongAnchor = meta?.genre === "hipHop"
+        && isStrongBeat(note)
+        && !protectedStructuralTension(note)
+        && !risk.chordClasses.has(mod(notePitch(note), 12))
+        && risk.nearestDistance <= 2;
+      if (!risk.risky && !hipHopStrongAnchor) continue;
 
       const section = sectionForBeat(structure, finite(note?.start));
       const sectionKey = `${track.id}:${section?.id ?? "song"}`;
