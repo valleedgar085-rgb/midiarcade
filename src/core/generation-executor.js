@@ -367,6 +367,7 @@ export function createGenerationExecutor({
         phraseResolutionRefinement: stageDiagnostics.phraseResolutionRefinement ?? acceptedDiagnostics.phraseResolutionRefinement ?? null,
         registerHealthRefinement: stageDiagnostics.registerHealthRefinement ?? acceptedDiagnostics.registerHealthRefinement ?? null,
         melodyContinuityRefinement: stageDiagnostics.melodyContinuityRefinement ?? acceptedDiagnostics.melodyContinuityRefinement ?? null,
+        melodyPhraseRefinement: stageDiagnostics.melodyPhraseRefinement ?? acceptedDiagnostics.melodyPhraseRefinement ?? null,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
