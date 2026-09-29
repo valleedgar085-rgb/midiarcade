@@ -1199,6 +1199,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
+    ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],
     ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
