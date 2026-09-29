@@ -59,6 +59,7 @@ test("cross-authority gate is deterministic, read-only, and accepts a coherent s
   assert.equal(first.repairs, 0);
   assert.equal(first.passed, true, JSON.stringify(first.issues));
   assert.equal(first.score, 100);
+  assert.equal(typeof first.observations.sourceMatchesDirectorGrooveDNA, "boolean");
 });
 
 test("cross-authority gate rejects a specialist using different Groove DNA", () => {
