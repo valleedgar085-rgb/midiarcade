@@ -13,7 +13,8 @@ export action. Advanced instrument controls remain accessible in their existing
 disclosures. Dynamic song artwork remains owned by the production cover engine.
 
 The preview command now uses a Node static server and accepts the host and port
-arguments passed by the managed preview service. It no longer depends on a
+arguments passed by the managed preview service, while retaining the required
+`--directory www` option to serve compiled assets. It no longer depends on a
 missing `python` executable.
 
 ## Validation
@@ -21,6 +22,9 @@ missing `python` executable.
 - `npm run quality`: 167 test files passed, web build passed, quality gate passed.
 - Initial HTML: 94 buttons; global CSS: 182189 / 186368 bytes.
 - `node --check scripts/serve-preview.mjs` and `git diff --check`: passed.
+- Preview smoke check: compiled HTML and app JavaScript served successfully.
+- The first CI attempt failed because the dev command omitted `--directory www`.
+  The command and server now implement this option; the existing test is unchanged.
 - Visual QA: blocked. The managed preview started successfully, but the cloud
   browser refused the local URL under its security policy. No screenshot or
   interaction verification is claimed.

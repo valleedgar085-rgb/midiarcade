@@ -8,7 +8,8 @@ const option = (name, fallback) => {
   const index = args.indexOf(name);
   return index < 0 ? fallback : args[index + 1];
 };
-const root = fileURLToPath(new URL('../www/', import.meta.url));
+const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+const root = path.resolve(projectRoot, option('--directory', 'www'));
 const host = option('--host', '127.0.0.1');
 const port = Number(option('--port', '4173'));
 const types = {
@@ -31,7 +32,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   const filename = path.resolve(root, `.${pathname === '/' ? '/index.html' : pathname}`);
-  if (!filename.startsWith(root)) {
+  if (!filename.startsWith(`${root}${path.sep}`)) {
     response.writeHead(403).end();
     return;
   }
