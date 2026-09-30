@@ -238,6 +238,64 @@ export function createGenerationExecutor({
       const originalResult = await executeAdapted(kind, adaptedPayload, expectedLifecycle);
       requireCurrentLifecycle(expectedLifecycle);
 
+      if (kind === "songVariations") {
+        const originalVariations = Array.isArray(originalResult?.variations) ? originalResult.variations : [];
+        let variationResult = originalResult;
+        let retryAttempted = false;
+        if (originalVariations.length !== 3) {
+          retryAttempted = true;
+          const rawConfig = payload?.config ?? {};
+          const retrySeed = `${String(rawConfig?.seed ?? config?.seed ?? "variation-set")}:variation-set-retry:1`;
+          const retryPayload = resolveGenerationRequest(kind, {
+            ...payload,
+            config: {
+              ...rawConfig,
+              seed: retrySeed,
+            },
+          });
+          mark("repair", {
+            pass: 1,
+            reason: "incomplete-variation-set",
+            originalCount: originalVariations.length,
+            retrySeed,
+          });
+          const retriedResult = await executeAdapted(kind, retryPayload, expectedLifecycle);
+          requireCurrentLifecycle(expectedLifecycle);
+          const retryVariations = Array.isArray(retriedResult?.variations) ? retriedResult.variations : [];
+          if (retryVariations.length === 3 || retryVariations.length > originalVariations.length) {
+            variationResult = retriedResult;
+          }
+          mark("compare", {
+            selected: variationResult === retriedResult ? "retry" : "original",
+            reason: retryVariations.length === 3 ? "complete-variation-set" : "best-available-variation-set",
+            originalCount: originalVariations.length,
+            retryCount: retryVariations.length,
+          });
+        } else {
+          mark("compare", {
+            selected: "original",
+            reason: "complete-variation-set",
+            skipped: true,
+            originalCount: originalVariations.length,
+          });
+        }
+        const finalCount = Array.isArray(variationResult?.variations) ? variationResult.variations.length : 0;
+        mark("diagnose", {
+          variationSet: true,
+          complete: finalCount === 3,
+          count: finalCount,
+          retryAttempted,
+        });
+        mark("finalize", {
+          variationSet: true,
+          complete: finalCount === 3,
+          count: finalCount,
+        });
+        flightRecorder.complete(flightId, variationResult);
+        report("complete");
+        return variationResult;
+      }
+
       if (kind === "compositionCandidate") {
         const transaction = originalResult?.transaction;
         const correction = transaction?.selfCorrection;
