@@ -8,6 +8,7 @@ import {
   applyMelodySectionMemoryAudit,
 } from "../src/core/output-quality-pipeline-register.js";
 import { authorizeQualityStage, qualityStageAuthority } from "../src/core/generation-repair-router.js";
+import { runQualityStageSequence } from "../src/core/output-quality-stage-runner.js";
 
 function note(start, pitch, duration = 0.5, velocity = 86) {
   return { start, pitch, duration, velocity };
@@ -178,4 +179,35 @@ test("final memory audit is read-only and cannot be skipped by another specialis
   });
   assert.equal(admission.allowed, true);
   assert.equal(admission.reason, "read-only-audit");
+});
+
+
+test("melody section development authority forbids topology and timing mutation", () => {
+  const authority = qualityStageAuthority("melodySectionDevelopmentRefinement");
+  assert.equal(authority.strictMutations, true);
+  assert.deepEqual(authority.mutations, ["duration", "harmony"]);
+  assert.equal(authority.mutations.includes("topology"), false);
+  assert.equal(authority.mutations.includes("timing"), false);
+});
+
+test("strict melody section authority rejects a future stage that shifts note starts", () => {
+  const song = songWithReturn(DEVELOPED_RETURN);
+  const shifted = structuredClone(song);
+  shifted.tracks.find((track) => track.id === "melody").notes[0].start += 0.25;
+
+  const result = runQualityStageSequence(song, [{
+    id: "melodySectionDevelopmentRefinement",
+    run: () => ({
+      song: shifted,
+      diagnostics: { attempted: true, accepted: true, changed: true, reason: "test-shift" },
+    }),
+  }]);
+
+  assert.equal(result.song, song, "unauthorized timing change must never become current song authority");
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.accepted, false);
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.reason, "mutation-authority-violation");
+  assert.deepEqual(
+    result.diagnostics.melodySectionDevelopmentRefinement.mutationAuthority.violations,
+    ["timing"],
+  );
 });
