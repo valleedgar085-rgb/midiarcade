@@ -26,6 +26,17 @@ function supportsCommittedAuthorityRefresh(song) {
   );
 }
 
+export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
+  if (!result || typeof result !== "object" || !report) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...(result.outputQualityDiagnostics ?? {}),
+      melodySectionMemoryAudit: report,
+    },
+  };
+}
+
 function committedAuthorityRegression(beforeSong, afterSong) {
   if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
   const reasons = [];
@@ -428,6 +439,10 @@ export function createGenerationExecutor({
       const committedMelodySectionMemory = selectedResult?.song
         ? evaluateMelodySectionMemory(selectedResult.song)
         : null;
+      selectedResult = withCommittedMelodySectionMemoryDiagnostics(
+        selectedResult,
+        committedMelodySectionMemory,
+      );
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       mark("finalize", {
         repairAuthority,
