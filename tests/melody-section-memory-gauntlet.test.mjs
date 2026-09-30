@@ -83,7 +83,7 @@ test("full-song melody memory gauntlet holds determinism, release safety, and re
         continue;
       }
       if (memory.status === "evaluated" && !memory.passed) {
-        failures.push(`${label}: memory audit failed: ${memory.reason}; score=${memory.score}; weakest=${memory.weakestSection?.sectionId ?? "none"}`);
+        failures.push(`${label}: memory audit failed: ${memory.reason}; score=${memory.score}; weakest=${JSON.stringify(memory.weakestSection ?? null)}; repair=${JSON.stringify(first.melodySectionDevelopmentDiagnostics ?? null)}`);
       }
       if (bars === 32 && memory.status !== "evaluated") {
         failures.push(`${label}: 32-bar song did not expose an evaluable memory relationship (${memory.reason})`);
