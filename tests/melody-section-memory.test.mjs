@@ -11,6 +11,7 @@ function songWith(targetNotes, {
   relationship = "recall",
   recallStrength = 0.78,
   sourceSectionId = "verse-1",
+  transform = null,
 } = {}) {
   const sourceNotes = [
     note(0.5, 60),
@@ -44,7 +45,7 @@ function songWith(targetNotes, {
           sourceSectionId,
           relationship,
           recallStrength,
-          transform: relationship === "return" ? "motif-return" : "contour-echo",
+          transform: transform ?? (relationship === "return" ? "motif-return" : "contour-echo"),
         },
       ],
     },
@@ -156,6 +157,45 @@ test("contrast can stay in the same melodic family without becoming a clone", ()
   assert.equal(report.passed, true, JSON.stringify(report));
   assert.ok(report.sections[0].metrics.cloneRisk < 0.82, JSON.stringify(report));
   assert.ok(report.sections[0].metrics.familiarity < 0.8, JSON.stringify(report));
+});
+
+test("transform-aware contrast rewards intentional harmonic reframe without requiring return-level familiarity", () => {
+  const contrast = [
+    note(8.25, 67, 0.25),
+    note(9.75, 64, 0.25),
+    note(10.5, 70, 0.5),
+    note(12, 65, 0.25),
+    note(13.5, 69, 0.5),
+    note(15.25, 64, 0.5),
+  ];
+  const report = evaluateMelodySectionMemory(songWith(contrast, {
+    relationship: "contrast",
+    recallStrength: 0.42,
+    transform: "harmonic-reframe",
+  }));
+  assert.equal(report.status, "evaluated");
+  assert.equal(report.passed, true, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.contrastEvidence >= 0.055, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.cloneRisk < 0.78, JSON.stringify(report));
+});
+
+test("contrast with no musical family evidence still fails even with authoritative metadata", () => {
+  const unrelated = [
+    note(8.25, 72, 0.25),
+    note(9.75, 72, 0.25),
+    note(11.25, 72, 0.25),
+    note(12.75, 72, 0.25),
+    note(14.25, 72, 0.25),
+    note(15.5, 72, 0.25),
+  ];
+  const report = evaluateMelodySectionMemory(songWith(unrelated, {
+    relationship: "contrast",
+    recallStrength: 0.42,
+    transform: "harmonic-reframe",
+  }));
+  assert.equal(report.passed, false, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.contrastEvidence < 0.055, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.relationshipFit < 0.48, JSON.stringify(report));
 });
 
 test("missing source section fails closed when the phrase-memory contract cannot be compared", () => {
