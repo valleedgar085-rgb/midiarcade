@@ -203,7 +203,7 @@ export function generateProducerVariationSet(current, input = {}, {
     });
     const reading = elementDisplayReading(direction, intensity);
     const auditions = [];
-    for (let candidateIndex = 0; candidateIndex < candidatesPerVariation; candidateIndex += 1) {
+    for (let candidateIndex = 0; candidateIndex < 4 && (candidateIndex < candidatesPerVariation || !auditions.some(({ assessment }) => assessment.eligible)); candidateIndex += 1) {
       const seed = `${sourceSeed}:element:${direction.id}:${candidateIndex}`;
       const config = directionConfig(current, input, direction, seed, 1, moodIntent, intensity);
       config.recentSongs = [current, ...selected, ...(input.recentSongs ?? [])];
@@ -266,7 +266,7 @@ export function generateProducerVariationSet(current, input = {}, {
         comparedSiblings: winnerEntry.assessment.comparedSiblings,
         criticDimensions: [...winnerEntry.assessment.criticDimensions],
       },
-      auditions: candidatesPerVariation,
+      auditions: auditions.length,
       eligibleAuditions: eligible.length,
       selectedAudition: winnerEntry.candidateIndex,
       identityLocked: {
