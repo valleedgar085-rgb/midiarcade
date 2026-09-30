@@ -281,6 +281,7 @@ export function createGenerationExecutor({
         }
         const finalCount = Array.isArray(variationResult?.variations) ? variationResult.variations.length : 0;
         mark("diagnose", {
+          reason: "variation-set-atomic",
           variationSet: true,
           complete: finalCount === 3,
           count: finalCount,
