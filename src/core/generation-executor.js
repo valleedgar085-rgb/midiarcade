@@ -27,7 +27,9 @@ function supportsCommittedAuthorityRefresh(song) {
 }
 
 export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
-  if (!result || typeof result !== "object" || !report) return result;
+  // Keep the engine result contract intact when there is no melody to audit.
+  // Unavailable reports remain visible in the finalize flight-recorder stage.
+  if (!result || typeof result !== "object" || !report || report.status === "unavailable") return result;
   return {
     ...result,
     outputQualityDiagnostics: {
