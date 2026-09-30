@@ -172,6 +172,55 @@ function contourRecallCandidate(song, report, {
   }
   return changed ? { id, song: candidate, changedNotes: changed } : null;
 }
+function directionalContourCandidate(song, report) {
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 4 || targetEntries.length < 4) return null;
+  const candidate = cloneValue(song);
+  const track = melodyTrack(candidate);
+  const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const comparable = Math.min(sourceEntries.length, targetEntries.length);
+  const opportunities = [];
+
+  for (let position = 1; position < comparable - 1; position += 1) {
+    const sourcePrev = sourceEntries[Math.round((position - 1) * (sourceEntries.length - 1) / (comparable - 1))]?.note;
+    const sourceNow = sourceEntries[Math.round(position * (sourceEntries.length - 1) / (comparable - 1))]?.note;
+    const targetPrev = targetEntries[Math.round((position - 1) * (targetEntries.length - 1) / (comparable - 1))]?.note;
+    const target = targetEntries[Math.round(position * (targetEntries.length - 1) / (comparable - 1))];
+    if (!sourcePrev || !sourceNow || !targetPrev || !target?.note || isProtectedAnchor(target.note)) continue;
+    const sourceDirection = Math.sign(finite(sourceNow.pitch) - finite(sourcePrev.pitch));
+    const targetDirection = Math.sign(finite(target.note.pitch) - finite(targetPrev.pitch));
+    if (sourceDirection === 0 || sourceDirection === targetDirection) continue;
+
+    const nextPitch = nearestScaleNeighbor(candidate, target.note.pitch, sourceDirection);
+    if (nextPitch === Math.round(finite(target.note.pitch))) continue;
+    if (nextPitch < window.min || nextPitch > window.max) continue;
+    opportunities.push({
+      target,
+      nextPitch,
+      sourceDirection,
+      short: finite(target.note.duration, 0.5) < 0.65,
+      offStrongBeat: Math.abs(finite(target.note.start) - Math.round(finite(target.note.start))) > 0.09,
+    });
+  }
+
+  opportunities.sort((left, right) => (
+    Number(right.short) - Number(left.short)
+    || Number(right.offStrongBeat) - Number(left.offStrongBeat)
+    || finite(left.target.note.start) - finite(right.target.note.start)
+  ));
+
+  let changed = 0;
+  for (const option of opportunities.slice(0, 3)) {
+    const note = track?.notes?.[option.target.index];
+    if (!note) continue;
+    note.pitch = option.nextPitch;
+    tag(note, report.sourceSectionId, "motif-direction-recall");
+    changed += 1;
+  }
+  return changed ? { id: "restore-directional-contour", song: candidate, changedNotes: changed } : null;
+}
+
 function endingRecallCandidate(song, report) {
   if (finite(report?.metrics?.endingSimilarity, 1) >= 0.76) return null;
   const sourceEntries = indexedNotes(song, report.sourceSectionId);
@@ -218,8 +267,8 @@ export function createMelodySectionDevelopmentCandidates(song, {
   if (!report.sourceSectionId) return [];
   const raw = [
     cloneBreakCandidate(song, report),
+    directionalContourCandidate(song, report),
     contourRecallCandidate(song, report, { maxNotes: 2, id: "restore-contour" }),
-    contourRecallCandidate(song, report, { maxNotes: 3, id: "restore-contour-strong" }),
     endingRecallCandidate(song, report),
   ].filter(Boolean);
   const seen = new Set();
