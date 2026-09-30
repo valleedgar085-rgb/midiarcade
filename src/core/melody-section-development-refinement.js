@@ -152,10 +152,10 @@ function contourRecallCandidate(song, report, {
       };
     })
     .filter((entry) => entry.source && entry.target && entry.nextPitch != null)
+    .filter((entry) => !entry.protected)
     .filter((entry) => entry.nextPitch !== Math.round(finite(entry.target.note?.pitch)))
     .sort((left, right) => (
-      Number(left.protected) - Number(right.protected)
-      || Number(right.short) - Number(left.short)
+      Number(right.short) - Number(left.short)
       || Number(right.offStrongBeat) - Number(left.offStrongBeat)
       || right.pitchDistance - left.pitchDistance
       || left.position - right.position
@@ -163,7 +163,6 @@ function contourRecallCandidate(song, report, {
     .slice(0, Math.max(1, Math.min(3, Math.floor(finite(maxNotes, 2)))));
   let changed = 0;
   for (const option of options) {
-    if (option.protected) continue;
     const note = track?.notes?.[option.target?.index];
     if (!note) continue;
     note.pitch = option.nextPitch;
@@ -269,6 +268,7 @@ export function createMelodySectionDevelopmentCandidates(song, {
     cloneBreakCandidate(song, report),
     directionalContourCandidate(song, report),
     contourRecallCandidate(song, report, { maxNotes: 2, id: "restore-contour" }),
+    contourRecallCandidate(song, report, { maxNotes: 3, id: "restore-contour-strong" }),
     endingRecallCandidate(song, report),
   ].filter(Boolean);
   const seen = new Set();
