@@ -58,6 +58,7 @@ test("quality evolution raises development while creating breathing room instead
   assert.equal(result.outputQuality.version, 1);
   assert.equal(result.melodyContinuityRefinement, true);
   assert.equal(result.melodyPhraseRefinement, true);
+  assert.equal(result.melodySectionDevelopmentRefinement, true);
 });
 
 test("all Phase 6A steering remains bounded under adversarial controls", () => {
@@ -96,6 +97,7 @@ test("Similar receives the same quality system without losing family-preserving 
   assert.ok(Math.abs(related.phraseDevelopment - outputQualityDevelopment("techno").phraseDevelopment) <= 0.012);
   const relatedConfig = applyOutputQualityEvolution(BASE, { kind: "similar" });
   assert.equal(relatedConfig.melodyPhraseRefinement, false, "related generations should not gain fresh-generation melody rewrites");
+  assert.equal(relatedConfig.melodySectionDevelopmentRefinement, false, "related generations should not gain full-song melody rewrites");
 });
 
 test("generation executor applies Phase 6A exactly once before worker or fallback execution", async () => {
