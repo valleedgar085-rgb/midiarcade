@@ -109,6 +109,34 @@ test("exact copied return is rejected as clone risk rather than rewarded as perf
   assert.equal(report.sections[0].metrics.cloneRisk, 1);
 });
 
+test("developed return keeps recognizable identity without cloning the source", () => {
+  const report = evaluateMelodySectionMemory(songWith(TRANSFORMED_RECALL, {
+    relationship: "return",
+    recallStrength: 0.72,
+  }));
+  assert.equal(report.status, "evaluated");
+  assert.equal(report.passed, true, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.familiarity >= 0.65, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.cloneRisk < 0.92, JSON.stringify(report));
+});
+
+test("unrelated return is rejected even when metadata points at the right source", () => {
+  const unrelated = [
+    note(8.25, 72, 0.25),
+    note(9.75, 60, 0.25),
+    note(10.25, 71, 0.25),
+    note(12.5, 59, 0.25),
+    note(13.25, 74, 0.25),
+    note(15.25, 61, 0.25),
+  ];
+  const report = evaluateMelodySectionMemory(songWith(unrelated, {
+    relationship: "return",
+    recallStrength: 0.9,
+  }));
+  assert.equal(report.passed, false, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.relationshipFit < 0.48 || report.score < 62, JSON.stringify(report));
+});
+
 test("contrast can stay in the same melodic family without becoming a clone", () => {
   const contrast = [
     note(8.25, 67, 0.25),
@@ -125,6 +153,7 @@ test("contrast can stay in the same melodic family without becoming a clone", ()
   }));
 
   assert.equal(report.status, "evaluated");
+  assert.equal(report.passed, true, JSON.stringify(report));
   assert.ok(report.sections[0].metrics.cloneRisk < 0.82, JSON.stringify(report));
   assert.ok(report.sections[0].metrics.familiarity < 0.8, JSON.stringify(report));
 });
