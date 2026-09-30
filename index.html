@@ -30,13 +30,13 @@
         </div>
         <div class="topbar-actions">
           <div class="topbar-menu-wrap">
-            <button class="icon-button menu-button" id="menuButton" type="button" aria-expanded="false" aria-label="Studio Menu">
+            <button class="icon-button menu-button" id="menuButton" type="button" aria-expanded="false" aria-label="Studio Menu" aria-controls="menuDropdown">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
               <b>MENU</b>
             </button>
             <div class="menu-dropdown" id="menuDropdown" aria-hidden="true">
-              <button class="menu-item" id="menuItemNew" type="button"><span class="menu-icon">✦</span><b>New song idea</b><kbd>N</kbd></button>
-              <button class="menu-item" id="menuItemSimilar" type="button"><span class="menu-icon">↻</span><b>More like this</b><kbd>S</kbd></button>
+              <button class="menu-item" id="menuItemNew" type="button"><span class="menu-icon">✦</span><b>Generate song</b><kbd>N</kbd></button>
+              <button class="menu-item" id="menuItemSimilar" type="button"><span class="menu-icon">↻</span><b>Three variations</b><kbd>S</kbd></button>
               <button class="menu-item" id="menuItemReset" type="button"><span class="menu-icon">↺</span><b>Reset session</b></button>
               <div class="menu-divider"></div>
               <button class="menu-item" id="menuItemFullscreen" type="button"><span class="menu-icon">⛶</span><b>Toggle fullscreen</b><kbd>F</kbd></button>
@@ -671,6 +671,7 @@
                   <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">← Back to Shape</button>
                 </div>
               </header>
+              <label class="editor-section-switch">SECTION <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Instrument in piano roll"></div>
               <div class="piano-roll-shell" id="pianoRollShell">
                 <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
@@ -953,8 +954,8 @@
         <div class="shortcut-list">
         <span><kbd>Space</kbd><b>Play / pause</b></span>
         <span><kbd>A</kbd><b>Shape workspace</b></span>
-        <span><kbd>N</kbd><b>New song idea</b></span>
-        <span><kbd>S</kbd><b>More like this</b></span>
+        <span><kbd>N</kbd><b>Generate song</b></span>
+        <span><kbd>S</kbd><b>Three variations</b></span>
           <span><kbd>E</kbd><b>Export MIDI</b></span>
         </div>
         <p class="guide-privacy-link"><a href="./privacy-policy.html">Read the MIDI Arcade Privacy Policy</a></p>

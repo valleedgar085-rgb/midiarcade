@@ -426,8 +426,8 @@ function renderCreativeThread() {
   $("#transportContext").textContent = `${section?.name || "Full song"} · ${meta.name} focus`;
   $("#threadRelationship").textContent = focusRelationship(trackId, section);
   $("#threadActionButton").innerHTML = section
-    ? `Continue editing ${section.name} <span>↘</span>`
-    : `Choose a section to edit <span>↘</span>`;
+    ? `Edit ${section.name} <span>↘</span>`
+    : `Choose a section <span>↘</span>`;
   if (!player?.playing) $("#threadLiveSection").textContent = section ? `${section.name} ready from bar ${section.start + 1}` : "Ready to listen";
 }
 
@@ -1183,7 +1183,7 @@ export function applyEditorAction(action) {
   }
   const selected = selectedEditorEntries(entries);
   if (!selected.length) {
-    renderSectionEditor("Select notes first. Shift-click adds more.");
+    renderSectionEditor("Select notes. Shift-click adds.");
     return false;
   }
   const range = editorBeatRange(section);
@@ -1193,7 +1193,7 @@ export function applyEditorAction(action) {
   if (action === "delete") {
     const selectedNotes = new Set(selected.map((entry) => entry.note));
     track.notes = trackNotes(track).filter((note) => !selectedNotes.has(note));
-    finishEditorMutation(`Deleted ${selected.length} note${selected.length === 1 ? "" : "s"}. Undo is ready.`, { keepSelection: false });
+    finishEditorMutation(`Deleted ${selected.length} note${selected.length === 1 ? "" : "s"}. Undo available.`, { keepSelection: false });
     return true;
   }
 
@@ -1333,7 +1333,7 @@ function renderSectionEditor(message = "") {
   const partnerEntries = editorEntries(partnerTrack, section);
   container.style.setProperty("--editor-color", meta.color);
   $("#sectionEditorTitle").textContent = `${section.name} · ${meta.name}`;
-  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · edits write directly into the exported MIDI`;
+  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · edits update MIDI`;
   $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
   $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
@@ -1343,13 +1343,14 @@ function renderSectionEditor(message = "") {
   );
   const relationshipLabel = partnerId
     ? `${TRACK_META[state.editorTrack]?.name || "Track"} ↔ ${TRACK_META[partnerId]?.name || partnerId}`
-    : "Selected instrument";
+    : "Instrument";
   $("#editorRelationshipSummary").innerHTML = `
     <span><small>RELATIONSHIP</small><strong>${relationshipLabel}</strong></span>
     <span><small>SHARED ATTACKS</small><strong>${relationship.sharedAttacks}</strong></span>
     <span><small>BREATHING NOTES</small><strong>${relationship.breathingNotes}</strong></span>
     <span><small>GUIDE</small><strong>${state.editorOverlay === "none" ? "Hidden" : state.editorOverlay === "harmony" ? "Harmony" : "Both"}</strong></span>`;
 
+  $("#editorSectionSwitch").innerHTML = normalizeSections().map((s) => `<option value="${s.id}" ${s.id === section.id ? "selected" : ""}>${s.name} / ${s.start + 1}-${s.start + s.bars}</option>`).join("");
   $("#editorTrackTabs").innerHTML = TRACK_ORDER.map((id) => {
     const trackObject = songTracks().find((candidate, index) => trackId(candidate, index) === id);
     const count = editorEntries(trackObject, section).length;
@@ -2917,12 +2918,12 @@ export function focusSongSection(sectionId, track = state.editorTrack, { openEdi
   state.editorSelection.clear();
   renderTimeline();
   renderTrackRack();
-  renderAttitudeStrip(`${TRACK_META[state.selectedTrack]?.name || "Instrument"} and ${section.name} are now connected.`);
+  renderAttitudeStrip(`${section.name} / ${TRACK_META[state.selectedTrack]?.name || "Instrument"}`);
   renderSectionEditor();
   renderCreativeThread();
   showToast(openEditor
-    ? `Opened ${section.name} in the ${TRACK_META[state.editorTrack]?.name || "MIDI"} piano roll.`
-    : `${section.name} is ready in the Section Shaper.`);
+    ? `${section.name} / ${TRACK_META[state.editorTrack]?.name || "MIDI"} editor`
+    : `${section.name} selected.`);
   if (scroll) {
     const target = openEditor ? $("#sectionEditor") : $("#sectionShaper");
     setTimeout(() => target?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 80);
@@ -6197,12 +6198,12 @@ function toggleFullscreen() {
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
-    showToast("Immersive Fullscreen active.");
+    showToast("Fullscreen on.");
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     }
-    showToast("Standard view active.");
+    showToast("Fullscreen off.");
   }
 }
 
@@ -6541,16 +6542,17 @@ function toggleFullscreen() {
   $("#varyCoverButton")?.addEventListener("click", () => {
     state.coverVariation = (Number(state.coverVariation) || 0) + 1;
     renderFinishWorkspace();
-    showToast(`${coverArtworkFinish(state.coverVariation).label} finish applied. The original composition stays intact.`);
+    showToast(`${coverArtworkFinish(state.coverVariation).label} finish applied. Composition preserved.`);
   });
 
+  $("#editorSectionSwitch").addEventListener("change", (e) => focusSongSection(e.target.value, state.editorTrack, { openEditor: true }));
   $("#editorCloseButton").addEventListener("click", () => {
     state.sectionEditorOpen = false;
     state.editorSelection.clear();
     renderTimeline();
     renderSectionEditor();
     renderCreativeThread();
-    showToast("Note detail closed. The selected section and your edits remain in Shape.");
+    showToast("Back to Shape. Edits saved.");
   });
   $("#editorPlayButton").addEventListener("click", async () => {
     const section = editorSection();
@@ -6625,7 +6627,7 @@ function toggleFullscreen() {
   $("#threadSectionButton").addEventListener("click", () => {
     const section = editorSection();
     scrollToControl(section ? "#sectionEditor" : "#arrangementTitle");
-    showToast(section ? `${section.name} is open in the piano roll.` : "Choose any section or colored instrument clip in the song map.");
+    showToast(section ? `${section.name} is open in the piano roll.` : "Choose a section or instrument clip.");
   });
   $("#threadTrackButton").addEventListener("click", () => {
     switchWorkspace("mix");
@@ -6637,7 +6639,7 @@ function toggleFullscreen() {
   $("#guidedModeButton").addEventListener("click", () => {
     state.guidedMode = !state.guidedMode;
     renderWorkflow();
-    showToast(state.guidedMode ? "Guided workflow is visible." : "Guided workflow is hidden. The Complete Guide is always available above.");
+    showToast(state.guidedMode ? "Guided workflow is visible." : "Workflow hidden. Guide stays available.");
   });
   $("#workflowAction").addEventListener("click", runWorkflowAction);
   $$('[data-workflow-step]').forEach((button) => button.addEventListener("click", () => {
