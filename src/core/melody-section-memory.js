@@ -172,15 +172,47 @@ function familiarityBandFit(relationship, recallStrength, familiarity) {
   return 1;
 }
 
+function contrastFamilyEvidence(transform, {
+  contour,
+  rhythm,
+  ending,
+  familiarity,
+}) {
+  const normalized = String(transform ?? "");
+  if (normalized === "rhythmic-displacement") return clamp(Math.max(contour, ending));
+  if (normalized === "harmonic-reframe") return clamp(Math.max(contour, rhythm * 0.6, ending * 0.7));
+  if (normalized === "register-reframe") return clamp(contour);
+  return clamp(Math.max(familiarity, contour * 0.8, ending * 0.8));
+}
+
 function relationshipFitness({
   relationship,
+  transform,
   recallStrength,
   familiarity,
   cloneRisk,
   metadataAccuracy,
+  contrastEvidence,
 }) {
+  if (relationship === "contrast") {
+    const requiredEvidence = String(transform ?? "") === "rhythmic-displacement"
+      ? 0.12
+      : String(transform ?? "") === "harmonic-reframe"
+        ? 0.055
+        : String(transform ?? "") === "register-reframe"
+          ? 0.10
+          : 0.12;
+    const familyFit = clamp(finite(contrastEvidence) / requiredEvidence);
+    const noveltyFit = clamp((1 - cloneRisk) / 0.72);
+    return clamp(
+      familyFit * 0.55
+        + metadataAccuracy * 0.25
+        + noveltyFit * 0.20,
+    );
+  }
+
   const familiarityFit = familiarityBandFit(relationship, recallStrength, familiarity);
-  const cloneThreshold = relationship === "return" ? 0.92 : relationship === "recall" ? 0.88 : 0.78;
+  const cloneThreshold = relationship === "return" ? 0.92 : 0.88;
   const clonePenalty = clamp((cloneRisk - cloneThreshold) / Math.max(0.01, 1 - cloneThreshold));
   return clamp(
     familiarityFit * 0.72
@@ -242,18 +274,28 @@ export function evaluateMelodySectionMemory(song) {
     const relationship = String(memory.relationship);
     const recallStrength = finite(memory.recallStrength, 0.7);
     const familiarityFit = familiarityBandFit(relationship, recallStrength, familiarity);
+    const contrastEvidence = relationship === "contrast"
+      ? contrastFamilyEvidence(memory.transform, { contour, rhythm, ending, familiarity })
+      : familiarity;
     const relationshipFit = relationshipFitness({
       relationship,
+      transform: memory.transform,
       recallStrength,
       familiarity,
       cloneRisk,
       metadataAccuracy,
+      contrastEvidence,
     });
     const score = Math.round(100 * (
-      relationshipFit * 0.58
-      + familiarityFit * 0.22
-      + (1 - cloneRisk) * 0.12
-      + metadataAccuracy * 0.08
+      relationship === "contrast"
+        ? relationshipFit * 0.58
+          + contrastEvidence * 0.18
+          + (1 - cloneRisk) * 0.16
+          + metadataAccuracy * 0.08
+        : relationshipFit * 0.58
+          + familiarityFit * 0.22
+          + (1 - cloneRisk) * 0.12
+          + metadataAccuracy * 0.08
     ));
 
     return Object.freeze({
@@ -270,6 +312,7 @@ export function evaluateMelodySectionMemory(song) {
         endingSimilarity: round(ending),
         familiarity: round(familiarity),
         familiarityFit: round(familiarityFit),
+        contrastEvidence: round(contrastEvidence),
         cloneRisk: round(cloneRisk),
         relationshipFit: round(relationshipFit),
         metadataCoverage: round(metadata.coverage),
