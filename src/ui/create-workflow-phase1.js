@@ -119,7 +119,7 @@ function organizePrimaryDirection(rootDocument, createPanel) {
   const feelControls = ["tempoControl", "energyControl", "complexityControl", "grooveControl"]
     .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
     .filter(Boolean);
-  const structureControls = ["barsControl"]
+  const structureControls = ["barsControl", "sectionPacingControl"]
     .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
     .filter(Boolean);
 

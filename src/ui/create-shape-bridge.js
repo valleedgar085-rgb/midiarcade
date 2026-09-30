@@ -79,6 +79,7 @@ export function readCreateCreativeContext(root = document) {
       mode: controlValue(root, "#modeControl", "auto"),
       tempo: controlValue(root, "#tempoControl", null),
       bars: controlValue(root, "#barsControl", "auto"),
+      sectionPacing: controlValue(root, "#sectionPacingControl", "roomier"),
       groove: controlValue(root, "#grooveControl", "auto"),
       energy: controlValue(root, "#energyControl", null),
       complexity: controlValue(root, "#complexityControl", null),

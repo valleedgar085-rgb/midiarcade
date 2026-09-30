@@ -11,6 +11,7 @@ export const GENERATION_PREFERENCE_IDS = Object.freeze([
   "modeControl",
   "tempoControl",
   "barsControl",
+  "sectionPacingControl",
   "grooveControl",
   "creativeRangeControl",
   "chordPathControl",

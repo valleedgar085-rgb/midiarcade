@@ -15,6 +15,7 @@ import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { captureManualGenerationControls, MANUAL_GENERATION_CONTROL_IDS } from "./core/manual-generation-controls.js";
+import { resolveSectionPacing } from "./core/section-pacing.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
@@ -917,7 +918,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     chordPath: resolvedChordPath,
     tempo: generationValue("tempoControl", 112),
     bpm: generationValue("tempoControl", 112),
-    bars: resolvedBars,
+    ...resolveSectionPacing({ bars: resolvedBars, sectionPacing: $("#sectionPacingControl")?.value || "roomier" }),
     groove,
     energy: generationValue("energyControl", 68) / 100,
     complexity,
@@ -949,7 +950,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
 }
 
 const GENERATION_SETTING_IDS = [
-  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "creativeRangeControl", "chordPathControl",
+  "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "sectionPacingControl", "grooveControl", "creativeRangeControl", "chordPathControl",
   "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl",
   "variationControl", "evolutionControl", "trapIntroModeControl", "surpriseControl",
 ];
@@ -965,6 +966,17 @@ function generationSettingsSnapshot() {
 }
 
 function renderGenerationIntent() {
+  const pacingHint = $("#sectionPacingHint");
+  const baseBars = Number($("#barsControl")?.value);
+  const pacingMode = $("#sectionPacingControl")?.value || "roomier";
+  if (pacingHint) {
+    const pacing = resolveSectionPacing({ bars: baseBars, sectionPacing: pacingMode });
+    pacingHint.textContent = Number.isFinite(baseBars) && baseBars > 0
+      ? pacingMode === "roomier"
+        ? `${pacing.pacingBaseBars} base bars → ${pacing.bars} bars · longer intro and more room in each section.`
+        : `${pacing.bars} bars · standard section length.`
+      : pacingMode === "roomier" ? "Auto length plus a longer intro and more room in each section." : "Auto chooses the song length.";
+  }
   const panel = $("#generationIntent");
   if (!panel) return;
   const current = generationSettingsSnapshot();
@@ -1816,7 +1828,7 @@ function syncControlsFromSong() {
   $("#keyControl").value = NOTE_NAMES.includes(songKey()) ? songKey() : "C";
   $("#modeControl").value = [...$("#modeControl").options].some((option) => option.value === songMode()) ? songMode() : "major";
   $("#tempoControl").value = clamp(songBpm(), 62, 190);
-  const barsValue = String(songBars());
+  const barsValue = String(state.song.settings?.pacingBaseBars ?? songBars());
   if ([...$("#barsControl").options].some((option) => option.value === barsValue)) $("#barsControl").value = barsValue;
   const generatedSettings = state.song.settings || {};
   const generationControlMap = {
@@ -6252,6 +6264,13 @@ function toggleFullscreen() {
     const mode = $("#trapIntroModeControl").value;
     showToast(`Trap / Hip-Hop intro set to ${mode === "extended" ? "extended build" : mode === "auto" ? "Auto" : "short"}. Generate to hear it.`);
   });
+  $("#sectionPacingControl")?.addEventListener("change", () => {
+    renderGenerationIntent();
+    scheduleSessionSave();
+    showToast($("#sectionPacingControl").value === "roomier"
+      ? "Roomier pacing: a longer intro and a little extra time in every section. Generate to hear it."
+      : "Standard pacing: use the chosen song length. Generate to hear it.");
+  });
 
   $("#tempoControl").addEventListener("change", () => {
     if (state.song && selectedGenreId() === songGenreId()) {
@@ -6526,6 +6545,7 @@ function toggleFullscreen() {
     $("#variationControl").value = 42;
     $("#evolutionControl").value = 58;
     $("#trapIntroModeControl").value = "short";
+    $("#sectionPacingControl").value = "roomier";
     $("#surpriseControl").value = 28;
     updateRangeDisplays();
     decorateAutoRangeControls();

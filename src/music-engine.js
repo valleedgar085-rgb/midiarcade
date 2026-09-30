@@ -8,6 +8,7 @@
 
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
 import { preserveManualGenerationControls } from "./core/manual-generation-controls.js";
+import { resolveSectionPacing, roomierSectionSizes, roomierIntroEntryBars } from "./core/section-pacing.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -1270,6 +1271,7 @@ export function createFusedGenreProfile(primaryGenreId, secondaryGenreId, blendR
 /** Normalize permissive UI values into the engine's stable configuration. */
 export function normalizeConfig(input = {}) {
   input = preserveManualGenerationControls(input);
+  const pacing = resolveSectionPacing(input);
   const seed = String(input.seed ?? DEFAULT_CONFIG.seed);
   const primaryGenre = normalizeGenre(input.genre ?? input.styleGenre ?? DEFAULT_CONFIG.genre);
   const secondaryGenre = input.secondaryGenre ? normalizeGenre(input.secondaryGenre) : null;
@@ -1340,7 +1342,8 @@ export function normalizeConfig(input = {}) {
     scale,
     scaleIntervals: [...SCALES[scale]],
     tempo: clamp(round(finite(input.tempo == null || input.tempo === "" ? profile.bpm.default : input.tempo, profile.bpm.default), 3), 30, 300),
-    bars: clamp(Math.round(finite(input.bars, DEFAULT_CONFIG.bars)), 1, 128),
+    bars: pacing.bars,
+    ...(pacing.sectionPacing === "roomier" ? { sectionPacing: pacing.sectionPacing, pacingBaseBars: pacing.pacingBaseBars } : {}),
     phraseBars: clamp(Math.round(finite(input.phraseBars, phraseBars)), 2, 8),
     timeSignature,
     mood,
@@ -1554,7 +1557,7 @@ function extendUrbanIntro(layout, sizes, config) {
 }
 
 function createStructure(config, rng) {
-  const bars = config.bars;
+  const bars = config.sectionPacing === "roomier" ? config.pacingBaseBars : config.bars;
   const form = GENRE_PROFILES[config.genre].arrangement.form;
   // Reggaeton also has a club-ready profile, but its verse/chorus form must not
   // be mistaken for a House/Techno build-drop arrangement.
@@ -1618,7 +1621,10 @@ function createStructure(config, rng) {
   }
 
   if (bars < layout.length) layout = layout.slice(0, bars);
-  const sizes = extendUrbanIntro(layout, allocateBars(layout, bars), config);
+  const baseline = extendUrbanIntro(layout, allocateBars(layout, bars), { ...config, bars });
+  const sizes = config.sectionPacing === "roomier"
+    ? roomierSectionSizes(layout, baseline, config.bars)
+    : baseline;
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
@@ -1652,7 +1658,9 @@ function adaptStructure(source, config) {
   const sourceTotal = selected.reduce((sum, item) => sum + item.bars, 0);
   const sizes = sourceTotal === config.bars
     ? selected.map((item) => item.bars)
-    : allocateBars(selected.map((item) => ({ ...item, weight: item.bars })), config.bars);
+    : config.sectionPacing === "roomier"
+      ? roomierSectionSizes(selected, allocateBars(selected.map((item) => ({ ...item, weight: item.bars })), config.pacingBaseBars), config.bars)
+      : allocateBars(selected.map((item) => ({ ...item, weight: item.bars })), config.bars);
   const occurrences = {};
   const barBeats = beatsPerBar(config);
   let startBar = 0;
@@ -6563,6 +6571,10 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
   let exitBeat = null;
 
   if (isOpeningIntro) {
+    if (config.sectionPacing === "roomier") {
+      const delay = roomierIntroEntryBars(trackId, span / barBeats) * barBeats;
+      return delay > 0 ? { entryBeat: round(section.startBeat + delay), exitBeat: null } : null;
+    }
     let delayFraction = 0;
     let maxBars = 0;
 
@@ -6656,6 +6668,10 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       const scene = scenes.get(section.id);
       const producerRole = scene?.roles?.[id] ?? lane?.role ?? "support";
       const roleGate = producerRoleGateWindow(section, structure, scene, id, producerRole, config);
+      // In Roomier intros the planned entrance owns the opening silence;
+      // an early motif anchor must not bring a delayed layer in immediately.
+      const anchorsBypassEntry = config.sectionPacing !== "roomier"
+        || section.id !== structure[0]?.id || section.name !== "intro";
       if (!lane || !notes.length) {
         result.push(...notes.map((note) => ({
           ...note,
@@ -6718,7 +6734,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         }
         const barPosition = mod(note.start, beatsPerBar(config));
         const protectedAnchor = isProtectedArrangementNote(note);
-        const outsideRoleGate = !protectedAnchor && Boolean(
+        const outsideRoleGate = (!protectedAnchor || !anchorsBypassEntry) && Boolean(
           (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
           || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
         );
@@ -6739,7 +6755,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           if (keepAttack == null) {
             const attackNotes = rockPowerChordGroups.get(attackKey) ?? [note];
             const attackProtected = attackNotes.some(isProtectedArrangementNote);
-            const outsideAttackGate = !attackProtected && Boolean(
+            const outsideAttackGate = (!attackProtected || !anchorsBypassEntry) && Boolean(
               (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
               || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
             );
@@ -6785,7 +6801,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       if (!kept.length && notes.length && producerRole !== "rest") {
         const fallbackNotes = notes.filter((note) => {
           const protectedAnchor = isProtectedArrangementNote(note);
-          if (protectedAnchor) return true;
+          if (protectedAnchor && anchorsBypassEntry) return true;
           if (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6) return false;
           if (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6) return false;
           return true;

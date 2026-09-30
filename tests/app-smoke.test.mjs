@@ -516,6 +516,7 @@ test("browser app initializes against the engine contract", async () => {
     modeControl: "dorian",
     tempoControl: "84",
     barsControl: "32",
+    sectionPacingControl: "standard",
     grooveControl: "straight",
     energyControl: "68",
     complexityControl: "54",
@@ -612,6 +613,14 @@ test("browser app initializes against the engine contract", async () => {
     }
   };
   assertManualDirection(firstGeneratedSnapshot.song);
+  elementFor("#sectionPacingControl").value = "roomier";
+  elementFor("#sectionPacingControl").dispatch("change");
+  const roomierConfig = app.buildConfig("pacing-ui");
+  assert.equal(roomierConfig.bars, 44);
+  assert.equal(roomierConfig.pacingBaseBars, 32);
+  assert.match(elementFor("#sectionPacingHint").textContent, /32 base bars → 44 bars/);
+  elementFor("#sectionPacingControl").value = "standard";
+  elementFor("#sectionPacingControl").dispatch("change");
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
