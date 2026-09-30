@@ -38,6 +38,10 @@ const SPECIALISTS = Object.freeze({
   ensemble: "ensemble-specialist",
 });
 
+const READ_ONLY_QUALITY_STAGES = Object.freeze(new Set([
+  "melodySectionMemoryAudit",
+]));
+
 const QUALITY_STAGE_OWNERS = Object.freeze({
   arrangement: ["ensemble", "phrase"],
   returnDevelopment: ["ensemble", "phrase"],
@@ -49,6 +53,8 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   fusionPerformanceRefinement: ["ensemble", "groove"],
   melodyContinuityRefinement: ["phrase", "ensemble", "harmony"],
   melodyPhraseRefinement: ["phrase", "harmony", "ensemble"],
+  melodySectionDevelopmentRefinement: ["phrase", "harmony", "ensemble"],
+  melodySectionMemoryAudit: [],
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
   genreIdentityRefinement: ["groove", "ensemble"],
@@ -81,14 +87,17 @@ export function resolveWeaknessAuthority(diagnosis = {}) {
 }
 
 export function qualityStageAuthority(stageId) {
-  const owners = Object.freeze([...(QUALITY_STAGE_OWNERS[String(stageId)] ?? [])]);
-  const mutations = Object.freeze([...new Set(owners.flatMap((owner) => OWNER_MUTATIONS[owner] ?? []))]);
+  const normalizedStageId = String(stageId ?? "");
+  const readOnly = READ_ONLY_QUALITY_STAGES.has(normalizedStageId);
+  const owners = Object.freeze([...(QUALITY_STAGE_OWNERS[normalizedStageId] ?? [])]);
+  const mutations = Object.freeze(readOnly ? [] : [...new Set(owners.flatMap((owner) => OWNER_MUTATIONS[owner] ?? []))]);
   return Object.freeze({
     version: 1,
-    stageId: String(stageId ?? ""),
+    stageId: normalizedStageId,
     owners,
     mutations,
-    automationOnly: String(stageId) === "transitionFxRefinement",
+    readOnly,
+    automationOnly: normalizedStageId === "transitionFxRefinement",
   });
 }
 
@@ -150,6 +159,9 @@ export function authorizeQualityStage(stageId, repairAuthority = null) {
   const stage = qualityStageAuthority(stageId);
   if (!repairAuthority) {
     return Object.freeze({ allowed: true, reason: "no-router-context", stage });
+  }
+  if (stage.readOnly) {
+    return Object.freeze({ allowed: true, reason: "read-only-audit", stage });
   }
   if (repairAuthority.allowsSurgicalPostprocess !== true) {
     return Object.freeze({ allowed: false, reason: "surgical-postprocess-disabled", stage });

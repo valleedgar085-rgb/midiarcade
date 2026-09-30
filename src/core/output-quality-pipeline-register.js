@@ -25,6 +25,11 @@ import {
   MAX_MELODY_PHRASE_CANDIDATES,
 } from "./melody-phrase-refinement.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
+import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
+import {
+  createMelodySectionDevelopmentCandidates,
+  MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
+} from "./melody-section-development-refinement.js";
 import {
   createRegisterHealthCandidates,
   MAX_REGISTER_HEALTH_CANDIDATES,
@@ -1144,6 +1149,218 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
   return { song: selected.song, diagnostics };
 }
 
+function compareMelodySectionDevelopmentAssessments(left, right) {
+  const passedDelta = Number(right.afterReport?.passed === true) - Number(left.afterReport?.passed === true);
+  if (passedDelta) return passedDelta;
+  const sectionDelta = right.sectionScoreDelta - left.sectionScoreDelta;
+  if (Math.abs(sectionDelta) > 1e-9) return sectionDelta;
+  const memoryDelta = right.memoryScoreDelta - left.memoryScoreDelta;
+  if (Math.abs(memoryDelta) > 1e-9) return memoryDelta;
+  const scoreDelta = right.scoreDelta - left.scoreDelta;
+  if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
+  return left.candidateIndex - right.candidateIndex;
+}
+
+function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+  const after = evaluateCandidate(candidate.song);
+  const release = evaluateReleaseGate(candidate.song, after);
+  const scoreDelta = finite(after?.score) - finite(before?.score);
+  const floorDelta = creativeFloor(after) - beforeFloor;
+  const dimensions = Object.keys(before?.subscores ?? {});
+  const dimensionDeltas = protectedDeltas(before, after, dimensions);
+  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
+  const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const localImprovement = candidate.sectionScoreDelta >= 4 || candidate.afterReport?.passed === true;
+  const accepted = Boolean(
+    release?.passed
+    && scaleSafe
+    && localImprovement
+    && candidate.memoryScoreDelta > 0
+    && scoreDelta >= -0.5
+    && floorDelta >= -0.5
+    && protectedSafe
+  );
+  return {
+    ...candidate,
+    after,
+    release,
+    scoreDelta,
+    floorDelta,
+    protectedDeltas: dimensionDeltas,
+    protectedSafe,
+    accepted,
+    reason: !release?.passed ? "release-gate"
+      : !scaleSafe ? "scale-safety"
+        : !localImprovement ? "memory-gain-too-small"
+          : !protectedSafe ? "protected-dimension-regression"
+            : scoreDelta < -0.5 || floorDelta < -0.5 ? "full-song-regression"
+              : accepted ? "melody-section-development-win" : "critic-regression",
+  };
+}
+
+export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  if (config.melodySectionDevelopmentRefinement !== true) {
+    return { song, diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES) };
+  }
+  const initialMemory = evaluateMelodySectionMemory(song);
+  if (initialMemory.status !== "evaluated") {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, initialMemory.reason, {
+        beforeMemoryScore: initialMemory.score,
+        memoryStatus: initialMemory.status,
+      }),
+    };
+  }
+  if (initialMemory.passed) {
+    return {
+      song,
+      diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, "already-strong", {
+        beforeMemoryScore: initialMemory.score,
+        memoryStatus: initialMemory.status,
+      }),
+    };
+  }
+
+  const maxPasses = 3;
+  let currentSong = song;
+  let currentMemory = initialMemory;
+  let currentEvaluation = evaluateCandidate(song);
+  let currentFloor = creativeFloor(currentEvaluation);
+  const passes = [];
+  const candidateIds = [];
+  let totalChangedNotes = 0;
+  let lastAccepted = null;
+
+  for (let passIndex = 0; passIndex < maxPasses && !currentMemory.passed; passIndex += 1) {
+    const candidates = createMelodySectionDevelopmentCandidates(currentSong);
+    if (!candidates.length) {
+      passes.push(Object.freeze({
+        pass: passIndex + 1,
+        attempted: true,
+        accepted: false,
+        reason: "no-improving-section-development-candidate",
+        beforeMemoryScore: currentMemory.score,
+        weakestSectionId: currentMemory.weakestSection?.sectionId ?? null,
+        candidateIds: Object.freeze([]),
+      }));
+      break;
+    }
+
+    const assessments = candidates.map((candidate) => assessMelodySectionDevelopmentCandidate(
+      candidate,
+      currentEvaluation,
+      currentFloor,
+      evaluateCandidate,
+      evaluateReleaseGate,
+    ));
+    candidateIds.push(...assessments.map(({ id }) => id));
+    const accepted = assessments.filter((entry) => entry.accepted)
+      .sort(compareMelodySectionDevelopmentAssessments);
+    const selected = accepted[0] ?? [...assessments].sort(compareMelodySectionDevelopmentAssessments)[0];
+    passes.push(Object.freeze({
+      pass: passIndex + 1,
+      attempted: true,
+      accepted: Boolean(selected?.accepted),
+      reason: selected?.reason ?? "critic-regression",
+      id: selected?.id ?? null,
+      sectionId: selected?.sectionId ?? null,
+      sourceSectionId: selected?.sourceSectionId ?? null,
+      relationship: selected?.relationship ?? null,
+      changedNotes: finite(selected?.changedNotes),
+      beforeMemoryScore: finite(selected?.beforeMemoryScore),
+      afterMemoryScore: finite(selected?.afterMemoryScore),
+      memoryScoreDelta: finite(selected?.memoryScoreDelta),
+      beforeSectionScore: finite(selected?.beforeSectionScore),
+      afterSectionScore: finite(selected?.afterSectionScore),
+      sectionScoreDelta: finite(selected?.sectionScoreDelta),
+      scoreDelta: round(selected?.scoreDelta),
+      floorDelta: round(selected?.floorDelta),
+      candidateIds: Object.freeze(assessments.map(({ id }) => id)),
+      protectedDeltas: Object.freeze(Object.fromEntries(
+        Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
+      )),
+    }));
+    if (!accepted.length) break;
+
+    lastAccepted = selected;
+    currentSong = selected.song;
+    currentMemory = evaluateMelodySectionMemory(currentSong);
+    currentEvaluation = selected.after;
+    currentFloor = creativeFloor(currentEvaluation);
+    totalChangedNotes += Math.max(0, Math.round(finite(selected.changedNotes)));
+  }
+
+  const acceptedPasses = passes.filter((entry) => entry.accepted);
+  const finalMemory = evaluateMelodySectionMemory(currentSong);
+  const finalEvaluation = acceptedPasses.length ? evaluateCandidate(currentSong) : currentEvaluation;
+  const finalRelease = acceptedPasses.length
+    ? evaluateReleaseGate(currentSong, finalEvaluation)
+    : null;
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted: acceptedPasses.length > 0,
+    changed: acceptedPasses.length > 0 && totalChangedNotes > 0,
+    reason: finalMemory.passed
+      ? "melody-section-development-win"
+      : acceptedPasses.length
+        ? "partial-melody-section-development"
+        : passes.at(-1)?.reason ?? "no-improving-section-development-candidate",
+    changedNotes: totalChangedNotes,
+    passesAttempted: passes.length,
+    passesAccepted: acceptedPasses.length,
+    passLimit: maxPasses,
+    candidatesEvaluated: candidateIds.length,
+    candidateLimit: MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
+    candidateIds: Object.freeze(candidateIds),
+    beforeMemoryScore: initialMemory.score,
+    afterMemoryScore: finalMemory.score,
+    memoryScoreDelta: finalMemory.score - initialMemory.score,
+    finalMemoryPassed: finalMemory.passed,
+    finalMemoryReason: finalMemory.reason,
+    weakestSectionId: finalMemory.weakestSection?.sectionId ?? null,
+    beforeScore: round(evaluateCandidate(song)?.score),
+    afterScore: round(finalEvaluation?.score),
+    scoreDelta: round(finite(finalEvaluation?.score) - finite(evaluateCandidate(song)?.score)),
+    passes: Object.freeze(passes),
+  });
+  if (!acceptedPasses.length) return { song, diagnostics };
+
+  currentSong.outputQualityEvolution = {
+    ...(currentSong.outputQualityEvolution ?? {}),
+    melodySectionDevelopmentRefinement: {
+      accepted: true,
+      changedNotes: diagnostics.changedNotes,
+      passesAccepted: diagnostics.passesAccepted,
+      memoryScoreDelta: diagnostics.memoryScoreDelta,
+      finalMemoryPassed: diagnostics.finalMemoryPassed,
+      candidatesEvaluated: diagnostics.candidatesEvaluated,
+    },
+  };
+  currentSong.meta = acceptedMetadata(
+    currentSong,
+    finalEvaluation,
+    finalRelease ?? lastAccepted?.release,
+    "melodySectionDevelopmentRefinement",
+    diagnostics,
+  );
+  return { song: currentSong, diagnostics };
+}
+
+export function applyMelodySectionMemoryAudit(song) {
+  const report = evaluateMelodySectionMemory(song);
+  return {
+    song,
+    diagnostics: Object.freeze({
+      attempted: true,
+      accepted: false,
+      changed: false,
+      finalAudit: true,
+      ...report,
+    }),
+  };
+}
+
 export function applySongOutputQualityPipeline(song, config = {}, {
   evaluateCandidate = evaluateSongCandidate,
   evaluateReleaseGate = evaluateSongReleaseGate,
@@ -1165,12 +1382,14 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
     { id: "melodyPhraseRefinement", run: (current) => applyMelodyPhraseRefinement(current, config, evaluate, release) },
+    { id: "melodySectionDevelopmentRefinement", run: (current) => applyMelodySectionDevelopmentRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
     { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
+    { id: "melodySectionMemoryAudit", run: (current) => applyMelodySectionMemoryAudit(current) },
   ], {
     repairAuthority: config?.generationRepairAuthority ?? null,
   });
@@ -1188,6 +1407,8 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
     melodyPhraseDiagnostics: diagnostics.melodyPhraseRefinement,
+    melodySectionDevelopmentDiagnostics: diagnostics.melodySectionDevelopmentRefinement,
+    melodySectionMemoryDiagnostics: diagnostics.melodySectionMemoryAudit,
     bassContinuityDiagnostics: diagnostics.bassContinuityRefinement,
     ensembleContinuityDiagnostics: diagnostics.ensembleContinuityRefinement,
     transitionFxDiagnostics: diagnostics.transitionFxRefinement,
@@ -1212,6 +1433,8 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
     ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],
+    ["melodySectionDevelopmentRefinement", processed.melodySectionDevelopmentDiagnostics],
+    ["melodySectionMemoryAudit", processed.melodySectionMemoryDiagnostics],
     ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
