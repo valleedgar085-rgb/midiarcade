@@ -958,6 +958,15 @@ input[type=range].is-auto{
 .section-chip small{font-size:8px;opacity:.6}
 .section-chip:hover,.section-chip.active{background:rgba(157,111,255,.18);border-color:var(--accent);color:var(--text)}
 .section-chip.is-playing-section{border-color:var(--green)}
+.timeline-playhead-track{
+  position:absolute;
+  top:0;
+  bottom:0;
+  left:calc(var(--arrange-label-width,72px) + 5px);
+  right:5px;
+  pointer-events:none;
+  z-index:12;
+}
 .playhead{
   position:absolute;top:0;bottom:0;width:2px;
   background:linear-gradient(to bottom,var(--green),transparent);
