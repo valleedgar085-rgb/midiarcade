@@ -1202,101 +1202,149 @@ export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCa
   if (config.melodySectionDevelopmentRefinement !== true) {
     return { song, diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES) };
   }
-  const memoryBefore = evaluateMelodySectionMemory(song);
-  if (memoryBefore.status !== "evaluated") {
+  const initialMemory = evaluateMelodySectionMemory(song);
+  if (initialMemory.status !== "evaluated") {
     return {
       song,
-      diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, memoryBefore.reason, {
-        beforeMemoryScore: memoryBefore.score,
-        memoryStatus: memoryBefore.status,
+      diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, initialMemory.reason, {
+        beforeMemoryScore: initialMemory.score,
+        memoryStatus: initialMemory.status,
       }),
     };
   }
-  if (memoryBefore.passed) {
+  if (initialMemory.passed) {
     return {
       song,
       diagnostics: disabledDiagnostics(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, "already-strong", {
-        beforeMemoryScore: memoryBefore.score,
-        memoryStatus: memoryBefore.status,
+        beforeMemoryScore: initialMemory.score,
+        memoryStatus: initialMemory.status,
       }),
     };
   }
 
-  const candidates = createMelodySectionDevelopmentCandidates(song);
-  if (!candidates.length) {
-    return {
-      song,
-      diagnostics: Object.freeze({
+  const maxPasses = 3;
+  let currentSong = song;
+  let currentMemory = initialMemory;
+  let currentEvaluation = evaluateCandidate(song);
+  let currentFloor = creativeFloor(currentEvaluation);
+  const passes = [];
+  const candidateIds = [];
+  let totalChangedNotes = 0;
+  let lastAccepted = null;
+
+  for (let passIndex = 0; passIndex < maxPasses && !currentMemory.passed; passIndex += 1) {
+    const candidates = createMelodySectionDevelopmentCandidates(currentSong);
+    if (!candidates.length) {
+      passes.push(Object.freeze({
+        pass: passIndex + 1,
         attempted: true,
         accepted: false,
-        changed: false,
         reason: "no-improving-section-development-candidate",
-        candidatesEvaluated: 0,
-        candidateLimit: MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
-        candidateIds: [],
-        beforeMemoryScore: memoryBefore.score,
-        weakestSectionId: memoryBefore.weakestSection?.sectionId ?? null,
-      }),
-    };
+        beforeMemoryScore: currentMemory.score,
+        weakestSectionId: currentMemory.weakestSection?.sectionId ?? null,
+        candidateIds: Object.freeze([]),
+      }));
+      break;
+    }
+
+    const assessments = candidates.map((candidate) => assessMelodySectionDevelopmentCandidate(
+      candidate,
+      currentEvaluation,
+      currentFloor,
+      evaluateCandidate,
+      evaluateReleaseGate,
+    ));
+    candidateIds.push(...assessments.map(({ id }) => id));
+    const accepted = assessments.filter((entry) => entry.accepted)
+      .sort(compareMelodySectionDevelopmentAssessments);
+    const selected = accepted[0] ?? [...assessments].sort(compareMelodySectionDevelopmentAssessments)[0];
+    passes.push(Object.freeze({
+      pass: passIndex + 1,
+      attempted: true,
+      accepted: Boolean(selected?.accepted),
+      reason: selected?.reason ?? "critic-regression",
+      id: selected?.id ?? null,
+      sectionId: selected?.sectionId ?? null,
+      sourceSectionId: selected?.sourceSectionId ?? null,
+      relationship: selected?.relationship ?? null,
+      changedNotes: finite(selected?.changedNotes),
+      beforeMemoryScore: finite(selected?.beforeMemoryScore),
+      afterMemoryScore: finite(selected?.afterMemoryScore),
+      memoryScoreDelta: finite(selected?.memoryScoreDelta),
+      beforeSectionScore: finite(selected?.beforeSectionScore),
+      afterSectionScore: finite(selected?.afterSectionScore),
+      sectionScoreDelta: finite(selected?.sectionScoreDelta),
+      scoreDelta: round(selected?.scoreDelta),
+      floorDelta: round(selected?.floorDelta),
+      candidateIds: Object.freeze(assessments.map(({ id }) => id)),
+      protectedDeltas: Object.freeze(Object.fromEntries(
+        Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
+      )),
+    }));
+    if (!accepted.length) break;
+
+    lastAccepted = selected;
+    currentSong = selected.song;
+    currentMemory = evaluateMelodySectionMemory(currentSong);
+    currentEvaluation = selected.after;
+    currentFloor = creativeFloor(currentEvaluation);
+    totalChangedNotes += Math.max(0, Math.round(finite(selected.changedNotes)));
   }
 
-  const before = evaluateCandidate(song);
-  const beforeFloor = creativeFloor(before);
-  const assessments = candidates.map((candidate) => assessMelodySectionDevelopmentCandidate(
-    candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate,
-  ));
-  const accepted = assessments.filter((entry) => entry.accepted)
-    .sort(compareMelodySectionDevelopmentAssessments);
-  const selected = accepted[0] ?? [...assessments].sort(compareMelodySectionDevelopmentAssessments)[0];
+  const acceptedPasses = passes.filter((entry) => entry.accepted);
+  const finalMemory = evaluateMelodySectionMemory(currentSong);
+  const finalEvaluation = acceptedPasses.length ? evaluateCandidate(currentSong) : currentEvaluation;
+  const finalRelease = acceptedPasses.length
+    ? evaluateReleaseGate(currentSong, finalEvaluation)
+    : null;
   const diagnostics = Object.freeze({
     attempted: true,
-    accepted: Boolean(selected?.accepted),
-    changed: Boolean(selected?.accepted && selected?.changedNotes),
-    reason: selected?.reason ?? "critic-regression",
-    id: selected?.id ?? null,
-    changedNotes: finite(selected?.changedNotes),
-    sectionId: selected?.sectionId ?? null,
-    sourceSectionId: selected?.sourceSectionId ?? null,
-    relationship: selected?.relationship ?? null,
-    candidatesEvaluated: assessments.length,
+    accepted: acceptedPasses.length > 0,
+    changed: acceptedPasses.length > 0 && totalChangedNotes > 0,
+    reason: finalMemory.passed
+      ? "melody-section-development-win"
+      : acceptedPasses.length
+        ? "partial-melody-section-development"
+        : passes.at(-1)?.reason ?? "no-improving-section-development-candidate",
+    changedNotes: totalChangedNotes,
+    passesAttempted: passes.length,
+    passesAccepted: acceptedPasses.length,
+    passLimit: maxPasses,
+    candidatesEvaluated: candidateIds.length,
     candidateLimit: MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
-    candidateIds: assessments.map(({ id }) => id),
-    beforeMemoryScore: finite(selected?.beforeMemoryScore),
-    afterMemoryScore: finite(selected?.afterMemoryScore),
-    memoryScoreDelta: finite(selected?.memoryScoreDelta),
-    beforeSectionScore: finite(selected?.beforeSectionScore),
-    afterSectionScore: finite(selected?.afterSectionScore),
-    sectionScoreDelta: finite(selected?.sectionScoreDelta),
-    beforeScore: round(before?.score),
-    afterScore: round(selected?.after?.score),
-    scoreDelta: round(selected?.scoreDelta),
-    floorDelta: round(selected?.floorDelta),
-    protectedDeltas: Object.fromEntries(
-      Object.entries(selected?.protectedDeltas ?? {}).map(([dimension, delta]) => [dimension, round(delta)]),
-    ),
+    candidateIds: Object.freeze(candidateIds),
+    beforeMemoryScore: initialMemory.score,
+    afterMemoryScore: finalMemory.score,
+    memoryScoreDelta: finalMemory.score - initialMemory.score,
+    finalMemoryPassed: finalMemory.passed,
+    finalMemoryReason: finalMemory.reason,
+    weakestSectionId: finalMemory.weakestSection?.sectionId ?? null,
+    beforeScore: round(evaluateCandidate(song)?.score),
+    afterScore: round(finalEvaluation?.score),
+    scoreDelta: round(finite(finalEvaluation?.score) - finite(evaluateCandidate(song)?.score)),
+    passes: Object.freeze(passes),
   });
-  if (!accepted.length) return { song, diagnostics };
+  if (!acceptedPasses.length) return { song, diagnostics };
 
-  selected.song.outputQualityEvolution = {
-    ...(selected.song.outputQualityEvolution ?? {}),
+  currentSong.outputQualityEvolution = {
+    ...(currentSong.outputQualityEvolution ?? {}),
     melodySectionDevelopmentRefinement: {
       accepted: true,
       changedNotes: diagnostics.changedNotes,
-      sectionId: diagnostics.sectionId,
-      sourceSectionId: diagnostics.sourceSectionId,
+      passesAccepted: diagnostics.passesAccepted,
       memoryScoreDelta: diagnostics.memoryScoreDelta,
-      sectionScoreDelta: diagnostics.sectionScoreDelta,
+      finalMemoryPassed: diagnostics.finalMemoryPassed,
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
   };
-  selected.song.meta = acceptedMetadata(
-    selected.song,
-    selected.after,
-    selected.release,
+  currentSong.meta = acceptedMetadata(
+    currentSong,
+    finalEvaluation,
+    finalRelease ?? lastAccepted?.release,
     "melodySectionDevelopmentRefinement",
     diagnostics,
   );
-  return { song: selected.song, diagnostics };
+  return { song: currentSong, diagnostics };
 }
 
 export function applyMelodySectionMemoryAudit(song) {
