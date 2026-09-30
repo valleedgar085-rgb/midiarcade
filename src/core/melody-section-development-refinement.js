@@ -74,6 +74,15 @@ function nearestScaleNeighbor(song, pitch, direction) {
   }
   return candidates[0] ?? source;
 }
+function isProtectedAnchor(note) {
+  return Boolean(
+    note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.motifHandoffRole
+    || note?.finalAssemblyRole
+    || note?.phraseRole === "turnaround"
+  );
+}
 function sourceContract(song, sectionId) {
   return (song?.phraseMemory?.sections ?? []).find((entry) => String(entry?.sectionId) === String(sectionId)) ?? null;
 }
@@ -106,7 +115,10 @@ function cloneBreakCandidate(song, report) {
   });
   return changed ? { id: "develop-clone", song: candidate, changedNotes: changed } : null;
 }
-function contourRecallCandidate(song, report) {
+function contourRecallCandidate(song, report, {
+  maxNotes = 2,
+  id = "restore-contour",
+} = {}) {
   if (finite(report?.metrics?.relationshipFit, 1) >= 0.72 && finite(report?.metrics?.familiarity, 1) >= 0.48) return null;
   const sourceEntries = indexedNotes(song, report.sourceSectionId);
   const targetEntries = indexedNotes(song, report.sectionId);
@@ -115,31 +127,50 @@ function contourRecallCandidate(song, report) {
   const track = melodyTrack(candidate);
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
   const count = Math.min(sourceEntries.length, targetEntries.length);
-  const picks = [...Array(Math.max(0, count - 2)).keys()]
+  const options = [...Array(Math.max(0, count - 2)).keys()]
     .map((offset) => offset + 1)
-    .sort((a, b) => {
-      const sourceA = sourceEntries[Math.round(a * (sourceEntries.length - 1) / (count - 1))]?.note;
-      const sourceB = sourceEntries[Math.round(b * (sourceEntries.length - 1) / (count - 1))]?.note;
-      const targetA = targetEntries[Math.round(a * (targetEntries.length - 1) / (count - 1))]?.note;
-      const targetB = targetEntries[Math.round(b * (targetEntries.length - 1) / (count - 1))]?.note;
-      return Math.abs(finite(sourceB?.pitch) - finite(targetB?.pitch)) - Math.abs(finite(sourceA?.pitch) - finite(targetA?.pitch)) || a - b;
+    .map((position) => {
+      const sourcePosition = Math.round(position * (sourceEntries.length - 1) / (count - 1));
+      const targetPosition = Math.round(position * (targetEntries.length - 1) / (count - 1));
+      const source = sourceEntries[sourcePosition]?.note;
+      const target = targetEntries[targetPosition];
+      const note = target?.note;
+      const nextPitch = source && note
+        ? nearestPitchWithClass(finite(note.pitch, 60), mod12(source.pitch), window)
+        : null;
+      const start = finite(note?.start);
+      const offStrongBeat = Math.abs(start - Math.round(start)) > 0.09;
+      return {
+        position,
+        source,
+        target,
+        nextPitch,
+        protected: isProtectedAnchor(note),
+        short: finite(note?.duration, 0.5) < 0.65,
+        offStrongBeat,
+        pitchDistance: source && note ? Math.abs(finite(source.pitch) - finite(note.pitch)) : 0,
+      };
     })
-    .slice(0, 2);
+    .filter((entry) => entry.source && entry.target && entry.nextPitch != null)
+    .filter((entry) => entry.nextPitch !== Math.round(finite(entry.target.note?.pitch)))
+    .sort((left, right) => (
+      Number(left.protected) - Number(right.protected)
+      || Number(right.short) - Number(left.short)
+      || Number(right.offStrongBeat) - Number(left.offStrongBeat)
+      || right.pitchDistance - left.pitchDistance
+      || left.position - right.position
+    ))
+    .slice(0, Math.max(1, Math.min(3, Math.floor(finite(maxNotes, 2)))));
   let changed = 0;
-  for (const position of picks) {
-    const sourcePosition = Math.round(position * (sourceEntries.length - 1) / (count - 1));
-    const targetPosition = Math.round(position * (targetEntries.length - 1) / (count - 1));
-    const source = sourceEntries[sourcePosition]?.note;
-    const target = targetEntries[targetPosition];
-    const note = track?.notes?.[target?.index];
-    if (!source || !note) continue;
-    const nextPitch = nearestPitchWithClass(finite(note.pitch, 60), mod12(source.pitch), window);
-    if (nextPitch === Math.round(finite(note.pitch))) continue;
-    note.pitch = nextPitch;
-    tag(note, report.sourceSectionId, "motif-recall-anchor");
+  for (const option of options) {
+    if (option.protected) continue;
+    const note = track?.notes?.[option.target?.index];
+    if (!note) continue;
+    note.pitch = option.nextPitch;
+    tag(note, report.sourceSectionId, maxNotes >= 3 ? "motif-recall-anchor-strong" : "motif-recall-anchor");
     changed += 1;
   }
-  return changed ? { id: "restore-contour", song: candidate, changedNotes: changed } : null;
+  return changed ? { id, song: candidate, changedNotes: changed } : null;
 }
 function endingRecallCandidate(song, report) {
   if (finite(report?.metrics?.endingSimilarity, 1) >= 0.76) return null;
@@ -187,7 +218,8 @@ export function createMelodySectionDevelopmentCandidates(song, {
   if (!report.sourceSectionId) return [];
   const raw = [
     cloneBreakCandidate(song, report),
-    contourRecallCandidate(song, report),
+    contourRecallCandidate(song, report, { maxNotes: 2, id: "restore-contour" }),
+    contourRecallCandidate(song, report, { maxNotes: 3, id: "restore-contour-strong" }),
     endingRecallCandidate(song, report),
   ].filter(Boolean);
   const seen = new Set();
