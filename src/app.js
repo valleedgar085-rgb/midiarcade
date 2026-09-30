@@ -2527,7 +2527,7 @@ function renderShapeDirector(section = editorSection()) {
     for (const entry of recommendations) {
       const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
       if (!button) continue;
-      button.textContent = entry.rank + " · " + entry.direction.label;
+      button.textContent = entry.direction.label;
       button.dataset.shapeRank = String(entry.rank);
       button.title = entry.reason;
       button.hidden = false;
@@ -2572,7 +2572,7 @@ function renderShapeDirector(section = editorSection()) {
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
       ? "Select notes first."
       : topSuggestion
-        ? `Recommended: ${topSuggestion.direction.label}. Tap one of the three suggested moves to preview it; nothing changes until Accept.`
+        ? `Recommended: ${topSuggestion.direction.label}. Tap one of the three suggested moves to preview it; nothing changes until Accept. Use Save this change to keep it.`
         : "Preview a direction, then Accept.";
     return;
   }
@@ -2941,7 +2941,7 @@ export function focusSongSection(sectionId, track = state.editorTrack, { openEdi
     : `${section.name} selected.`);
   if (scroll) {
     const target = openEditor ? $("#sectionEditor") : $("#sectionShaper");
-    setTimeout(() => target?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 80);
+    setTimeout(() => target?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 80);
   }
   return true;
 }
@@ -6483,6 +6483,7 @@ function toggleFullscreen() {
     if (action === "earlier") moveFocusedSection(-1);
     if (action === "later") moveFocusedSection(1);
     if (action === "edit") {
+      $("#shapeNoteDetail").open = true;
       state.sectionEditorOpen = true;
       renderSectionEditor("Choose an instrument, then select notes to shape.");
       setTimeout(() => $("#sectionEditor")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 60);
