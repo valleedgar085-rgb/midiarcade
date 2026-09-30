@@ -69,6 +69,7 @@ import { createPlaybackView, shouldRefreshPlaybackDetails } from "./ui/playback-
 import { generationMinimumVisibleMs, generationStageState } from "./ui/generation-progress.js";
 import {
   analyzeSectionRelationship,
+  classifyNoteRole,
   nearestScalePitch,
   transposeScaleStep,
 } from "./ui/shape-logic.js";
@@ -96,6 +97,9 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+let generationLiveStageState;
+import("./ui/generation-live-progress.js").then((module) => { generationLiveStageState = module.generationLiveStageState; });
+
 const GENRE_IDS = ["neoSoul", "hipHop", "rap", "trap", "house", "techno", "drumBass", "synthwave", "pop", "loFiHipHop", "rnbSoul", "drill", "reggaeton", "afrobeats", "jazz", "ambient", "funk", "country", "rock"];
 
 const PATCHES = {
@@ -425,8 +429,8 @@ function renderCreativeThread() {
   $("#transportContext").textContent = `${section?.name || "Full song"} · ${meta.name} focus`;
   $("#threadRelationship").textContent = focusRelationship(trackId, section);
   $("#threadActionButton").innerHTML = section
-    ? `Continue editing ${section.name} <span>↘</span>`
-    : `Choose a section to edit <span>↘</span>`;
+    ? `Edit ${section.name} <span>↘</span>`
+    : `Choose a section <span>↘</span>`;
   if (!player?.playing) $("#threadLiveSection").textContent = section ? `${section.name} ready from bar ${section.start + 1}` : "Ready to listen";
 }
 
@@ -1182,7 +1186,7 @@ export function applyEditorAction(action) {
   }
   const selected = selectedEditorEntries(entries);
   if (!selected.length) {
-    renderSectionEditor("Select one or more notes first. Shift-click adds notes to the selection.");
+    renderSectionEditor("Select notes. Shift-click adds.");
     return false;
   }
   const range = editorBeatRange(section);
@@ -1192,7 +1196,7 @@ export function applyEditorAction(action) {
   if (action === "delete") {
     const selectedNotes = new Set(selected.map((entry) => entry.note));
     track.notes = trackNotes(track).filter((note) => !selectedNotes.has(note));
-    finishEditorMutation(`Deleted ${selected.length} note${selected.length === 1 ? "" : "s"}. Undo is ready.`, { keepSelection: false });
+    finishEditorMutation(`Deleted ${selected.length} note${selected.length === 1 ? "" : "s"}. Undo available.`, { keepSelection: false });
     return true;
   }
 
@@ -1244,7 +1248,7 @@ export function applyEditorAction(action) {
 function setEditorVelocity(value) {
   const selected = selectedEditorEntries();
   if (!selected.length) {
-    renderSectionEditor("Select notes before changing velocity.");
+    renderSectionEditor("Select notes first.");
     return false;
   }
   pushHistory();
@@ -1287,6 +1291,8 @@ function bindSectionEditorInteractions(container) {
   container.addEventListener("click", (event) => {
     const trackButton = event.target.closest?.("[data-editor-track]");
     if (trackButton) {
+      resolvePendingShapeDirectorCandidate({ rerender: false });
+      shapeDirectorState().target = "track";
       selectAttitudeTrack(trackButton.dataset.editorTrack, { announce: false });
       state.editorSelection.clear();
       renderUiRegions("tracks", "timeline", "editor");
@@ -1315,6 +1321,9 @@ function renderSectionEditor(message = "") {
   container.setAttribute("aria-hidden", String(!open));
   $("#tab-arrange")?.classList.toggle("has-section-focus", open);
   renderArrangeWorkflow();
+  const panel = $("#shapeDirectorPanel");
+  (open ? $("#editorShapeTools") : $("#sectionShaperContent"))?.append(panel);
+  renderShapeDirector(section);
   if (!open) return;
 
   const track = editorTrack();
@@ -1331,10 +1340,10 @@ function renderSectionEditor(message = "") {
   const partnerTrack = songTracks().find((candidate, index) => trackId(candidate, index) === partnerId);
   const partnerEntries = editorEntries(partnerTrack, section);
   container.style.setProperty("--editor-color", meta.color);
-  $("#sectionEditorTitle").textContent = `${section.name} · ${meta.name}`;
-  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · edits write directly into the exported MIDI`;
+  $("#sectionEditorTitle").textContent = `${section.name} · ${shapeDirectorState().target === "section" ? "All instruments" : meta.name}`;
+  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · Changes affect ${shapeDirectorState().target === "section" ? "all instruments in this section" : shapeDirectorState().target === "notes" ? "selected notes only" : "only this instrument here"}`;
   $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
-  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · drawn and transposed notes stay in scale`;
+  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
   const relationship = analyzeSectionRelationship(
     entries.map(({ note }) => note),
@@ -1342,13 +1351,14 @@ function renderSectionEditor(message = "") {
   );
   const relationshipLabel = partnerId
     ? `${TRACK_META[state.editorTrack]?.name || "Track"} ↔ ${TRACK_META[partnerId]?.name || partnerId}`
-    : "Selected instrument";
+    : "Instrument";
   $("#editorRelationshipSummary").innerHTML = `
     <span><small>RELATIONSHIP</small><strong>${relationshipLabel}</strong></span>
     <span><small>SHARED ATTACKS</small><strong>${relationship.sharedAttacks}</strong></span>
     <span><small>BREATHING NOTES</small><strong>${relationship.breathingNotes}</strong></span>
-    <span><small>GUIDE</small><strong>${state.editorOverlay === "none" ? "Hidden" : state.editorOverlay === "harmony" ? "Harmony" : "Partner + harmony"}</strong></span>`;
+    <span><small>GUIDE</small><strong>${state.editorOverlay === "none" ? "Hidden" : state.editorOverlay === "harmony" ? "Harmony" : "Both"}</strong></span>`;
 
+  $("#editorSectionSwitch").innerHTML = normalizeSections().map((s) => `<option value="${s.id}" ${s.id === section.id ? "selected" : ""}>${s.name} / ${s.start + 1}-${s.start + s.bars}</option>`).join("");
   $("#editorTrackTabs").innerHTML = TRACK_ORDER.map((id) => {
     const trackObject = songTracks().find((candidate, index) => trackId(candidate, index) === id);
     const count = editorEntries(trackObject, section).length;
@@ -1396,6 +1406,11 @@ function renderSectionEditor(message = "") {
   $("#pianoRollGrid").style.setProperty("--bar-width", `${state.editorZoom * range.beatsPerBar}px`);
   $("#pianoRollGrid").style.setProperty("--subdivision-width", `${Math.max(4, state.editorZoom * grid)}px`);
   $("#pianoRollGrid").innerHTML = `<div class="piano-roll-editor-playhead" aria-hidden="true"><i></i></div>${guideRows}${partnerMarkup}${notesMarkup}`;
+  // Match velocity stems to the same beat positions as the note grid.
+  $("#velocityLane").setAttribute("aria-hidden", "false");
+  const velocityBars = $("#velocityBars");
+  velocityBars.innerHTML = `<div class="velocity-stems" style="width:${totalBeats * state.editorZoom}px">${entries.map(({ note, id }) => `<i class="velocity-stem${state.editorSelection.has(id) ? " is-selected" : ""}" style="left:${(noteStart(note) - range.start) * state.editorZoom}px;height:${noteVelocity(note) / 127 * 100}%"></i>`).join("")}</div>`;
+  velocityBars.scrollLeft = $("#pianoRollViewport").scrollLeft;
   $("#editorSelectionCount").textContent = `${selected.length} NOTE${selected.length === 1 ? "" : "S"} SELECTED`;
   const selectedVelocity = selected.length
     ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length)
@@ -1405,8 +1420,8 @@ function renderSectionEditor(message = "") {
   $("#editorGridControl").value = String(state.editorGrid);
   $("#editorZoomControl").value = state.editorZoom;
   $("#editorStatus").textContent = message || (entries.length
-    ? `${meta.name} in ${section.name}. Click a note, Shift-click for several, or double-click empty space to draw.`
-      : `No ${meta.name.toLowerCase()} notes are in ${section.name}. Double-click the grid to draw one.`);
+    ? `${meta.name} · tap to select; double-tap to draw.`
+      : `Empty ${meta.name} · double-tap to draw.`);
   renderSectionVariationLab(section);
   $$('[data-editor-action]', container).forEach((button) => {
     const tonalAction = ["octave-down", "pitch-down", "pitch-up", "octave-up"].includes(button.dataset.editorAction);
@@ -1421,6 +1436,7 @@ function renderSectionEditor(message = "") {
 function renderSectionVariationLab(section = editorSection()) {
   const lab = $("#sectionVariationLab");
   if (!lab) return;
+  lab.hidden = shapeDirectorState().target !== "section";
   const variations = state.sectionVariations?.sectionId === section?.id
     ? state.sectionVariations.options
     : [];
@@ -1434,7 +1450,7 @@ function renderSectionVariationLab(section = editorSection()) {
   const directionNames = ["Space", "Lift", "Contrast"];
   lab.innerHTML = variations?.length
     ? `
-      <div class="variation-lab-heading"><small>A/B SECTION LAB</small><strong>Compare complete musical directions</strong><p>Playback jumps to ${section.name}. Nothing is committed until you keep a choice.</p></div>
+      <div class="variation-lab-heading"><small>VARIATION · THIS SECTION</small><strong>Compare section ideas</strong><p>Audition ${section.name}, then keep a choice.</p></div>
       <div class="variation-actions variation-comparison" role="radiogroup" aria-label="Section variation choices">
         <button type="button" data-section-variation="0" class="${active === 0 ? "is-active" : ""}" role="radio" aria-checked="${active === 0}"><b>ORIGINAL</b><small>Current arrangement</small></button>
         ${variations.map((option, index) => {
@@ -1450,7 +1466,7 @@ function renderSectionVariationLab(section = editorSection()) {
         <button class="variation-keep" type="button" data-section-variation-keep>Keep ${active ? `Option ${String.fromCharCode(64 + active)}` : "original"}</button>
       </div>`
     : `
-      <div><small>A/B SECTION LAB</small><strong>Need a different version of this moment?</strong><p>Create three bounded alternatives without rewriting the rest of the song.</p></div>
+      <div><small>VARIATION · THIS SECTION</small><strong>Try another idea</strong><p>Three ideas for this section.</p></div>
       <button class="variation-explore" type="button" data-section-variation-explore>Explore 3 variations</button>`;
 }
 
@@ -2347,6 +2363,7 @@ export function queueMobileSectionJump(sectionId) {
 }
 
 function sectionMacroValues(sectionId) {
+  sectionId += shapeDirectorState().target === "section" ? "" : ":" + state.editorTrack;
   if (!state.sectionMacroValues[sectionId]) {
     state.sectionMacroValues[sectionId] = {
       energy: "auto",
@@ -2374,7 +2391,7 @@ function sectionNotes(section, trackFilter = null) {
 function shapeDirectorState() {
   if (!state.shapeDirector || typeof state.shapeDirector !== "object") {
     state.shapeDirector = {
-      target: "section",
+      target: "track",
       size: "touchUp",
       direction: null,
       preserve: [],
@@ -2473,6 +2490,7 @@ function renderShapeDirector(section = editorSection()) {
   panel.hidden = !section;
   if (!section) return;
   const director = shapeDirectorState();
+  $("#sectionShaper")?.classList.toggle("instrument-scope", director.target !== "section");
   const target = $("#shapeDirectorTarget");
   const size = $("#shapeDirectorSize");
   const trackName = $("#shapeDirectorTrackName");
@@ -2488,10 +2506,10 @@ function renderShapeDirector(section = editorSection()) {
     composeButton.disabled = composeDisabled;
     composeButton.setAttribute?.("aria-disabled", String(composeDisabled));
     const composeLabel = $("#shapeDirectorComposeLabel");
-    if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Recompose with Blueprint";
+    if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Try a new part";
     composeButton.title = notesOnly
-      ? "Blueprint recomposition works on the current instrument or whole section; note-level edits stay with Shape Director."
-      : "Generate a new scoped part from the song blueprint, then validate harmony and groove before audition.";
+      ? "Select an instrument to try a new part."
+      : "Preview a new part before accepting.";
   }
   if (directions && !directions.childElementCount) {
     directions.innerHTML = Object.values(SHAPE_QUICK_DIRECTIONS)
@@ -2509,7 +2527,7 @@ function renderShapeDirector(section = editorSection()) {
     for (const entry of recommendations) {
       const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
       if (!button) continue;
-      button.textContent = entry.rank + " · " + entry.direction.label;
+      button.textContent = entry.direction.label;
       button.dataset.shapeRank = String(entry.rank);
       button.title = entry.reason;
       button.hidden = false;
@@ -2538,7 +2556,7 @@ function renderShapeDirector(section = editorSection()) {
   }
   if (target) target.value = director.target;
   if (size) size.value = director.size;
-  if (trackName) trackName.textContent = TRACK_META[state.editorTrack]?.name || state.editorTrack || "Instrument";
+  if (trackName) trackName.textContent = section.name + " · " + (director.target === "section" ? "All instruments" : TRACK_META[state.editorTrack]?.name || state.editorTrack);
   if (noteCount) noteCount.textContent = String(state.editorSelection?.size || 0) + " selected notes";
   const notesOption = target?.querySelector?.('option[value="notes"]');
   if (notesOption) notesOption.disabled = !(state.editorSelection?.size > 0);
@@ -2552,10 +2570,10 @@ function renderShapeDirector(section = editorSection()) {
     if (candidate) candidate.hidden = true;
     const topSuggestion = recommendations[0];
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
-      ? "Select notes in the piano roll first, or use Section / Current instrument scope."
+      ? "Select notes first."
       : topSuggestion
-        ? `Recommended: ${topSuggestion.direction.label} — ${topSuggestion.reason}. Tap one of the three suggested moves to preview it; nothing changes until Accept.`
-        : "Pick a musical direction to preview. Nothing changes until Accept.";
+        ? "Choose a suggestion above, then listen to Before and After."
+        : "Choose a suggestion above to preview a change.";
     return;
   }
   const summary = director.transaction.summary;
@@ -2563,7 +2581,7 @@ function renderShapeDirector(section = editorSection()) {
   if (director.transaction.compositionCandidate) {
     const correction = director.transaction.selfCorrection;
     const scores = director.transaction.validation?.judge?.candidate?.scores ?? {};
-    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · Blueprint validated";
+    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · New idea";
     $("#shapeDirectorCandidateMeta").textContent = [
       `${correction?.attemptCount ?? 1} pass${(correction?.attemptCount ?? 1) === 1 ? "" : "es"}`,
       `harmony ${scores.harmony ?? "—"}`,
@@ -2579,8 +2597,8 @@ function renderShapeDirector(section = editorSection()) {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
   });
   if (status) status.textContent = director.audition === "after"
-    ? "After is playing from the uncommitted candidate. Accept to write it into the song or return to Before."
-    : "Original song is still active. Tap After to audition the proposed local rewrite.";
+    ? "You are hearing the preview. Save this change to keep it, or Keep original."
+    : "You are hearing the original. Tap After to hear the change.";
 }
 
 function prepareShapeDirectorCandidate(direction) {
@@ -2631,7 +2649,7 @@ async function prepareBlueprintCompositionCandidate() {
   }
   const selection = blueprintCompositionSelection(section);
   if (!selection) {
-    showToast("Blueprint recomposition works on the whole section or current instrument. Use Shape Director for selected-note edits.");
+    showToast("Choose an instrument to try a new part.");
     return false;
   }
 
@@ -2664,7 +2682,7 @@ async function prepareBlueprintCompositionCandidate() {
     if (!transaction?.validation?.valid) {
       const reason = transaction?.validation?.issues?.[0]?.replaceAll(":", " ") ?? "quality judge rejected the candidate";
       renderShapeDirector(section);
-      showToast(`No safe blueprint candidate was committed — ${reason}. The original music is unchanged.`);
+      showToast(`Could not create a safe part: ${reason}.`);
       return false;
     }
 
@@ -2674,13 +2692,13 @@ async function prepareBlueprintCompositionCandidate() {
     director.direction = null;
     renderShapeDirector(section);
     const attempts = transaction.selfCorrection?.attemptCount ?? 1;
-    showToast(`Blueprint candidate passed the Harmony + Groove Judge in ${attempts} pass${attempts === 1 ? "" : "es"}. Compare Before and After.`);
+    showToast(`New part checked in ${attempts} pass${attempts === 1 ? "" : "es"}. Compare Before / After.`);
     return true;
   } catch (error) {
     if (!generationOwnership.isCurrent(operation)) return false;
     console.error(error);
     renderShapeDirector(section);
-    showToast("Blueprint recomposition could not finish safely. The original music is unchanged.");
+    showToast("Could not create a safe part.");
     return false;
   } finally {
     if (finishGenerationActivity(operation, "generation:blueprint-recompose-finish")) hideGenerationActivity();
@@ -2716,7 +2734,7 @@ function acceptShapeDirectorCandidate() {
   player.stop();
   pushHistory({ ...createHistorySnapshot(), song: deepClone(transaction.before) });
   if (transaction.compositionCandidate && transaction.validation?.valid !== true) {
-    showToast("That blueprint candidate no longer passes validation, so it was not committed.");
+    showToast("This part no longer passes checks. Try again.");
     return false;
   }
   state.song = transaction.compositionCandidate
@@ -2729,7 +2747,7 @@ function acceptShapeDirectorCandidate() {
   director.direction = null;
   renderAll();
   scheduleSessionSave();
-  showToast(label + " is now part of this section. Undo can restore the previous version.");
+  showToast(label + " accepted. Undo restores the original.");
   return true;
 }
 
@@ -2771,9 +2789,9 @@ function renderSectionShaper(message = "") {
     : 0;
   const energyLabel = averageVelocity >= 98 ? "high-impact"
     : averageVelocity <= 72 ? "restrained" : "balanced";
-  $("#sectionShaperName").textContent = section.name;
+  $("#sectionShaperName").textContent = section.name + " · " + TRACK_META[state.editorTrack].name;
   $("#sectionShaperMeta").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · ${energyLabel}`;
-  $("#sectionShaperStatus").textContent = message || "Auto follows the song’s composition blueprint. Choose only what you want to direct.";
+  $("#sectionShaperStatus").textContent = message || "Auto follows the song.";
   if (summary) summary.textContent = `${section.name} selected · ${section.bars} bars · ${energyLabel}`;
   $$("[data-section-macro]", shaper).forEach((control) => {
     control.value = values[control.dataset.sectionMacro] || "auto";
@@ -2788,15 +2806,15 @@ function renderSectionShaper(message = "") {
 }
 
 const ARRANGEMENT_ERROR_COPY = {
-  "invalid-song-shape": "This song is missing arrangement data required for that edit.",
-  "invalid-section-identity": "Two sections share an identity. Generate a related idea to rebuild the arrangement safely.",
-  "noncontiguous-sections": "The section timeline could not be realigned safely.",
-  "invalid-song-duration": "The song length and section map do not agree.",
-  "invalid-track-events": "A note falls outside the playable song range, so the edit was protected.",
-  "invalid-automation-events": "An automation point falls outside the song range, so the edit was protected.",
-  "invalid-harmony-events": "A harmony event falls outside the song range, so the edit was protected.",
-  "invalid-transform": "That section direction is not supported.",
-  "no-musical-change": "This section already matches that musical direction. No Undo step was added.",
+  "invalid-song-shape": "Arrangement data is missing.",
+  "invalid-section-identity": "Duplicate section IDs. Try a related idea.",
+  "noncontiguous-sections": "Section timing could not be aligned.",
+  "invalid-song-duration": "Song length and sections differ.",
+  "invalid-track-events": "A note is outside the song. Edit blocked.",
+  "invalid-automation-events": "Automation is outside the song. Edit blocked.",
+  "invalid-harmony-events": "Harmony is outside the song. Edit blocked.",
+  "invalid-transform": "Unsupported section direction.",
+  "no-musical-change": "This part already matches.",
 };
 
 function commitArrangementCommand(command, message, { closeEditor = false, rejectedMessage = "" } = {}) {
@@ -2805,7 +2823,7 @@ function commitArrangementCommand(command, message, { closeEditor = false, rejec
   if (!result.changed) {
     const feedback = ARRANGEMENT_ERROR_COPY[result.error]
       || rejectedMessage
-      || "That arrangement change is not available for this section.";
+      || "This change is unavailable.";
     renderSectionShaper(feedback);
     showToast(feedback);
     return false;
@@ -2820,7 +2838,7 @@ function commitArrangementCommand(command, message, { closeEditor = false, rejec
   refreshSongIdea(state.song);
   renderAll();
   const feedback = result.repaired
-    ? `${message} The section timeline was safely realigned first.`
+    ? `${message} Section timing realigned.`
     : message;
   renderSectionShaper(feedback);
   scheduleSessionSave();
@@ -2833,13 +2851,14 @@ function applySectionMacro(kind, value) {
   if (!section) return false;
   sectionMacroValues(section.id)[kind] = value;
   if (value === "auto") {
-    renderSectionShaper(`${kind[0].toUpperCase()}${kind.slice(1)} returned to Auto. Future variations will follow the composition engine.`);
+    renderSectionShaper(`${kind[0].toUpperCase()}${kind.slice(1)} returned to Auto.`);
     return true;
   }
   const label = `${section.name} ${kind} set to ${value}.`;
   return commitArrangementCommand({
     type: "transform",
     sectionId: section.id,
+    trackId: shapeDirectorState().target === "section" ? undefined : state.editorTrack,
     operation: kind,
     value,
   }, label);
@@ -2851,8 +2870,9 @@ function simplifyFocusedSection() {
   return commitArrangementCommand({
     type: "transform",
     sectionId: section.id,
+    trackId: shapeDirectorState().target === "section" ? undefined : state.editorTrack,
     operation: "simplify",
-  }, `${section.name} has more breathing room.`);
+  }, `${section.name} has more space.`);
 }
 
 function buildFocusedSection() {
@@ -2861,8 +2881,9 @@ function buildFocusedSection() {
   return commitArrangementCommand({
     type: "transform",
     sectionId: section.id,
+    trackId: shapeDirectorState().target === "section" ? undefined : state.editorTrack,
     operation: "build",
-  }, `${section.name} now rises toward its next transition.`);
+  }, `${section.name} now builds.`);
 }
 
 function duplicateFocusedSection() {
@@ -2903,6 +2924,7 @@ export function focusSongSection(sectionId, track = state.editorTrack, { openEdi
   if (!section) return false;
   resolvePendingShapeDirectorCandidate({ rerender: false });
   state.focusedSection = section.id;
+  shapeDirectorState().target = "track";
   if (TRACK_ORDER.includes(track)) {
     state.editorTrack = track;
     state.selectedTrack = track;
@@ -2911,15 +2933,15 @@ export function focusSongSection(sectionId, track = state.editorTrack, { openEdi
   state.editorSelection.clear();
   renderTimeline();
   renderTrackRack();
-  renderAttitudeStrip(`${TRACK_META[state.selectedTrack]?.name || "Instrument"} and ${section.name} are now connected.`);
+  renderAttitudeStrip(`${section.name} / ${TRACK_META[state.selectedTrack]?.name || "Instrument"}`);
   renderSectionEditor();
   renderCreativeThread();
   showToast(openEditor
-    ? `Opened ${section.name} in the ${TRACK_META[state.editorTrack]?.name || "MIDI"} piano roll.`
-    : `${section.name} is ready in the Section Shaper.`);
+    ? `${section.name} / ${TRACK_META[state.editorTrack]?.name || "MIDI"} editor`
+    : `${section.name} selected.`);
   if (scroll) {
     const target = openEditor ? $("#sectionEditor") : $("#sectionShaper");
-    setTimeout(() => target?.scrollIntoView?.({ behavior: "smooth", block: "center" }), 80);
+    setTimeout(() => target?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 80);
   }
   return true;
 }
@@ -3039,7 +3061,7 @@ export function selectAttitudeTrack(id, { announce = true } = {}) {
   if (!TRACK_ORDER.includes(id)) return false;
   state.selectedTrack = id;
   state.editorTrack = id;
-  renderAttitudeStrip(announce ? `${TRACK_META[id].name} selected. Its attitude controls are ready.` : "");
+  renderAttitudeStrip(announce ? `${TRACK_META[id].name} selected. Ready to shape.` : "");
   renderMixOverview();
   renderExportSetup();
   $$('[data-timeline-track]').forEach((row) => row.classList.toggle("is-focus-track", row.dataset.timelineTrack === id));
@@ -3661,6 +3683,7 @@ function generationDelay(kind = "new") {
  */
 let generationSafetyTimer = null;
 let generationProgressTimer = null;
+let generationProgressReport = { phase: "plan", visited: ["plan"] };
 const generationOwnership = createGenerationOwnership();
 
 function clearGenerationSafetyTimer() {
@@ -3678,20 +3701,21 @@ function clearGenerationProgressTimer() {
 }
 
 function renderGenerationProgress(kind, elapsedMs) {
-  const progress = generationStageState(kind, elapsedMs);
+  const progress = generationLiveStageState ? generationLiveStageState(kind, elapsedMs, generationProgressReport) : { ...generationStageState(kind, 0), completedStageIds: [] };
   const wash = $("#generationWash");
   if (!wash) return;
-  $("#generationStageCount").textContent = `PASS ${progress.stageNumber} OF ${progress.stageCount}`;
+  $("#generationStageCount").textContent = `${progress.stage.label} · ${Math.floor(elapsedMs / 1000)}s`;
   $("#generationStageCopy").textContent = progress.stage.copy;
   wash.style.setProperty("--generation-progress", `${Math.round(progress.progress * 100)}%`);
   $$("[data-generation-stage]", wash).forEach((element, index) => {
-    element.dataset.state = index < progress.stageIndex ? "done" : index === progress.stageIndex ? "active" : "waiting";
+    element.dataset.state = index === progress.stageIndex ? "active" : progress.completedStageIds.includes(element.dataset.generationStage) ? "done" : "waiting";
   });
 }
 
 function startGenerationProgress(kind) {
   clearGenerationProgressTimer();
   const startedAt = Date.now();
+  generationProgressReport = { phase: "plan", visited: ["plan"] };
   renderGenerationProgress(kind, 0);
   generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 160);
 }
@@ -3764,6 +3788,9 @@ async function persistAcceptedGeneration(record) {
 }
 
 const generationExecutor = createGenerationExecutor({
+  onProgress(event) {
+    generationProgressReport = { ...event, visited: [...generationProgressReport.visited, event.phase] };
+  },
   timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
   fallback: createAppGenerationFallback({ generationRunner }),
@@ -6191,12 +6218,12 @@ function toggleFullscreen() {
     if (document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
-    showToast("Immersive Fullscreen active.");
+    showToast("Fullscreen on.");
   } else {
     if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     }
-    showToast("Standard view active.");
+    showToast("Fullscreen off.");
   }
 }
 
@@ -6363,7 +6390,7 @@ function toggleFullscreen() {
     if (player.playing) player.seek(player.currentSongTime());
   });
   $("#reorderButton").addEventListener("click", reshapeArrangement);
-  $("#sectionShaper")?.addEventListener("change", (event) => {
+  $("#tab-arrange")?.addEventListener("change", (event) => {
     const shapeTarget = event.target.closest?.("#shapeDirectorTarget");
     if (shapeTarget) {
       clearShapeDirectorCandidate({ restore: true, rerender: false });
@@ -6404,7 +6431,7 @@ function toggleFullscreen() {
     const control = event.target.closest?.("[data-section-macro]");
     if (control) applySectionMacro(control.dataset.sectionMacro, control.value);
   });
-  $("#sectionShaper")?.addEventListener("click", (event) => {
+  $("#tab-arrange")?.addEventListener("click", (event) => {
     if (event.target.closest?.("[data-shape-more]")) {
       const panel = $("#shapeDirectorPanel");
       if (panel) panel.dataset.shapeMore = panel.dataset.shapeMore === "true" ? "false" : "true";
@@ -6456,6 +6483,7 @@ function toggleFullscreen() {
     if (action === "earlier") moveFocusedSection(-1);
     if (action === "later") moveFocusedSection(1);
     if (action === "edit") {
+      $("#shapeNoteDetail").open = true;
       state.sectionEditorOpen = true;
       renderSectionEditor("Choose an instrument, then select notes to shape.");
       setTimeout(() => $("#sectionEditor")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 60);
@@ -6535,16 +6563,17 @@ function toggleFullscreen() {
   $("#varyCoverButton")?.addEventListener("click", () => {
     state.coverVariation = (Number(state.coverVariation) || 0) + 1;
     renderFinishWorkspace();
-    showToast(`${coverArtworkFinish(state.coverVariation).label} finish applied. The original composition stays intact.`);
+    showToast(`${coverArtworkFinish(state.coverVariation).label} finish applied. Composition preserved.`);
   });
 
+  $("#editorSectionSwitch").addEventListener("change", (e) => focusSongSection(e.target.value, state.editorTrack, { openEditor: true }));
   $("#editorCloseButton").addEventListener("click", () => {
     state.sectionEditorOpen = false;
     state.editorSelection.clear();
     renderTimeline();
     renderSectionEditor();
     renderCreativeThread();
-    showToast("Note detail closed. The selected section and your edits remain in Shape.");
+    showToast("Back to Shape. Edits saved.");
   });
   $("#editorPlayButton").addEventListener("click", async () => {
     const section = editorSection();
@@ -6596,6 +6625,7 @@ function toggleFullscreen() {
   });
   $("#pianoRollViewport").addEventListener("scroll", (event) => {
     $("#pianoKeyboard").scrollTop = event.currentTarget.scrollTop;
+    $("#velocityBars").scrollLeft = event.currentTarget.scrollLeft;
   });
   $("#pianoRollViewport").addEventListener("keydown", (event) => {
     const action = {
@@ -6618,7 +6648,7 @@ function toggleFullscreen() {
   $("#threadSectionButton").addEventListener("click", () => {
     const section = editorSection();
     scrollToControl(section ? "#sectionEditor" : "#arrangementTitle");
-    showToast(section ? `${section.name} is open in the piano roll.` : "Choose any section or colored instrument clip in the song map.");
+    showToast(section ? `${section.name} is open in the piano roll.` : "Choose a section or instrument clip.");
   });
   $("#threadTrackButton").addEventListener("click", () => {
     switchWorkspace("mix");
@@ -6630,7 +6660,7 @@ function toggleFullscreen() {
   $("#guidedModeButton").addEventListener("click", () => {
     state.guidedMode = !state.guidedMode;
     renderWorkflow();
-    showToast(state.guidedMode ? "Guided workflow is visible." : "Guided workflow is hidden. The Complete Guide is always available above.");
+    showToast(state.guidedMode ? "Guided workflow is visible." : "Workflow hidden. Guide stays available.");
   });
   $("#workflowAction").addEventListener("click", runWorkflowAction);
   $$('[data-workflow-step]').forEach((button) => button.addEventListener("click", () => {

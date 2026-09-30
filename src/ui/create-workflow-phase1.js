@@ -114,7 +114,7 @@ function organizePrimaryDirection(rootDocument, createPanel) {
     return element;
   };
 
-  genre.insertAdjacentElement("afterbegin", heading("song", "1 · SONG", "Choose the musical world"));
+  genre.insertAdjacentElement("afterbegin", heading("song", "SONG", "Choose the musical world"));
 
   const feelControls = ["tempoControl", "energyControl", "complexityControl", "grooveControl"]
     .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
@@ -124,16 +124,12 @@ function organizePrimaryDirection(rootDocument, createPanel) {
     .filter(Boolean);
 
   controls.append(
-    heading("feel", "2 · FEEL", "Set pace, energy, detail and pocket"),
+    heading("feel", "FEEL", "Set pace, energy, detail and pocket"),
     ...feelControls,
-    heading("structure", "3 · STRUCTURE", "Choose how much room the song gets"),
+    heading("structure", "STRUCTURE", "Choose how much room the song gets"),
     ...structureControls,
   );
 
-  generationActions.insertAdjacentElement(
-    "beforebegin",
-    heading("generate", "4 · GENERATE", "Compose from this direction"),
-  );
 }
 
 function consolidateAdvancedDirection(rootDocument, createPanel) {
@@ -181,7 +177,7 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   updateCreatePath(createPanel);
 
   const nowPlayingLabel = createPanel.querySelector(".song-showcase .showcase-copy>.eyebrow");
-  if (nowPlayingLabel) nowPlayingLabel.innerHTML = '<span></span> CURRENT SONG';
+  if (nowPlayingLabel) nowPlayingLabel.innerHTML = '<span></span> CURRENT PROJECT';
 
   const tasteLabel = createPanel.querySelector(".taste-actions > span");
   if (tasteLabel) tasteLabel.textContent = "Teach Producer Brain from this song";
@@ -222,6 +218,7 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
 
   upgradeWorkflowCopy(createPanel);
 }
+
 
 function setupCreateScrollState(rootDocument, createPanel) {
   const ownerWindow = rootDocument?.defaultView ?? globalThis.window;

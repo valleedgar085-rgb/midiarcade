@@ -30,13 +30,13 @@
         </div>
         <div class="topbar-actions">
           <div class="topbar-menu-wrap">
-            <button class="icon-button menu-button" id="menuButton" type="button" aria-expanded="false" aria-label="Studio Menu">
+            <button class="icon-button menu-button" id="menuButton" type="button" aria-expanded="false" aria-label="Studio Menu" aria-controls="menuDropdown">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
               <b>MENU</b>
             </button>
             <div class="menu-dropdown" id="menuDropdown" aria-hidden="true">
-              <button class="menu-item" id="menuItemNew" type="button"><span class="menu-icon">✦</span><b>New song idea</b><kbd>N</kbd></button>
-              <button class="menu-item" id="menuItemSimilar" type="button"><span class="menu-icon">↻</span><b>More like this</b><kbd>S</kbd></button>
+              <button class="menu-item" id="menuItemNew" type="button"><span class="menu-icon">✦</span><b>Generate song</b><kbd>N</kbd></button>
+              <button class="menu-item" id="menuItemSimilar" type="button"><span class="menu-icon">↻</span><b>Three variations</b><kbd>S</kbd></button>
               <button class="menu-item" id="menuItemReset" type="button"><span class="menu-icon">↺</span><b>Reset session</b></button>
               <div class="menu-divider"></div>
               <button class="menu-item" id="menuItemFullscreen" type="button"><span class="menu-icon">⛶</span><b>Toggle fullscreen</b><kbd>F</kbd></button>
@@ -146,10 +146,10 @@
                 <label class="create-live-select">
                   <span>SONG LENGTH</span>
                   <select id="barsControl" aria-label="Song length">
-                    <option value="auto">Auto · choose length</option>
-                    <option value="16">16 bars</option><option value="24">24 bars</option>
-                    <option value="32" selected>32 bars</option><option value="48">48 bars</option>
-                    <option value="64">64 bars</option>
+                    <option value="auto">Auto · Producer chooses</option>
+                    <option value="16">16 bars · sketch</option><option value="24">24 bars · short</option>
+                    <option value="32" selected>32 bars · standard</option><option value="48">48 bars · full</option>
+                    <option value="64">64 bars · extended</option>
                   </select>
                 </label>
                 <label class="create-live-select">
@@ -168,6 +168,9 @@
                   <span class="showcase-play-icon" aria-hidden="true"></span><strong>Play song</strong>
                 </button>
               </div>
+              <a class="create-continue-button" id="createContinueButton" href="#preGenSection">
+                <span>Continue creating</span><b aria-hidden="true">→</b>
+              </a>
               <label class="taste-actions select-control" for="tasteRating">
                 <span>Teach the engine</span>
                 <select id="tasteRating" aria-label="Rate this song idea">
@@ -473,6 +476,16 @@
                 <p id="generationIntentCopy">Change a setting to stage a new direction. Your current song stays untouched.</p>
               </div>
             </div>
+            <section class="generator-scope" aria-label="Generation scope">
+              <div class="generator-scope-heading">
+                <span><small>BUILD</small><strong>Full song</strong></span>
+                <em>Complete arrangement</em>
+              </div>
+              <div class="generator-role-chips" aria-label="Included musical roles">
+                <span>Drums</span><span>Bass</span><span>Chords</span><span>Lead</span>
+                <span>Counter</span><span>Arp</span><span>FX</span>
+              </div>
+            </section>
             <div class="generation-actions-bar" aria-label="Generation">
               <button class="generation-button generation-new" id="generateNew" type="button">
                 <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 3.5 21.2 14l10.3 4-10.3 4L18 32.5 14.8 22 4.5 18l10.3-4L18 3.5Z"/></svg></span>
@@ -504,9 +517,9 @@
           <section class="creative-thread shape-focus-bar" id="creativeThread" aria-labelledby="creativeThreadTitle">
             <div class="thread-progress" id="threadProgress" aria-hidden="true"><i></i></div>
             <div class="thread-heading">
-              <p class="eyebrow">SHAPE FOCUS</p>
-              <h2 id="creativeThreadTitle">One musical decision at a time</h2>
-              <p id="threadRelationship">The full arrangement is shaping the selected instrument.</p>
+              <p class="eyebrow">CURRENT FOCUS</p>
+              <h2 id="creativeThreadTitle">Shape the song</h2>
+              <p id="threadRelationship">Choose a section, choose an instrument, then change only what matters.</p>
             </div>
             <div class="thread-path" aria-label="Current focus">
               <button class="thread-node song-node" id="threadSongButton" type="button">
@@ -530,28 +543,29 @@
           <section class="panel arrangement-panel shape-canvas" aria-labelledby="arrangementTitle">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">SHAPE WORKSPACE</p>
-                <h2 id="arrangementTitle">Direct the song, section by section</h2>
-                <p class="section-description">Start with a section block. Adjust its feel in the panel, then open note detail only when the musical idea needs precision.</p>
+                <p class="eyebrow">SHAPE</p>
+                <h2 id="arrangementTitle">Shape your song</h2>
+                <p class="section-description">Tap a section and instrument below. Try a change, listen, then save it.</p>
               </div>
               <div class="arrangement-tools">
                 <button class="small-button" id="reorderButton" type="button">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M4 6h.01M8 12h12M4 12h.01M8 18h12M4 18h.01"/></svg>
-                  Reshape order
+                  Rearrange song
                 </button>
               </div>
             </div>
             <div class="arrange-workflow" id="arrangeWorkflow" aria-label="Arrangement workflow">
-              <span data-arrange-step="map"><b>1</b><em><small>SONG MAP</small><strong>Choose a moment</strong></em></span>
-              <span data-arrange-step="section"><b>2</b><em><small>SECTION SHAPE</small><strong id="arrangeSectionStep">Open a section</strong></em></span>
-              <span data-arrange-step="notes"><b>3</b><em><small>NOTE DETAIL</small><strong id="arrangeNoteStep">Optional precision</strong></em></span>
+              <span data-arrange-step="map"><b>1</b><em><small>SONG MAP</small><strong>Choose a part</strong></em></span>
+              <span data-arrange-step="section"><b>2</b><em><small>SECTION SHAPE</small><strong id="arrangeSectionStep">Shape its feel</strong></em></span>
+              <span data-arrange-step="notes"><b>3</b><em><small>NOTE DETAIL</small><strong id="arrangeNoteStep">Edit notes if needed</strong></em></span>
             </div>
             <div class="shape-stage">
               <div class="shape-map-column">
                 <div class="shape-map-toolbar">
-                  <span><i></i><strong>FULL ARRANGEMENT</strong><small id="shapeMapSummary">Select a section to begin</small></span>
-                  <span class="shape-map-legend"><i></i> Energy and note activity</span>
+                  <span><i></i><strong>1. Choose a part</strong><small id="shapeMapSummary">Select a section to begin</small></span>
+                  <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
+                <details class="shape-map-detail" open><summary>Show instrument clips</summary><p>Tap a colored clip — for example, Bass under Intro. Swipe sideways for later sections.</p></details>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
@@ -565,19 +579,24 @@
               <aside class="section-shaper" id="sectionShaper" aria-labelledby="sectionShaperTitle">
                 <div class="section-shaper-empty" id="sectionShaperEmpty">
                   <span class="section-shaper-orbit" aria-hidden="true"><i></i><i></i></span>
-                  <small>SECTION SHAPER</small>
+                  <small>SELECTED PART</small>
                   <h3 id="sectionShaperTitle">Choose a section</h3>
-                  <p>Select any block in the song map to reveal musical direction, arrangement actions, and precise note editing.</p>
+                  <p>Tap an instrument’s colored clip in the map. Its section and instrument will stay visible while you work.</p>
                 </div>
                 <div class="section-shaper-content" id="sectionShaperContent" hidden>
                   <header>
-                    <span><small>SECTION SHAPER</small><h3 id="sectionShaperName">Verse</h3></span>
+                    <span><small>SELECTED PART</small><h3 id="sectionShaperName">Verse</h3></span>
                     <button id="sectionShaperPlay" type="button" aria-label="Play selected section">▶</button>
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
+                  <button class="section-edit-primary" type="button" data-section-action="edit">
+                    <span><small>PIANO ROLL</small><strong>Edit notes</strong></span>
+                    <b aria-hidden="true">→</b>
+                  </button>
+                  <details class="shape-extra-feel"><summary>More feel controls <small>These edits apply immediately. Undo restores the previous version.</small></summary>
                   <div class="shaper-group-heading">
-                    <span><small>SECTION CONTROLS</small><strong>Shape the feel</strong></span>
-                    <em>Leave any choice on Auto</em>
+                    <span><small>SECTION FEEL</small><strong>Shape this moment</strong></span>
+                    <em>Auto keeps the original musical intent</em>
                   </div>
                   <div class="section-macro-grid" aria-label="Section shape controls">
                     <label style="--shape-tone:#fb7185"><span>ENERGY <small>Impact and dynamics</small></span><select data-section-macro="energy" aria-label="Section energy"><option value="auto">Auto · follow arc</option><option value="low">Restrained</option><option value="balanced">Balanced</option><option value="high">Lifted</option></select></label>
@@ -586,21 +605,34 @@
                     <label style="--shape-tone:#c084fc"><span>TENSION <small>Register and urgency</small></span><select data-section-macro="tension" aria-label="Section tension"><option value="auto">Auto · follow story</option><option value="open">Open</option><option value="balanced">Balanced</option><option value="charged">Charged</option></select></label>
                     <label style="--shape-tone:#34d399"><span>POCKET <small>Timing character</small></span><select data-section-macro="pocket" aria-label="Section pocket"><option value="auto">Auto · genre pocket</option><option value="relaxed">Relaxed</option><option value="tight">Tight</option><option value="pushed">Pushed</option></select></label>
                   </div>
+                  </details>
 
                   <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
+
                     <div class="shape-director-heading">
-                      <span><small>SHAPE DIRECTOR</small><strong id="shapeDirectorTitle">Pick what feels better</strong></span>
+                      <span><small>TRY A CHANGE</small><strong id="shapeDirectorTitle">2. Shape this part</strong></span>
                     </div>
+                    <span class="shape-director-current"><small>YOU ARE WORKING ON</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
+                    <p class="shape-directions-help">Tap a suggestion to preview it. Your original stays safe until you save.</p>
+                    <div class="shape-director-directions" id="shapeDirectorDirections" aria-label="Quick musical directions"></div>
+                    <div class="shape-director-candidate" id="shapeDirectorCandidate" hidden>
+                      <span><small>PREVIEW · NOT SAVED YET</small><strong id="shapeDirectorCandidateTitle">More Bounce · Touch Up</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
+                      <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Before and After audition"></div>
+                      <div class="shape-director-commit">
+                        <button type="button" data-shape-discard>Keep original</button>
+                        <button class="is-primary" type="button" data-shape-accept>Save this change</button>
+                      </div>
+                    </div>
+                    <details class="shape-change-options"><summary>Change options <small>Amount, scope, and things to keep</small></summary>
                     <div class="shape-director-scope">
-                      <label><span>WHAT TO CHANGE</span>
+                      <label><span>WHAT TO CHANGE</span><small>Only the selected part by default</small>
                         <select id="shapeDirectorTarget" aria-label="Shape target scope">
-                          <option value="section">This section</option>
-                          <option value="track">Current instrument</option>
+                          <option value="section">Whole section · all instruments</option>
+                          <option value="track">Only this instrument</option>
                           <option value="notes">Selected notes</option>
                         </select>
                       </label>
-                      <span class="shape-director-current"><small>INSTRUMENT</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
-                      <label><span>HOW MUCH</span>
+                      <label><span>HOW MUCH</span><small>Start small; preview before saving</small>
                         <select id="shapeDirectorSize" aria-label="Shape change size">
                           <option value="touchUp">Small · polish</option>
                           <option value="reshape">Medium · reshape</option>
@@ -608,11 +640,6 @@
                         </select>
                       </label>
                     </div>
-                    <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
-                      <span><small>BLUEPRINT + QUALITY JUDGE</small><strong id="shapeDirectorComposeLabel">Recompose with Blueprint</strong></span>
-                      <b aria-hidden="true">↻</b>
-                    </a>
-                    <div class="shape-director-directions" id="shapeDirectorDirections" aria-label="Quick musical directions"></div>
                     <details class="shape-director-locks">
                       <summary><span>Preserve what already works</span><small>OPTIONAL LOCKS</small></summary>
                       <div>
@@ -622,21 +649,18 @@
                         <label><input type="checkbox" data-shape-preserve="instrument" /> Instrument</label>
                       </div>
                     </details>
-                    <div class="shape-director-candidate" id="shapeDirectorCandidate" hidden>
-                      <span><small>LOCAL CANDIDATE</small><strong id="shapeDirectorCandidateTitle">More Bounce · Touch Up</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
-                      <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Before and After audition"></div>
-                      <div class="shape-director-commit">
-                        <button type="button" data-shape-discard>Discard</button>
-                        <button class="is-primary" type="button" data-shape-accept>Accept change</button>
-                      </div>
-                    </div>
+                    </details>
+                    <details class="shape-new-idea"><summary>Try a new musical idea <small>Replace this part with a fresh variation</small></summary>
+                    <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
+                      <span><small>TRY A DIFFERENT MUSICAL IDEA</small><strong id="shapeDirectorComposeLabel">Try this direction</strong></span>
+                      <b aria-hidden="true">↻</b>
+                    </a>
+                    </details>
+
+                    <details class="shape-help"><summary aria-label="How to shape a part">? How to use Shape</summary><p>Tap an instrument’s clip in the song map, such as Intro · Bass. Changes affect only that instrument in that section. Choose a direction, compare Before / After, then Save this change or Keep original. Note tools affect selected notes; Select all chooses every note in this part. Shorter / Longer changes how long notes play. Align to grid lines notes up evenly; Loosen timing adds slight timing differences. Choose Whole section only when you want every instrument changed.</p></details>
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
-                  <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PRECISION EDITING</small><strong>Edit notes</strong></span>
-                    <b aria-hidden="true">→</b>
-                  </button>
-                  <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>More tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
+                  <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>Whole-section tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
                     <div class="section-quick-actions" aria-label="Section actions"><button type="button" data-section-action="queue-jump">⚡ Queue Jump</button><button type="button" data-section-action="simplify">Create space</button><button type="button" data-section-action="build">Add a build</button><button type="button" data-section-action="variations">Try variations</button><button type="button" data-section-action="duplicate">Duplicate section</button></div>
                     <div class="section-order-actions" aria-label="Move selected section"><button type="button" data-section-action="earlier">← Earlier</button><button type="button" data-section-action="later">Later →</button></div>
                   </div></details>
@@ -648,16 +672,59 @@
               <header class="editor-header">
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
-                  <p class="eyebrow">PRECISION EDITOR</p>
+                  <p class="eyebrow">EDITING ONLY THIS PART</p>
                   <h3 id="sectionEditorTitle">Edit notes precisely</h3>
                   <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
                 </div>
                 <div class="editor-header-actions">
-                  <button class="editor-play-button" id="editorPlayButton" type="button">Play from here</button>
-                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">← Back to Shape</button>
+                  <button class="editor-play-button" id="editorPlayButton" type="button">Listen from here</button>
+                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">Choose another part</button>
                 </div>
               </header>
-              <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Instrument in piano roll"></div>
+              <label class="editor-section-switch">Section <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
+              <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
+              <div id="editorShapeTools"></div>
+              <details class="shape-note-detail" id="shapeNoteDetail">
+                <summary><strong>3. Edit notes</strong><small>Optional · change note length, timing, pitch, or strength</small></summary>
+                <p class="shape-note-help">Tap notes to select them, or use Select all for this part. Selected notes light up. Note edits apply immediately; Undo restores the previous version.</p>
+              <div class="piano-roll-shell" id="pianoRollShell">
+                <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
+                <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
+                  <div class="piano-roll-grid" id="pianoRollGrid"></div>
+                </div>
+              </div>
+              <div class="velocity-lane" id="velocityLane" aria-label="Velocity lane" aria-hidden="true">
+                <div class="velocity-lane-header"><small>VELOCITY</small></div>
+                <div class="velocity-bars" id="velocityBars"></div>
+              </div>
+              <div class="editor-toolbar" role="toolbar" aria-label="Essential note editing tools">
+                <span class="editor-toolbar-label"><small>ESSENTIAL TOOLS</small><strong>Edit selected notes</strong></span>
+                <label class="editor-select">NOTE SPACING GRID
+                  <select id="editorGridControl">
+                    <option value="1">1/4</option><option value="0.5">1/8</option>
+                    <option value="0.25" selected>1/16</option><option value="0.1666667">1/16T</option>
+                  </select>
+                </label>
+                <span class="editor-tool-group">
+                  <button type="button" data-editor-action="select-all">Select all</button>
+                  <button type="button" data-editor-action="quantize">Align to grid</button>
+                  <button type="button" data-editor-action="humanize">Loosen timing</button>
+                </span>
+                <span class="editor-tool-cluster editor-note-length"><small>NOTE LENGTH</small><span class="editor-tool-group">
+                    <button type="button" data-editor-action="shorter" aria-label="Shorten selected notes">Shorter</button>
+                    <button type="button" data-editor-action="longer" aria-label="Lengthen selected notes">Longer</button>
+                  </span></span>
+                <label class="editor-velocity">NOTE STRENGTH <output id="editorVelocityValue">100 · strong</output>
+                  <input id="editorVelocityControl" type="range" min="1" max="127" value="100" aria-label="Selected note velocity from 1 to 127" />
+                  <small>MIDI 1–40 soft · 41–90 balanced · 91–127 strong</small>
+                </label>
+              </div>
+              <section class="section-variation-lab" id="sectionVariationLab" aria-label="Section variation lab"></section>
+              <details class="editor-advanced-tools">
+                <summary>
+                  <span><small>ADVANCED NOTE TOOLS</small><strong>Move, resize, transpose or remove selected notes</strong></span>
+                  <b aria-hidden="true">+</b>
+                </summary>
               <div class="editor-musical-guide" id="editorMusicalGuide">
                 <div class="editor-guide-identity">
                   <small>HARMONY GUIDE</small>
@@ -678,35 +745,10 @@
                 </label>
               </div>
               <div class="editor-relationship-summary" id="editorRelationshipSummary" aria-live="polite"></div>
-              <div class="editor-toolbar" role="toolbar" aria-label="Essential note editing tools">
-                <span class="editor-toolbar-label"><small>ESSENTIAL TOOLS</small><strong>Timing and dynamics</strong></span>
-                <label class="editor-select">GRID
-                  <select id="editorGridControl">
-                    <option value="1">1/4</option><option value="0.5">1/8</option>
-                    <option value="0.25" selected>1/16</option><option value="0.1666667">1/16T</option>
-                  </select>
-                </label>
-                <span class="editor-tool-group">
-                  <button type="button" data-editor-action="select-all">Select all</button>
-                  <button type="button" data-editor-action="quantize">Quantize</button>
-                  <button type="button" data-editor-action="humanize">Humanize</button>
-                </span>
-                <label class="editor-velocity">NOTE VELOCITY <output id="editorVelocityValue">100 · strong</output>
-                  <input id="editorVelocityControl" type="range" min="1" max="127" value="100" aria-label="Selected note velocity from 1 to 127" />
-                  <small>MIDI 1–40 soft · 41–90 balanced · 91–127 strong</small>
-                </label>
-              </div>
-              <details class="editor-advanced-tools">
-                <summary>
-                  <span><small>ADVANCED NOTE TOOLS</small><strong>Move, resize, transpose or remove selected notes</strong></span>
-                  <b aria-hidden="true">+</b>
-                </summary>
                 <div class="editor-advanced-tools-body" role="toolbar" aria-label="Advanced note editing tools">
-                  <span class="editor-tool-cluster"><small>POSITION &amp; LENGTH</small><span class="editor-tool-group">
+                  <span class="editor-tool-cluster"><small>POSITION</small><span class="editor-tool-group">
                     <button type="button" data-editor-action="nudge-left" aria-label="Nudge left">Left</button>
                     <button type="button" data-editor-action="nudge-right" aria-label="Nudge right">Right</button>
-                    <button type="button" data-editor-action="shorter" aria-label="Shorten">Shorter</button>
-                    <button type="button" data-editor-action="longer" aria-label="Lengthen">Longer</button>
                   </span></span>
                   <span class="editor-tool-cluster"><small>PITCH</small><span class="editor-tool-group tonal-tools">
                     <button type="button" data-editor-action="octave-down" aria-label="-12">-12</button>
@@ -724,18 +766,8 @@
                 <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Click notes to select - Shift-click adds - Double-click empty space to draw</small></span>
                 <label>ZOOM <input id="editorZoomControl" type="range" min="44" max="100" value="64" /></label>
               </div>
-              <div class="piano-roll-shell" id="pianoRollShell">
-                <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
-                <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
-                  <div class="piano-roll-grid" id="pianoRollGrid"></div>
-                </div>
-              </div>
-              <div class="velocity-lane" id="velocityLane" aria-label="Velocity lane" aria-hidden="true">
-                <div class="velocity-lane-header"><small>VELOCITY</small></div>
-                <div class="velocity-bars" id="velocityBars"></div>
-              </div>
-              <section class="section-variation-lab" id="sectionVariationLab" aria-label="Section variation lab"></section>
               <p class="editor-status" id="editorStatus" role="status" aria-live="polite">Choose a section, then select notes to edit.</p>
+              </details>
             </section>
           </section>
         </div>
@@ -879,12 +911,12 @@
     <div class="generation-wash" id="generationWash" role="status" aria-live="polite" aria-atomic="false" aria-hidden="true">
       <section class="generation-message" aria-labelledby="generationMessage">
         <div class="generation-orbit" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        <p><b>PRODUCER BRAIN</b><span id="generationStageCount">PASS 1 OF 6</span></p>
+        <p><b>PRODUCER BRAIN</b><span id="generationStageCount">Planning · 0s</span></p>
         <h2 id="generationMessage">COMPOSING HARMONIC ARCHITECTURE</h2>
         <div class="generation-meter" aria-hidden="true"><i id="generationMeter"></i></div>
         <p class="generation-stage-copy" id="generationStageCopy">Planning section energy, contrast, and the return of the hook.</p>
         <div class="generation-stages" id="generationStages" aria-label="Composition passes">
-          <span data-generation-stage="blueprint"><i></i>Song map</span><span data-generation-stage="harmony"><i></i>Harmony</span><span data-generation-stage="phrases"><i></i>Phrases</span><span data-generation-stage="groove"><i></i>Pocket</span><span data-generation-stage="audition"><i></i>Producer</span><span data-generation-stage="master"><i></i>Final pass</span>
+          <span data-generation-stage="blueprint"><i></i>Plan</span><span data-generation-stage="harmony"><i></i>Compose</span><span data-generation-stage="phrases"><i></i>Check</span><span data-generation-stage="groove"><i></i>Improve</span><span data-generation-stage="audition"><i></i>Compare</span><span data-generation-stage="master"><i></i>Final checks</span>
         </div>
         <small>Auditioning complete songs—not stitching random loops.</small>
       </section>
@@ -937,8 +969,8 @@
         <div class="shortcut-list">
         <span><kbd>Space</kbd><b>Play / pause</b></span>
         <span><kbd>A</kbd><b>Shape workspace</b></span>
-        <span><kbd>N</kbd><b>New song idea</b></span>
-        <span><kbd>S</kbd><b>More like this</b></span>
+        <span><kbd>N</kbd><b>Generate song</b></span>
+        <span><kbd>S</kbd><b>Three variations</b></span>
           <span><kbd>E</kbd><b>Export MIDI</b></span>
         </div>
         <p class="guide-privacy-link"><a href="./privacy-policy.html">Read the MIDI Arcade Privacy Policy</a></p>

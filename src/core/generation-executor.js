@@ -71,6 +71,7 @@ export function createGenerationExecutor({
   recorder = null,
   persistGeneration = null,
   onPersistenceError = null,
+  onProgress = null,
   now = () => Date.now(),
   workerRetryBaseMs = 1000,
   workerRetryMaxMs = 30000,
@@ -217,7 +218,14 @@ export function createGenerationExecutor({
       sourceSong: adaptedPayload?.sourceSong,
       config,
     });
-    flightRecorder.mark(flightId, "plan", {
+    const report = (phase, detail = {}) => {
+      if (expectedLifecycle === lifecycle) onProgress?.({ kind, phase, detail });
+    };
+    const mark = (phase, detail) => {
+      flightRecorder.mark(flightId, phase, detail);
+      report(phase, detail);
+    };
+    mark("plan", {
       producerBrain: config?.producerBrain?.id ?? null,
       blueprint: config?.producerBrain?.blueprint?.id ?? null,
       outputQuality: config?.outputQuality?.seedSignature ?? null,
@@ -225,34 +233,35 @@ export function createGenerationExecutor({
     });
 
     try {
-      flightRecorder.mark(flightId, "compose", { pass: 0 });
+      mark("compose", { pass: 0 });
       const originalResult = await executeAdapted(kind, adaptedPayload, expectedLifecycle);
       requireCurrentLifecycle(expectedLifecycle);
 
       if (kind === "compositionCandidate") {
         const transaction = originalResult?.transaction;
         const correction = transaction?.selfCorrection;
-        flightRecorder.mark(flightId, "diagnose", {
+        mark("diagnose", {
           valid: transaction?.validation?.valid === true,
           issues: transaction?.validation?.issues ?? [],
           attempts: correction?.attemptCount ?? 1,
           selectedAttempt: correction?.selectedAttempt ?? 0,
         });
-        flightRecorder.mark(flightId, "compare", {
+        mark("compare", {
           selected: transaction?.validation?.valid ? "candidate" : "rejected",
           reason: correction?.stoppedReason ?? "composition-candidate",
         });
-        flightRecorder.mark(flightId, "finalize", {
+        mark("finalize", {
           compositionCandidate: true,
           passed: transaction?.validation?.valid === true,
         });
         flightRecorder.complete(flightId, originalResult);
+        report("complete");
         return originalResult;
       }
 
       const diagnosis = diagnoseGenerationOutcome(kind, originalResult, config);
       const repairAuthority = decideGenerationRepairAuthority(kind, diagnosis, config);
-      flightRecorder.mark(flightId, "diagnose", {
+      mark("diagnose", {
         shouldRetry: repairAuthority.mode === "composition-reroute",
         reason: diagnosis.reason,
         focusRoute: diagnosis.focusRoute,
@@ -268,7 +277,7 @@ export function createGenerationExecutor({
       let selectedResult = originalResult;
       if (repairAuthority.mode === "composition-reroute") {
         const correctionPayload = createSelfCorrectionPayload(adaptedPayload, diagnosis);
-        flightRecorder.mark(flightId, "repair", {
+        mark("repair", {
           pass: 1,
           focusRoute: diagnosis.focusRoute,
           focusDimension: diagnosis.focusDimension,
@@ -278,20 +287,21 @@ export function createGenerationExecutor({
         requireCurrentLifecycle(expectedLifecycle);
         const comparison = selectSelfCorrectedResult(originalResult, correctedResult);
         selectedResult = comparison.result;
-        flightRecorder.mark(flightId, "compare", {
+        mark("compare", {
           selected: comparison.selected,
           reason: comparison.reason,
           scoreDelta: comparison.scoreDelta,
           creativeFloorDelta: comparison.creativeFloorDelta,
         });
       } else {
-        flightRecorder.mark(flightId, "compare", {
+        mark("compare", {
           selected: "original",
           reason: diagnosis.reason,
           skipped: true,
         });
       }
 
+      report("finalize");
       const qualityConfig = attachGenerationRepairAuthority(config, repairAuthority);
       const preQualityResult = selectedResult;
       const refreshCommittedAuthorities = supportsCommittedAuthorityRefresh(preQualityResult?.song);
@@ -356,7 +366,7 @@ export function createGenerationExecutor({
       }
 
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
-      flightRecorder.mark(flightId, "finalize", {
+      mark("finalize", {
         repairAuthority,
         committedQuality,
         resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
@@ -376,7 +386,7 @@ export function createGenerationExecutor({
         && ["new", "similar"].includes(kind)
         && Boolean(selectedResult?.song);
       if (shouldPersist) {
-        flightRecorder.mark(flightId, "persist", { enabled: true });
+        mark("persist", { enabled: true });
       }
       flightRecorder.complete(flightId, selectedResult);
 
@@ -406,6 +416,7 @@ export function createGenerationExecutor({
         }
       }
 
+      report("complete");
       return selectedResult;
     } catch (error) {
       flightRecorder.fail(flightId, error);

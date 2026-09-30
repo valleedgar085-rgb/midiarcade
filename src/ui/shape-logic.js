@@ -1,3 +1,4 @@
+import { getScaleChordGuide } from "../core/scale-guide.js";
 import { clamp } from "../utils.js";
 
 function pitchClass(value) {
@@ -55,4 +56,19 @@ export function analyzeSectionRelationship(notes = [], partnerNotes = [], tolera
     breathingNotes: Math.max(0, primary.length - sharedAttacks),
     interlockRatio: primary.length ? sharedAttacks / primary.length : 0,
   });
+}
+
+/** Classify displayed notes against the harmony active at their onset. */
+export function classifyNoteRole(noteOrPitch, songOrGuide) {
+  const guide = Array.isArray(songOrGuide?.scalePitchClasses)
+    ? songOrGuide : getScaleChordGuide(songOrGuide, noteStart(noteOrPitch));
+  const pitch = typeof noteOrPitch === "number" ? noteOrPitch
+    : Number(noteOrPitch?.pitch ?? noteOrPitch?.midi ?? noteOrPitch?.note ?? 60);
+  const chordClasses = (guide.chord?.notes || []).map((note) => typeof note === "number"
+    ? pitchClass(note) : guide.scalePitchClasses[guide.scaleNotes.indexOf(String(note).replace(/[0-9]/g, ""))]);
+  const pc = pitchClass(pitch);
+  const role = pc === chordClasses[0] ? "root-tone"
+    : chordClasses.includes(pc) ? "chord-tone"
+    : guide.scalePitchClasses.includes(pc) ? "scale-tone" : "outside-tone";
+  return { role };
 }

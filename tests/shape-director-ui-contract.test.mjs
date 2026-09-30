@@ -28,12 +28,12 @@ test("Shape Director runtime remains candidate-first and history-safe", () => {
   assert.match(app, /function discardShapeDirectorCandidate[\s\S]*?transaction\.before/);
 });
 
-test("Shape Director presents target, direction, and compare as three obvious stages", () => {
-  assert.match(css, /PHASE 5: SHAPE DIRECTOR/);
-  assert.match(css, /content:"1 · TARGET"/);
-  assert.match(css, /content:"2 · MUSICAL DIRECTION"/);
-  assert.match(css, /content:"3 · COMPARE & COMMIT"/);
-  assert.match(css, /\.shape-director-commit button\.is-primary[\s\S]*?linear-gradient\(135deg,#16a34a,#047857\)/);
+test("Shape puts suggestions and comparison before optional controls", () => {
+  assert.match(html, /id="shapeDirectorDirections"[\s\S]*?id="shapeDirectorCandidate"[\s\S]*?class="shape-change-options"/);
+  assert.match(html, /<details class="shape-change-options">[\s\S]*?id="shapeDirectorTarget"[\s\S]*?id="shapeDirectorSize"/);
+  assert.match(html, /<details class="shape-new-idea">[\s\S]*?id="shapeDirectorCompose"/);
+  assert.match(html, /id="shapeDirectorTitle">2\. Shape this part/);
+  assert.match(html, /id="shapeNoteDetail">[\s\S]*?3\. Edit notes/);
 });
 
 test("Shape Director is touch friendly and landscape aware", () => {

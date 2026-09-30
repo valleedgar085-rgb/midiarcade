@@ -4658,10 +4658,6 @@ input[type=range]{accent-color:var(--figma-orange)}
     content:'Midnight Polaroid';
     display:block;color:var(--figma-text);font-size:22px;font-weight:800;margin:-8px 0 20px;
   }
-  .showcase-art + .showcase-copy::after{
-    content:'Seed generated multitrack · Neo Soul';
-    display:block;color:var(--figma-muted);font-size:12px;margin:-14px 0 0;
-  }
   .showcase-copy .create-live-controls{margin-top:0!important}
   .create-console .panel,.create-console [class*="panel"]{box-shadow:none}
   .transport{

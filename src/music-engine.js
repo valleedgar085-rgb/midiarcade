@@ -6,6 +6,7 @@
  * expressed in quarter-note beats; MIDI conversion happens only in encodeMidi.
  */
 
+import { planMusicalLookahead } from "./core/musical-lookahead.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -241,7 +242,7 @@ export const DAW_REGISTER_POLICIES = deepFreeze({
 /** Genre writing ranges and deterministic General MIDI sound palettes. */
 export const GENRE_PROFILES = deepFreeze({
   neoSoul: {
-    id: "neoSoul", label: "Neo Soul / R&B", bpm: { min: 68, max: 96, default: 84 },
+    id: "neoSoul", label: "Neo Soul", bpm: { min: 68, max: 96, default: 84 },
     preferredScales: ["dorian", "minor", "major", "mixolydian"],
     grooveWeights: {
       drumGroove: { backbeat: 4.2, halfTime: 1.4, breakbeat: 0.8, electro: 0.6, fourFloor: 0.15 },
@@ -4761,7 +4762,7 @@ function generateBass(
       offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
     }
 
-    const nextChord = harmony[(eventIndex + 1) % harmony.length];
+    const nextChord = harmony[eventIndex + 1];
     const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
     const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
     for (let index = 0; index < offsets.length; index += 1) {
@@ -4792,9 +4793,10 @@ function generateBass(
         pitch = midiForDegree(config, chord.degree + movement, bassOctave);
       }
       const last = index === offsets.length - 1;
-      if (last && nextChord && rng.bool(settings.variation * config.complexity * 0.5)) {
-        const target = rootMidi(nextChord, bassOctave);
+      if (last && rng.bool(settings.variation * config.complexity * 0.5)) {
+        // Keep the seeded articulation stream stable, including the final event.
         const approach = rng.pick([-2, -1, 1, 2]);
+        const target = rootMidi(nextChord ?? chord, bassOctave);
         pitch = nearestScalePitch(target + approach, config, Math.sign(approach));
       }
       const harmonicLiftEligible = (
@@ -4813,6 +4815,11 @@ function generateBass(
         pitch += 12;
         harmonicLifts += 1;
       }
+      const lookahead = last && index > 0 && nextChord ? planMusicalLookahead({
+        pitch, start: absoluteStart, boundary: nextChord.start, totalBeats,
+        scalePitchClasses: scalePitchClasses(config), nextTones: [nextChord.rootPc], trackId: "bass",
+      }) : null;
+      if (lookahead) pitch = lookahead.pitch;
       const nextOffset = offsets[index + 1] ?? chord.duration;
       const durationFactor = ["house", "techno"].includes(config.genre)
         ? 0.58
@@ -4840,6 +4847,7 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
         },
       );
     }
@@ -7264,6 +7272,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.memoryOriginSectionId ? { memoryOriginSectionId: note.memoryOriginSectionId } : {}),
       ...(note.memoryTransform ? { memoryTransform: note.memoryTransform } : {}),
       ...(Number.isFinite(note.plannedTension) ? { plannedTension: round(note.plannedTension) } : {}),
+      ...(note.musicalLookaheadIntent ? { musicalLookaheadIntent: { ...note.musicalLookaheadIntent } } : {}),
       ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
       ...(Number.isFinite(note.phraseBoundary) ? { phraseBoundary: round(note.phraseBoundary) } : {}),
       ...(note.articulationIntent ? { articulationIntent: note.articulationIntent } : {}),
@@ -9673,10 +9682,18 @@ function applyPhraseResolutions(
         ? targetChord.tones.filter((tone) => tone !== chord.rootPc && tone !== config.keyPc)
         : targetChord.tones;
       const landingChord = expressiveTones.length ? { ...targetChord, tones: expressiveTones } : targetChord;
-      const target = nearestChordTone(landing.pitch, landingChord, direction);
+      const nextChord = harmonyAt(harmony, boundary + 0.01);
+      const lookahead = nextChord?.start > chord.start ? planMusicalLookahead({
+        pitch: nearestChordTone(landing.pitch, landingChord, direction),
+        start: landing.start, boundary, totalBeats: config.bars * barBeats,
+        scalePitchClasses: scalePitchClasses(config), currentTones: landingChord.tones,
+        nextTones: nextChord.tones, trackId, protectedLanding: forceTonic,
+      }) : null;
+      const target = lookahead?.pitch ?? nearestChordTone(landing.pitch, landingChord, direction);
       const maximumLeap = trackId === "counterpoint" ? 5 : 7;
       if (Math.abs(target - landing.pitch) <= maximumLeap || forceTonic) {
         landing.pitch = nearestScalePitch(target, config, direction);
+        if (lookahead && landing.pitch === lookahead.pitch) landing.musicalLookaheadIntent = lookahead;
       }
       landing.duration = round(clamp(
         Math.max(

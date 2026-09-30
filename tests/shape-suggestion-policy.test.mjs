@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { rankShapeSuggestions } from "../src/core/shape-director-policy.js";
 
+const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 
 test("A3 ranks Shape starting points from critic weakness, section role, target, and Element lineage", () => {
@@ -56,7 +57,7 @@ test("A3 adapts the ranked suggestion to payoff and outro section roles", () => 
 
 test("A3 wiring stays advisory and stages the existing Shape transaction path", () => {
   assert.match(app, /rankShapeSuggestions\(\{/);
-  assert.match(app, /nothing changes until Accept/);
+  assert.match(html, /Your original stays safe until you save/);
   assert.match(app, /data-shape-direction/);
   assert.match(app, /prepareShapeDirectorCandidate\(direction\)/);
   assert.match(app, /state\.song\?\.variationSet\?\.element\?\.id/);

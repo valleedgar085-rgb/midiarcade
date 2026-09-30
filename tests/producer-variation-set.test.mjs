@@ -304,3 +304,23 @@ test("an Element with no release-safe auditions fails closed instead of returnin
   });
   assert.deepEqual(variations, []);
 });
+
+test("Elements retry rejected auditions within four attempts without admitting unsafe songs", () => {
+  const direction = ELEMENT_PROFILES[0];
+  const failed = scoreSong({ id: "failed", overall: 100, role: 100, releasePassed: false }, direction);
+  const safe = scoreSong({ id: "safe", overall: 84, role: 86, releasePassed: true }, direction);
+  let calls = 0;
+  const result = generateProducerVariationSet(sourceSong(), { count: 1, candidatesPerVariation: 2 }, {
+    generateSimilar() { return structuredClone(++calls < 3 ? failed : safe); },
+  });
+  assert.equal(calls, 3);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].variationSet.auditions, 3);
+  assert.equal(result[0].variationSet.selectedAudition, 2);
+  calls = 0;
+  const rejected = generateProducerVariationSet(sourceSong(), { count: 1 }, {
+    generateSimilar() { calls++; return structuredClone(failed); },
+  });
+  assert.equal(calls, 4);
+  assert.deepEqual(rejected, []);
+});

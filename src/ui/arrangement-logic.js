@@ -304,7 +304,7 @@ function relocateSongSections(sourceSong, sectionId, targetIndex) {
   return { song, focusSectionId: String(sectionId) };
 }
 
-function transformSongSection(sourceSong, sectionId, operation, value) {
+function transformSongSection(sourceSong, sectionId, operation, value, trackId) {
   const sourceSections = sourceSong?.structure ?? sourceSong?.sections;
   const section = sourceSections?.find?.((candidate) => String(candidate.id) === String(sectionId));
   if (!section) return null;
@@ -313,7 +313,7 @@ function transformSongSection(sourceSong, sectionId, operation, value) {
   const rangeStart = sectionStartBeat(section, beatsPerBar);
   const rangeEnd = rangeStart + sectionBars(section) * beatsPerBar;
   const inRange = (note) => eventStart(note) >= rangeStart - 1e-7 && eventStart(note) < rangeEnd - 1e-7;
-  const tracks = Array.isArray(song.tracks) ? song.tracks : [];
+  const tracks = (Array.isArray(song.tracks) ? song.tracks : []).filter((track) => !trackId || String(track.id) === String(trackId));
   const entries = tracks.flatMap((track) => (
     (track.notes ?? []).filter(inRange).map((note) => ({ note, track }))
   ));
@@ -326,7 +326,7 @@ function transformSongSection(sourceSong, sectionId, operation, value) {
     entries.forEach(({ note }) => setEventVelocity(note, Math.min(120, Math.max(1, Math.round(eventVelocity(note) * factor)))));
   } else if (operation === "simplify" || (operation === "density" && value === "sparse")) {
     for (const track of tracks) {
-      if (!["melody", "counterpoint", "chords", "pad"].includes(String(track.id))) continue;
+      if (!trackId && !["melody", "counterpoint", "chords", "pad"].includes(String(track.id))) continue;
       let sectionIndex = 0;
       track.notes = (track.notes ?? []).filter((note) => !inRange(note) || sectionIndex++ % 3 !== 1);
     }
@@ -416,7 +416,7 @@ export function executeArrangementCommand(sourceSong, command = {}) {
     result = relocateSongSections(workingSong, command.sectionId, Math.round(finite(command.targetIndex, -1)));
   }
   if (command.type === "transform") {
-    result = transformSongSection(workingSong, command.sectionId, command.operation, command.value);
+    result = transformSongSection(workingSong, command.sectionId, command.operation, command.value, command.trackId);
   }
   if (!result) return { changed: false, error: "command-rejected", command: clone(command) };
   if (arrangementPayload(sourceSong) === arrangementPayload(result.song)) {

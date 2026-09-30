@@ -217,3 +217,16 @@ test("timing repair refuses ambiguous identities and destructive event correctio
   overflowingNote.tracks[0].notes[1].duration = 20;
   assert.equal(repairArrangementTiming(overflowingNote), null);
 });
+
+ test("instrument shaping leaves other instruments and later sections unchanged", () => {
+  const source = fixture();
+  source.tracks.push({ id: "bass", notes: [{ pitch: 36, start: 1, duration: 1, velocity: 60 }, { pitch: 38, start: 3, duration: 1, velocity: 60 }, { pitch: 40, start: 9, duration: 1, velocity: 60 }] });
+  for (const operation of ["energy", "build", "pocket", "density", "simplify"]) {
+    const result = executeArrangementCommand(source, { type: "transform", sectionId: "verse-1", trackId: "bass", operation, value: operation === "density" ? "rich" : operation === "pocket" ? "relaxed" : operation === "energy" ? "high" : undefined });
+    assert.equal(result.changed, true, operation);
+    assert.deepEqual(result.song.tracks[0], source.tracks[0]);
+    assert.deepEqual(result.song.tracks[1].notes.filter(note => note.start >= 8), source.tracks[1].notes.filter(note => note.start >= 8));
+    assert.deepEqual(result.song.harmony, source.harmony);
+  }
+  assert.equal(executeArrangementCommand(source, { type: "transform", sectionId: "verse-1", trackId: "missing", operation: "energy", value: "high" }).changed, false);
+});

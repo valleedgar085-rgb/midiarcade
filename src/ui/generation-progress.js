@@ -17,7 +17,7 @@ const SIMILAR_OVERRIDES = Object.freeze({
 
 const VARIATION_OVERRIDES = Object.freeze({
   blueprint: "Mapping three distinct arrangements around the same musical identity.",
-  audition: "Comparing six complete candidates for hook, pocket, and story arc.",
+  audition: "Comparing complete candidates for hook, pocket, and story arc.",
 });
 
 const STAGE_CADENCE_MS = Object.freeze({
