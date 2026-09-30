@@ -4203,19 +4203,3 @@ body #menuDropdown .menu-icon { color: #78d2c5 !important; }
 .instrument-scope label:has([data-section-bars]),.instrument-scope .section-actions-menu{display:none}
 .shape-help{color:#cbd5e1;padding:12px;border:1px solid #58c9bb55;border-radius:12px}.shape-help summary{cursor:pointer;color:#58c9bb}.shape-help p{line-height:1.55}.shape-director-current{border:1px solid #58c9bb88;border-radius:10px;padding:10px;background:#16312e;box-shadow:0 0 14px #58c9bb18}
 
-/* Shape: select a part, shape the feel, optionally edit notes. */
-#tab-arrange .section-editor.is-open{position:relative!important;inset:auto!important;overflow:visible!important;z-index:2!important;margin:18px 0!important;padding:16px!important;border:1px solid #58c9bb44!important;border-radius:18px!important;box-shadow:0 0 24px #58c9bb0a!important}
-#tab-arrange .section-editor.is-open .editor-header{position:sticky!important;top:var(--topbar-h,68px)!important;margin:0 -16px 12px!important;padding:14px 16px!important;border-bottom:1px solid #58c9bb66!important;z-index:8!important;background:#10171cf5!important}
-#tab-arrange .section-editor .editor-header p{color:#b5c8cc!important}
-#tab-arrange .shape-director-panel{display:flex!important;flex-direction:column;gap:14px;padding:16px!important}
-#tab-arrange .shape-director-panel::before,#tab-arrange .shape-director-scope::before,#tab-arrange .shape-director-directions::before,#tab-arrange .shape-director-candidate::before{display:none!important}
-#tab-arrange .shape-director-heading{order:0}#tab-arrange .shape-director-scope{order:1}#tab-arrange .shape-director-directions{order:2}#tab-arrange .shape-blueprint-compose{order:3}#tab-arrange .shape-director-candidate{order:4}#tab-arrange .shape-director-status{order:5}#tab-arrange .shape-director-locks{order:6}#tab-arrange .shape-help{order:7}
-#tab-arrange .shape-director-scope{display:flex!important;flex-direction:column;gap:12px}#tab-arrange .shape-director-current{order:-1;width:100%;box-sizing:border-box}#tab-arrange .shape-director-current strong{font-size:20px!important;color:#e5faf5!important}
-#tab-arrange .shape-director-scope label{display:grid;gap:6px}#tab-arrange .shape-director-scope label>small{color:#b5c8cc;font-size:12px}#tab-arrange .shape-director-scope select{min-height:48px!important}
-#tab-arrange .shape-director-directions button{min-height:48px!important;font-size:14px!important}#tab-arrange .shape-director-status{line-height:1.6!important;color:#b5c8cc!important}
-#tab-arrange .shape-note-detail,#tab-arrange .shape-extra-feel{margin:16px 0;border:1px solid #34464d;border-radius:14px;padding:14px;background:#10171c}
-#tab-arrange .shape-note-detail>summary,#tab-arrange .shape-extra-feel>summary{cursor:pointer;min-height:44px;color:#e5faf5;font-weight:700}#tab-arrange .shape-note-detail>summary small,#tab-arrange .shape-extra-feel>summary small{display:block;font-weight:400;color:#b5c8cc;font-size:12px;line-height:1.6;margin-top:6px}
-#tab-arrange .shape-note-help{color:#b5c8cc;font-size:13px;line-height:1.6}#tab-arrange .editor-toolbar{gap:12px!important}#tab-arrange .arrangement-insight-lanes{display:none!important}#tab-arrange .editor-musical-guide,#tab-arrange .editor-relationship-summary{display:none!important}
-@media(min-width:760px){#tab-arrange .shape-director-scope{display:grid!important;grid-template-columns:1fr 1fr}#tab-arrange .shape-director-current{grid-column:1/-1}}
-
-#tab-arrange.has-section-focus #sectionShaper{display:none!important}#tab-arrange .shape-stage{grid-template-columns:minmax(0,1fr)!important}#tab-arrange .editor-advanced-tools[open] .editor-musical-guide{display:flex!important}#tab-arrange .editor-advanced-tools[open] .editor-relationship-summary{display:flex!important}

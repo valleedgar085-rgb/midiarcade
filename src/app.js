@@ -1340,8 +1340,8 @@ function renderSectionEditor(message = "") {
   const partnerTrack = songTracks().find((candidate, index) => trackId(candidate, index) === partnerId);
   const partnerEntries = editorEntries(partnerTrack, section);
   container.style.setProperty("--editor-color", meta.color);
-  $("#sectionEditorTitle").textContent = `${section.name} · ${meta.name}`;
-  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · Shape: ${shapeDirectorState().target === "section" ? "all instruments" : "this instrument"}`;
+  $("#sectionEditorTitle").textContent = `${section.name} · ${shapeDirectorState().target === "section" ? "All instruments" : meta.name}`;
+  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · Changes affect ${shapeDirectorState().target === "section" ? "all instruments in this section" : shapeDirectorState().target === "notes" ? "selected notes only" : "only this instrument here"}`;
   $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
   $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
@@ -2572,8 +2572,8 @@ function renderShapeDirector(section = editorSection()) {
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
       ? "Select notes first."
       : topSuggestion
-        ? `Recommended: ${topSuggestion.direction.label}. Tap one of the three suggested moves to preview it; nothing changes until Accept. Use Save this change to keep it.`
-        : "Preview a direction, then Accept.";
+        ? "Choose a suggestion above, then listen to Before and After."
+        : "Choose a suggestion above to preview a change.";
     return;
   }
   const summary = director.transaction.summary;
@@ -2581,7 +2581,7 @@ function renderShapeDirector(section = editorSection()) {
   if (director.transaction.compositionCandidate) {
     const correction = director.transaction.selfCorrection;
     const scores = director.transaction.validation?.judge?.candidate?.scores ?? {};
-    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · Blueprint validated";
+    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · New idea";
     $("#shapeDirectorCandidateMeta").textContent = [
       `${correction?.attemptCount ?? 1} pass${(correction?.attemptCount ?? 1) === 1 ? "" : "es"}`,
       `harmony ${scores.harmony ?? "—"}`,
@@ -2597,8 +2597,8 @@ function renderShapeDirector(section = editorSection()) {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
   });
   if (status) status.textContent = director.audition === "after"
-    ? "After is playing from the uncommitted candidate. Accept to write it into the song or return to Before."
-    : "Original song is still active. Tap After to audition the proposed local rewrite.";
+    ? "You are hearing the preview. Save this change to keep it, or Keep original."
+    : "You are hearing the original. Tap After to hear the change.";
 }
 
 function prepareShapeDirectorCandidate(direction) {

@@ -67,7 +67,10 @@ const solarPopStyles = await transform(
   transformOptions,
 );
 const midnightStudioStyles = await transform(
-  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'midnight-studio.css'), 'utf8'),
+  // Shape workspace rules live separately and follow the shared theme.
+  ['midnight-studio.css', 'shape-workspace.css']
+    .map((name) => fs.readFileSync(path.join(projectRoot, 'src', 'ui', name), 'utf8'))
+    .join('\n'),
   transformOptions,
 );
 fs.writeFileSync(

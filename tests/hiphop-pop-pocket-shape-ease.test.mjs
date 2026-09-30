@@ -56,13 +56,13 @@ test("fixed-seed Hip-Hop and Pop generation remain deterministic after pocket ch
 });
 
 test("Shape shows three recommendations first and progressively discloses the rest", () => {
-  assert.match(html, /Pick what feels better/);
+  assert.match(html, /2\. Shape this part/);
   assert.match(html, /WHAT TO CHANGE/);
   assert.match(html, /HOW MUCH/);
   assert.match(html, /Small · polish[\s\S]*?Medium · reshape[\s\S]*?Big · transform/);
   assert.match(app, /data-shape-more/);
   assert.match(app, /button\.hidden = panel\.dataset\.shapeMore !== "true"/);
-  assert.match(app, /Tap one of the three suggested moves to preview it/);
+  assert.match(app, /Choose a suggestion above, then listen to Before and After/);
   assert.match(app, /More directions/);
   assert.match(app, /Fewer directions/);
 });
