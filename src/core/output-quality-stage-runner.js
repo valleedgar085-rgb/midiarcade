@@ -54,11 +54,19 @@ export function runQualityStageSequence(song, stages = [], { repairAuthority = n
     const result = stage.run(current);
     const after = result?.song ?? current;
     const mutationAuthority = auditStageMutationAuthority(before, after, stage.id);
+    const strictViolation = Boolean(admission.stage?.strictMutations && !mutationAuthority.passed);
     const stageDiagnostics = result?.diagnostics ?? null;
     diagnostics[stage.id] = stageDiagnostics && typeof stageDiagnostics === "object"
-      ? Object.freeze({ ...stageDiagnostics, repairAuthority: admission, mutationAuthority })
+      ? Object.freeze({
+        ...stageDiagnostics,
+        ...(strictViolation
+          ? { accepted: false, changed: false, reason: "mutation-authority-violation" }
+          : {}),
+        repairAuthority: admission,
+        mutationAuthority,
+      })
       : stageDiagnostics;
-    if (result?.song) current = result.song;
+    if (result?.song && !strictViolation) current = result.song;
   }
   return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });
 }
