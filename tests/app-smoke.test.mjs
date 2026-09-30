@@ -53,6 +53,19 @@ test("Create unifies now playing with the essential song controls", () => {
   assert.match(cssSource, /\.create-live-controls\s*\{[\s\S]*?backdrop-filter:blur\(20px\)/);
 });
 
+test("Shape playhead starts at the musical grid instead of the track-label column", () => {
+  assert.match(
+    htmlSource,
+    /class="timeline-playhead-track"[\s\S]*?class="playhead" id="playhead"/,
+    "playhead must live inside a grid-aligned coordinate wrapper",
+  );
+  assert.match(
+    cssSource,
+    /\.timeline-playhead-track\s*\{[\s\S]*?left:\s*calc\(var\(--arrange-label-width,72px\) \+ 5px\);[\s\S]*?right:\s*5px;/,
+    "playhead coordinate space must begin after the authoritative Shape label width and lane padding",
+  );
+});
+
 test("producer score tiers explain progress without presenting a fake percentage", () => {
   assert.deepEqual(qualityTier(92), { id: "studio", label: "STUDIO READY", nextTarget: 95 });
   assert.deepEqual(qualityTier(96), { id: "release", label: "RELEASE READY", nextTarget: 98 });
