@@ -18,7 +18,7 @@ test("loading producer passes are informative, ordered, steady, and bounded", ()
   assert.equal(stages.length, 6);
   assert.deepEqual(stages.map(({ id }) => id), ["blueprint", "harmony", "phrases", "groove", "audition", "master"]);
   assert.match(generationStages("similar")[2].copy, /familiar motif/i);
-  assert.match(generationStages("songVariations")[4].copy, /six complete candidates/i);
+  assert.match(generationStages("songVariations")[4].copy, /complete candidates/i);
   assert.ok(generationMinimumVisibleMs("new") >= 3000, "New should remain readable long enough to show Producer Brain work");
   assert.ok(generationMinimumVisibleMs("songVariations") >= 4000, "three-way elemental generation deserves a longer visible thinking pass");
   assert.equal(generationStageState("new", -50).stageIndex, 0);

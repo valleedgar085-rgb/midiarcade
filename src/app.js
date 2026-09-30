@@ -97,6 +97,9 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+let generationLiveStageState;
+import("./ui/generation-live-progress.js").then((module) => { generationLiveStageState = module.generationLiveStageState; });
+
 const GENRE_IDS = ["neoSoul", "hipHop", "rap", "trap", "house", "techno", "drumBass", "synthwave", "pop", "loFiHipHop", "rnbSoul", "drill", "reggaeton", "afrobeats", "jazz", "ambient", "funk", "country", "rock"];
 
 const PATCHES = {
@@ -2804,7 +2807,7 @@ function renderSectionShaper(message = "") {
 
 const ARRANGEMENT_ERROR_COPY = {
   "invalid-song-shape": "Arrangement data is missing.",
-  "invalid-section-identity": "Duplicate section IDs. Generate a related idea to rebuild.",
+  "invalid-section-identity": "Duplicate section IDs. Try a related idea.",
   "noncontiguous-sections": "Section timing could not be aligned.",
   "invalid-song-duration": "Song length and sections differ.",
   "invalid-track-events": "A note is outside the song. Edit blocked.",
@@ -2835,7 +2838,7 @@ function commitArrangementCommand(command, message, { closeEditor = false, rejec
   refreshSongIdea(state.song);
   renderAll();
   const feedback = result.repaired
-    ? `${message} The section timeline was safely realigned first.`
+    ? `${message} Section timing realigned.`
     : message;
   renderSectionShaper(feedback);
   scheduleSessionSave();
@@ -3680,6 +3683,7 @@ function generationDelay(kind = "new") {
  */
 let generationSafetyTimer = null;
 let generationProgressTimer = null;
+let generationProgressReport = { phase: "plan", visited: ["plan"] };
 const generationOwnership = createGenerationOwnership();
 
 function clearGenerationSafetyTimer() {
@@ -3697,20 +3701,21 @@ function clearGenerationProgressTimer() {
 }
 
 function renderGenerationProgress(kind, elapsedMs) {
-  const progress = generationStageState(kind, elapsedMs);
+  const progress = generationLiveStageState ? generationLiveStageState(kind, elapsedMs, generationProgressReport) : { ...generationStageState(kind, 0), completedStageIds: [] };
   const wash = $("#generationWash");
   if (!wash) return;
-  $("#generationStageCount").textContent = `PASS ${progress.stageNumber} OF ${progress.stageCount}`;
+  $("#generationStageCount").textContent = `${progress.stage.label} · ${Math.floor(elapsedMs / 1000)}s`;
   $("#generationStageCopy").textContent = progress.stage.copy;
   wash.style.setProperty("--generation-progress", `${Math.round(progress.progress * 100)}%`);
   $$("[data-generation-stage]", wash).forEach((element, index) => {
-    element.dataset.state = index < progress.stageIndex ? "done" : index === progress.stageIndex ? "active" : "waiting";
+    element.dataset.state = index === progress.stageIndex ? "active" : progress.completedStageIds.includes(element.dataset.generationStage) ? "done" : "waiting";
   });
 }
 
 function startGenerationProgress(kind) {
   clearGenerationProgressTimer();
   const startedAt = Date.now();
+  generationProgressReport = { phase: "plan", visited: ["plan"] };
   renderGenerationProgress(kind, 0);
   generationProgressTimer = setInterval(() => renderGenerationProgress(kind, Date.now() - startedAt), 160);
 }
@@ -3783,6 +3788,9 @@ async function persistAcceptedGeneration(record) {
 }
 
 const generationExecutor = createGenerationExecutor({
+  onProgress(event) {
+    generationProgressReport = { ...event, visited: [...generationProgressReport.visited, event.phase] };
+  },
   timeoutMs: 90000,
   workerFactory: () => new Worker(new URL("./generation-worker.js", import.meta.url), { type: "module" }),
   fallback: createAppGenerationFallback({ generationRunner }),

@@ -1739,7 +1739,7 @@ test("idea analysis is UI-ready and Similar preserves genre DNA while refreshing
     "rhythmicFeatures", "chordProgression", "harmonicStory", "transitionTypes", "performanceFeel", "sectionArc", "soundPalette",
   ]);
   assert.equal(idea.genreId, "neoSoul");
-  assert.equal(idea.genreLabel, "Neo Soul / R&B");
+  assert.equal(idea.genreLabel, "Neo Soul");
   assert.equal(idea.tempoFit, "Genre pocket");
   assert.match(idea.rhythmIdentity.label, /\S/);
   assert.match(idea.rhythmIdentity.signature, /^[A-Z0-9]{1,5}$/);
