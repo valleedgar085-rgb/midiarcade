@@ -565,7 +565,7 @@
                   <span><i></i><strong>SONG STRUCTURE</strong><small id="shapeMapSummary">Select a section to begin</small></span>
                   <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
-                <details class="shape-map-detail"><summary>Show detailed map <small>Harmony · instrument lanes</small></summary></details>
+                <details class="shape-map-detail" open><summary>Choose a section + instrument <small>Tap a colored clip to edit only that part</small></summary></details>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
@@ -606,18 +606,19 @@
                   </div>
 
                   <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
+                    <details class="shape-help"><summary aria-label="How to shape a part">? How to use Shape</summary><p>Tap an instrument’s clip in the song map, such as Intro · Bass. Changes affect only that instrument in that section. Choose a direction, compare Before / After, then Accept or Discard. Note tools affect selected notes; Select all chooses every note in this part. Shorter / Longer changes how long notes play. Quantize lines notes up with the grid; Humanize adds slight timing differences. Choose Whole section only when you want every instrument changed.</p></details>
                     <div class="shape-director-heading">
                       <span><small>SMART SHAPE</small><strong id="shapeDirectorTitle">Pick what feels better</strong></span>
                     </div>
                     <div class="shape-director-scope">
                       <label><span>WHAT TO CHANGE</span>
                         <select id="shapeDirectorTarget" aria-label="Shape target scope">
-                          <option value="section">This section</option>
-                          <option value="track">Current instrument</option>
+                          <option value="section">Whole section · all instruments</option>
+                          <option value="track">Only this instrument</option>
                           <option value="notes">Selected notes</option>
                         </select>
                       </label>
-                      <span class="shape-director-current"><small>INSTRUMENT</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
+                      <span class="shape-director-current"><small>CHANGING</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
                       <label><span>HOW MUCH</span>
                         <select id="shapeDirectorSize" aria-label="Shape change size">
                           <option value="touchUp">Small · polish</option>
@@ -725,6 +726,7 @@
                   <small>MIDI 1–40 soft · 41–90 balanced · 91–127 strong</small>
                 </label>
               </div>
+              <div id="editorShapeTools"></div>
               <section class="section-variation-lab" id="sectionVariationLab" aria-label="Section variation lab"></section>
               <details class="editor-advanced-tools">
                 <summary>

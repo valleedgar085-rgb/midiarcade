@@ -4198,3 +4198,7 @@ body #menuDropdown[aria-hidden="false"] {
 body #menuDropdown .menu-item { color: #e8f1f5 !important; min-height: 44px; }
 body #menuDropdown .menu-item:hover { background: rgba(88,201,187,.1) !important; }
 body #menuDropdown .menu-icon { color: #78d2c5 !important; }
+
+/* Keep whole-section structure tools explicit. */
+.instrument-scope label:has([data-section-bars]),.instrument-scope .section-actions-menu{display:none}
+.shape-help{color:#cbd5e1;padding:12px;border:1px solid #58c9bb55;border-radius:12px}.shape-help summary{cursor:pointer;color:#58c9bb}.shape-help p{line-height:1.55}.shape-director-current{border:1px solid #58c9bb88;border-radius:10px;padding:10px;background:#16312e;box-shadow:0 0 14px #58c9bb18}
