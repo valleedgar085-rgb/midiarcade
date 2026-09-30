@@ -272,8 +272,14 @@ export function createMelodySectionDevelopmentCandidates(song, {
     endingRecallCandidate(song, report),
   ].filter(Boolean);
   const seen = new Set();
+  const limit = Math.max(
+    0,
+    Math.min(
+      MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
+      Math.floor(finite(maxCandidates, MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES)),
+    ),
+  );
   return raw
-    .slice(0, Math.max(0, Math.min(MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES)))))
     .map((candidate, candidateIndex) => {
       const after = evaluateMelodySectionMemory(candidate.song);
       const afterSection = (after.sections ?? []).find((entry) => String(entry.sectionId) === String(report.sectionId)) ?? null;
@@ -301,5 +307,6 @@ export function createMelodySectionDevelopmentCandidates(song, {
       };
     })
     .filter(Boolean)
-    .filter((candidate) => candidate.memoryScoreDelta > 0 && candidate.sectionScoreDelta > 0);
+    .filter((candidate) => candidate.memoryScoreDelta > 0 && candidate.sectionScoreDelta > 0)
+    .slice(0, limit);
 }
