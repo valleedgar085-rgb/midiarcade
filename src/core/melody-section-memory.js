@@ -154,6 +154,24 @@ function metadataCoverage(notes, sourceSectionId) {
   };
 }
 
+function relationshipBand(relationship, recallStrength) {
+  const strength = clamp(recallStrength, 0, 1);
+  return relationship === "return"
+    ? { min: 0.52 + strength * 0.18, max: 0.97 }
+    : relationship === "recall"
+      ? { min: 0.35 + strength * 0.18, max: 0.93 }
+      : { min: 0.18 + strength * 0.12, max: 0.76 };
+}
+
+function familiarityBandFit(relationship, recallStrength, familiarity) {
+  const band = relationshipBand(relationship, recallStrength);
+  if (familiarity < band.min) return clamp(familiarity / Math.max(0.01, band.min));
+  if (familiarity > band.max) {
+    return clamp(1 - (familiarity - band.max) / Math.max(0.01, 1 - band.max));
+  }
+  return 1;
+}
+
 function relationshipFitness({
   relationship,
   recallStrength,
@@ -161,17 +179,7 @@ function relationshipFitness({
   cloneRisk,
   metadataAccuracy,
 }) {
-  const strength = clamp(recallStrength, 0, 1);
-  const band = relationship === "return"
-    ? { min: 0.52 + strength * 0.18, max: 0.97 }
-    : relationship === "recall"
-      ? { min: 0.35 + strength * 0.18, max: 0.93 }
-      : { min: 0.18 + strength * 0.12, max: 0.76 };
-  const familiarityFit = familiarity < band.min
-    ? clamp(familiarity / Math.max(0.01, band.min))
-    : familiarity > band.max
-      ? clamp(1 - (familiarity - band.max) / Math.max(0.01, 1 - band.max))
-      : 1;
+  const familiarityFit = familiarityBandFit(relationship, recallStrength, familiarity);
   const cloneThreshold = relationship === "return" ? 0.92 : relationship === "recall" ? 0.88 : 0.78;
   const clonePenalty = clamp((cloneRisk - cloneThreshold) / Math.max(0.01, 1 - cloneThreshold));
   return clamp(
@@ -231,16 +239,19 @@ export function evaluateMelodySectionMemory(song) {
     const cloneRisk = exactCloneRisk(sourceNotes, targetNotes, sourceRange, targetRange);
     const metadata = metadataCoverage(targetNotes, memory.sourceSectionId);
     const metadataAccuracy = metadata.tagged ? metadata.accuracy : 0.72;
+    const relationship = String(memory.relationship);
+    const recallStrength = finite(memory.recallStrength, 0.7);
+    const familiarityFit = familiarityBandFit(relationship, recallStrength, familiarity);
     const relationshipFit = relationshipFitness({
-      relationship: String(memory.relationship),
-      recallStrength: finite(memory.recallStrength, 0.7),
+      relationship,
+      recallStrength,
       familiarity,
       cloneRisk,
       metadataAccuracy,
     });
     const score = Math.round(100 * (
       relationshipFit * 0.58
-      + familiarity * 0.22
+      + familiarityFit * 0.22
       + (1 - cloneRisk) * 0.12
       + metadataAccuracy * 0.08
     ));
@@ -248,9 +259,9 @@ export function evaluateMelodySectionMemory(song) {
     return Object.freeze({
       sectionId: String(memory.sectionId),
       sourceSectionId: String(memory.sourceSectionId),
-      relationship: String(memory.relationship),
+      relationship,
       transform: memory.transform ?? null,
-      recallStrength: round(clamp(memory.recallStrength ?? 0.7)),
+      recallStrength: round(clamp(recallStrength)),
       available: true,
       score,
       metrics: Object.freeze({
@@ -258,6 +269,7 @@ export function evaluateMelodySectionMemory(song) {
         rhythmSimilarity: round(rhythm),
         endingSimilarity: round(ending),
         familiarity: round(familiarity),
+        familiarityFit: round(familiarityFit),
         cloneRisk: round(cloneRisk),
         relationshipFit: round(relationshipFit),
         metadataCoverage: round(metadata.coverage),
