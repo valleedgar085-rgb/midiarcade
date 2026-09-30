@@ -1,6 +1,7 @@
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
 import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
+import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
 import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
@@ -365,6 +366,9 @@ export function createGenerationExecutor({
         }));
       }
 
+      const committedMelodySectionMemory = selectedResult?.song
+        ? evaluateMelodySectionMemory(selectedResult.song)
+        : null;
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       mark("finalize", {
         repairAuthority,
@@ -378,6 +382,8 @@ export function createGenerationExecutor({
         registerHealthRefinement: stageDiagnostics.registerHealthRefinement ?? acceptedDiagnostics.registerHealthRefinement ?? null,
         melodyContinuityRefinement: stageDiagnostics.melodyContinuityRefinement ?? acceptedDiagnostics.melodyContinuityRefinement ?? null,
         melodyPhraseRefinement: stageDiagnostics.melodyPhraseRefinement ?? acceptedDiagnostics.melodyPhraseRefinement ?? null,
+        melodySectionDevelopmentRefinement: stageDiagnostics.melodySectionDevelopmentRefinement ?? acceptedDiagnostics.melodySectionDevelopmentRefinement ?? null,
+        melodySectionMemoryAudit: committedMelodySectionMemory ?? stageDiagnostics.melodySectionMemoryAudit ?? null,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
