@@ -1,6 +1,7 @@
 import { clampFinite as clamp, finite } from "../utils.js";
 import { fusionCharacter, popHipHopRapFusionContext } from "./genre-fusion-steering.js";
 import { applyProducerBrainConfig } from "./producer-brain.js";
+import { preserveManualGenerationControls } from "./manual-generation-controls.js";
 
 const TRACK_IDS = Object.freeze(["drums", "bass", "chords", "melody", "counterpoint", "pad"]);
 
@@ -224,7 +225,7 @@ export function adaptGenerationConfig(config = {}, { kind = "new" } = {}) {
       space: round(character.space),
     },
   });
-  return applyProducerBrainConfig(out, { kind, character, taste: vector });
+  return preserveManualGenerationControls(applyProducerBrainConfig(out, { kind, character, taste: vector }));
 }
 
 export function adaptGenerationRequest(kind, payload = {}) {

@@ -2,6 +2,7 @@ import { clampFinite as clamp, finite } from "../utils.js";
 import { fusionDevelopment, popHipHopRapFusionContext } from "./genre-fusion-steering.js";
 import { hash32 } from "./deterministic-rng.js";
 import { normalizeGenreId } from "./genre-contract.js";
+import { preserveManualGenerationControls } from "./manual-generation-controls.js";
 
 const DEFAULT_DEVELOPMENT = Object.freeze({
   grooveEvolution: 0.62,
@@ -195,5 +196,5 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
   }
 
   out.outputQuality = profile;
-  return out;
+  return preserveManualGenerationControls(out);
 }

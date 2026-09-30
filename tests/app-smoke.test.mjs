@@ -605,6 +605,13 @@ test("browser app initializes against the engine contract", async () => {
   elementFor("#generateNew").dispatch("click");
   const firstGeneratedSnapshot = await waitForGenerationCommit(app, firstGenerationCount);
   assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
+  const assertManualDirection = (song) => {
+    for (const [key, percent] of Object.entries({ variation: 42, evolution: 58, surprise: 28 })) {
+      assert.equal(Number(elementFor(`#${key}Control`).value), percent, `${key} slider must stay fixed with Auto off`);
+      assert.equal(song.settings[key], percent / 100, `${key} composer value must honor Auto off`);
+    }
+  };
+  assertManualDirection(firstGeneratedSnapshot.song);
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
@@ -809,6 +816,7 @@ test("browser app initializes against the engine contract", async () => {
   elementFor("#generateNew").dispatch("click");
   assert.equal(app.getAppStateSnapshot().isGenerating, true);
   const freshGeneration = await waitForGenerationCommit(app, initialGeneration.generationCount);
+  assertManualDirection(freshGeneration.song);
   assert.equal(freshGeneration.generationCount, initialGeneration.generationCount + 1, "rapid taps must commit exactly one generation");
   assert.notEqual(freshGeneration.song.seed, initialGeneration.song.seed, "New must advance to a fresh seed");
   assert.notEqual(freshGeneration.song.id, initialGeneration.song.id, "New must replace the arrangement");
@@ -820,6 +828,7 @@ test("browser app initializes against the engine contract", async () => {
 
   elementFor("#generateSimilar").dispatch("click");
   const relatedGeneration = await waitForGenerationCommit(app, freshGeneration.generationCount);
+  assertManualDirection(relatedGeneration.song);
   assert.equal(relatedGeneration.generationCount, freshGeneration.generationCount + 1);
   assert.equal(relatedGeneration.songVariationCount, 3, "Similar must prepare three complete full-song directions");
   assert.equal(relatedGeneration.activeSongVariation, 0);

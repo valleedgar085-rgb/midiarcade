@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
+import { preserveManualGenerationControls } from "./core/manual-generation-controls.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -1268,6 +1269,7 @@ export function createFusedGenreProfile(primaryGenreId, secondaryGenreId, blendR
 
 /** Normalize permissive UI values into the engine's stable configuration. */
 export function normalizeConfig(input = {}) {
+  input = preserveManualGenerationControls(input);
   const seed = String(input.seed ?? DEFAULT_CONFIG.seed);
   const primaryGenre = normalizeGenre(input.genre ?? input.styleGenre ?? DEFAULT_CONFIG.genre);
   const secondaryGenre = input.secondaryGenre ? normalizeGenre(input.secondaryGenre) : null;
@@ -1346,6 +1348,7 @@ export function normalizeConfig(input = {}) {
     complexity,
     variation: unit(input.variation, DEFAULT_CONFIG.variation),
     evolution: unit(input.evolution, DEFAULT_CONFIG.evolution),
+    ...(input.manualGenerationControls ? { manualGenerationControls: { ...input.manualGenerationControls } } : {}),
     surprise,
     similarity: unit(input.similarity, DEFAULT_CONFIG.similarity),
     swing: unit(input.swing, profile.swing),

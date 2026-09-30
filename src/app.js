@@ -14,6 +14,7 @@ import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSecti
 import { createMidiInputManager } from "./midi-input.js";
 import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
+import { captureManualGenerationControls, MANUAL_GENERATION_CONTROL_IDS } from "./core/manual-generation-controls.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
@@ -932,6 +933,11 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     evolution: generationValue("evolutionControl", 58) / 100,
     trapIntroMode,
     surprise: generationValue("surpriseControl", 28) / 100,
+    manualGenerationControls: captureManualGenerationControls(state.autoControls, {
+      variation: readNumber("#variationControl", 42) / 100,
+      evolution: readNumber("#evolutionControl", 58) / 100,
+      surprise: readNumber("#surpriseControl", 28) / 100,
+    }),
     similarity: clamp(1 - generationValue("variationControl", 42) / 165, 0.58, 0.92),
     trackControls,
     tracks: trackControls,
@@ -1821,12 +1827,15 @@ function syncControlsFromSong() {
     swing: "swingControl",
     humanize: "humanizeControl",
     variation: "variationControl",
+    evolution: "evolutionControl",
+    surprise: "surpriseControl",
     trapIntroMode: "trapIntroModeControl",
   };
   for (const [setting, controlId] of Object.entries(generationControlMap)) {
     const control = $(`#${controlId}`);
     const value = generatedSettings[setting];
     if (!control || value == null) continue;
+    if (MANUAL_GENERATION_CONTROL_IDS[setting] && !state.autoControls.has(controlId)) continue;
     const normalized = typeof value === "number" && !["groove", "chordPath"].includes(setting)
       ? probabilityPercent(value)
       : String(value);
@@ -1841,12 +1850,6 @@ function syncControlsFromSong() {
   }
   if (generatedSettings.rollAmount != null) {
     $("#rollControl").value = probabilityPercent(generatedSettings.rollAmount);
-  }
-  if (generatedSettings.evolution != null) {
-    $("#evolutionControl").value = probabilityPercent(generatedSettings.evolution);
-  }
-  if (generatedSettings.surprise != null) {
-    $("#surpriseControl").value = probabilityPercent(generatedSettings.surprise);
   }
   syncAutoSelects();
 
