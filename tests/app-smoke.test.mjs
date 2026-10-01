@@ -23,6 +23,7 @@ const performanceAbControlsSource = await readFile(new URL("../src/ui/performanc
 const copyCatalogSource = await readFile(new URL("../src/ui/copy-catalog.js", import.meta.url), "utf8");
 const cssSource = await readFile(new URL("../styles.css", import.meta.url), "utf8");
 const generationExperienceCssSource = await readFile(new URL("../src/ui/generation-experience.css", import.meta.url), "utf8");
+const midnightStudioCssSource = await readFile(new URL("../src/ui/midnight-studio.css", import.meta.url), "utf8");
 const buildSource = await readFile(new URL("../scripts/build.js", import.meta.url), "utf8");
 
 async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs = 12000) {
@@ -51,6 +52,32 @@ test("Create unifies now playing with the essential song controls", () => {
   }
   assert.match(cssSource, /\.create-console\s*\{[\s\S]*?grid-template-columns/);
   assert.match(cssSource, /\.create-live-controls\s*\{[\s\S]*?backdrop-filter:blur\(20px\)/);
+});
+
+test("Shape playhead starts at the musical grid instead of the track-label column", () => {
+  assert.match(
+    htmlSource,
+    /class="timeline-playhead-track"[\s\S]*?class="playhead" id="playhead"/,
+    "playhead must live inside a grid-aligned coordinate wrapper",
+  );
+  assert.match(
+    cssSource,
+    /\.timeline-playhead-track\s*\{[\s\S]*?left:\s*calc\(var\(--arrange-label-width,72px\) \+ 5px\);[\s\S]*?right:\s*5px;/,
+    "expanded playhead coordinate space must begin after the authoritative Shape label width and lane padding",
+  );
+  assert.match(
+    midnightStudioCssSource,
+    /shape-map-detail:not\(\[open\]\)\) \.timeline-playhead-track\s*\{[\s\S]*?left:\s*5px !important;/,
+    "collapsed Shape map must move the playhead origin back to the visible musical grid edge",
+  );
+});
+
+test("Shape selected-part state hides the empty prompt once a clip is selected", () => {
+  assert.match(
+    midnightStudioCssSource,
+    /#tab-arrange \.section-shaper-empty\[hidden\],[\s\S]*?#tab-arrange \.section-shaper-content\[hidden\][\s\S]*?display:\s*none !important;/,
+    "Midnight Studio must not override the native hidden state for Shape panels",
+  );
 });
 
 test("producer score tiers explain progress without presenting a fake percentage", () => {

@@ -8,6 +8,7 @@ import {
   applyMelodySectionMemoryAudit,
 } from "../src/core/output-quality-pipeline-register.js";
 import { authorizeQualityStage, qualityStageAuthority } from "../src/core/generation-repair-router.js";
+import { runQualityStageSequence } from "../src/core/output-quality-stage-runner.js";
 
 function note(start, pitch, duration = 0.5, velocity = 86) {
   return { start, pitch, duration, velocity };
@@ -109,6 +110,11 @@ test("section-development candidates are deterministic and never touch drums or 
       before.tracks.find((track) => track.id === "melody").notes.map((entry) => entry.start),
       "section development must preserve canonical note starts",
     );
+    assert.deepEqual(
+      candidate.song.tracks.find((track) => track.id === "melody").notes.map((entry) => entry.velocity),
+      before.tracks.find((track) => track.id === "melody").notes.map((entry) => entry.velocity),
+      "section development must not smuggle expression changes through memory repair",
+    );
   }
 });
 
@@ -178,4 +184,69 @@ test("final memory audit is read-only and cannot be skipped by another specialis
   });
   assert.equal(admission.allowed, true);
   assert.equal(admission.reason, "read-only-audit");
+});
+
+
+test("melody section development authority forbids topology, timing, and velocity mutation", () => {
+  const authority = qualityStageAuthority("melodySectionDevelopmentRefinement");
+  assert.equal(authority.strictMutations, true);
+  assert.deepEqual(authority.mutations, ["duration", "harmony"]);
+  assert.equal(authority.mutations.includes("topology"), false);
+  assert.equal(authority.mutations.includes("timing"), false);
+  assert.equal(authority.mutations.includes("velocity"), false);
+});
+
+test("strict melody authority isolates and rejects in-place timing mutation even without stage diagnostics", () => {
+  const song = songWithReturn(DEVELOPED_RETURN);
+  const before = structuredClone(song);
+
+  const result = runQualityStageSequence(song, [{
+    id: "melodySectionDevelopmentRefinement",
+    run(input) {
+      input.tracks.find((track) => track.id === "melody").notes[0].start += 0.25;
+      return { song: input };
+    },
+  }]);
+
+  assert.equal(result.song, song, "strict stage rejection must preserve the authoritative song object");
+  assert.deepEqual(song, before, "in-place mutation must be contained inside the isolated stage input");
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.accepted, false);
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.reason, "mutation-authority-violation");
+  assert.deepEqual(
+    result.diagnostics.melodySectionDevelopmentRefinement.mutationAuthority.violations,
+    ["timing"],
+  );
+});
+
+test("strict melody authority rejects velocity changes outside the stage contract", () => {
+  const song = songWithReturn(DEVELOPED_RETURN);
+
+  const result = runQualityStageSequence(song, [{
+    id: "melodySectionDevelopmentRefinement",
+    run(input) {
+      input.tracks.find((track) => track.id === "melody").notes[0].velocity += 3;
+      return { song: input, diagnostics: { attempted: true, accepted: true, changed: true } };
+    },
+  }]);
+
+  assert.equal(result.song, song);
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.accepted, false);
+  assert.deepEqual(
+    result.diagnostics.melodySectionDevelopmentRefinement.mutationAuthority.violations,
+    ["velocity"],
+  );
+});
+
+
+test("strict no-op stage preserves the original song identity", () => {
+  const song = songWithReturn(DEVELOPED_RETURN);
+  const result = runQualityStageSequence(song, [{
+    id: "melodySectionDevelopmentRefinement",
+    run(input) {
+      return { song: input, diagnostics: { attempted: false, accepted: false, changed: false, reason: "already-strong" } };
+    },
+  }]);
+
+  assert.equal(result.song, song);
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.mutationAuthority.changed, false);
 });

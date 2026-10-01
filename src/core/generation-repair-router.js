@@ -42,6 +42,14 @@ const READ_ONLY_QUALITY_STAGES = Object.freeze(new Set([
   "melodySectionMemoryAudit",
 ]));
 
+const STRICT_MUTATION_QUALITY_STAGES = Object.freeze(new Set([
+  "melodySectionDevelopmentRefinement",
+]));
+
+const QUALITY_STAGE_MUTATIONS = Object.freeze({
+  melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony"]),
+});
+
 const QUALITY_STAGE_OWNERS = Object.freeze({
   arrangement: ["ensemble", "phrase"],
   returnDevelopment: ["ensemble", "phrase"],
@@ -90,13 +98,19 @@ export function qualityStageAuthority(stageId) {
   const normalizedStageId = String(stageId ?? "");
   const readOnly = READ_ONLY_QUALITY_STAGES.has(normalizedStageId);
   const owners = Object.freeze([...(QUALITY_STAGE_OWNERS[normalizedStageId] ?? [])]);
-  const mutations = Object.freeze(readOnly ? [] : [...new Set(owners.flatMap((owner) => OWNER_MUTATIONS[owner] ?? []))]);
+  const stageMutations = QUALITY_STAGE_MUTATIONS[normalizedStageId];
+  const mutations = Object.freeze(readOnly
+    ? []
+    : stageMutations
+      ? [...stageMutations]
+      : [...new Set(owners.flatMap((owner) => OWNER_MUTATIONS[owner] ?? []))]);
   return Object.freeze({
     version: 1,
     stageId: normalizedStageId,
     owners,
     mutations,
     readOnly,
+    strictMutations: STRICT_MUTATION_QUALITY_STAGES.has(normalizedStageId),
     automationOnly: normalizedStageId === "transitionFxRefinement",
   });
 }
