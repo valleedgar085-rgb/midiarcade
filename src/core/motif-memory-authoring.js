@@ -144,26 +144,18 @@ function developContrast(source, fallback, memory, seed) {
   const motif = clone(fallback);
   if (!validMotif(source)) return motif;
 
-  // Preserve a small family fingerprint: the opening cue plus the source
-  // cadence contour, anchored to the contrasting motif's own final pitch.
-  // Keeping the target final degree means the bridge remains harmonically its
-  // own section while the last two intervals still read as related material.
+  // Preserve only a small family fingerprint: one opening contour cue and the
+  // final pitch direction. The target stays genuinely contrasting.
   motif.events[0].degree = Math.round(finite(source.events[0]?.degree, motif.events[0].degree));
   if (motif.events.length >= 3 && source.events.length >= 3) {
-    const sourceTail = source.events.slice(-3);
-    const sourceFinal = finite(sourceTail[2]?.degree);
-    const intervalIntoFinal = sourceFinal - finite(sourceTail[1]?.degree);
-    const intervalIntoPenultimate = finite(sourceTail[1]?.degree) - finite(sourceTail[0]?.degree);
+    const sourceTail = source.events.slice(-2);
+    const sourceDirection = Math.sign(
+      finite(sourceTail[1]?.degree) - finite(sourceTail[0]?.degree),
+    ) || deterministicSign(seed, `contrast-tail:${memory.sectionId}`);
+    const targetIndex = motif.events.length - 2;
     const final = motif.events[motif.events.length - 1];
-    const penultimate = motif.events[motif.events.length - 2];
-    const antepenultimate = motif.events[motif.events.length - 3];
-    const fallbackDirection = deterministicSign(seed, `contrast-tail:${memory.sectionId}`);
-    const finalDegree = finite(final.degree);
-    const resolvedFinalInterval = intervalIntoFinal || fallbackDirection;
-    const resolvedPriorInterval = intervalIntoPenultimate || -fallbackDirection;
-    penultimate.degree = Math.round(clamp(finalDegree - resolvedFinalInterval, -9, 9));
-    antepenultimate.degree = Math.round(clamp(
-      finite(penultimate.degree) - resolvedPriorInterval,
+    motif.events[targetIndex].degree = Math.round(clamp(
+      finite(final.degree) - sourceDirection,
       -9,
       9,
     ));
