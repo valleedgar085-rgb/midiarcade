@@ -39,10 +39,98 @@ function circularDistance(left, right) {
   return Math.min(raw, 12 - raw);
 }
 
+function rawChordPitchClasses(chord) {
+  return new Set((chord?.tones ?? []).map((tone) => mod(tone, 12)));
+}
+
 function chordPitchClasses(chord, scaleClasses) {
-  return new Set((chord?.tones ?? [])
-    .map((tone) => mod(tone, 12))
+  return new Set([...rawChordPitchClasses(chord)]
     .filter((pitchClass) => !scaleClasses?.size || scaleClasses.has(pitchClass)));
+}
+
+export const TONAL_LICENSE_TYPES = Object.freeze([
+  "chromaticApproach",
+  "borrowedChordTone",
+  "modalInterchangeTone",
+  "secondaryDominantTone",
+  "alteredDominantTone",
+  "blueNote",
+]);
+
+function tonalLicenseType(note) {
+  const value = String(note?.tonalLicense ?? note?.harmonicRole ?? "").trim();
+  return TONAL_LICENSE_TYPES.includes(value) ? value : null;
+}
+
+function shortStepResolution(note, nextNote, scaleClasses) {
+  if (!nextNote) return false;
+  const start = finite(note?.start);
+  const nextStart = finite(nextNote?.start, Infinity);
+  const duration = Math.max(0.02, finite(note?.duration, 0.25));
+  if (duration > 0.6 || nextStart <= start || nextStart - start > 1) return false;
+  const motion = Math.abs(notePitch(nextNote) - notePitch(note));
+  return motion === 1 && scaleClasses.has(mod(notePitch(nextNote), 12));
+}
+
+export function evaluateTonalLicense(note, nextNote, chord, meta = {}) {
+  const type = tonalLicenseType(note);
+  if (!type) return Object.freeze({ valid: false, type: null, reason: "unlicensed" });
+
+  const scaleClasses = scalePitchClasses(meta);
+  const pitchClass = mod(notePitch(note), 12);
+  if (scaleClasses.has(pitchClass)) {
+    return Object.freeze({ valid: false, type, reason: "already-scale-safe" });
+  }
+
+  const rawChordClasses = rawChordPitchClasses(chord);
+  if (type === "borrowedChordTone" || type === "modalInterchangeTone") {
+    const backedByChord = Boolean(
+      chord?.borrowed === true
+      || chord?.modalInterchange === true
+      || chord?.harmonicLicense === "modalInterchange"
+    );
+    return Object.freeze({
+      valid: backedByChord && rawChordClasses.has(pitchClass),
+      type,
+      reason: backedByChord && rawChordClasses.has(pitchClass) ? "borrowed-chord-evidence" : "missing-borrowed-chord-evidence",
+    });
+  }
+
+  if (type === "secondaryDominantTone") {
+    const backedByChord = Boolean(
+      chord?.secondaryDominant === true
+      || chord?.harmonicLicense === "secondaryDominant"
+    );
+    return Object.freeze({
+      valid: backedByChord && rawChordClasses.has(pitchClass),
+      type,
+      reason: backedByChord && rawChordClasses.has(pitchClass) ? "secondary-dominant-evidence" : "missing-secondary-dominant-evidence",
+    });
+  }
+
+  if (type === "alteredDominantTone") {
+    const backedByChord = Boolean(
+      chord?.altered === true
+      || chord?.harmonicLicense === "alteredDominant"
+    );
+    return Object.freeze({
+      valid: backedByChord && rawChordClasses.has(pitchClass),
+      type,
+      reason: backedByChord && rawChordClasses.has(pitchClass) ? "altered-dominant-evidence" : "missing-altered-dominant-evidence",
+    });
+  }
+
+  if (type === "chromaticApproach" || type === "blueNote") {
+    const resolves = shortStepResolution(note, nextNote, scaleClasses);
+    const strongBeatSafe = !isStrongBeat(note) || finite(note?.duration, 0.25) <= 0.35;
+    return Object.freeze({
+      valid: resolves && strongBeatSafe,
+      type,
+      reason: resolves && strongBeatSafe ? "short-step-resolution" : "missing-safe-resolution",
+    });
+  }
+
+  return Object.freeze({ valid: false, type, reason: "unsupported-license" });
 }
 
 function nearestPitchForClasses(sourcePitch, classes, { maxDistance = 12, avoidCandidate = null } = {}) {
@@ -147,24 +235,61 @@ function weightedTonicScores(tracks = [], harmony = [], structure = []) {
 
 export function analyzeTonalIntegrity(tracks = [], harmony = [], meta = {}, structure = []) {
   const scaleClasses = scalePitchClasses(meta);
-  const pitched = tracks
+  const pitchedEntries = tracks
     .filter((track) => track?.id !== "drums")
-    .flatMap((track) => track?.notes ?? []);
-  const scaleSafeCount = pitched.filter((note) => scaleClasses.has(mod(notePitch(note), 12))).length;
-  const scaleFit = pitched.length ? scaleSafeCount / pitched.length : 1;
+    .flatMap((track) => {
+      const ordered = [...(track?.notes ?? [])].sort((left, right) => (
+        finite(left?.start) - finite(right?.start) || notePitch(left) - notePitch(right)
+      ));
+      return ordered.map((note, index) => ({
+        note,
+        nextNote: ordered[index + 1] ?? null,
+        trackId: track?.id,
+      }));
+    });
+
+  let literalScaleSafeCount = 0;
+  let licensedColorNotes = 0;
+  let unsafeScaleNotes = 0;
+  for (const entry of pitchedEntries) {
+    const pitchClass = mod(notePitch(entry.note), 12);
+    if (scaleClasses.has(pitchClass)) {
+      literalScaleSafeCount += 1;
+      continue;
+    }
+    const chord = harmonyAt(harmony, finite(entry.note?.start));
+    const license = evaluateTonalLicense(entry.note, entry.nextNote, chord, meta);
+    if (license.valid) licensedColorNotes += 1;
+    else unsafeScaleNotes += 1;
+  }
+
+  const literalScaleFit = pitchedEntries.length ? literalScaleSafeCount / pitchedEntries.length : 1;
+  const scaleFit = pitchedEntries.length
+    ? (literalScaleSafeCount + licensedColorNotes) / pitchedEntries.length
+    : 1;
 
   let contextualNotes = 0;
   let chordToneNotes = 0;
   let harshStrongNotes = 0;
   for (const track of tracks.filter((candidate) => ["melody", "counterpoint"].includes(String(candidate?.id)))) {
-    for (const note of track?.notes ?? []) {
+    const ordered = [...(track?.notes ?? [])].sort((left, right) => (
+      finite(left?.start) - finite(right?.start) || notePitch(left) - notePitch(right)
+    ));
+    for (let index = 0; index < ordered.length; index += 1) {
+      const note = ordered[index];
+      const nextNote = ordered[index + 1] ?? null;
       const chord = harmonyAt(harmony, finite(note?.start));
       const chordClasses = chordPitchClasses(chord, scaleClasses);
       if (!chordClasses.size || !(isStrongBeat(note) || isLongColorTone(note))) continue;
       contextualNotes += 1;
       const pitchClass = mod(notePitch(note), 12);
-      if (chordClasses.has(pitchClass)) chordToneNotes += 1;
-      else if (tonalRiskFor(note, chord, scaleClasses).risky) harshStrongNotes += 1;
+      const license = evaluateTonalLicense(note, nextNote, chord, meta);
+      const rawChordClasses = rawChordPitchClasses(chord);
+      if (chordClasses.has(pitchClass) || license.valid && rawChordClasses.has(pitchClass)) {
+        chordToneNotes += 1;
+      } else if (!license.valid && tonalRiskFor(note, chord, scaleClasses).risky) {
+        harshStrongNotes += 1;
+      }
     }
   }
 
@@ -175,12 +300,15 @@ export function analyzeTonalIntegrity(tracks = [], harmony = [], meta = {}, stru
   const selectedScore = tonicScores[selectedKeyPc] ?? 0;
 
   return Object.freeze({
-    version: 1,
+    version: 2,
     selectedKeyPc,
     detectedTonicPc,
     tonicConfidence: round(maxScore / Math.max(1e-9, tonicScores.reduce((sum, value) => sum + value, 0))),
     selectedTonicAlignment: round(selectedScore / maxScore),
     scaleFit: round(scaleFit),
+    literalScaleFit: round(literalScaleFit),
+    licensedColorNotes,
+    unsafeScaleNotes,
     strongChordFit: round(contextualNotes ? chordToneNotes / contextualNotes : 1),
     contextualNotes,
     harshStrongNotes,
@@ -196,29 +324,42 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
   const before = analyzeTonalIntegrity(clonedTracks, harmony, meta, structure);
   let scaleCorrections = 0;
   let chordCorrections = 0;
+  let licensedPreserved = 0;
   const correctionsByTrack = {};
   const sectionCorrections = new Map();
 
   for (const track of clonedTracks) {
     if (track.id === "drums") continue;
     let trackCorrections = 0;
-    for (const note of track.notes ?? []) {
+    const ordered = [...(track.notes ?? [])].sort((left, right) => (
+      finite(left?.start) - finite(right?.start) || notePitch(left) - notePitch(right)
+    ));
+    for (let index = 0; index < ordered.length; index += 1) {
+      const note = ordered[index];
+      const nextNote = ordered[index + 1] ?? null;
       const originalPitch = notePitch(note);
+      const chord = harmonyAt(harmony, finite(note?.start));
+      const license = evaluateTonalLicense(note, nextNote, chord, meta);
+
       if (!scaleClasses.has(mod(originalPitch, 12))) {
-        const corrected = nearestPitchForClasses(originalPitch, scaleClasses, {
-          maxDistance: 12,
-          avoidCandidate: (candidate) => createsSamePitchOverlap(track.notes, note, candidate),
-        });
-        if (corrected.pitch !== originalPitch) {
-          note.pitch = corrected.pitch;
-          note.tonalIntegrityRepair = "scale-snap";
-          scaleCorrections += 1;
-          trackCorrections += 1;
+        if (license.valid) {
+          note.tonalIntegrityLicense = license.type;
+          licensedPreserved += 1;
+        } else {
+          const corrected = nearestPitchForClasses(originalPitch, scaleClasses, {
+            maxDistance: 12,
+            avoidCandidate: (candidate) => createsSamePitchOverlap(track.notes, note, candidate),
+          });
+          if (corrected.pitch !== originalPitch) {
+            note.pitch = corrected.pitch;
+            note.tonalIntegrityRepair = "scale-snap";
+            scaleCorrections += 1;
+            trackCorrections += 1;
+          }
         }
       }
 
-      if (!["melody", "counterpoint"].includes(String(track.id))) continue;
-      const chord = harmonyAt(harmony, finite(note?.start));
+      if (!["melody", "counterpoint"].includes(String(track.id)) || license.valid) continue;
       const risk = tonalRiskFor(note, chord, scaleClasses);
       const hipHopStrongAnchor = meta?.genre === "hipHop"
         && isStrongBeat(note)
@@ -251,10 +392,11 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
   return Object.freeze({
     tracks: clonedTracks,
     report: Object.freeze({
-      version: 1,
+      version: 2,
       status: after.scaleFit >= 0.999999 && after.harshStrongNotes === 0 ? "clean" : "best-available",
       scaleCorrections,
       chordCorrections,
+      licensedPreserved,
       correctionsByTrack: Object.freeze({ ...correctionsByTrack }),
       before,
       after,
