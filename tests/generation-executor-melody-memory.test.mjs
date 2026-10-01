@@ -88,12 +88,13 @@ test("generation executor replaces stale memory diagnostics when the result alre
     song: executorMemorySong(),
     outputQualityDiagnostics: { melodySectionMemoryAudit: stale },
   };
+  const sourceBefore = structuredClone(expected.song);
   const executor = createGenerationExecutor({ fallback: () => expected });
 
   const result = await executor.run("new", { config: { seed: "memory-refresh-integration" } });
 
   assert.notEqual(result, expected);
-  assert.equal(result.song, expected.song);
+  assert.deepEqual(expected.song, sourceBefore, "executor quality processing must not mutate the fallback source song");
   assert.notEqual(result.outputQualityDiagnostics.melodySectionMemoryAudit, stale);
   assert.equal(result.outputQualityDiagnostics.melodySectionMemoryAudit.status, "evaluated");
 });
