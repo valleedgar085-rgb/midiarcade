@@ -136,7 +136,30 @@ function rhythmSimilarity(source, target, sourceRange, targetRange) {
 }
 
 function endingSimilarity(source, target) {
-  return clamp(multisetSimilarity(ngrams(endingShape(source), 2), ngrams(endingShape(target), 2)));
+  const sourceTail = source.slice(-Math.min(3, source.length));
+  const targetTail = target.slice(-Math.min(3, target.length));
+  const exactShape = multisetSimilarity(
+    ngrams(endingShape(source), 2),
+    ngrams(endingShape(target), 2),
+  );
+
+  // Cadence identity can survive a chord-aware final revoicing even when the
+  // literal normalized pitch shape changes. Preserve credit for matching
+  // directional/interval evidence instead of collapsing that musical memory
+  // to zero.
+  const sourceDirections = directionSequence(sourceTail);
+  const targetDirections = directionSequence(targetTail);
+  const directionEvidence = multisetSimilarity(sourceDirections, targetDirections);
+  const sourceIntervals = intervalSequence(sourceTail)
+    .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
+  const targetIntervals = intervalSequence(targetTail)
+    .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
+  const intervalEvidence = multisetSimilarity(sourceIntervals, targetIntervals);
+
+  return clamp(Math.max(
+    exactShape,
+    directionEvidence * 0.42 + intervalEvidence * 0.28,
+  ));
 }
 
 function exactCloneRisk(source, target, sourceRange, targetRange) {
