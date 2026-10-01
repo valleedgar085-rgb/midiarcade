@@ -3250,6 +3250,11 @@ body:has(#tab-arrange.is-active) main#top {
   box-shadow: none !important;
 }
 
+#tab-arrange .section-shaper-empty[hidden],
+#tab-arrange .section-shaper-content[hidden] {
+  display: none !important;
+}
+
 #tab-arrange .section-shaper-empty {
   min-height: 150px !important;
   display: grid !important;
