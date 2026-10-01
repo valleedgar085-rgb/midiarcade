@@ -142,6 +142,31 @@ test("production generation can preserve licensed color while remaining tonally 
     assert.ok(song.harmony.some((event) => event.harmonicLicense), "production harmony should contain a licensed color event");
   assert.equal(song.tonalIntegrity.after.scaleFit, 1, "validated color must remain release-safe");
   assert.equal(song.tonalIntegrity.after.unsafeScaleNotes, 0);
-  assert.ok(song.tonalIntegrity.after.licensedColorNotes >= 1, "at least one licensed outside tone should survive to the final song");
+  assert.ok(
+    song.tonalIntegrity.after.licensedColorNotes >= 1,
+    `at least one licensed outside tone should survive to the final song: ${JSON.stringify({
+      tonal: song.tonalIntegrity.after,
+      finalAssemblyRepairs: song.finalAssembly?.repairs,
+      licensedHarmony: song.harmony.filter((event) => event.harmonicLicense).map((event) => ({
+        start: event.start,
+        duration: event.duration,
+        symbol: event.symbol,
+        harmonicLicense: event.harmonicLicense,
+        licensedPitchClasses: event.licensedPitchClasses,
+      })),
+      coloredNotes: song.tracks
+        .filter((track) => track.id !== "drums")
+        .flatMap((track) => track.notes.map((note) => ({
+          trackId: track.id,
+          start: note.start,
+          pitch: note.pitch,
+          tonalLicense: note.tonalLicense,
+          tonalIntegrityLicense: note.tonalIntegrityLicense,
+          harmonicColorSource: note.harmonicColorSource,
+          finalAssemblyRole: note.finalAssemblyRole,
+        })))
+        .filter((note) => note.tonalLicense || note.tonalIntegrityLicense || note.harmonicColorSource || note.finalAssemblyRole === "licensed-harmony-color-voice"),
+    })}`,
+  );
   assert.ok(song.tonalIntegrity.after.literalScaleFit < 1, "final song should retain genuine non-diatonic color");
 });
