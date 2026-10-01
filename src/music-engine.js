@@ -7224,13 +7224,24 @@ export function genreMicroTimingOffset({
   return 0;
 }
 
-function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null) {
+function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null, harmony = []) {
   const totalBeats = config.bars * beatsPerBar(config);
   const upgraded = Boolean(config.professionalUpgrade);
   const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
   const humanization = arrangementProfile?.humanization ?? {};
   const felt = [];
   const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
+  const orderedRawNotes = [...rawNotes].sort((left, right) => (
+    finite(left?.start) - finite(right?.start)
+    || finite(left?.pitch) - finite(right?.pitch)
+  ));
+  const nextByRawNote = new Map(orderedRawNotes.map((note, index) => [note, orderedRawNotes[index + 1] ?? null]));
+  const tonalMeta = {
+    genre: config.genre,
+    keyPc: config.keyPc,
+    scaleIntervals: config.scaleIntervals,
+    beatsPerBar: beatsPerBar(config),
+  };
   for (const note of rawNotes) {
     // Hip-Hop kick, snare, hat, and bass patterns are authored together.
     // Do not add a second random performance offset after that relationship
@@ -7282,8 +7293,19 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       7 * config.humanize * (upgraded ? clamp(finite(humanization.velocityVarianceScale, 1), 0.7, 1.4) : 1),
     );
     const velocity = clamp(Math.round(note.velocity + (rng.float() * 2 - 1) * velocityRange * settings.humanize), 1, 127);
+    const tonalLicense = trackId === "drums"
+      ? null
+      : evaluateTonalLicense(
+        note,
+        nextByRawNote.get(note),
+        harmonyAt(harmony, finite(note?.start)),
+        tonalMeta,
+      );
+    const renderedPitch = trackId === "drums" || tonalLicense?.valid
+      ? note.pitch
+      : nearestScalePitch(note.pitch, config, 0, allowedScale);
     felt.push({
-      pitch: trackId === "drums" ? note.pitch : nearestScalePitch(note.pitch, config, 0, allowedScale),
+      pitch: renderedPitch,
       // Keep six-decimal timing for authored triplet/subdivision notes. The
       // standard four-decimal rounding moves them off their intended grid.
       start: exactSubdivision ? round(start, 6) : round(start),
@@ -7320,6 +7342,12 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.melodyStoryRole ? { melodyStoryRole: note.melodyStoryRole } : {}),
       ...(note.melodyStoryReason ? { melodyStoryReason: note.melodyStoryReason } : {}),
       ...(note.melodySpacingProtected ? { melodySpacingProtected: true } : {}),
+      ...(note.tonalLicense ? { tonalLicense: note.tonalLicense } : {}),
+      ...(note.harmonicColorSource ? { harmonicColorSource: note.harmonicColorSource } : {}),
+      ...(note.harmonicColorChord ? { harmonicColorChord: note.harmonicColorChord } : {}),
+      ...(note.melodicColorIntent ? { melodicColorIntent: note.melodicColorIntent } : {}),
+      ...(Number.isFinite(note.resolvesToPitch) ? { resolvesToPitch: note.resolvesToPitch } : {}),
+      ...(tonalLicense?.valid ? { tonalIntegrityLicense: tonalLicense.type } : {}),
       ...(note.connectionId ? { connectionId: note.connectionId } : {}),
       ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
       ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
@@ -10458,6 +10486,7 @@ function compose(config, options = {}) {
       rootRng.fork(`${id}-feel`),
       id,
       performanceProfile,
+      harmony,
     );
     const notes = articulatePerformance(
       feltNotes,
