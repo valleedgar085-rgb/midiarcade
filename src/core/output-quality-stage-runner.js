@@ -72,7 +72,11 @@ export function runQualityStageSequence(song, stages = [], { repairAuthority = n
         ? Object.freeze({ ...stageDiagnostics, repairAuthority: admission, mutationAuthority })
         : stageDiagnostics;
     }
-    if (result?.song && !strictViolation) current = after;
+    if (result?.song && !strictViolation) {
+      current = admission.stage?.strictMutations && !mutationAuthority.changed
+        ? before
+        : after;
+    }
   }
   return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });
 }
