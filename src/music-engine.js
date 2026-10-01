@@ -8403,11 +8403,16 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     }
     if (!anchor) continue;
     const restoredStart = round(clamp(anchor.start, section.startBeat, section.endBeat - 0.02));
+    const producerScene = songBlueprint?.producerIntent?.scenes
+      ?.find((scene) => scene.sectionId === entry.sectionId);
     track.notes.push({
       ...anchor,
       start: restoredStart,
       duration: round(Math.min(anchor.duration, section.endBeat - restoredStart)),
       orchestrationRole: "feature",
+      producerRole: producerScene?.roles?.[entry.featuredTrack]
+        ?? (producerScene?.foregroundTrack === entry.featuredTrack ? "foreground" : anchor.producerRole ?? "support"),
+      producerScenePurpose: producerScene?.purpose ?? anchor.producerScenePurpose ?? "develop",
       finalAssemblyRole: "restored-feature-anchor",
     });
     track.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
