@@ -6817,6 +6817,11 @@ function isProtectedArrangementNote(note) {
     || note?.transitionHandoffRole
     || note?.memoryRole
     || note?.motifHandoffRole
+    // Licensed non-diatonic chord tones are deliberate harmony-authority
+    // decisions. Orchestration may thin the chord, but it must not silently
+    // delete the only voice that makes the licensed color audible.
+    || note?.tonalLicense
+    || note?.harmonicColorSource
     || note?.ensembleAccent
     || note?.finalAssemblyRole
   );
