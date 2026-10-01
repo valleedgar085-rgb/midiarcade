@@ -135,7 +135,7 @@ export function rankPhraseTargetCandidates({
   limit = 4,
 } = {}) {
   if (!Number.isFinite(pitch)) return [];
-  const scale = new Set(scalePitchClasses.map(pc));
+  const scale = new Set(Array.from(scalePitchClasses ?? [], pc));
   const current = chordClasses(currentTones);
   if (!scale.size || !current.size) return [];
 
