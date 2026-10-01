@@ -63,7 +63,12 @@ test("Shape playhead starts at the musical grid instead of the track-label colum
   assert.match(
     cssSource,
     /\.timeline-playhead-track\s*\{[\s\S]*?left:\s*calc\(var\(--arrange-label-width,72px\) \+ 5px\);[\s\S]*?right:\s*5px;/,
-    "playhead coordinate space must begin after the authoritative Shape label width and lane padding",
+    "expanded playhead coordinate space must begin after the authoritative Shape label width and lane padding",
+  );
+  assert.match(
+    midnightStudioCssSource,
+    /shape-map-detail:not\(\[open\]\)\) \.timeline-playhead-track\s*\{[\s\S]*?left:\s*5px !important;/,
+    "collapsed Shape map must move the playhead origin back to the visible musical grid edge",
   );
 });
 
