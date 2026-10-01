@@ -1765,6 +1765,141 @@ function narrativeEnergy(narrativeId, base, progress, index) {
   return clamp(base * 0.9 + (progress < 0.7 ? progress * 0.13 : (1 - progress) * 0.08), 0.24, 1);
 }
 
+function structureStoryStage(sectionName) {
+  if (sectionName === "intro") return "establish";
+  if (sectionName === "verse") return "pocket";
+  if (["prechorus", "build"].includes(sectionName)) return "build";
+  if (["chorus", "drop", "theme"].includes(sectionName)) return "payoff";
+  if (["bridge", "breakdown", "solo"].includes(sectionName)) return "reset";
+  if (sectionName === "outro") return "resolve";
+  return "develop";
+}
+
+function applyStructureDirector(config, structure, plans) {
+  if (!Array.isArray(plans) || plans.length !== structure.length) return plans;
+  const fullSong = config.bars >= 12 && structure.length >= 3;
+  if (!fullSong) return plans;
+
+  const occurrences = new Map();
+  let previousEnergy = null;
+
+  return plans.map((plan, index) => {
+    const section = structure[index];
+    const stage = structureStoryStage(section.name);
+    const occurrence = (occurrences.get(section.name) ?? 0) + 1;
+    occurrences.set(section.name, occurrence);
+
+    let energy = clamp(finite(plan.energy, 0.58), 0.2, 1);
+    if (stage === "establish") {
+      energy = clamp(Math.min(energy, 0.46), 0.28, 0.46);
+    } else if (stage === "pocket") {
+      energy = clamp(
+        Math.min(energy, occurrence > 1 ? 0.7 : 0.64),
+        occurrence > 1 ? 0.52 : 0.48,
+        occurrence > 1 ? 0.7 : 0.64,
+      );
+    } else if (stage === "build") {
+      energy = clamp(
+        Math.max(energy, finite(previousEnergy, 0.58) + 0.08, 0.7),
+        0.68,
+        0.84,
+      );
+    } else if (stage === "payoff") {
+      const returnLift = occurrence > 1 ? 0.04 : 0;
+      energy = clamp(
+        Math.max(energy + returnLift, finite(previousEnergy, 0.62) + 0.14, 0.84 + returnLift),
+        0.82,
+        1,
+      );
+    } else if (stage === "reset") {
+      energy = clamp(
+        Math.min(energy, finite(previousEnergy, 0.72) - 0.14, 0.58),
+        0.38,
+        0.58,
+      );
+    } else if (stage === "resolve") {
+      energy = clamp(Math.min(energy, 0.44), 0.28, 0.44);
+    }
+
+    const densityMultiplier = {
+      establish: 0.72,
+      pocket: occurrence > 1 ? 0.94 : 0.88,
+      build: 0.96,
+      payoff: 1.06,
+      reset: 0.76,
+      resolve: 0.68,
+      develop: 0.92,
+    }[stage] ?? 1;
+    const density = round(clamp(finite(plan.density, 0.62) * densityMultiplier, 0.22, 0.98));
+
+    let tension = clamp(finite(plan.tension, energy * 0.72), 0, 1);
+    if (stage === "establish") tension = clamp(Math.min(tension, 0.42), 0.18, 0.42);
+    if (stage === "build") tension = clamp(Math.max(tension, 0.78), 0.72, 0.94);
+    if (stage === "payoff") tension = clamp(Math.max(tension, 0.8), 0.76, 1);
+    if (stage === "reset") tension = clamp(Math.min(tension, 0.52), 0.24, 0.52);
+    if (stage === "resolve") tension = clamp(Math.min(tension, 0.34), 0.16, 0.34);
+
+    const envelope = { ...(plan.tensionEnvelope ?? {}) };
+    if (stage === "establish") {
+      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.24), 0.28), 0.12, 0.28));
+      envelope.peak = round(clamp(Math.min(finite(envelope.peak, 0.46), 0.48), 0.28, 0.48));
+      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.4), 0.42), 0.2, 0.42));
+      envelope.peakAt = 0.72;
+      envelope.shape = "establish";
+    } else if (stage === "build") {
+      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.58), 0.6), 0.42, 0.6));
+      envelope.peak = round(clamp(Math.max(finite(envelope.peak, 0.86), 0.86), 0.86, 1));
+      envelope.end = round(clamp(Math.max(finite(envelope.end, 0.84), 0.82), 0.82, 0.98));
+      envelope.peakAt = 0.9;
+      envelope.shape = "rise";
+    } else if (stage === "payoff") {
+      envelope.start = round(clamp(Math.max(finite(envelope.start, 0.76), 0.72), 0.72, 0.94));
+      envelope.peak = round(clamp(Math.max(finite(envelope.peak, 0.92), 0.9), 0.9, 1));
+      envelope.end = round(clamp(finite(envelope.end, 0.68), 0.52, 0.82));
+      envelope.peakAt = 0.64;
+      envelope.shape = "payoff";
+    } else if (stage === "reset") {
+      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.46), 0.5), 0.24, 0.5));
+      envelope.peak = round(clamp(Math.min(finite(envelope.peak, 0.58), 0.62), 0.36, 0.62));
+      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.48), 0.5), 0.22, 0.5));
+      envelope.peakAt = 0.58;
+      envelope.shape = "reset";
+    } else if (stage === "resolve") {
+      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.24), 0.24), 0.08, 0.24));
+      envelope.shape = "release";
+    }
+
+    const entranceDelaysBars = stage === "establish" && section.name === "intro"
+      ? {
+          drums: 0,
+          pad: 0,
+          bass: 0.75,
+          chords: 1.25,
+          melody: 1.75,
+          counterpoint: 2,
+        }
+      : null;
+
+    previousEnergy = energy;
+    return {
+      ...plan,
+      energy: round(energy),
+      tension: round(tension),
+      density,
+      tensionEnvelope: envelope,
+      structureStory: {
+        version: 2,
+        stage,
+        occurrence,
+        energyTarget: round(energy),
+        changeBudget: stage === "payoff" ? 2 : 1,
+        maxConcurrentMajorChanges: stage === "payoff" ? 2 : 1,
+        ...(entranceDelaysBars ? { entranceDelaysBars } : {}),
+      },
+    };
+  });
+}
+
 function harmonicStoryForSection(section, role, cadence, narrativeId, index, last) {
   if (last || role === "release") return { role: "release", color: "grounded", startDegree: 0, goalDegree: 0 };
   if (cadence === "lift") return { role: "tension", color: "dominant", startDegree: index % 2 ? 1 : 3, goalDegree: 4 };
@@ -2008,6 +2143,11 @@ function createProducerIntentContract(
       sectionId: section.id,
       sectionName: section.name,
       purpose,
+      storyStage: plan?.structureStory?.stage ?? structureStoryStage(section.name),
+      changeBudget: plan?.structureStory?.changeBudget ?? 1,
+      entryDelaysBars: plan?.structureStory?.entranceDelaysBars
+        ? { ...plan.structureStory.entranceDelaysBars }
+        : null,
       returnIndex,
       developmentAxis,
       foregroundTrack,
@@ -2163,7 +2303,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     ),
   });
   const direction = songDNA.melodic.direction;
-  const sectionPlans = structure.map((section, index) => {
+  const rawSectionPlans = structure.map((section, index) => {
     const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
     const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
     const energy = narrativeEnergy(narrative.id, baseEnergy, progress, index);
@@ -2259,24 +2399,35 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       harmonicGoalDegree: sourcePlan?.harmonicGoalDegree ?? harmonicStory.goalDegree,
     };
   });
+  const sectionPlans = applyStructureDirector(config, structure, rawSectionPlans);
   const transitions = sectionPlans.slice(0, -1).map((from, index) => {
     const to = sectionPlans[index + 1];
     const sourceTransition = source?.transitions?.find((transition) => (
       transition.fromSectionId === from.sectionId && transition.toSectionId === to.sectionId
     ));
-    const type = sourceTransition?.type ?? transitionType(from, to);
+    const payoffArrival = ["chorus", "drop", "theme"].includes(to.sectionName);
+    const setupSection = ["verse", "prechorus", "build"].includes(from.sectionName);
+    const type = sourceTransition?.type
+      ?? (payoffArrival && setupSection ? "launch" : transitionType(from, to));
     const energyDelta = to.energy - from.energy;
     const strength = sourceTransition?.strength ?? round(clamp(
       0.42 + Math.abs(energyDelta) * 1.5 + (["launch", "drop-out"].includes(type) ? 0.18 : 0),
       0.38,
       1,
     ));
+    const breathBeats = sourceTransition?.breathBeats ?? (
+      type === "launch" && payoffArrival
+        ? round(clamp(beatsPerBar(config) * 0.125, 0.35, 0.75))
+        : 0
+    );
     return {
       fromSectionId: from.sectionId,
       toSectionId: to.sectionId,
       type,
       strength,
       pickupBeats: sourceTransition?.pickupBeats ?? (strength > 0.72 ? 1 : 0.5),
+      breathBeats,
+      storyRole: payoffArrival ? "payoff-arrival" : type === "build" ? "setup" : "handoff",
     };
   });
   const orchestrationMatrix = createOrchestrationMatrix(config, structure, sectionPlans, source);
@@ -2299,6 +2450,23 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
   });
   return {
     version: 6,
+    structureDirector: {
+      version: 2,
+      id: "story-arc-v2",
+      stages: sectionPlans.map((plan) => ({
+        sectionId: plan.sectionId,
+        sectionName: plan.sectionName,
+        ...clone(plan.structureStory),
+      })),
+      transitions: transitions.map((transition) => ({
+        fromSectionId: transition.fromSectionId,
+        toSectionId: transition.toSectionId,
+        type: transition.type,
+        strength: transition.strength,
+        breathBeats: transition.breathBeats ?? 0,
+        storyRole: transition.storyRole ?? "handoff",
+      })),
+    },
     narrative: { id: narrative.id, label: narrative.label },
     songDNA,
     hookSectionId: hookSection?.id ?? null,
@@ -6771,8 +6939,14 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
     && scene.purpose === "establish";
   let entryBeat = null;
   let exitBeat = null;
+  const directedEntryBars = Number(scene?.entryDelaysBars?.[trackId]);
 
-  if (isOpeningIntro) {
+  if (isOpeningIntro && Number.isFinite(directedEntryBars)) {
+    if (directedEntryBars > 0) {
+      const delay = Math.min(barBeats * directedEntryBars, span * 0.68);
+      entryBeat = round(section.startBeat + Math.max(0.5, delay));
+    }
+  } else if (isOpeningIntro) {
     let delayFraction = 0;
     let maxBars = 0;
 
@@ -9384,6 +9558,29 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
     const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, 2);
     const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
     let coordinated = false;
+    const breathBeats = clamp(finite(transition.breathBeats, 0), 0, Math.min(1, pickup));
+    const breathStart = boundary - breathBeats;
+
+    if (breathBeats > 0 && transition.type === "launch") {
+      for (const track of tracks) {
+        if (!["chords", "melody", "counterpoint", "pad"].includes(track.id)) continue;
+        const kept = [];
+        for (const note of track.notes) {
+          if (note.start >= breathStart - 1e-6 && note.start < boundary - 1e-6) {
+            coordinated = true;
+            continue;
+          }
+          if (note.start < breathStart && note.start + note.duration > breathStart) {
+            note.duration = round(Math.max(0.02, breathStart - note.start));
+            note.transitionHandoffRole = "payoff-breath";
+            note.transitionHandoffId = handoffId;
+            coordinated = true;
+          }
+          kept.push(note);
+        }
+        track.notes = kept;
+      }
+    }
 
     if (transition.type === "drop-out") {
       const silenceStart = Math.max(from.startBeat, boundary - pickup);
@@ -10292,15 +10489,23 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
     const scene = scenes.find((entry) => entry.sectionId === section.id);
     if (scene?.foregroundTrack !== "melody") continue;
     const end = finite(section.endBeat);
+    const outgoingTransition = transitionFromSection(songBlueprint, section);
+    const breathBeats = outgoingTransition?.type === "launch"
+      ? clamp(finite(outgoingTransition?.breathBeats, 0), 0, 1)
+      : 0;
+    const endingLimit = breathBeats > 0 ? end - breathBeats : end;
     const windowStart = end - barBeats * 1.25;
-    const hasEndingNote = melody.notes.some((note) => note.start >= windowStart && note.start < end - 0.01);
+    const hasEndingNote = melody.notes.some((note) => (
+      note.start >= windowStart
+      && note.start < endingLimit - 0.01
+    ));
     if (hasEndingNote) continue;
 
     const recent = melody.notes
       .filter((note) => note.start >= Math.max(finite(section.startBeat), end - barBeats * 2) && note.start < windowStart)
       .sort((left, right) => left.start - right.start);
     if (!recent.length) continue;
-    const start = round(end - 1.5, 2);
+    const start = round(Math.min(end - 1.5, endingLimit - 0.35), 2);
     if (melody.notes.some((note) => Math.abs(note.start - start) < 0.08)) continue;
 
     const source = recent.at(-1);
@@ -10316,7 +10521,7 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
     melody.notes.push({
       pitch,
       start,
-      duration: Math.min(1.4, Math.max(0.08, end - start - 0.02)),
+      duration: Math.min(1.4, Math.max(0.08, endingLimit - start - 0.03)),
       velocity: clamp(Math.round(source.velocity + 4), 1, 108),
       resolutionRole: shouldLandOnTonic ? "tonic-landing" : "chord-landing",
       phraseCadenceRole: "section-answer",
