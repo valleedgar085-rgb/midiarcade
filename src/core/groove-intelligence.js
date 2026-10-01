@@ -1,3 +1,4 @@
+import { POP_REFERENCE_PACK_ID, popReferencePocketPosition } from "./pop-reference-profile.js";
 const BASE_GRID_STEPS = 16;
 
 function finite(value, fallback = 0) {
@@ -811,11 +812,16 @@ export function createGrooveDNA(input = {}, {
   const densityControl = clamp(input?.density ?? input?.complexity ?? 0.58, 0, 1);
   const variation = clamp(input?.variation ?? 0.48, 0, 1);
   const tripletAmount = clamp(input?.tripletAmount ?? 0, 0, 1);
+  const referencePack = genre === "pop" && input.popReferenceEnabled === true && input.popReferencePack === POP_REFERENCE_PACK_ID;
   const normalizedSections = normalizeStructure(structure ?? input?.structure, bars, beatsPerBar);
   const barPlans = [];
 
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
+    const pocket = popReferencePocketPosition(bar, section);
+    // Probability/density choices recur as a two-bar band pocket. Microtiming
+    // remains per-bar; optional rhythmic changes wait for the four-bar answer.
+    const patternSeed = referencePack ? `${seed}:${genre}:${section.name}:${pocket.cell}` : `${seed}:${genre}:${bar}`;
     const protectedSpaceSteps = scaleSteps(cellPolicy.protectedSpaces, gridSteps);
     const openingBoundary = bars >= 12
       && bar === 0
@@ -843,7 +849,7 @@ export function createGrooveDNA(input = {}, {
         baseSteps,
         grammar.probability[lane],
         lockedSteps,
-        `${seed}:${genre}:${bar}:${lane}`,
+        `${patternSeed}:${lane}`,
       );
       const transformed = applyTransforms(probabilitySteps, grammar.transforms, {
         lane,
@@ -855,7 +861,9 @@ export function createGrooveDNA(input = {}, {
       });
       const factor = grammar.density[lane]
         * (0.72 + densityControl * 0.56)
-        * sectionDensityMultiplier(genre, section)
+        * (referencePack
+          ? (["intro", "outro"].includes(sectionRole(section)) ? 0.72 : sectionRole(section) === "payoff" ? 1.1 : 1)
+          : sectionDensityMultiplier(genre, section))
         * transformed.densityMultiplier;
       const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps]);
       const densitySteps = applyDensity(
@@ -864,12 +872,12 @@ export function createGrooveDNA(input = {}, {
         lockedSteps,
         transformAuthorizedSteps,
         protectedSteps,
-        `${seed}:${genre}:${bar}:${lane}:density`,
+        `${patternSeed}:${lane}:density`,
       );
       const variationAmount = genre === "jazz"
         ? 0
         : Math.round(variation * (lane === "hat" ? 2 : 1));
-      const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
+      const variedCandidate = (!referencePack || pocket.turnaround) && variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
         ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
         : densitySteps;
       const openingShapedCandidate = shapeOpeningLaneSteps(
@@ -908,7 +916,7 @@ export function createGrooveDNA(input = {}, {
         relationship,
         beatsPerStep,
         gridSteps,
-        `${seed}:${genre}:${bar}:${role}`,
+        `${patternSeed}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
@@ -950,6 +958,7 @@ export function createGrooveDNA(input = {}, {
     genre,
     grammarId: grammar.id,
     characterId: grammar.characterId ?? grammar.id,
+    ...(referencePack ? { referencePack: POP_REFERENCE_PACK_ID, pocketBars: 2, developmentBars: 4 } : {}),
     philosophy: grammar.philosophy,
     barCount: bars,
     beatsPerBar,

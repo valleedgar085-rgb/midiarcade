@@ -272,6 +272,7 @@ export function createSpecialistDirectorPlan(song) {
     genre: song?.meta?.genre ?? gauntletSong?.intent?.genre,
     tempo: song?.meta?.tempo,
     popReferenceEnabled: Boolean(usesPopReferenceCharacter),
+    popReferencePack: sourceGrooveDNA?.referencePack,
     bars: song?.meta?.bars,
     beatsPerBar: song?.meta?.beatsPerBar,
     complexity: song?.settings?.complexity ?? song?.meta?.complexity ?? 0.58,

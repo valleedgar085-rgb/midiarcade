@@ -9,6 +9,7 @@
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
 import { preserveManualGenerationControls } from "./core/manual-generation-controls.js";
 import { resolveSectionPacing, roomierSectionSizes, roomierIntroEntryBars } from "./core/section-pacing.js";
+import { POP_REFERENCE_PACK_ID, usesGroovyPopReferences, applyGroovyPopStyle, shapeGroovyPopMotif } from "./core/pop-reference-profile.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -1333,6 +1334,7 @@ export function normalizeConfig(input = {}) {
     fusionBlend,
     isFusion: Boolean(profile.isFusion),
     professionalUpgrade,
+    ...(usesGroovyPopReferences({ ...input, genre, secondaryGenre, professionalUpgrade }) ? { popReferencePack: POP_REFERENCE_PACK_ID } : {}),
     genreLabel: profile.label,
     arrangementProfileId: arrangementProfile.id,
     chordPath,
@@ -2456,7 +2458,8 @@ function createRhythmIdentity(config, drumGroove, rng) {
   }[config.genre] ?? {};
   const hatMotions = nativeIdentity.hats ?? ["steady", "offbeat", "skip", "rising", "alternating"];
   const percussionVoices = nativeIdentity.percussion ?? ["ride", "tambourine", "cowbell", "shaker"];
-  const phraseCycles = upgraded
+  const popReferences = usesGroovyPopReferences(config);
+  const phraseCycles = popReferences ? [4, 8] : upgraded
     ? arrangementProfile.phraseBars
       .map((bars) => clamp(Math.round(finite(bars, 4)), 2, 8))
       .filter((bars, index, values) => values.indexOf(bars) === index)
@@ -2464,7 +2467,7 @@ function createRhythmIdentity(config, drumGroove, rng) {
   const phraseShapes = ["questionAnswer", "syncopatedLoop", "longShort", "staircase", "sparseEcho"];
   const contourShapes = ["arch", "valley", "wave", "climbFall", "fallRebound", "pedalLaunch"];
   const timingPockets = nativeIdentity.pockets ?? ["centered", "laidBack", "pushed", "elastic"];
-  const motifBarChoices = config.bars >= 8 && config.complexity > 0.72
+  const motifBarChoices = popReferences ? [2] : config.bars >= 8 && config.complexity > 0.72
     ? [1, 2, 2, 3]
     : [1, 2, 2];
   const signature = hashSeed(`${rng.seed}|${config.genre}|${drumGroove}`).toString(36).slice(0, 5).toUpperCase();
@@ -2481,7 +2484,7 @@ function createRhythmIdentity(config, drumGroove, rng) {
     contourShape: rng.pick(contourShapes),
     motifBars: rng.pick(motifBarChoices),
     timingPocket: rng.pick(timingPockets),
-    cadenceGap: rng.pick([0, 0.25, 0.5, 0.75]),
+    cadenceGap: rng.pick(popReferences ? [0.75, 1] : [0, 0.25, 0.5, 0.75]),
     ...(upgraded ? {
       flowTemplateId: rhythmTemplate?.id ?? "grid-pocket",
       flowSteps: Array.isArray(rhythmTemplate?.steps) ? rhythmTemplate.steps.slice(0, 16) : [0, 4, 8, 12],
@@ -2508,7 +2511,7 @@ function createStyle(config, rng) {
       Math.pow(Math.max(0.01, weight + bonusFor(name)), exponent),
     ]));
   };
-  const style = {
+  let style = {
     drumGroove: genreDrumAnchor ?? styleWeighted(drumWeights, (name) => (
       name === "fourFloor" ? config.energy * 0.7
         : name === "breakbeat" ? config.complexity * 0.8
@@ -2528,6 +2531,7 @@ function createStyle(config, rng) {
     counterMotion: rng.pick(STYLE_CHOICES.counterMotion),
     padMotion: rng.pick(STYLE_CHOICES.padMotion),
   };
+  style = applyGroovyPopStyle(style, config);
   style.rhythmIdentity = createRhythmIdentity(config, style.drumGroove, rng.fork("rhythm-identity"));
   return style;
 }
@@ -2564,7 +2568,7 @@ function varyStyle(source, config, rng) {
       accentRotation: freshIdentity.accentRotation,
       mutationBias: round((finite(inheritedIdentity.mutationBias, 0.4) + freshIdentity.mutationBias) / 2, 3),
     };
-  return result;
+  return applyGroovyPopStyle(result, config);
 }
 
 function progressionFamily(scale) {
@@ -3270,13 +3274,14 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     );
   }
 
-  const melody = {
+  let melody = {
     lengthBeats: round(lengthBeats),
     phraseShape,
     contourShape,
     genreGrammar: config.genre,
     events,
   };
+  if (usesGroovyPopReferences(config)) melody = shapeGroovyPopMotif(melody, barBeats, rng.fork("groovy-pop-phrase"));
   const family = {};
   const hookRefinement = refineWeakHookMotif(
     relatedMotif(melody, "B", config, style, rng.fork("motif-b")),
@@ -4210,6 +4215,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     genre: config.genre,
     tempo: config.tempo,
     popReferenceEnabled: config.professionalUpgrade && config.genre === "pop" && !config.secondaryGenre,
+    popReferencePack: config.popReferencePack,
     bars: config.bars,
     beatsPerBar: barBeats,
     complexity: config.complexity,
@@ -4292,6 +4298,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         id: grooveDNA.id,
         grammarId: grooveDNA.grammarId,
         characterId: grooveDNA.characterId,
+        ...(grooveDNA.referencePack ? { referencePack: grooveDNA.referencePack } : {}),
         sectionRole: grooveDNA.bars?.[bar]?.sectionRole ?? null,
       },
       bassPulses,
@@ -4308,6 +4315,7 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       id: grooveDNA.id,
       grammarId: grooveDNA.grammarId,
       characterId: grooveDNA.characterId,
+      ...(grooveDNA.referencePack ? { referencePack: grooveDNA.referencePack, pocketBars: grooveDNA.pocketBars, developmentBars: grooveDNA.developmentBars } : {}),
       philosophy: grooveDNA.philosophy,
       pipeline: [...grooveDNA.pipeline],
     },
@@ -4563,7 +4571,8 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       && config.drumFills > 0.001
       && rollFigures < maximumRolls;
     const rollProbability = config.rollAmount * config.drumFills * (0.3 + config.energy * 0.38 + config.complexity * 0.38) * (importantBoundary ? 1.35 : 0.72);
-    const useRoll = boundary && rollFigures < maximumRolls && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
+    const popFillBoundaryAllowed = !usesGroovyPopReferences(config) || importantBoundary;
+    const useRoll = boundary && popFillBoundaryAllowed && rollFigures < maximumRolls && (forceRoll || forceTransitionRoll || transitionRng.bool(rollProbability));
     if (usePreDropPunctuation) {
       const burstStart = Math.max(0, barBeats - 1);
       const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
@@ -4606,7 +4615,7 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       hit(49, start + barBeats - 0.02, eventVelocity(config, settings, intensity, transitionRng, 0.88), 0.3, {
         transitionFeature: transition?.type ?? "fill",
       });
-    } else if (boundary && (
+    } else if (boundary && popFillBoundaryAllowed && (
       (["launch", "build", "turnaround"].includes(transition?.type) && transition.strength >= 0.56)
       || transitionRng.bool(config.drumFills * profile.arrangement.fillFrequency * (0.5 + settings.variation * 0.5))
     )) {
@@ -5771,6 +5780,8 @@ function phraseDevelopment(config, section, repeat, repeatStart, motif, counterp
   const repeatEnd = Math.min(repeatStart + motif.lengthBeats, section.endBeat);
   const sectionEnding = repeatEnd >= section.endBeat - 0.01;
   const phraseEnding = sectionEnding || repeat % 2 === 1;
+  // Let a two-bar Pop gesture settle before developing its answer.
+  if (usesGroovyPopReferences(config) && !counterpoint && !sectionEnding && repeat % 2 === 0) return null;
   const local = rng.fork(`development-${counterpoint ? "counter" : "lead"}-${section.id}-${repeat}`);
   const intensity = clamp(section.intensity * (0.52 + config.energy * 0.5), 0.3, 1.25);
   let plannedType = null;

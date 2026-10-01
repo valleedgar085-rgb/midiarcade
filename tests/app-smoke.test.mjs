@@ -613,6 +613,12 @@ test("browser app initializes against the engine contract", async () => {
     }
   };
   assertManualDirection(firstGeneratedSnapshot.song);
+  elementFor("#genreControl").value = "pop";
+  assert.equal(app.buildConfig("pop-reference-ui").popReferencePack, "groovy-funk-pop-v1", "fresh solo Pop uses the uploaded reference direction");
+  elementFor("#secondaryGenreControl").value = "techno";
+  assert.equal(app.buildConfig("pop-fusion-reference-ui").popReferencePack, undefined, "fusions retain their selected genre balance");
+  elementFor("#secondaryGenreControl").value = "none";
+  elementFor("#genreControl").value = "neoSoul";
   elementFor("#sectionPacingControl").value = "roomier";
   elementFor("#sectionPacingControl").dispatch("change");
   const roomierConfig = app.buildConfig("pacing-ui");
