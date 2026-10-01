@@ -10819,7 +10819,10 @@ function compose(config, options = {}) {
   );
   const finalAssemblyRepair = runCandidateAssemblyRepair(
     tonalIntegrityRepair.tracks,
-    characteristicVoice.tracks,
+    // Final Assembly may restore a removed feature anchor. Its fallback must
+    // already carry the producer-intent roles/collision cleanup; otherwise a
+    // late restore can undo Phase 76 immediately before the read-only audit.
+    producerIntentEnforcement.tracks,
     structure,
     songBlueprint,
     config,
