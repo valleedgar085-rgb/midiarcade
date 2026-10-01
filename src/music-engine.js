@@ -3297,12 +3297,24 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     };
   }
   const sectionAssignments = assignMotifFamily(structure, songBlueprint);
-  const memoryAuthoring = authorMotifMemoryVariants({
-    family,
-    assignments: sectionAssignments,
-    phraseMemory: songBlueprint?.phraseMemory,
-    seed: config.seed,
-  });
+  // Section-to-section motif memory is a full-song authority. Applying it to
+  // compact 8-bar calibration/loop generations rewrites their deterministic
+  // motif identity before Producer Brain can measure local repair behavior.
+  // Keep short loops on the proven family assignment path; full songs retain
+  // the authored recall/contrast/return system.
+  const memoryAuthoring = config.bars >= 12
+    ? authorMotifMemoryVariants({
+      family,
+      assignments: sectionAssignments,
+      phraseMemory: songBlueprint?.phraseMemory,
+      seed: config.seed,
+    })
+    : {
+      version: 1,
+      authority: "motif-memory-authoring-v1",
+      sectionMotifs: {},
+      sections: [],
+    };
   return {
     melody: clone(family.A.melody),
     counterpoint: clone(family.A.counterpoint),
