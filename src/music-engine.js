@@ -5023,10 +5023,6 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config,
     answer.rhythmicFeature = answer.rhythmicFeature ?? "bass-fill-answer";
     answer.rhythmTurnaroundId = fill.id;
     answer.rhythmTurnaroundRole = "bass-answer";
-    // The answer is intentionally authored inside the final beat before the
-    // section boundary. Later feel/humanize passes must not slide it outside
-    // that call-and-response window.
-    answer.preserveTiming = true;
     answer.transitionFeature = fill.notes[0].transitionFeature ?? "turnaround";
     bassAnswers += 1;
   }
@@ -7290,6 +7286,7 @@ function applyFeaturedMotifHandoffs(rawTracks, structure, songBlueprint, motifLe
         // fill answers are authored against an exact section boundary and must
         // not be repurposed as Phase 69 motif-handoff timing targets.
         && note.preserveTiming !== true
+        && note.rhythmTurnaroundRole !== "bass-answer"
         && (
           entry.featuredTrack !== "drums"
           || ![36, 38, 39].includes(note.pitch)
