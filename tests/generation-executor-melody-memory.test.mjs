@@ -44,3 +44,14 @@ test("executor preserves a result without melody while recording the unavailable
   assert.equal(finalStage.detail.melodySectionMemoryAudit.reason, "missing-melody");
   executor.dispose();
 });
+
+
+test("committed melody memory refresh preserves exact legacy result identity when diagnostics were never exposed", () => {
+  const committed = { status: "evaluated", passed: true, score: 82, reason: "memory-development-coherent" };
+  const legacy = { status: "committed", song: { id: "legacy-stable-result" } };
+
+  const refreshed = withCommittedMelodySectionMemoryDiagnostics(legacy, committed);
+
+  assert.equal(refreshed, legacy);
+  assert.equal(refreshed.outputQualityDiagnostics, undefined);
+});
