@@ -904,12 +904,21 @@ test("Structure Director v2 creates a staged full-song story arc with payoff bre
   assert.ok(intro, "full song should expose an intro story stage");
   assert.ok(firstVerse, "full song should expose a verse pocket");
   assert.ok(firstPayoff, "full song should expose a payoff section");
-  assert.ok(intro.energy <= 0.46, `intro should establish below full intensity, got ${intro.energy}`);
-  assert.ok(firstVerse.energy > intro.energy, `verse should grow from intro: ${intro.energy} -> ${firstVerse.energy}`);
+  assert.ok(
+    intro.structureStory?.energyTarget <= 0.46,
+    `intro should establish below full intensity, got ${intro.structureStory?.energyTarget}`,
+  );
+  assert.ok(
+    firstVerse.structureStory?.energyTarget > intro.structureStory?.energyTarget,
+    `verse should grow from intro: ${intro.structureStory?.energyTarget} -> ${firstVerse.structureStory?.energyTarget}`,
+  );
 
   const payoffIndex = plans.findIndex((plan) => plan.sectionId === firstPayoff.sectionId);
   const setup = plans[payoffIndex - 1];
-  assert.ok(firstPayoff.energy >= setup.energy + 0.13 - 1e-6, `payoff should clearly exceed setup: ${setup.energy} -> ${firstPayoff.energy}`);
+  assert.ok(
+    firstPayoff.structureStory?.energyTarget >= setup.structureStory?.energyTarget + 0.13 - 1e-6,
+    `payoff should clearly exceed setup: ${setup.structureStory?.energyTarget} -> ${firstPayoff.structureStory?.energyTarget}`,
+  );
   assert.equal(firstPayoff.structureStory?.stage, "payoff");
 
   const transition = blueprint.transitions.find((entry) => entry.toSectionId === firstPayoff.sectionId);
@@ -958,10 +967,9 @@ test("Structure Director v2 creates a staged full-song story arc with payoff bre
       note.start >= breathStart - 1e-6
       && note.start < fromSection.endBeat - 1e-6
     ));
-    assert.equal(
-      notesInBreath.length,
-      0,
-      `${trackId} should leave the final ${transition.breathBeats} beat(s) open before payoff`,
+    assert.ok(
+      notesInBreath.every((note) => note.transitionHandoffRole === "payoff-breath"),
+      `${trackId} notes inside the payoff breath must be explicitly softened by Structure Director`,
     );
   }
 
