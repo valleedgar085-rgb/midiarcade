@@ -3690,6 +3690,9 @@ function registerCollisionPriority(note = {}) {
     || note.memoryRole
     || note.finalAssemblyRole
     || note.phraseAnchor
+    || note.tonalLicense
+    || note.tonalIntegrityLicense
+    || note.harmonicColorSource
     || note.dawRegisterRole
   );
   return (protectedRole ? 10000 : 0)
@@ -3718,8 +3721,17 @@ function cleanupRegisterPitchCollisions(track) {
     const preferred = registerCollisionPriority(note) > registerCollisionPriority(existing)
       ? note
       : existing;
+    const licensed = existing.tonalLicense || note.tonalLicense
+      ? (existing.tonalLicense ? existing : note)
+      : null;
     const merged = {
       ...preferred,
+      ...(licensed ? {
+        tonalLicense: licensed.tonalLicense,
+        ...(licensed.tonalIntegrityLicense ? { tonalIntegrityLicense: licensed.tonalIntegrityLicense } : {}),
+        ...(licensed.harmonicColorSource ? { harmonicColorSource: licensed.harmonicColorSource } : {}),
+        ...(licensed.harmonicColorChord ? { harmonicColorChord: licensed.harmonicColorChord } : {}),
+      } : {}),
       duration: Math.max(finite(existing.duration, 0.1), finite(note.duration, 0.1)),
       velocity: Math.max(Math.round(finite(existing.velocity, 80)), Math.round(finite(note.velocity, 80))),
       dawRegisterMerged: true,
@@ -3746,6 +3758,12 @@ function cleanupRegisterPitchCollisions(track) {
           Math.round(finite(previous.velocity, 80)),
           Math.round(finite(note.velocity, 80)),
         );
+        if (!previous.tonalLicense && note.tonalLicense) {
+          previous.tonalLicense = note.tonalLicense;
+          if (note.tonalIntegrityLicense) previous.tonalIntegrityLicense = note.tonalIntegrityLicense;
+          if (note.harmonicColorSource) previous.harmonicColorSource = note.harmonicColorSource;
+          if (note.harmonicColorChord) previous.harmonicColorChord = note.harmonicColorChord;
+        }
         previous.dawRegisterMerged = true;
         coalescedNearOnsets += 1;
         continue;
