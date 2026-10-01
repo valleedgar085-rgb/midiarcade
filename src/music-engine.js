@@ -1947,7 +1947,7 @@ function createOrchestrationMatrix(config, structure, sectionPlans, source = nul
       return [id, {
         presence,
         velocity: round(clamp(
-          (0.82 + storyEnergy * 0.18 + (featured ? 0.06 : 0)) * storyVelocityScale,
+          0.82 + plan.energy * 0.18 + (featured ? 0.06 : 0),
           0.72,
           1.08,
         )),
