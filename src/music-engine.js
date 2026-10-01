@@ -11387,6 +11387,7 @@ function compose(config, options = {}) {
     arrangementLayers: arrangementLayering.report,
     characteristicVoice: characteristicVoice.report,
     songDNA: clone(songBlueprint.songDNA),
+    structureDirector: songBlueprint.structureDirector ? clone(songBlueprint.structureDirector) : null,
     producerIntent: clone(songBlueprint.producerIntent),
     producerIntentReport: {
       ...finalProducerIntentReport,
@@ -11410,6 +11411,7 @@ function compose(config, options = {}) {
     phraseMemory: clone(songBlueprint.phraseMemory),
     producerPass: produced.report,
     generationPhases: [
+      { phase: 6.5, id: "structure-director-v2", status: songBlueprint.structureDirector ? "complete" : "not-applicable" },
       { phase: 7, id: "dynamic-orchestration", status: "complete" },
       { phase: 8, id: "musical-memory", status: "complete" },
       { phase: 9, id: "producer-pass", status: "awaiting-critic" },
