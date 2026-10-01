@@ -8555,19 +8555,20 @@ function reconcileFinalMotifMemoryProvenance(
 }
 
 function nearestLicensedPitchForVoice(note, pitchClass, trackNotes) {
+  const sourcePitch = Math.round(finite(note?.pitch, 60));
   const candidates = [];
   for (let pitch = 0; pitch <= 127; pitch += 1) {
     if (mod(pitch, 12) !== mod(pitchClass, 12)) continue;
     const collision = trackNotes.some((other) => (
       other !== note
-      && other.pitch === pitch
-      && note.start < other.start + other.duration - 1e-6
-      && other.start < note.start + note.duration - 1e-6
+      && Math.round(finite(other?.pitch, -1)) === pitch
+      && finite(note?.start) < finite(other?.start) + Math.max(0.02, finite(other?.duration, 0.25)) - 1e-6
+      && finite(other?.start) < finite(note?.start) + Math.max(0.02, finite(note?.duration, 0.25)) - 1e-6
     ));
     if (!collision) candidates.push(pitch);
   }
   candidates.sort((left, right) => (
-    Math.abs(left - note.pitch) - Math.abs(right - note.pitch)
+    Math.abs(left - sourcePitch) - Math.abs(right - sourcePitch)
     || left - right
   ));
   return candidates[0] ?? null;
@@ -8586,6 +8587,9 @@ function reconcileLicensedHarmonyColorVoice(sourceTracks, harmony, config) {
     beatsPerBar: beatsPerBar(config),
   };
 
+  const licensedEvents = (harmony ?? []).filter((chord) => chord?.harmonicLicense);
+  if (!licensedEvents.length) return { tracks, restored: 0 };
+
   const alreadyAudible = tracks
     .filter((track) => track.id !== "drums")
     .some((track) => {
@@ -8603,30 +8607,55 @@ function reconcileLicensedHarmonyColorVoice(sourceTracks, harmony, config) {
   if (alreadyAudible) return { tracks, restored: 0 };
 
   const trackPreference = ["chords", "pad", "melody", "counterpoint", "bass"];
-  for (const chord of harmony ?? []) {
-    const licensed = chord?.licensedPitchClasses ?? [];
-    if (!chord?.harmonicLicense || !licensed.length) continue;
+  for (const chord of licensedEvents) {
+    const licensed = [
+      ...new Set(
+        (Array.isArray(chord?.licensedPitchClasses) && chord.licensedPitchClasses.length
+          ? chord.licensedPitchClasses
+          : (chord?.tones ?? []).filter((tone) => !allowed.has(mod(tone, 12))))
+          .map((value) => mod(value, 12)),
+      ),
+    ];
+    if (!licensed.length) continue;
+
     const start = finite(chord.start);
     const end = start + Math.max(0.08, finite(chord.duration, beatsPerBar(config)));
     for (const trackId of trackPreference) {
       const track = tracks.find((entry) => entry.id === trackId);
       if (!track) continue;
-      const candidates = (track.notes ?? [])
-        .filter((note) => note.start >= start - 1e-6 && note.start < end - 1e-6)
+      const ordered = [...(track.notes ?? [])].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+      const candidates = ordered
+        .filter((note) => {
+          const noteStart = finite(note.start);
+          const noteEnd = noteStart + Math.max(0.02, finite(note.duration, 0.25));
+          return noteStart < end - 1e-6 && noteEnd > start + 1e-6;
+        })
         .sort((left, right) => (
-          Math.abs(left.start - start) - Math.abs(right.start - start)
-          || right.velocity - left.velocity
+          Math.abs(finite(left.start) - start) - Math.abs(finite(right.start) - start)
+          || Number(Boolean(right.tonalLicense)) - Number(Boolean(left.tonalLicense))
+          || finite(right.velocity) - finite(left.velocity)
         ));
+
       for (const note of candidates) {
+        const nextNote = ordered[ordered.indexOf(note) + 1] ?? null;
         for (const pitchClass of licensed) {
           const pitch = nearestLicensedPitchForVoice(note, pitchClass, track.notes);
           if (!Number.isFinite(pitch)) continue;
           const license = tonalLicenseForChordPitch(pitch, chord, config);
           if (!license) continue;
-          note.pitch = pitch;
-          Object.assign(note, license);
-          note.tonalIntegrityLicense = note.tonalIntegrityLicense ?? license.tonalLicense;
-          note.finalAssemblyRole = note.finalAssemblyRole ?? "licensed-harmony-color-voice";
+
+          const candidate = {
+            ...note,
+            pitch,
+            ...license,
+            tonalIntegrityLicense: license.tonalLicense,
+          };
+          const validation = evaluateTonalLicense(candidate, nextNote, chord, meta);
+          if (!validation.valid) continue;
+
+          Object.assign(note, candidate, {
+            finalAssemblyRole: note.finalAssemblyRole ?? "licensed-harmony-color-voice",
+          });
           return { tracks, restored: 1 };
         }
       }
