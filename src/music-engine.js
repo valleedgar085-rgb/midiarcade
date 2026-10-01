@@ -1781,67 +1781,12 @@ function applyStructureDirector(config, structure, plans) {
   if (!fullSong) return plans;
 
   const occurrences = new Map();
-  let previousTarget = null;
-
   return plans.map((plan, index) => {
     const section = structure[index];
     const stage = structureStoryStage(section.name);
     const occurrence = (occurrences.get(section.name) ?? 0) + 1;
     occurrences.set(section.name, occurrence);
 
-    // Structure Director deliberately does NOT rewrite plan.energy/tension/density.
-    // Those values feed melody memory, critic calibration, repair selection, and
-    // deterministic phrase behavior. The Director owns presentation targets only.
-    let energyTarget = clamp(finite(plan.energy, 0.58), 0.2, 1);
-    if (stage === "establish") {
-      energyTarget = clamp(Math.min(energyTarget, 0.46), 0.28, 0.46);
-    } else if (stage === "pocket") {
-      energyTarget = clamp(
-        Math.min(energyTarget, occurrence > 1 ? 0.7 : 0.64),
-        occurrence > 1 ? 0.52 : 0.48,
-        occurrence > 1 ? 0.7 : 0.64,
-      );
-    } else if (stage === "build") {
-      energyTarget = clamp(
-        Math.max(energyTarget, finite(previousTarget, 0.58) + 0.08, 0.7),
-        0.68,
-        0.84,
-      );
-    } else if (stage === "payoff") {
-      const returnLift = occurrence > 1 ? 0.04 : 0;
-      energyTarget = clamp(
-        Math.max(energyTarget + returnLift, finite(previousTarget, 0.62) + 0.14, 0.84 + returnLift),
-        0.82,
-        1,
-      );
-    } else if (stage === "reset") {
-      energyTarget = clamp(
-        Math.min(energyTarget, finite(previousTarget, 0.72) - 0.14, 0.58),
-        0.38,
-        0.58,
-      );
-    } else if (stage === "resolve") {
-      energyTarget = clamp(Math.min(energyTarget, 0.44), 0.28, 0.44);
-    }
-
-    const densityScale = {
-      establish: 0.74,
-      pocket: occurrence > 1 ? 0.96 : 0.9,
-      build: 0.96,
-      payoff: 1.04,
-      reset: 0.8,
-      resolve: 0.72,
-      develop: 0.94,
-    }[stage] ?? 1;
-    const velocityScale = {
-      establish: 0.9,
-      pocket: 0.95,
-      build: 0.99,
-      payoff: occurrence > 1 ? 1.06 : 1.03,
-      reset: 0.9,
-      resolve: 0.86,
-      develop: 0.96,
-    }[stage] ?? 1;
     const entranceDelaysBars = stage === "establish" && section.name === "intro"
       ? {
           drums: 0,
@@ -1853,16 +1798,13 @@ function applyStructureDirector(config, structure, plans) {
         }
       : null;
 
-    previousTarget = energyTarget;
     return {
       ...plan,
       structureStory: {
         version: 2,
         stage,
         occurrence,
-        energyTarget: round(energyTarget),
-        densityScale,
-        velocityScale,
+        energyTarget: round(finite(plan.energy, 0.58)),
         changeBudget: stage === "payoff" ? 2 : 1,
         maxConcurrentMajorChanges: stage === "payoff" ? 2 : 1,
         ...(entranceDelaysBars ? { entranceDelaysBars } : {}),
@@ -1994,18 +1936,11 @@ function createOrchestrationMatrix(config, structure, sectionPlans, source = nul
     if (inherited?.lanes && !creativeReturn) return clone(inherited);
     const shape = ORCHESTRATION_SHAPES[section.name] ?? ORCHESTRATION_SHAPES.idea;
     const featuredTrack = featuredTrackForSection(section, plan, config, occurrence);
-    const storyEnergy = finite(plan?.structureStory?.energyTarget, plan.energy);
-    const storyDensityScale = finite(plan?.structureStory?.densityScale, 1);
-    const storyVelocityScale = finite(plan?.structureStory?.velocityScale, 1);
     const lanes = Object.fromEntries(TRACK_IDS.map((id) => {
       const base = finite(shape[id], 0.7);
-      const energyFactor = 0.82 + storyEnergy * 0.24;
+      const energyFactor = 0.82 + plan.energy * 0.24;
       const featured = id === featuredTrack;
-      const presence = round(clamp(
-        base * energyFactor * storyDensityScale + (featured ? 0.08 : 0),
-        0.18,
-        1,
-      ));
+      const presence = round(clamp(base * energyFactor + (featured ? 0.08 : 0), 0.18, 1));
       const registerShift = ["melody", "counterpoint", "chords", "pad"].includes(id)
         ? (featured ? plan.registerLift : 0)
         : 0;
@@ -2389,27 +2324,19 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       transition.fromSectionId === from.sectionId && transition.toSectionId === to.sectionId
     ));
     const payoffArrival = ["chorus", "drop", "theme"].includes(to.sectionName);
-    const setupSection = ["verse", "prechorus", "build"].includes(from.sectionName);
-    const type = sourceTransition?.type
-      ?? (payoffArrival && setupSection ? "launch" : transitionType(from, to));
+    const type = sourceTransition?.type ?? transitionType(from, to);
     const energyDelta = to.energy - from.energy;
     const strength = sourceTransition?.strength ?? round(clamp(
       0.42 + Math.abs(energyDelta) * 1.5 + (["launch", "drop-out"].includes(type) ? 0.18 : 0),
       0.38,
       1,
     ));
-    const breathBeats = sourceTransition?.breathBeats ?? (
-      type === "launch" && payoffArrival
-        ? round(clamp(beatsPerBar(config) * 0.125, 0.35, 0.75))
-        : 0
-    );
     return {
       fromSectionId: from.sectionId,
       toSectionId: to.sectionId,
       type,
       strength,
       pickupBeats: sourceTransition?.pickupBeats ?? (strength > 0.72 ? 1 : 0.5),
-      breathBeats,
       storyRole: payoffArrival ? "payoff-arrival" : type === "build" ? "setup" : "handoff",
     };
   });
@@ -2447,8 +2374,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
           toSectionId: transition.toSectionId,
           type: transition.type,
           strength: transition.strength,
-          breathBeats: transition.breathBeats ?? 0,
-          storyRole: transition.storyRole ?? "handoff",
+            storyRole: transition.storyRole ?? "handoff",
         })),
       },
     } : {}),
@@ -9544,22 +9470,6 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
     const pickup = clamp(finite(transition.pickupBeats, 0.5), 0.25, 2);
     const handoffId = `${transition.fromSectionId}->${transition.toSectionId}`;
     let coordinated = false;
-    const breathBeats = clamp(finite(transition.breathBeats, 0), 0, Math.min(1, pickup));
-    const breathStart = boundary - breathBeats;
-
-    if (breathBeats > 0 && transition.type === "launch") {
-      for (const track of tracks) {
-        if (!["chords", "melody", "counterpoint", "pad"].includes(track.id)) continue;
-        for (const note of track.notes) {
-          if (note.start < breathStart - 1e-6 || note.start >= boundary - 1e-6) continue;
-          note.velocity = clamp(Math.round(note.velocity * 0.78), 1, 120);
-          note.transitionHandoffRole = "payoff-breath";
-          note.transitionHandoffId = handoffId;
-          coordinated = true;
-        }
-      }
-    }
-
     if (transition.type === "drop-out") {
       const silenceStart = Math.max(from.startBeat, boundary - pickup);
       for (const track of tracks) {
@@ -11381,7 +11291,6 @@ function compose(config, options = {}) {
     phraseMemory: clone(songBlueprint.phraseMemory),
     producerPass: produced.report,
     generationPhases: [
-      { phase: 6.5, id: "structure-director-v2", status: songBlueprint.structureDirector ? "complete" : "not-applicable" },
       { phase: 7, id: "dynamic-orchestration", status: "complete" },
       { phase: 8, id: "musical-memory", status: "complete" },
       { phase: 9, id: "producer-pass", status: "awaiting-critic" },
