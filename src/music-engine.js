@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
+import { authorMotifMemoryVariants } from "./core/motif-memory-authoring.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -3291,12 +3292,25 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
       counterpoint: counterMotifFromMelody(familyMelody, style, barBeats),
     };
   }
+  const sectionAssignments = assignMotifFamily(structure, songBlueprint);
+  const memoryAuthoring = authorMotifMemoryVariants({
+    family,
+    assignments: sectionAssignments,
+    phraseMemory: songBlueprint?.phraseMemory,
+    seed: config.seed,
+  });
   return {
     melody: clone(family.A.melody),
     counterpoint: clone(family.A.counterpoint),
     family,
     hookDistinctiveness: hookRefinement.report,
-    sectionAssignments: assignMotifFamily(structure, songBlueprint),
+    sectionAssignments,
+    sectionMotifs: clone(memoryAuthoring.sectionMotifs),
+    motifMemoryAuthoring: {
+      version: memoryAuthoring.version,
+      authority: memoryAuthoring.authority,
+      sections: clone(memoryAuthoring.sections),
+    },
   };
 }
 
@@ -5809,6 +5823,10 @@ function phraseDevelopment(config, section, repeat, repeatStart, motif, counterp
 }
 
 function motifForSection(motifProgram, section, counterpoint, fallback) {
+  const memoryVariant = !counterpoint
+    ? motifProgram?.sectionMotifs?.[section.id]?.melody
+    : null;
+  if (validMotif(memoryVariant)) return memoryVariant;
   const assignment = motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
   const familyMember = motifProgram?.family?.[assignment?.motifId ?? "A"];
   const selected = counterpoint ? familyMember?.counterpoint : familyMember?.melody;
@@ -6236,6 +6254,12 @@ function generateLead(
             } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
             ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
+            ...(activeMotif?.memoryAuthoring ? {
+              motifMemoryVariantId: `motif-memory:${activeMotif.memoryAuthoring.sectionId}`,
+              motifMemorySourceSectionId: activeMotif.memoryAuthoring.sourceSectionId,
+              motifMemoryRelationship: activeMotif.memoryAuthoring.relationship,
+              motifMemoryTransform: activeMotif.memoryAuthoring.transform,
+            } : {}),
             ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
@@ -7356,6 +7380,10 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.memoryRole ? { memoryRole: note.memoryRole } : {}),
       ...(note.memoryOriginSectionId ? { memoryOriginSectionId: note.memoryOriginSectionId } : {}),
       ...(note.memoryTransform ? { memoryTransform: note.memoryTransform } : {}),
+      ...(note.motifMemoryVariantId ? { motifMemoryVariantId: note.motifMemoryVariantId } : {}),
+      ...(note.motifMemorySourceSectionId ? { motifMemorySourceSectionId: note.motifMemorySourceSectionId } : {}),
+      ...(note.motifMemoryRelationship ? { motifMemoryRelationship: note.motifMemoryRelationship } : {}),
+      ...(note.motifMemoryTransform ? { motifMemoryTransform: note.motifMemoryTransform } : {}),
       ...(Number.isFinite(note.plannedTension) ? { plannedTension: round(note.plannedTension) } : {}),
       ...(note.musicalLookaheadIntent ? { musicalLookaheadIntent: { ...note.musicalLookaheadIntent } } : {}),
       ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
