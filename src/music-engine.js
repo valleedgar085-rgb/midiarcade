@@ -8516,6 +8516,126 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
   return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
 }
 
+function reconcileFinalMotifMemoryProvenance(
+  sourceTracks,
+  structure,
+  motifs,
+) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) return { tracks, restored: 0 };
+
+  let restored = 0;
+  for (const memory of motifs?.motifMemoryAuthoring?.sections ?? []) {
+    if (!["recall", "return"].includes(String(memory?.relationship ?? ""))) continue;
+    const section = structure.find((entry) => String(entry.id) === String(memory.sectionId));
+    if (!section) continue;
+    const motifLength = Math.max(
+      1,
+      finite(motifs?.sectionMotifs?.[memory.sectionId]?.melody?.lengthBeats, motifs?.melody?.lengthBeats ?? 4),
+    );
+    const coreEnd = Math.min(section.endBeat, section.startBeat + motifLength);
+    const notes = melody.notes.filter((note) => (
+      note.start >= section.startBeat - 1e-6
+      && note.start < coreEnd - 1e-6
+    ));
+    for (const note of notes) {
+      if (note.motifMemoryCore !== true) restored += 1;
+      note.motifMemoryCore = true;
+      note.motifMemoryVariantId ??= `motif-memory:${memory.sectionId}`;
+      note.motifMemorySourceSectionId ??= memory.sourceSectionId;
+      note.motifMemoryRelationship ??= memory.relationship;
+      note.motifMemoryTransform ??= memory.transform ?? null;
+    }
+  }
+  return { tracks, restored };
+}
+
+function nearestLicensedPitchForVoice(note, pitchClass, trackNotes) {
+  const candidates = [];
+  for (let pitch = 0; pitch <= 127; pitch += 1) {
+    if (mod(pitch, 12) !== mod(pitchClass, 12)) continue;
+    const collision = trackNotes.some((other) => (
+      other !== note
+      && other.pitch === pitch
+      && note.start < other.start + other.duration - 1e-6
+      && other.start < note.start + note.duration - 1e-6
+    ));
+    if (!collision) candidates.push(pitch);
+  }
+  candidates.sort((left, right) => (
+    Math.abs(left - note.pitch) - Math.abs(right - note.pitch)
+    || left - right
+  ));
+  return candidates[0] ?? null;
+}
+
+function reconcileLicensedHarmonyColorVoice(sourceTracks, harmony, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const allowed = scalePitchClasses(config);
+  const meta = {
+    genre: config.genre,
+    keyPc: config.keyPc,
+    scaleIntervals: config.scaleIntervals,
+    beatsPerBar: beatsPerBar(config),
+  };
+
+  const alreadyAudible = tracks
+    .filter((track) => track.id !== "drums")
+    .some((track) => {
+      const ordered = [...(track.notes ?? [])].sort((a, b) => a.start - b.start || a.pitch - b.pitch);
+      return ordered.some((note, index) => (
+        !allowed.has(mod(note.pitch, 12))
+        && evaluateTonalLicense(
+          note,
+          ordered[index + 1] ?? null,
+          harmonyAt(harmony, finite(note.start)),
+          meta,
+        ).valid
+      ));
+    });
+  if (alreadyAudible) return { tracks, restored: 0 };
+
+  const trackPreference = ["chords", "pad", "melody", "counterpoint", "bass"];
+  for (const chord of harmony ?? []) {
+    const licensed = chord?.licensedPitchClasses ?? [];
+    if (!chord?.harmonicLicense || !licensed.length) continue;
+    const start = finite(chord.start);
+    const end = start + Math.max(0.08, finite(chord.duration, beatsPerBar(config)));
+    for (const trackId of trackPreference) {
+      const track = tracks.find((entry) => entry.id === trackId);
+      if (!track) continue;
+      const candidates = (track.notes ?? [])
+        .filter((note) => note.start >= start - 1e-6 && note.start < end - 1e-6)
+        .sort((left, right) => (
+          Math.abs(left.start - start) - Math.abs(right.start - start)
+          || right.velocity - left.velocity
+        ));
+      for (const note of candidates) {
+        for (const pitchClass of licensed) {
+          const pitch = nearestLicensedPitchForVoice(note, pitchClass, track.notes);
+          if (!Number.isFinite(pitch)) continue;
+          const license = tonalLicenseForChordPitch(pitch, chord, config);
+          if (!license) continue;
+          note.pitch = pitch;
+          Object.assign(note, license);
+          note.tonalIntegrityLicense = note.tonalIntegrityLicense ?? license.tonalLicense;
+          note.finalAssemblyRole = note.finalAssemblyRole ?? "licensed-harmony-color-voice";
+          return { tracks, restored: 1 };
+        }
+      }
+    }
+  }
+
+  return { tracks, restored: 0 };
+}
+
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
   const sectionById = indexFirstById(structure);
   const trackById = indexFirstById(tracks);
@@ -10900,7 +11020,19 @@ function compose(config, options = {}) {
     songBlueprint,
     config,
   );
-  const tracks = finalAssemblyRepair.tracks;
+  const memoryProvenance = reconcileFinalMotifMemoryProvenance(
+    finalAssemblyRepair.tracks,
+    structure,
+    motifs,
+  );
+  const licensedColorVoice = reconcileLicensedHarmonyColorVoice(
+    memoryProvenance.tracks,
+    harmony,
+    config,
+  );
+  const tracks = licensedColorVoice.tracks;
+  finalAssemblyRepair.repairs.motifMemoryProvenanceRestored = memoryProvenance.restored;
+  finalAssemblyRepair.repairs.licensedHarmonyColorVoicesRestored = licensedColorVoice.restored;
   const finalTonalIntegrity = analyzeTonalIntegrity(
     tracks,
     harmony,
