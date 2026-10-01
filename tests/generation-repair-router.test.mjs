@@ -6,6 +6,7 @@ import {
   authorizeQualityStage,
   decideGenerationRepairAuthority,
   qualityStageAuthority,
+  resolveEnsembleCoherenceRepairHint,
   resolveWeaknessAuthority,
 } from "../src/core/generation-repair-router.js";
 
@@ -72,4 +73,28 @@ test("quality specialist admission follows the diagnosed mutation owner", () => 
   assert.equal(authorizeQualityStage("registerHealthRefinement", authority).allowed, true);
   assert.equal(authorizeQualityStage("groovePocket", authority).allowed, false);
   assert.equal(authorizeQualityStage("transitionFxRefinement", authority).allowed, true);
+});
+
+
+test("section coherence failures route to one bounded ensemble specialist without granting regeneration", () => {
+  const hint = resolveEnsembleCoherenceRepairHint({
+    sectionFailures: [
+      { sectionId: "verse-2", failures: ["melody-counterline", "density-balance"] },
+    ],
+  });
+
+  assert.equal(hint.available, true);
+  assert.equal(hint.owner, "ensemble");
+  assert.equal(hint.specialist, "ensemble-specialist");
+  assert.equal(hint.sectionId, "verse-2");
+  assert.equal(hint.relationship, "melody-counterline");
+  assert.deepEqual(hint.allowedMutations, ["timing", "topology"]);
+  assert.equal("allowsFullRegeneration" in hint, false);
+});
+
+test("section coherence repair hint fails closed when the final audit has no actionable section failure", () => {
+  const hint = resolveEnsembleCoherenceRepairHint({ sectionFailures: [] });
+  assert.equal(hint.available, false);
+  assert.equal(hint.owner, null);
+  assert.deepEqual(hint.allowedMutations, []);
 });
