@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { evaluateCrossAuthorityCoherence } from "../src/core/cross-authority-coherence.js";
 import { createSpecialistDirectorPlan } from "../src/core/specialist-musicians.js";
+import { withCommittedCrossAuthorityCoherenceDiagnostics } from "../src/core/generation-executor.js";
 
 function song() {
   return {
@@ -106,4 +107,33 @@ test("relationship diagnostics remain read-only when ensemble contracts are unav
   assert.equal(report.checks.leadDialogueCoherent, true);
   assert.equal(report.checks.cadenceTeamCoherent, true);
   assert.equal(report.checks.sectionEvolutionCoherent, true);
+});
+
+
+test("committed coherence diagnostics attach read-only audit without replacing the accepted song", () => {
+  const source = song();
+  const before = structuredClone(source);
+  const report = evaluateCrossAuthorityCoherence(source);
+  const result = {
+    status: "committed",
+    song: source,
+    outputQualityDiagnostics: { existing: true },
+  };
+
+  const attached = withCommittedCrossAuthorityCoherenceDiagnostics(result, report);
+
+  assert.equal(attached.song, source);
+  assert.deepEqual(source, before);
+  assert.equal(attached.outputQualityDiagnostics.existing, true);
+  assert.deepEqual(attached.outputQualityDiagnostics.crossAuthorityCoherenceAudit, report);
+  assert.equal(report.mode, "read-only");
+  assert.equal(report.repairs, 0);
+});
+
+test("committed coherence diagnostics preserve legacy results without quality diagnostics", () => {
+  const source = song();
+  const result = { status: "committed", song: source };
+  const report = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(withCommittedCrossAuthorityCoherenceDiagnostics(result, report), result);
 });
