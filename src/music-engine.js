@@ -10318,7 +10318,11 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
 
     if (window.diagnostics.bassLock < 0.52) {
       const bass = notesInWindow(track("bass"), window.startBeat, window.endBeat)
-        .filter((note) => !note.motifHandoffRole)
+        .filter((note) => (
+          !note.motifHandoffRole
+          && note.rhythmTurnaroundRole !== "bass-answer"
+          && note.preserveTiming !== true
+        ))
         .sort((left, right) => left.start - right.start)[0];
       const pulses = absoluteGroovePulses(
         grooveConductor,
