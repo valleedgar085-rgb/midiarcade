@@ -119,7 +119,20 @@ function contourSimilarity(source, target) {
 function rhythmSimilarity(source, target, sourceRange, targetRange) {
   const left = rhythmSequence(source, sourceRange).map((value) => Math.round(value * 32) / 32);
   const right = rhythmSequence(target, targetRange).map((value) => Math.round(value * 32) / 32);
-  return clamp(multisetSimilarity(ngrams(left, 2), ngrams(right, 2)));
+  const onsetScore = multisetSimilarity(ngrams(left, 2), ngrams(right, 2));
+
+  // Phrase rhythm is more than onset spacing: held-vs-short articulation is part
+  // of the authored rhythmic identity too. Keep canonical note starts immutable,
+  // but allow a recalled phrase to retain rhythmic evidence through its duration
+  // pattern when a deliberate displacement transform changes every onset n-gram.
+  const normalizedDurations = (notes, range) => notes.map((note) => (
+    Math.round(clamp(finite(note?.duration, 0.25) / Math.max(0.25, range?.length ?? 1)) * 32) / 32
+  ));
+  const durationScore = multisetSimilarity(
+    ngrams(normalizedDurations(source, sourceRange), 2),
+    ngrams(normalizedDurations(target, targetRange), 2),
+  );
+  return clamp(onsetScore * 0.8 + durationScore * 0.2);
 }
 
 function endingSimilarity(source, target) {
