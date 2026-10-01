@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { evaluateCrossAuthorityCoherence } from "../src/core/cross-authority-coherence.js";
 import { createSpecialistDirectorPlan } from "../src/core/specialist-musicians.js";
+import { withCommittedCrossAuthorityCoherenceDiagnostics } from "../src/core/generation-executor.js";
 
 function song() {
   return {
@@ -106,4 +107,86 @@ test("relationship diagnostics remain read-only when ensemble contracts are unav
   assert.equal(report.checks.leadDialogueCoherent, true);
   assert.equal(report.checks.cadenceTeamCoherent, true);
   assert.equal(report.checks.sectionEvolutionCoherent, true);
+});
+
+
+test("committed coherence diagnostics attach read-only audit without replacing the accepted song", () => {
+  const source = song();
+  const before = structuredClone(source);
+  const report = evaluateCrossAuthorityCoherence(source);
+  const result = {
+    status: "committed",
+    song: source,
+    outputQualityDiagnostics: { existing: true },
+  };
+
+  const attached = withCommittedCrossAuthorityCoherenceDiagnostics(result, report);
+
+  assert.equal(attached.song, source);
+  assert.deepEqual(source, before);
+  assert.equal(attached.outputQualityDiagnostics.existing, true);
+  assert.deepEqual(attached.outputQualityDiagnostics.crossAuthorityCoherenceAudit, report);
+  assert.equal(report.mode, "read-only");
+  assert.equal(report.repairs, 0);
+});
+
+test("committed coherence diagnostics preserve legacy results without quality diagnostics", () => {
+  const source = song();
+  const result = { status: "committed", song: source };
+  const report = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(withCommittedCrossAuthorityCoherenceDiagnostics(result, report), result);
+});
+
+
+test("v3 exposes deterministic section relationship diagnostics without inventing failures when contracts are unavailable", () => {
+  const source = song();
+  const first = evaluateCrossAuthorityCoherence(source);
+  const second = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(first.version, 3);
+  assert.equal(first.authority, "cross-authority-coherence-v3");
+  assert.deepEqual(first.sectionDiagnostics, second.sectionDiagnostics);
+  assert.deepEqual(first.sectionFailures, second.sectionFailures);
+  assert.deepEqual(first.sectionDiagnostics, []);
+  assert.deepEqual(first.sectionFailures, []);
+});
+
+test("v3 maps weak ensemble relationships to their exact section and relationship names", () => {
+  const source = song();
+  source.generationInterlock = {
+    sectionContracts: source.structure.map((section) => ({
+      sectionId: section.id,
+      featuredTrack: "melody",
+      harmonicGoalPitchClasses: section.id === "verse" ? [9, 0, 4] : [5, 9, 0],
+      coordination: {
+        featuredTrack: "melody",
+        roles: { drums: "foundation", bass: "foundation", chords: "support", melody: "feature" },
+        relationships: [
+          { kind: "rhythm-foundation" },
+          { kind: "harmonic-support" },
+          { kind: "lead-dialogue" },
+          { kind: "foreground-hierarchy" },
+          { kind: "cadence-team" },
+        ],
+      },
+    })),
+  };
+  source.tracks.push({
+    id: "counterpoint",
+    notes: [
+      { pitch: 69, start: 1, duration: 0.5, velocity: 80 },
+      { pitch: 69, start: 5, duration: 0.5, velocity: 80 },
+    ],
+  });
+
+  const report = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(report.version, 3);
+  assert.equal(report.sectionDiagnostics.length, 2);
+  assert.equal(report.sectionDiagnostics[0].sectionId, "verse");
+  assert.equal(typeof report.sectionDiagnostics[0].relationships.kickBass, "number");
+  assert.equal(typeof report.sectionDiagnostics[0].relationships.chordMelody, "number");
+  assert.ok(report.sectionDiagnostics.some((entry) => entry.failures.includes("melody-counterline")));
+  assert.ok(report.sectionFailures.some((entry) => entry.failures.includes("melody-counterline")));
 });

@@ -2,10 +2,12 @@ import { createGenerationFlightRecorder } from "./generation-flight-recorder.js"
 import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
+import { evaluateCrossAuthorityCoherence } from "./cross-authority-coherence.js";
 import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
   decideGenerationRepairAuthority,
+  resolveEnsembleCoherenceRepairHint,
 } from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
@@ -24,6 +26,17 @@ function supportsCommittedAuthorityRefresh(song) {
     && song?.finalAssembly?.checks
     && song?.songBlueprint?.producerIntent
   );
+}
+
+export function withCommittedCrossAuthorityCoherenceDiagnostics(result, report) {
+  if (!result || typeof result !== "object" || !report || !result.outputQualityDiagnostics || typeof result.outputQualityDiagnostics !== "object") return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      crossAuthorityCoherenceAudit: report,
+    },
+  };
 }
 
 export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
@@ -445,6 +458,14 @@ export function createGenerationExecutor({
         }));
       }
 
+      const committedCrossAuthorityCoherence = selectedResult?.song
+        ? evaluateCrossAuthorityCoherence(selectedResult.song)
+        : null;
+      selectedResult = withCommittedCrossAuthorityCoherenceDiagnostics(
+        selectedResult,
+        committedCrossAuthorityCoherence,
+      );
+      const ensembleCoherenceRepairHint = resolveEnsembleCoherenceRepairHint(committedCrossAuthorityCoherence);
       const committedMelodySectionMemory = selectedResult?.song
         ? evaluateMelodySectionMemory(selectedResult.song)
         : null;
@@ -467,6 +488,8 @@ export function createGenerationExecutor({
         melodyPhraseRefinement: stageDiagnostics.melodyPhraseRefinement ?? acceptedDiagnostics.melodyPhraseRefinement ?? null,
         melodySectionDevelopmentRefinement: stageDiagnostics.melodySectionDevelopmentRefinement ?? acceptedDiagnostics.melodySectionDevelopmentRefinement ?? null,
         melodySectionMemoryAudit: committedMelodySectionMemory ?? stageDiagnostics.melodySectionMemoryAudit ?? null,
+        crossAuthorityCoherenceAudit: committedCrossAuthorityCoherence ?? stageDiagnostics.crossAuthorityCoherenceAudit ?? null,
+        ensembleCoherenceRepairHint,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
