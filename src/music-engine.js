@@ -8372,6 +8372,20 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     maxPitch: counterWindow.max,
     marker: "final-assembly-lead-space",
   });
+
+  // Final Assembly is the last note-writing authority. Restored feature anchors
+  // and lead/counterpoint repairs can reintroduce same-pitch overlaps after the
+  // earlier DAW register pass, so enforce the hard export contract here.
+  let samePitchDuplicatesMerged = 0;
+  let samePitchOverlapsTrimmed = 0;
+  for (const track of tracks) {
+    if (track.id === "drums") continue;
+    const cleaned = cleanupRegisterPitchCollisions(track);
+    track.notes = cleaned.track.notes;
+    samePitchDuplicatesMerged += cleaned.mergedDuplicates + cleaned.coalescedNearOnsets;
+    samePitchOverlapsTrimmed += cleaned.overlapsTrimmed;
+  }
+
   return {
     tracks,
     repairs: {
@@ -8381,6 +8395,8 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
       leadUnisonsCleared: separationRepair.leadUnisonsCleared,
       leadCounterpointNotesRemoved: separationRepair.notesRemoved,
       melodyDuplicatesMerged,
+      samePitchDuplicatesMerged,
+      samePitchOverlapsTrimmed,
     },
   };
 }
