@@ -10224,7 +10224,9 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
 
     if (window.diagnostics.bassLock < 0.52) {
       const bass = notesInWindow(track("bass"), window.startBeat, window.endBeat)
-        .filter((note) => !note.motifHandoffRole)
+        // A turnaround answer belongs to the drum fill's final-beat window.
+        // Repair a regular bass pulse without moving that composed response.
+        .filter((note) => !note.motifHandoffRole && note.rhythmTurnaroundRole !== "bass-answer")
         .sort((left, right) => left.start - right.start)[0];
       const pulses = absoluteGroovePulses(
         grooveConductor,

@@ -3033,7 +3033,10 @@ test("phase 72 makes bass answer drum fills with scale-safe section approaches",
       assert.ok(callIds.has(answer.rhythmTurnaroundId));
       const bar = Number(answer.rhythmTurnaroundId.split(":")[1]);
       const boundary = (bar + 1) * song.meta.beatsPerBar;
-      assert.ok(answer.start >= boundary - 1.05 && answer.start < boundary);
+      assert.ok(
+        answer.start >= boundary - 1.05 && answer.start < boundary,
+        `${genre} ${answer.rhythmTurnaroundId}: answer at ${answer.start} must precede ${boundary} by at most 1.05 beats`,
+      );
       assert.equal(answer.rhythmTurnaroundRole, "bass-answer");
     }
     assert.deepEqual(song, engine.generateNew(input));
