@@ -9241,6 +9241,13 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
       for (const track of tracks) {
         const kept = [];
         for (const note of track.notes) {
+          // Phase 72 owns the drum-fill/bass-answer turnaround. A later
+          // drop-out may clear surrounding support, but it must keep this
+          // authored answer at its pre-boundary pickup position.
+          if (track.id === "bass" && note.rhythmTurnaroundRole === "bass-answer") {
+            kept.push(note);
+            continue;
+          }
           if (note.start >= silenceStart - 1e-6 && note.start < boundary - 1e-6) {
             const belongsToIncomingSection = note.connectionId === `interlock:${to.id}`;
             const essentialArrival = (
