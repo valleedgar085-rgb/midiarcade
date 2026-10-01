@@ -18,6 +18,7 @@ function normalizedTracks(song) {
           start: round(note?.start),
           duration: round(note?.duration),
           pitch: Math.round(finite(note?.pitch, 60)),
+          velocity: Math.round(finite(note?.velocity, 84)),
         }))
         .sort((left, right) => (
           left.start - right.start
@@ -37,6 +38,7 @@ function signatures(song) {
     counts: Object.fromEntries(ids.map((id) => [id, map.get(id)?.length ?? 0])),
     starts: Object.fromEntries(ids.map((id) => [id, (map.get(id) ?? []).map((note) => note.start)])),
     durations: Object.fromEntries(ids.map((id) => [id, (map.get(id) ?? []).map((note) => note.duration)])),
+    velocities: Object.fromEntries(ids.map((id) => [id, (map.get(id) ?? []).map((note) => note.velocity)])),
     pitchClasses: Object.fromEntries(ids.map((id) => [id, (map.get(id) ?? []).map((note) => ((note.pitch % 12) + 12) % 12)])),
     pitches: Object.fromEntries(ids.map((id) => [id, (map.get(id) ?? []).map((note) => note.pitch)])),
   };
@@ -70,6 +72,7 @@ export function auditStageMutationAuthority(beforeSong, afterSong, stageId) {
   if (topologyChanged) changed.push("topology");
   if (!same(before.starts, after.starts)) changed.push("timing");
   if (!same(before.durations, after.durations)) changed.push("duration");
+  if (authority.strictMutations && !same(before.velocities, after.velocities)) changed.push("velocity");
 
   // Once topology changes, a one-to-one pitch comparison is not reliable.
   if (!topologyChanged) {
