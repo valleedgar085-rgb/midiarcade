@@ -236,3 +236,17 @@ test("strict melody authority rejects velocity changes outside the stage contrac
     ["velocity"],
   );
 });
+
+
+test("strict no-op stage preserves the original song identity", () => {
+  const song = songWithReturn(DEVELOPED_RETURN);
+  const result = runQualityStageSequence(song, [{
+    id: "melodySectionDevelopmentRefinement",
+    run(input) {
+      return { song: input, diagnostics: { attempted: false, accepted: false, changed: false, reason: "already-strong" } };
+    },
+  }]);
+
+  assert.equal(result.song, song);
+  assert.equal(result.diagnostics.melodySectionDevelopmentRefinement.mutationAuthority.changed, false);
+});
