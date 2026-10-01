@@ -804,7 +804,7 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
     assert.equal(contract.version, 1);
     assert.equal(contract.scenes.length, song.structure.length);
     assert.equal(report.phase, 76);
-    assert.equal(report.status, "complete");
+    assert.equal(report.status, "complete", `${genre}: ${JSON.stringify(report)}`);
     assert.equal(report.metrics.sceneCount, song.structure.length);
     assert.ok(report.metrics.foregroundCoverage >= 0.9);
     assert.ok(report.metrics.answerCollisionRate <= 0.28);
