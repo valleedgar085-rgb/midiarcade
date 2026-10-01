@@ -7269,6 +7269,10 @@ function applyFeaturedMotifHandoffs(rawTracks, structure, songBlueprint, motifLe
       .filter((note) => (
         note.start >= target.startBeat - 1e-6
         && note.start < target.startBeat + window - 1e-6
+        // Respect stronger timing authorities. In particular, Phase 72 bass
+        // fill answers are authored against an exact section boundary and must
+        // not be repurposed as Phase 69 motif-handoff timing targets.
+        && note.preserveTiming !== true
         && (
           entry.featuredTrack !== "drums"
           || ![36, 38, 39].includes(note.pitch)
