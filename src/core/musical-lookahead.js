@@ -172,7 +172,7 @@ export function planMusicalLookahead({
     || boundary <= start || boundary - start > 1.5
     || !["bass", "melody", "counterpoint"].includes(trackId)) return null;
 
-  const scale = new Set(scalePitchClasses.map(pc));
+  const scale = new Set(Array.from(scalePitchClasses ?? [], pc));
   const future = chordClasses(nextTones);
   if (!future.size || !scale.has(pc(pitch))) return null;
   const bass = trackId === "bass";
