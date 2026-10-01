@@ -7,6 +7,7 @@ import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
   decideGenerationRepairAuthority,
+  resolveEnsembleCoherenceRepairHint,
 } from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
@@ -464,6 +465,7 @@ export function createGenerationExecutor({
         selectedResult,
         committedCrossAuthorityCoherence,
       );
+      const ensembleCoherenceRepairHint = resolveEnsembleCoherenceRepairHint(committedCrossAuthorityCoherence);
       const committedMelodySectionMemory = selectedResult?.song
         ? evaluateMelodySectionMemory(selectedResult.song)
         : null;
@@ -487,6 +489,7 @@ export function createGenerationExecutor({
         melodySectionDevelopmentRefinement: stageDiagnostics.melodySectionDevelopmentRefinement ?? acceptedDiagnostics.melodySectionDevelopmentRefinement ?? null,
         melodySectionMemoryAudit: committedMelodySectionMemory ?? stageDiagnostics.melodySectionMemoryAudit ?? null,
         crossAuthorityCoherenceAudit: committedCrossAuthorityCoherence ?? stageDiagnostics.crossAuthorityCoherenceAudit ?? null,
+        ensembleCoherenceRepairHint,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
       });
