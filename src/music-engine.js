@@ -5011,6 +5011,10 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config,
     answer.rhythmicFeature = answer.rhythmicFeature ?? "bass-fill-answer";
     answer.rhythmTurnaroundId = fill.id;
     answer.rhythmTurnaroundRole = "bass-answer";
+    // The answer is intentionally authored inside the final beat before the
+    // section boundary. Later feel/humanize passes must not slide it outside
+    // that call-and-response window.
+    answer.preserveTiming = true;
     answer.transitionFeature = fill.notes[0].transitionFeature ?? "turnaround";
     bassAnswers += 1;
   }
