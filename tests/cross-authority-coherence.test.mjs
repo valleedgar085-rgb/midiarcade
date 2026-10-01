@@ -137,3 +137,56 @@ test("committed coherence diagnostics preserve legacy results without quality di
 
   assert.equal(withCommittedCrossAuthorityCoherenceDiagnostics(result, report), result);
 });
+
+
+test("v3 exposes deterministic section relationship diagnostics without inventing failures when contracts are unavailable", () => {
+  const source = song();
+  const first = evaluateCrossAuthorityCoherence(source);
+  const second = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(first.version, 3);
+  assert.equal(first.authority, "cross-authority-coherence-v3");
+  assert.deepEqual(first.sectionDiagnostics, second.sectionDiagnostics);
+  assert.deepEqual(first.sectionFailures, second.sectionFailures);
+  assert.deepEqual(first.sectionDiagnostics, []);
+  assert.deepEqual(first.sectionFailures, []);
+});
+
+test("v3 maps weak ensemble relationships to their exact section and relationship names", () => {
+  const source = song();
+  source.generationInterlock = {
+    sectionContracts: source.structure.map((section) => ({
+      sectionId: section.id,
+      featuredTrack: "melody",
+      harmonicGoalPitchClasses: section.id === "verse" ? [9, 0, 4] : [5, 9, 0],
+      coordination: {
+        featuredTrack: "melody",
+        roles: { drums: "foundation", bass: "foundation", chords: "support", melody: "feature" },
+        relationships: [
+          { kind: "rhythm-foundation" },
+          { kind: "harmonic-support" },
+          { kind: "lead-dialogue" },
+          { kind: "foreground-hierarchy" },
+          { kind: "cadence-team" },
+        ],
+      },
+    })),
+  };
+  source.tracks.push({
+    id: "counterpoint",
+    notes: [
+      { pitch: 69, start: 1, duration: 0.5, velocity: 80 },
+      { pitch: 69, start: 5, duration: 0.5, velocity: 80 },
+    ],
+  });
+
+  const report = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(report.version, 3);
+  assert.equal(report.sectionDiagnostics.length, 2);
+  assert.equal(report.sectionDiagnostics[0].sectionId, "verse");
+  assert.equal(typeof report.sectionDiagnostics[0].relationships.kickBass, "number");
+  assert.equal(typeof report.sectionDiagnostics[0].relationships.chordMelody, "number");
+  assert.ok(report.sectionDiagnostics.some((entry) => entry.failures.includes("melody-counterline")));
+  assert.ok(report.sectionFailures.some((entry) => entry.failures.includes("melody-counterline")));
+});
