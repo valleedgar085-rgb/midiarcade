@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { withCommittedMelodySectionMemoryDiagnostics } from "../src/core/generation-executor.js";
+import {
+  createGenerationExecutor,
+  withCommittedMelodySectionMemoryDiagnostics,
+} from "../src/core/generation-executor.js";
 
 test("committed melody memory refresh replaces stale returned diagnostics without dropping other fields", () => {
   const stale = { status: "evaluated", passed: false, score: 44, reason: "stale" };
@@ -39,4 +42,58 @@ test("committed melody memory refresh preserves exact legacy result identity whe
 
   assert.equal(refreshed, legacy);
   assert.equal(refreshed.outputQualityDiagnostics, undefined);
+});
+
+
+function executorMemorySong() {
+  const source = [
+    { start: 0.5, pitch: 60, duration: 0.5, velocity: 86 },
+    { start: 1.5, pitch: 64, duration: 0.25, velocity: 86 },
+    { start: 2.5, pitch: 67, duration: 0.5, velocity: 86 },
+    { start: 3.5, pitch: 64, duration: 0.75, velocity: 86 },
+  ];
+  return {
+    meta: { beatsPerBar: 4 },
+    structure: [
+      { id: "verse-1", name: "verse", startBeat: 0, endBeat: 4, bars: 1 },
+      { id: "verse-2", name: "verse", startBeat: 4, endBeat: 8, bars: 1 },
+    ],
+    phraseMemory: {
+      version: 1,
+      familyId: "executor-memory",
+      sections: [
+        { sectionId: "verse-1", sourceSectionId: "verse-1", relationship: "statement", recallStrength: 1 },
+        { sectionId: "verse-2", sourceSectionId: "verse-1", relationship: "return", recallStrength: 0.8, transform: "motif-return" },
+      ],
+    },
+    tracks: [{
+      id: "melody",
+      notes: [
+        ...source,
+        ...source.map((note) => ({
+          ...note,
+          start: note.start + 4,
+          pitch: note.pitch + (note.pitch === 64 ? 2 : 0),
+          phraseMemorySourceSectionId: "verse-1",
+        })),
+      ],
+    }],
+  };
+}
+
+test("generation executor replaces stale memory diagnostics when the result already exposes quality diagnostics", async () => {
+  const stale = { status: "evaluated", passed: false, score: 1, reason: "stale" };
+  const expected = {
+    status: "committed",
+    song: executorMemorySong(),
+    outputQualityDiagnostics: { melodySectionMemoryAudit: stale },
+  };
+  const executor = createGenerationExecutor({ fallback: () => expected });
+
+  const result = await executor.run("new", { config: { seed: "memory-refresh-integration" } });
+
+  assert.notEqual(result, expected);
+  assert.equal(result.song, expected.song);
+  assert.notEqual(result.outputQualityDiagnostics.melodySectionMemoryAudit, stale);
+  assert.equal(result.outputQualityDiagnostics.melodySectionMemoryAudit.status, "evaluated");
 });
