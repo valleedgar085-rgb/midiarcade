@@ -130,6 +130,34 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
   if (!cadenceTeamCoherent) issues.push("phrase-resolution-team-weak");
   if (!sectionEvolutionCoherent) issues.push("section-role-evolution-flat");
 
+  const sectionDiagnostics = Object.freeze((ensemble.sections ?? []).map((entry) => {
+    const failures = [];
+    if (Number(entry.rhythmFoundation ?? 1) < 0.45) failures.push("kick-bass");
+    if (Number(entry.harmonicSupport ?? 1) < 0.5) failures.push("bass-harmony");
+    if (Number(entry.leadHarmonySeparation ?? 1) < 0.5) failures.push("chord-melody");
+    if (Number(entry.leadDialogue ?? 1) < 0.55 || Number(entry.collisionControl ?? 1) < 0.5) failures.push("melody-counterline");
+    if (Number(entry.roleHierarchy ?? 1) < 0.55) failures.push("density-balance");
+    if (Number(entry.cadenceTeam ?? 1) < 0.5) failures.push("transition-continuity");
+    return Object.freeze({
+      sectionId: entry.sectionId ?? null,
+      score: Number(entry.score ?? 0),
+      passed: failures.length === 0,
+      failures: Object.freeze(failures),
+      relationships: Object.freeze({
+        kickBass: Number(entry.rhythmFoundation ?? 0),
+        bassHarmony: Number(entry.harmonicSupport ?? 0),
+        chordMelody: Number(entry.leadHarmonySeparation ?? 0),
+        melodyCounterline: Number(entry.leadDialogue ?? 0),
+        entranceExit: Number(entry.cadenceTeam ?? 0),
+        densityBalance: Number(entry.roleHierarchy ?? 0),
+        transitionContinuity: Number(entry.cadenceTeam ?? 0),
+      }),
+    });
+  }));
+  const sectionFailures = Object.freeze(sectionDiagnostics
+    .filter((entry) => !entry.passed)
+    .map((entry) => Object.freeze({ sectionId: entry.sectionId, failures: entry.failures })));
+
   const checks = Object.freeze({
     specialistsShareGrooveDNA,
     specialistsShareHarmony,
@@ -147,8 +175,8 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
   const score = Math.round((passedChecks / Object.keys(checks).length) * 100);
 
   return Object.freeze({
-    version: 2,
-    authority: "cross-authority-coherence-v2",
+    version: 3,
+    authority: "cross-authority-coherence-v3",
     mode: "read-only",
     passed: issues.length === 0,
     score,
@@ -167,6 +195,8 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
     checks,
     grooveLock,
     ensemble,
+    sectionDiagnostics,
+    sectionFailures,
     specialistSignatures: Object.freeze({
       grooveDNA: Object.freeze(specialistGrooveSignatures),
       harmony: Object.freeze(specialistHarmonySignatures),
