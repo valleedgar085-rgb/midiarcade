@@ -6056,11 +6056,17 @@ function generateLead(
   for (const [sectionIndex, section] of structure.entries()) {
     const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
+    const memoryAuthoring = !counterpoint ? activeMotif?.memoryAuthoring ?? null : null;
+    const memoryRelationship = String(memoryAuthoring?.relationship ?? "");
+    const memoryRecallSection = ["recall", "return"].includes(memoryRelationship);
     const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
     const sectionLength = section.endBeat - section.startBeat;
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
-      const development = phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
+      const memoryCore = memoryRecallSection && repeat === 0;
+      const development = memoryCore
+        ? null
+        : phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
       for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
         const event = activeMotif.events[eventIndex];
         const progress = eventIndex / Math.max(1, activeMotif.events.length - 1);
@@ -6089,7 +6095,7 @@ function generateLead(
           && !counterpointDialogue
           && eventIndex === 0
           && repeat % 2 === 0;
-        const phraseAnchor = phraseSkeleton || counterpointSkeleton || legacyCounterpointAnchor;
+        const phraseAnchor = phraseSkeleton || counterpointSkeleton || legacyCounterpointAnchor || memoryCore;
         if (development?.type === "rest" && eventIndex === development.restIndex && !phraseAnchor) continue;
         if (
           development?.type === "fragment"
@@ -6120,13 +6126,15 @@ function generateLead(
         const timingMagnet = counterpoint
           ? 0.18 + config.syncopation * 0.08
           : 0.26 + config.syncopation * 0.12;
-        const synchronized = magnetizeBeatToGroove(
-          grooveConductor,
-          proposedStart,
-          counterpoint ? "counterPulses" : "leadPulses",
-          barBeats,
-          timingMagnet,
-        );
+        const synchronized = memoryCore
+          ? { beat: proposedStart, snapped: false }
+          : magnetizeBeatToGroove(
+            grooveConductor,
+            proposedStart,
+            counterpoint ? "counterPulses" : "leadPulses",
+            barBeats,
+            timingMagnet,
+          );
         const start = Math.max(repeatStart, synchronized.beat);
         const plannedDensity = sectionPlan?.density ?? 0.7;
         const tensionDensity = 0.82 + plannedTension * (counterpoint ? 0.18 : 0.3);
@@ -6153,17 +6161,19 @@ function generateLead(
         const legacyVariationTrigger = repeat > 0
           && rng.bool(settings.variation * (0.1 + config.variation * 0.18));
         if (legacyVariationTrigger) rng.pick([-2, -1, 1, 2]);
-        const storyIntent = developedRepeatDegreeShift({
-          fullSong: config.bars >= 12,
-          section,
-          repeat,
-          eventIndex,
-          sectionIndex,
-          progress,
-          phraseAnchor,
-          counterpoint,
-          variation: settings.variation * config.variation,
-        });
+        const storyIntent = memoryCore
+          ? { role: "memory-core", degreeShift: 0, reason: "preserve-recall-contour" }
+          : developedRepeatDegreeShift({
+            fullSong: config.bars >= 12,
+            section,
+            repeat,
+            eventIndex,
+            sectionIndex,
+            progress,
+            phraseAnchor,
+            counterpoint,
+            variation: settings.variation * config.variation,
+          });
         const developedRepeatShift = storyIntent.degreeShift;
         degree += developedRepeatShift;
         if (development?.type === "answer" && progress >= 0.45) degree += development.direction * (eventIndex % 2 === 0 ? 2 : 1);
@@ -6185,7 +6195,13 @@ function generateLead(
         const chord = harmonyAt(harmony, start);
         const position = mod(start, beatsPerBar(config));
         const strong = Math.abs(position - Math.round(position)) < 0.04;
-        if (strong && chord) pitch = nearestChordTone(pitch, chord, degree === 0 ? 0 : Math.sign(degree));
+        if (
+          strong
+          && chord
+          && (!memoryCore || eventIndex === 0 || eventIndex === activeMotif.events.length - 1)
+        ) {
+          pitch = nearestChordTone(pitch, chord, degree === 0 ? 0 : Math.sign(degree));
+        }
         if (counterpoint && chord && chord.tones.includes(mod(pitch, 12))) {
           const escape = rng.bool(0.5) ? 2 : -2;
           pitch = nearestScalePitch(pitch + escape, config, Math.sign(escape));
@@ -6197,7 +6213,7 @@ function generateLead(
         const protectedLookaheadLanding = (
           development?.type === "resolution" && progress >= 0.82
         ) || section.endBeat - start <= 0.28;
-        const lookahead = chord && nextChord ? planMusicalLookahead({
+        const lookahead = !memoryCore && chord && nextChord ? planMusicalLookahead({
           pitch,
           start,
           boundary: nextChord.start,
@@ -6263,12 +6279,18 @@ function generateLead(
               motifMemorySourceSectionId: activeMotif.memoryAuthoring.sourceSectionId,
               motifMemoryRelationship: activeMotif.memoryAuthoring.relationship,
               motifMemoryTransform: activeMotif.memoryAuthoring.transform,
+              ...(memoryCore ? { motifMemoryCore: true } : {}),
             } : {}),
             ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
       }
-      if (!counterpoint && ["answer", "resolution", "climax"].includes(development?.type) && development.sectionEnding) {
+      if (
+        !counterpoint
+        && !memoryRecallSection
+        && ["answer", "resolution", "climax"].includes(development?.type)
+        && development.sectionEnding
+      ) {
         const start = Math.max(repeatStart, development.repeatEnd - 0.375);
         const chord = harmonyAt(harmony, start);
         let pitch = midiForDegree(config, (chord?.degree ?? 0) + sectionDegreeShift(section), settings.octave);
@@ -6293,6 +6315,8 @@ function generateLead(
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
       const section = structure[sectionIndex];
       const closingMotif = motifForSection(motifProgram, section, false, motif);
+      const closingMemoryRelationship = String(closingMotif?.memoryAuthoring?.relationship ?? "");
+      if (["recall", "return"].includes(closingMemoryRelationship)) continue;
       if (section.endBeat - section.startBeat < 1) continue;
       const force = config.tripletAmount >= 0.5 && config.genre === "trap" && config.energy >= 0.82 && config.complexity >= 0.72 && figures === 0 && sectionIndex === 0;
       if (!force && !rng.bool(config.tripletAmount * (0.16 + config.complexity * 0.3))) continue;
@@ -7481,6 +7505,7 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.motifMemorySourceSectionId ? { motifMemorySourceSectionId: note.motifMemorySourceSectionId } : {}),
       ...(note.motifMemoryRelationship ? { motifMemoryRelationship: note.motifMemoryRelationship } : {}),
       ...(note.motifMemoryTransform ? { motifMemoryTransform: note.motifMemoryTransform } : {}),
+      ...(note.motifMemoryCore ? { motifMemoryCore: true } : {}),
       ...(Number.isFinite(note.plannedTension) ? { plannedTension: round(note.plannedTension) } : {}),
       ...(note.musicalLookaheadIntent ? { musicalLookaheadIntent: { ...note.musicalLookaheadIntent } } : {}),
       ...(note.resolutionRole ? { resolutionRole: note.resolutionRole } : {}),
