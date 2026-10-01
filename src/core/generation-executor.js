@@ -26,6 +26,26 @@ function supportsCommittedAuthorityRefresh(song) {
   );
 }
 
+export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
+  // Preserve the exact legacy engine result when it never exposed quality diagnostics.
+  // The final audit still remains available in the finalize flight-recorder stage.
+  if (
+    !result
+    || typeof result !== "object"
+    || !report
+    || report.status === "unavailable"
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      melodySectionMemoryAudit: report,
+    },
+  };
+}
+
 function committedAuthorityRegression(beforeSong, afterSong) {
   if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
   const reasons = [];
@@ -428,6 +448,10 @@ export function createGenerationExecutor({
       const committedMelodySectionMemory = selectedResult?.song
         ? evaluateMelodySectionMemory(selectedResult.song)
         : null;
+      selectedResult = withCommittedMelodySectionMemoryDiagnostics(
+        selectedResult,
+        committedMelodySectionMemory,
+      );
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       mark("finalize", {
         repairAuthority,
