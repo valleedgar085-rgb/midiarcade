@@ -109,7 +109,6 @@ function cloneBreakCandidate(song, report) {
     const nextPitch = nearestScaleNeighbor(candidate, note.pitch, direction);
     if (nextPitch === Math.round(finite(note.pitch))) return;
     note.pitch = nextPitch;
-    note.velocity = Math.round(clamp(finite(note.velocity, 84) + (ordinal === 0 ? 2 : -2), 1, 120));
     tag(note, report.sourceSectionId, "developed-return");
     changed += 1;
   });
