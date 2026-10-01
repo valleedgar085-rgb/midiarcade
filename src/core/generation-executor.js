@@ -27,13 +27,20 @@ function supportsCommittedAuthorityRefresh(song) {
 }
 
 export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
-  // Keep the engine result contract intact when there is no melody to audit.
-  // Unavailable reports remain visible in the finalize flight-recorder stage.
-  if (!result || typeof result !== "object" || !report || report.status === "unavailable") return result;
+  // Preserve the exact legacy engine result when it never exposed quality diagnostics.
+  // The final audit still remains available in the finalize flight-recorder stage.
+  if (
+    !result
+    || typeof result !== "object"
+    || !report
+    || report.status === "unavailable"
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
   return {
     ...result,
     outputQualityDiagnostics: {
-      ...(result.outputQualityDiagnostics ?? {}),
+      ...result.outputQualityDiagnostics,
       melodySectionMemoryAudit: report,
     },
   };
