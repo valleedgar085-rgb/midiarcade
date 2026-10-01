@@ -6,7 +6,7 @@ import {
   applyLicensedHarmonyColor,
   tonalLicenseForChordPitch,
 } from "../src/core/licensed-harmony-color.js";
-import { generateNew } from "../src/music-engine.js";
+import { candidateSeed, generateNew } from "../src/music-engine.js";
 
 const C_MAJOR = [0, 2, 4, 5, 7, 9, 11];
 
@@ -115,9 +115,10 @@ test("production generation can preserve licensed color while remaining tonally 
   let seed = null;
   for (let index = 0; index < 512 && seed == null; index += 1) {
     const candidate = `production-color-${index}`;
+    const productionSeed = candidateSeed(candidate, "new", 0);
     const preview = applyLicensedHarmonyColor(
       sampleHarmony(),
-      baseConfig({ seed: candidate, bars: 4 }),
+      baseConfig({ seed: productionSeed, bars: 4 }),
     );
     if (preview[0]?.harmonicLicense === "secondaryDominant") seed = candidate;
   }
@@ -137,7 +138,8 @@ test("production generation can preserve licensed color while remaining tonally 
     candidateCount: 1,
   });
 
-  assert.ok(song.harmony.some((event) => event.harmonicLicense), "production harmony should contain a licensed color event");
+  assert.equal(song.seed, candidateSeed(seed, "new", 0), "test preview must use the exact production candidate seed");
+    assert.ok(song.harmony.some((event) => event.harmonicLicense), "production harmony should contain a licensed color event");
   assert.equal(song.tonalIntegrity.after.scaleFit, 1, "validated color must remain release-safe");
   assert.equal(song.tonalIntegrity.after.unsafeScaleNotes, 0);
   assert.ok(song.tonalIntegrity.after.licensedColorNotes >= 1, "at least one licensed outside tone should survive to the final song");
