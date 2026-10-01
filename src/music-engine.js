@@ -3690,6 +3690,8 @@ function registerCollisionPriority(note = {}) {
     || note.memoryRole
     || note.finalAssemblyRole
     || note.phraseAnchor
+    || note.motifMemoryCore
+    || note.motifMemoryVariantId
     || note.tonalLicense
     || note.tonalIntegrityLicense
     || note.harmonicColorSource
@@ -3732,6 +3734,13 @@ function cleanupRegisterPitchCollisions(track) {
         ...(licensed.harmonicColorSource ? { harmonicColorSource: licensed.harmonicColorSource } : {}),
         ...(licensed.harmonicColorChord ? { harmonicColorChord: licensed.harmonicColorChord } : {}),
       } : {}),
+      ...((existing.motifMemoryCore || note.motifMemoryCore) ? { motifMemoryCore: true } : {}),
+      ...(existing.motifMemoryVariantId || note.motifMemoryVariantId ? {
+        motifMemoryVariantId: existing.motifMemoryVariantId ?? note.motifMemoryVariantId,
+        motifMemorySourceSectionId: existing.motifMemorySourceSectionId ?? note.motifMemorySourceSectionId,
+        motifMemoryRelationship: existing.motifMemoryRelationship ?? note.motifMemoryRelationship,
+        motifMemoryTransform: existing.motifMemoryTransform ?? note.motifMemoryTransform,
+      } : {}),
       duration: Math.max(finite(existing.duration, 0.1), finite(note.duration, 0.1)),
       velocity: Math.max(Math.round(finite(existing.velocity, 80)), Math.round(finite(note.velocity, 80))),
       dawRegisterMerged: true,
@@ -3764,6 +3773,11 @@ function cleanupRegisterPitchCollisions(track) {
           if (note.harmonicColorSource) previous.harmonicColorSource = note.harmonicColorSource;
           if (note.harmonicColorChord) previous.harmonicColorChord = note.harmonicColorChord;
         }
+        if (note.motifMemoryCore) previous.motifMemoryCore = true;
+        previous.motifMemoryVariantId = previous.motifMemoryVariantId ?? note.motifMemoryVariantId;
+        previous.motifMemorySourceSectionId = previous.motifMemorySourceSectionId ?? note.motifMemorySourceSectionId;
+        previous.motifMemoryRelationship = previous.motifMemoryRelationship ?? note.motifMemoryRelationship;
+        previous.motifMemoryTransform = previous.motifMemoryTransform ?? note.motifMemoryTransform;
         previous.dawRegisterMerged = true;
         coalescedNearOnsets += 1;
         continue;
@@ -6045,6 +6059,11 @@ function protectExpressiveLeadSpacing(notes = []) {
       duplicate.melodySpacingProtected = true;
       duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
       duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
+      if (note.motifMemoryCore) duplicate.motifMemoryCore = true;
+      duplicate.motifMemoryVariantId = duplicate.motifMemoryVariantId ?? note.motifMemoryVariantId;
+      duplicate.motifMemorySourceSectionId = duplicate.motifMemorySourceSectionId ?? note.motifMemorySourceSectionId;
+      duplicate.motifMemoryRelationship = duplicate.motifMemoryRelationship ?? note.motifMemoryRelationship;
+      duplicate.motifMemoryTransform = duplicate.motifMemoryTransform ?? note.motifMemoryTransform;
       continue;
     }
     merged.push(note);
@@ -8425,6 +8444,11 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
         duplicate.finalAssemblyRole = duplicate.finalAssemblyRole ?? "merged-melody-duplicate";
         duplicate.melodyStoryReason = duplicate.melodyStoryReason ?? note.melodyStoryReason;
         duplicate.melodyNotationReason = duplicate.melodyNotationReason ?? note.melodyNotationReason;
+        if (note.motifMemoryCore) duplicate.motifMemoryCore = true;
+        duplicate.motifMemoryVariantId = duplicate.motifMemoryVariantId ?? note.motifMemoryVariantId;
+        duplicate.motifMemorySourceSectionId = duplicate.motifMemorySourceSectionId ?? note.motifMemorySourceSectionId;
+        duplicate.motifMemoryRelationship = duplicate.motifMemoryRelationship ?? note.motifMemoryRelationship;
+        duplicate.motifMemoryTransform = duplicate.motifMemoryTransform ?? note.motifMemoryTransform;
         melodyDuplicatesMerged += 1;
       }
       melodyTrack.notes = merged;
