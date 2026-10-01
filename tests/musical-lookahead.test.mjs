@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planMusicalLookahead } from "../src/core/musical-lookahead.js";
+import {
+  planMusicalLookahead,
+  rankPhraseTargetCandidates,
+  scorePhraseTargetCandidate,
+} from "../src/core/musical-lookahead.js";
 import { generateNew } from "../src/music-engine.js";
 
 const major = [0, 2, 4, 5, 7, 9, 11];
@@ -72,4 +76,97 @@ test("generated songs use future-aware bass and melody choices deterministically
   }
   assert.ok(seen.has("bass"), "a bass approach must survive into the committed song");
   assert.ok(seen.has("melody"), "a melodic chord connection must survive into the committed song");
+});
+
+
+test("phrase-target scoring prefers common tones over unnecessary motion", () => {
+  const ranked = rankPhraseTargetCandidates({
+    pitch: 67,
+    scalePitchClasses: major,
+    currentTones: [0, 4, 7],
+    nextTones: [9, 0, 4],
+    nextRootPc: 9,
+  });
+
+  assert.equal(ranked[0].candidate, 64);
+  assert.equal(ranked[0].targetRole, "common-tone");
+  assert.equal(ranked[0].goalPitch, 64);
+  assert.equal(ranked[0].goalDistance, 0);
+});
+
+test("guide-tone scoring favors an incoming 3rd or 7th when voice leading is smooth", () => {
+  const eToF = scorePhraseTargetCandidate({
+    candidate: 64,
+    sourcePitch: 64,
+    currentTones: [0, 4, 7],
+    nextTones: [7, 11, 2, 5],
+    nextRootPc: 7,
+  });
+  const cToD = scorePhraseTargetCandidate({
+    candidate: 60,
+    sourcePitch: 64,
+    currentTones: [0, 4, 7],
+    nextTones: [7, 11, 2, 5],
+    nextRootPc: 7,
+  });
+
+  assert.equal(eToF.goalPitch, 65);
+  assert.equal(eToF.targetRole, "guide-tone");
+  assert.equal(eToF.semitonePreparation, true);
+  assert.ok(eToF.score > cToD.score);
+});
+
+test("lookahead leaves an already ideal common guide tone unchanged", () => {
+  const plan = planMusicalLookahead({
+    pitch: 71,
+    start: 3.25,
+    boundary: 4,
+    totalBeats: 16,
+    scalePitchClasses: major,
+    currentTones: [7, 11, 2, 5],
+    nextTones: [0, 4, 7, 11],
+    currentRootPc: 7,
+    nextRootPc: 0,
+    trackId: "melody",
+  });
+  assert.equal(plan, null);
+});
+
+test("generated lead notes expose scored phrase-target intent before real chord changes", { timeout: 120_000 }, () => {
+  let survivor = null;
+  let survivorSong = null;
+
+  for (let index = 0; index < 8 && !survivor; index += 1) {
+    const config = {
+      seed: `phrase-target-live-${index}`,
+      genre: "pop",
+      bars: 8,
+      key: "C",
+      scale: "major",
+      complexity: 0.78,
+      variation: 0.72,
+      professionalUpgrade: true,
+      candidateCount: 1,
+    };
+    const song = generateNew(config);
+    assert.deepEqual(song, generateNew(config));
+
+    survivor = song.tracks
+      .filter((track) => ["melody", "counterpoint"].includes(track.id))
+      .flatMap((track) => track.notes)
+      .find((note) => (
+        note.musicalLookaheadIntent?.role === "phrase-target"
+        && Math.abs(note.pitch - note.musicalLookaheadIntent.pitch) < 1e-6
+      )) ?? null;
+    if (survivor) survivorSong = song;
+  }
+
+  assert.ok(survivor, "at least one composed lead note should retain a scored future-chord target");
+  const plan = survivor.musicalLookaheadIntent;
+  assert.ok(["common-guide-tone", "common-tone", "guide-tone", "future-chord-tone"].includes(plan.targetRole));
+  assert.ok(plan.boundary > survivor.start);
+  assert.ok(plan.goalDistance >= 0);
+  const nextChord = survivorSong.harmony.find((chord) => Math.abs(chord.start - plan.boundary) < 0.01);
+  assert.ok(nextChord);
+  assert.ok(nextChord.tones.includes(pc(plan.goalPitch)));
 });
