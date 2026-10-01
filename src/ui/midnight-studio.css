@@ -4117,6 +4117,10 @@ body .app-shell, body main#top, body .tab-panel.is-active {
 }
 
 #tab-arrange .shape-map-column .timeline-shell { width: 100% !important; max-width: 100% !important; }
+#tab-arrange .shape-map-column:has(.shape-map-detail:not([open])) .timeline-playhead-track {
+  left: 5px !important;
+}
+
 #tab-arrange .shape-map-column:has(.shape-map-detail[open]) .timeline { min-width: 1400px !important; }
 #tab-arrange .shape-map-column:has(.shape-map-detail[open]) .section-strip { display: grid !important; }
 #tab-arrange .shape-map-column:has(.shape-map-detail[open]) .section-chip { min-width: 0; }
