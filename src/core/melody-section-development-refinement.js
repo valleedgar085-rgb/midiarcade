@@ -89,6 +89,10 @@ function sourceContract(song, sectionId) {
 function tag(note, sourceSectionId, role) {
   note.phraseMemorySourceSectionId = sourceSectionId;
   note.sectionDevelopmentRole = role;
+  // This tag is only applied to notes actually rewritten from the source-memory
+  // relationship, so downstream diagnostics can distinguish authored recall
+  // evidence from incidental contour similarity.
+  note.motifMemoryCore = true;
 }
 function cloneBreakCandidate(song, report) {
   if (finite(report?.metrics?.cloneRisk) < 0.88) return null;
@@ -265,10 +269,12 @@ export function createMelodySectionDevelopmentCandidates(song, {
   if (!report.sourceSectionId) return [];
   const raw = [
     cloneBreakCandidate(song, report),
+    // Ending identity is critical recall evidence and used to be starved out by
+    // the three-candidate budget when contour candidates were all available.
+    endingRecallCandidate(song, report),
     directionalContourCandidate(song, report),
     contourRecallCandidate(song, report, { maxNotes: 2, id: "restore-contour" }),
     contourRecallCandidate(song, report, { maxNotes: 3, id: "restore-contour-strong" }),
-    endingRecallCandidate(song, report),
   ].filter(Boolean);
   const seen = new Set();
   const limit = Math.max(
