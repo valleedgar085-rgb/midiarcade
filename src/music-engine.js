@@ -9990,6 +9990,77 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
   };
 }
 
+
+function autoScaleCandidatesForConfig(config) {
+  const profile = config.secondaryGenre && config.secondaryGenre !== config.genre
+    ? createFusedGenreProfile(config.genre, config.secondaryGenre, config.fusionBlend)
+    : GENRE_PROFILES[config.genre];
+  return profile?.preferredScales?.length ? profile.preferredScales : [config.scale];
+}
+
+function harmonyContextFromTimeline(harmony, config) {
+  const events = (Array.isArray(harmony) ? harmony : [])
+    .filter((event) => Array.isArray(event?.tones) && event.tones.length);
+  if (!events.length) return null;
+  const index = events.length >= 3 ? 1 : 0;
+  return {
+    keyPc: config.keyPc,
+    previousChord: events[index - 1] ?? null,
+    chord: events[index],
+    nextChord: events[index + 1] ?? null,
+  };
+}
+
+export function refineAutoScaleFromHarmony(config, harmony) {
+  if (config?.scaleSelection !== "auto") {
+    return Object.freeze({ config, report: null });
+  }
+  const harmonyContext = harmonyContextFromTimeline(harmony, config);
+  if (!harmonyContext) {
+    return Object.freeze({ config, report: null });
+  }
+
+  const previousScale = config.scale;
+  const scale = resolveAutoScale({
+    candidates: autoScaleCandidatesForConfig(config),
+    seed: config.seed,
+    genre: config.genre,
+    chordPath: config.chordPath,
+    energy: config.energy,
+    complexity: config.complexity,
+    surprise: config.surprise,
+    mood: config.mood,
+    harmonyContext,
+  });
+
+  if (!SCALES[scale]) {
+    return Object.freeze({ config, report: null });
+  }
+
+  const report = Object.freeze({
+    version: 1,
+    authority: "auto-scale-harmony-refinement-v1",
+    previousScale,
+    selectedScale: scale,
+    changed: scale !== previousScale,
+    context: Object.freeze([
+      harmonyContext.previousChord?.symbol ?? harmonyContext.previousChord?.roman ?? null,
+      harmonyContext.chord?.symbol ?? harmonyContext.chord?.roman ?? null,
+      harmonyContext.nextChord?.symbol ?? harmonyContext.nextChord?.roman ?? null,
+    ].filter(Boolean)),
+  });
+
+  return Object.freeze({
+    config: {
+      ...config,
+      scale,
+      scaleIntervals: [...SCALES[scale]],
+      autoScaleRefinement: report,
+    },
+    report,
+  });
+}
+
 function compose(config, options = {}) {
   const rootRng = createSeededRandom(config.seed);
   const route = compositionRoute(
@@ -10013,6 +10084,21 @@ function compose(config, options = {}) {
   const structure = options.preserveAuthorities
     ? baseStructure
     : applySongBlueprint(baseStructure, songBlueprint);
+
+  let autoScaleRefinement = null;
+  if (config.scaleSelection === "auto" && !options.preserveAuthorities) {
+    const provisionalHarmony = createHarmony(
+      config,
+      structure,
+      rootRng.fork("harmony-auto-preview"),
+      options.harmonyBlueprint,
+      songBlueprint,
+    );
+    const refinedAutoScale = refineAutoScaleFromHarmony(config, provisionalHarmony);
+    config = refinedAutoScale.config;
+    autoScaleRefinement = refinedAutoScale.report;
+  }
+
   const spectrumPlan = createSpectrumPlan(config, structure, songBlueprint);
   const performanceProfile = createPerformanceProfile(
     config,
@@ -10486,6 +10572,7 @@ function compose(config, options = {}) {
       keyPc: config.keyPc,
       scale: config.scale,
       scaleIntervals: [...config.scaleIntervals],
+      autoScaleRefinement: autoScaleRefinement ? clone(autoScaleRefinement) : null,
       timeSignature: [...config.timeSignature],
       bars: config.bars,
       beatsPerBar: beatsPerBar(config),
