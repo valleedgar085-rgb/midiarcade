@@ -99,7 +99,10 @@ function developRecall(source, memory, seed) {
     seed,
     `recall:${memory.sectionId}`,
     motif.events.length >= 7 ? 3 : 2,
-  );
+  ).filter((index) => (
+    transform !== "ending-answer"
+    || index < motif.events.length - 3
+  ));
 
   for (const [ordinal, index] of positions.entries()) {
     const event = motif.events[index];
@@ -120,10 +123,15 @@ function developRecall(source, memory, seed) {
 
   if (transform === "ending-answer" && motif.events.length >= 3) {
     const penultimate = motif.events[motif.events.length - 2];
-    const final = motif.events[motif.events.length - 1];
-    const direction = Math.sign(finite(final.degree) - finite(penultimate.degree))
-      || deterministicSign(seed, `ending-answer:${memory.sectionId}`);
-    shiftDegree(penultimate, -direction);
+    // Keep the authored three-note cadence contour recognizable. The "answer"
+    // is expressed as articulation development instead of replacing the pitch
+    // evidence that identifies the source phrase.
+    const direction = deterministicSign(seed, `ending-answer:${memory.sectionId}`);
+    penultimate.duration = round(clamp(
+      finite(penultimate.duration, 0.5) * (direction > 0 ? 0.82 : 1.14),
+      0.16,
+      3.5,
+    ));
   }
 
   motif.events.sort((left, right) => finite(left.offset) - finite(right.offset));
