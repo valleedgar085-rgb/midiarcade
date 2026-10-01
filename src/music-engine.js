@@ -7627,6 +7627,23 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
     if (previous && previous.pitch === note.pitch && Math.abs(previous.start - note.start) < 0.0005) {
       previous.duration = Math.max(previous.duration, note.duration);
       previous.velocity = Math.max(previous.velocity, note.velocity);
+
+      // This dedupe runs before scale safety. Never erase evidence that makes
+      // an intentionally non-diatonic pitch legal, or provenance that proves
+      // a note belongs to an authored recall core.
+      if (!previous.tonalLicense && note.tonalLicense) {
+        previous.tonalLicense = note.tonalLicense;
+        if (note.tonalIntegrityLicense) previous.tonalIntegrityLicense = note.tonalIntegrityLicense;
+        if (note.harmonicColorSource) previous.harmonicColorSource = note.harmonicColorSource;
+        if (note.harmonicColorChord) previous.harmonicColorChord = note.harmonicColorChord;
+        if (note.melodicColorIntent) previous.melodicColorIntent = note.melodicColorIntent;
+        if (Number.isFinite(note.resolvesToPitch)) previous.resolvesToPitch = note.resolvesToPitch;
+      }
+      if (note.motifMemoryCore) previous.motifMemoryCore = true;
+      previous.motifMemoryVariantId = previous.motifMemoryVariantId ?? note.motifMemoryVariantId;
+      previous.motifMemorySourceSectionId = previous.motifMemorySourceSectionId ?? note.motifMemorySourceSectionId;
+      previous.motifMemoryRelationship = previous.motifMemoryRelationship ?? note.motifMemoryRelationship;
+      previous.motifMemoryTransform = previous.motifMemoryTransform ?? note.motifMemoryTransform;
     } else {
       deduped.push(note);
     }
