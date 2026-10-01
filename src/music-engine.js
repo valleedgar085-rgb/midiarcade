@@ -1781,7 +1781,7 @@ function applyStructureDirector(config, structure, plans) {
   if (!fullSong) return plans;
 
   const occurrences = new Map();
-  let previousEnergy = null;
+  let previousTarget = null;
 
   return plans.map((plan, index) => {
     const section = structure[index];
@@ -1789,86 +1789,59 @@ function applyStructureDirector(config, structure, plans) {
     const occurrence = (occurrences.get(section.name) ?? 0) + 1;
     occurrences.set(section.name, occurrence);
 
-    let energy = clamp(finite(plan.energy, 0.58), 0.2, 1);
+    // Structure Director deliberately does NOT rewrite plan.energy/tension/density.
+    // Those values feed melody memory, critic calibration, repair selection, and
+    // deterministic phrase behavior. The Director owns presentation targets only.
+    let energyTarget = clamp(finite(plan.energy, 0.58), 0.2, 1);
     if (stage === "establish") {
-      energy = clamp(Math.min(energy, 0.46), 0.28, 0.46);
+      energyTarget = clamp(Math.min(energyTarget, 0.46), 0.28, 0.46);
     } else if (stage === "pocket") {
-      energy = clamp(
-        Math.min(energy, occurrence > 1 ? 0.7 : 0.64),
+      energyTarget = clamp(
+        Math.min(energyTarget, occurrence > 1 ? 0.7 : 0.64),
         occurrence > 1 ? 0.52 : 0.48,
         occurrence > 1 ? 0.7 : 0.64,
       );
     } else if (stage === "build") {
-      energy = clamp(
-        Math.max(energy, finite(previousEnergy, 0.58) + 0.08, 0.7),
+      energyTarget = clamp(
+        Math.max(energyTarget, finite(previousTarget, 0.58) + 0.08, 0.7),
         0.68,
         0.84,
       );
     } else if (stage === "payoff") {
       const returnLift = occurrence > 1 ? 0.04 : 0;
-      energy = clamp(
-        Math.max(energy + returnLift, finite(previousEnergy, 0.62) + 0.14, 0.84 + returnLift),
+      energyTarget = clamp(
+        Math.max(energyTarget + returnLift, finite(previousTarget, 0.62) + 0.14, 0.84 + returnLift),
         0.82,
         1,
       );
     } else if (stage === "reset") {
-      energy = clamp(
-        Math.min(energy, finite(previousEnergy, 0.72) - 0.14, 0.58),
+      energyTarget = clamp(
+        Math.min(energyTarget, finite(previousTarget, 0.72) - 0.14, 0.58),
         0.38,
         0.58,
       );
     } else if (stage === "resolve") {
-      energy = clamp(Math.min(energy, 0.44), 0.28, 0.44);
+      energyTarget = clamp(Math.min(energyTarget, 0.44), 0.28, 0.44);
     }
 
-    const densityMultiplier = {
-      establish: 0.72,
-      pocket: occurrence > 1 ? 0.94 : 0.88,
+    const densityScale = {
+      establish: 0.74,
+      pocket: occurrence > 1 ? 0.96 : 0.9,
       build: 0.96,
-      payoff: 1.06,
-      reset: 0.76,
-      resolve: 0.68,
-      develop: 0.92,
+      payoff: 1.04,
+      reset: 0.8,
+      resolve: 0.72,
+      develop: 0.94,
     }[stage] ?? 1;
-    const density = round(clamp(finite(plan.density, 0.62) * densityMultiplier, 0.22, 0.98));
-
-    let tension = clamp(finite(plan.tension, energy * 0.72), 0, 1);
-    if (stage === "establish") tension = clamp(Math.min(tension, 0.42), 0.18, 0.42);
-    if (stage === "build") tension = clamp(Math.max(tension, 0.78), 0.72, 0.94);
-    if (stage === "payoff") tension = clamp(Math.max(tension, 0.8), 0.76, 1);
-    if (stage === "reset") tension = clamp(Math.min(tension, 0.52), 0.24, 0.52);
-    if (stage === "resolve") tension = clamp(Math.min(tension, 0.34), 0.16, 0.34);
-
-    const envelope = { ...(plan.tensionEnvelope ?? {}) };
-    if (stage === "establish") {
-      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.24), 0.28), 0.12, 0.28));
-      envelope.peak = round(clamp(Math.min(finite(envelope.peak, 0.46), 0.48), 0.28, 0.48));
-      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.4), 0.42), 0.2, 0.42));
-      envelope.peakAt = 0.72;
-      envelope.shape = "establish";
-    } else if (stage === "build") {
-      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.58), 0.6), 0.42, 0.6));
-      envelope.peak = round(clamp(Math.max(finite(envelope.peak, 0.86), 0.86), 0.86, 1));
-      envelope.end = round(clamp(Math.max(finite(envelope.end, 0.84), 0.82), 0.82, 0.98));
-      envelope.peakAt = 0.9;
-      envelope.shape = "rise";
-    } else if (stage === "payoff") {
-      envelope.start = round(clamp(Math.max(finite(envelope.start, 0.76), 0.72), 0.72, 0.94));
-      envelope.peak = round(clamp(Math.max(finite(envelope.peak, 0.92), 0.9), 0.9, 1));
-      envelope.end = round(clamp(finite(envelope.end, 0.68), 0.52, 0.82));
-      envelope.peakAt = 0.64;
-      envelope.shape = "payoff";
-    } else if (stage === "reset") {
-      envelope.start = round(clamp(Math.min(finite(envelope.start, 0.46), 0.5), 0.24, 0.5));
-      envelope.peak = round(clamp(Math.min(finite(envelope.peak, 0.58), 0.62), 0.36, 0.62));
-      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.48), 0.5), 0.22, 0.5));
-      envelope.peakAt = 0.58;
-      envelope.shape = "reset";
-    } else if (stage === "resolve") {
-      envelope.end = round(clamp(Math.min(finite(envelope.end, 0.24), 0.24), 0.08, 0.24));
-      envelope.shape = "release";
-    }
-
+    const velocityScale = {
+      establish: 0.9,
+      pocket: 0.95,
+      build: 0.99,
+      payoff: occurrence > 1 ? 1.06 : 1.03,
+      reset: 0.9,
+      resolve: 0.86,
+      develop: 0.96,
+    }[stage] ?? 1;
     const entranceDelaysBars = stage === "establish" && section.name === "intro"
       ? {
           drums: 0,
@@ -1880,18 +1853,16 @@ function applyStructureDirector(config, structure, plans) {
         }
       : null;
 
-    previousEnergy = energy;
+    previousTarget = energyTarget;
     return {
       ...plan,
-      energy: round(energy),
-      tension: round(tension),
-      density,
-      tensionEnvelope: envelope,
       structureStory: {
         version: 2,
         stage,
         occurrence,
-        energyTarget: round(energy),
+        energyTarget: round(energyTarget),
+        densityScale,
+        velocityScale,
         changeBudget: stage === "payoff" ? 2 : 1,
         maxConcurrentMajorChanges: stage === "payoff" ? 2 : 1,
         ...(entranceDelaysBars ? { entranceDelaysBars } : {}),
@@ -2023,17 +1994,28 @@ function createOrchestrationMatrix(config, structure, sectionPlans, source = nul
     if (inherited?.lanes && !creativeReturn) return clone(inherited);
     const shape = ORCHESTRATION_SHAPES[section.name] ?? ORCHESTRATION_SHAPES.idea;
     const featuredTrack = featuredTrackForSection(section, plan, config, occurrence);
+    const storyEnergy = finite(plan?.structureStory?.energyTarget, plan.energy);
+    const storyDensityScale = finite(plan?.structureStory?.densityScale, 1);
+    const storyVelocityScale = finite(plan?.structureStory?.velocityScale, 1);
     const lanes = Object.fromEntries(TRACK_IDS.map((id) => {
       const base = finite(shape[id], 0.7);
-      const energyFactor = 0.82 + plan.energy * 0.24;
+      const energyFactor = 0.82 + storyEnergy * 0.24;
       const featured = id === featuredTrack;
-      const presence = round(clamp(base * energyFactor + (featured ? 0.08 : 0), 0.18, 1));
+      const presence = round(clamp(
+        base * energyFactor * storyDensityScale + (featured ? 0.08 : 0),
+        0.18,
+        1,
+      ));
       const registerShift = ["melody", "counterpoint", "chords", "pad"].includes(id)
         ? (featured ? plan.registerLift : 0)
         : 0;
       return [id, {
         presence,
-        velocity: round(clamp(0.82 + plan.energy * 0.18 + (featured ? 0.06 : 0), 0.72, 1.08)),
+        velocity: round(clamp(
+          (0.82 + storyEnergy * 0.18 + (featured ? 0.06 : 0)) * storyVelocityScale,
+          0.72,
+          1.08,
+        )),
         registerShift,
         role: featured ? "feature" : ["drums", "bass"].includes(id) ? "foundation" : presence < 0.46 ? "space" : "support",
       }];
@@ -2100,6 +2082,7 @@ function createProducerIntentContract(
     const answerTrack = answerTrackForForeground(foregroundTrack, section, config);
     const purpose = PRODUCER_PURPOSES[section.name]
       ?? (plan.role === "peak" ? "payoff" : plan.role === "release" ? "resolve" : "develop");
+    const storyEnergy = finite(plan?.structureStory?.energyTarget, plan.energy);
     const returnIndex = finite(matrix?.featureOccurrence, 0);
     const developmentAxis = returnIndex > 0
       ? returnAxes[hashSeed(`${config.seed}|${section.name}|${returnIndex}|development-axis`) % returnAxes.length]
@@ -2155,8 +2138,8 @@ function createProducerIntentContract(
       silenceBudget,
       densityCeiling: round(
         purpose === "establish" && section.name === "intro"
-          ? clamp(0.58 + plan.energy * 0.18 - silenceBudget * 0.08, 0.58, 0.78)
-          : clamp(0.64 + plan.energy * 0.3 - silenceBudget * 0.12, 0.58, 0.96),
+          ? clamp(0.58 + storyEnergy * 0.18 - silenceBudget * 0.08, 0.58, 0.78)
+          : clamp(0.64 + storyEnergy * 0.3 - silenceBudget * 0.12, 0.58, 0.96),
       ),
       roles,
     };
@@ -6914,9 +6897,10 @@ export function producerPacingDensityScale(
     return round(range[0] + (range[1] - range[0]) * smooth);
   }
 
+  if (scene.storyStage === "pocket") return round(0.9 + 0.1 * smooth);
   if (scene.purpose === "build") return round(0.82 + 0.18 * smooth);
-  if (scene.purpose === "reset") return round(0.76 + 0.16 * smooth);
-  if (scene.purpose === "resolve") return round(1 - 0.22 * smooth);
+  if (scene.purpose === "reset") return round(0.78 + 0.14 * smooth);
+  if (scene.purpose === "resolve") return round(1 - 0.2 * smooth);
   return 1;
 }
 
@@ -9566,21 +9550,13 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
     if (breathBeats > 0 && transition.type === "launch") {
       for (const track of tracks) {
         if (!["chords", "melody", "counterpoint", "pad"].includes(track.id)) continue;
-        const kept = [];
         for (const note of track.notes) {
-          if (note.start >= breathStart - 1e-6 && note.start < boundary - 1e-6) {
-            coordinated = true;
-            continue;
-          }
-          if (note.start < breathStart && note.start + note.duration > breathStart) {
-            note.duration = round(Math.max(0.02, breathStart - note.start));
-            note.transitionHandoffRole = "payoff-breath";
-            note.transitionHandoffId = handoffId;
-            coordinated = true;
-          }
-          kept.push(note);
+          if (note.start < breathStart - 1e-6 || note.start >= boundary - 1e-6) continue;
+          note.velocity = clamp(Math.round(note.velocity * 0.78), 1, 120);
+          note.transitionHandoffRole = "payoff-breath";
+          note.transitionHandoffId = handoffId;
+          coordinated = true;
         }
-        track.notes = kept;
       }
     }
 
@@ -10491,23 +10467,15 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
     const scene = scenes.find((entry) => entry.sectionId === section.id);
     if (scene?.foregroundTrack !== "melody") continue;
     const end = finite(section.endBeat);
-    const outgoingTransition = transitionFromSection(songBlueprint, section);
-    const breathBeats = outgoingTransition?.type === "launch"
-      ? clamp(finite(outgoingTransition?.breathBeats, 0), 0, 1)
-      : 0;
-    const endingLimit = breathBeats > 0 ? end - breathBeats : end;
     const windowStart = end - barBeats * 1.25;
-    const hasEndingNote = melody.notes.some((note) => (
-      note.start >= windowStart
-      && note.start < endingLimit - 0.01
-    ));
+    const hasEndingNote = melody.notes.some((note) => note.start >= windowStart && note.start < end - 0.01);
     if (hasEndingNote) continue;
 
     const recent = melody.notes
       .filter((note) => note.start >= Math.max(finite(section.startBeat), end - barBeats * 2) && note.start < windowStart)
       .sort((left, right) => left.start - right.start);
     if (!recent.length) continue;
-    const start = round(Math.min(end - 1.5, endingLimit - 0.35), 2);
+    const start = round(end - 1.5, 2);
     if (melody.notes.some((note) => Math.abs(note.start - start) < 0.08)) continue;
 
     const source = recent.at(-1);
@@ -10523,7 +10491,7 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
     melody.notes.push({
       pitch,
       start,
-      duration: Math.min(1.4, Math.max(0.08, endingLimit - start - 0.03)),
+      duration: Math.min(1.4, Math.max(0.08, end - start - 0.02)),
       velocity: clamp(Math.round(source.velocity + 4), 1, 108),
       resolutionRole: shouldLandOnTonic ? "tonic-landing" : "chord-landing",
       phraseCadenceRole: "section-answer",
