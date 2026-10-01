@@ -9236,7 +9236,8 @@ function runTransitionHandoffPass(sourceTracks, structure, songBlueprint) {
             || Math.abs(left.start - boundary) - Math.abs(right.start - boundary)
           ));
         const arrivalCandidates = incoming.filter((note) => (
-          note.connectionId === `interlock:${to.id}` || !note.ensembleCadenceRole
+          note.rhythmTurnaroundRole !== "bass-answer"
+          && (note.connectionId === `interlock:${to.id}` || !note.ensembleCadenceRole)
         ));
         const arrival = arrivalCandidates.find((note) => note.transitionFeature === transition.type)
           ?? (["drums", "bass", "chords", "pad"].includes(track.id) ? arrivalCandidates[0] : null);
