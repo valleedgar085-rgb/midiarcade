@@ -2450,23 +2450,25 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
   });
   return {
     version: 6,
-    structureDirector: {
-      version: 2,
-      id: "story-arc-v2",
-      stages: sectionPlans.map((plan) => ({
-        sectionId: plan.sectionId,
-        sectionName: plan.sectionName,
-        ...clone(plan.structureStory),
-      })),
-      transitions: transitions.map((transition) => ({
-        fromSectionId: transition.fromSectionId,
-        toSectionId: transition.toSectionId,
-        type: transition.type,
-        strength: transition.strength,
-        breathBeats: transition.breathBeats ?? 0,
-        storyRole: transition.storyRole ?? "handoff",
-      })),
-    },
+    ...(config.bars >= 12 && structure.length >= 3 ? {
+      structureDirector: {
+        version: 2,
+        id: "story-arc-v2",
+        stages: sectionPlans.map((plan) => ({
+          sectionId: plan.sectionId,
+          sectionName: plan.sectionName,
+          ...clone(plan.structureStory),
+        })),
+        transitions: transitions.map((transition) => ({
+          fromSectionId: transition.fromSectionId,
+          toSectionId: transition.toSectionId,
+          type: transition.type,
+          strength: transition.strength,
+          breathBeats: transition.breathBeats ?? 0,
+          storyRole: transition.storyRole ?? "handoff",
+        })),
+      },
+    } : {}),
     narrative: { id: narrative.id, label: narrative.label },
     songDNA,
     hookSectionId: hookSection?.id ?? null,
