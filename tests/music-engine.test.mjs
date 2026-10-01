@@ -878,6 +878,116 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
   );
 });
 
+test("Structure Director v2 creates a staged full-song story arc with payoff breathing room", () => {
+  const input = {
+    ...CONFIG,
+    genre: "pop",
+    seed: "structure-director-v2-story-arc",
+    bars: 32,
+    candidateCount: 1,
+    energy: 0.72,
+    complexity: 0.68,
+    evolution: 0.78,
+  };
+  const song = engine.generateNew(input);
+  const blueprint = song.songBlueprint;
+  const director = blueprint.structureDirector;
+
+  assert.equal(director?.version, 2);
+  assert.equal(director?.id, "story-arc-v2");
+  assert.equal(director?.stages?.length, song.structure.length);
+
+  const plans = blueprint.sectionPlans;
+  const intro = plans.find((plan) => plan.sectionName === "intro");
+  const firstVerse = plans.find((plan) => plan.sectionName === "verse");
+  const firstPayoff = plans.find((plan) => ["chorus", "drop", "theme"].includes(plan.sectionName));
+  assert.ok(intro, "full song should expose an intro story stage");
+  assert.ok(firstVerse, "full song should expose a verse pocket");
+  assert.ok(firstPayoff, "full song should expose a payoff section");
+  assert.ok(intro.energy <= 0.46, `intro should establish below full intensity, got ${intro.energy}`);
+  assert.ok(firstVerse.energy > intro.energy, `verse should grow from intro: ${intro.energy} -> ${firstVerse.energy}`);
+
+  const payoffIndex = plans.findIndex((plan) => plan.sectionId === firstPayoff.sectionId);
+  const setup = plans[payoffIndex - 1];
+  assert.ok(firstPayoff.energy >= setup.energy + 0.13 - 1e-6, `payoff should clearly exceed setup: ${setup.energy} -> ${firstPayoff.energy}`);
+  assert.equal(firstPayoff.structureStory?.stage, "payoff");
+
+  const transition = blueprint.transitions.find((entry) => entry.toSectionId === firstPayoff.sectionId);
+  assert.equal(transition?.type, "launch");
+  assert.ok(transition?.breathBeats >= 0.35, `payoff should reserve a breath, got ${transition?.breathBeats}`);
+
+  const introSection = song.structure[0];
+  const introScene = song.producerIntent.scenes.find((scene) => scene.sectionId === introSection.id);
+  assert.equal(introScene?.storyStage, "establish");
+  assert.ok(introScene?.entryDelaysBars?.bass > 0);
+  assert.ok(introScene?.entryDelaysBars?.chords > introScene?.entryDelaysBars?.bass);
+  assert.ok(introScene?.entryDelaysBars?.melody > introScene?.entryDelaysBars?.chords);
+
+  const bassGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "bass",
+    introScene.roles.bass,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  const chordGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "chords",
+    introScene.roles.chords,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  const melodyGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "melody",
+    introScene.roles.melody,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  assert.ok(bassGate.entryBeat < chordGate.entryBeat);
+  assert.ok(chordGate.entryBeat < melodyGate.entryBeat);
+
+  const fromSection = song.structure.find((section) => section.id === transition.fromSectionId);
+  const breathStart = fromSection.endBeat - transition.breathBeats;
+  for (const trackId of ["chords", "melody", "counterpoint", "pad"]) {
+    const track = song.tracks.find((candidate) => candidate.id === trackId);
+    const notesInBreath = (track?.notes ?? []).filter((note) => (
+      note.start >= breathStart - 1e-6
+      && note.start < fromSection.endBeat - 1e-6
+    ));
+    assert.equal(
+      notesInBreath.length,
+      0,
+      `${trackId} should leave the final ${transition.breathBeats} beat(s) open before payoff`,
+    );
+  }
+
+  assert.deepEqual(song, engine.generateNew(input));
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
+test("Structure Director v2 keeps short loop forms immediate", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "structure-director-v2-short-loop",
+    bars: 8,
+    candidateCount: 1,
+  });
+  assert.equal(song.songBlueprint?.structureDirector, undefined);
+  assert.deepEqual(song, engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "structure-director-v2-short-loop",
+    bars: 8,
+    candidateCount: 1,
+  }));
+});
+
 test("Trap full-song rendering keeps support out of the opening pocket until its producer gate", () => {
   const input = {
     ...CONFIG,
