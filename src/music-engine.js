@@ -14692,6 +14692,17 @@ function commitCandidate(candidates, search = {}) {
     },
   };
 
+  const committedConfig = normalizeConfig(configFromSong(selected.song));
+  // Register repair is the last pitch-writing authority before commit. Reconcile
+  // any licensed harmony color here so a valid secondary-dominant/borrowed tone
+  // cannot be normalized away after candidate composition has already approved it.
+  const committedLicensedColor = reconcileLicensedHarmonyColorVoice(
+    selected.song.tracks,
+    selected.song.harmony ?? [],
+    committedConfig,
+  );
+  selected.song.tracks = committedLicensedColor.tracks;
+
   // The single committed Final Assembly occurs after every engine note-writing
   // authority. It does not rerun any pitch/rhythm repair afterward.
   const committedFinalAssembly = runFinalAssemblyPass(
@@ -14699,9 +14710,16 @@ function commitCandidate(candidates, search = {}) {
     selected.song.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
     selected.song.songBlueprint ?? null,
-    normalizeConfig(configFromSong(selected.song)),
+    committedConfig,
   );
-  selected.song.tracks = committedFinalAssembly.tracks;
+  const committedMemoryProvenance = reconcileFinalMotifMemoryProvenance(
+    committedFinalAssembly.tracks,
+    selected.song.structure ?? selected.song.sections ?? [],
+    selected.song.motifs ?? {},
+  );
+  selected.song.tracks = committedMemoryProvenance.tracks;
+  committedFinalAssembly.repairs.licensedHarmonyColorVoicesRestored = committedLicensedColor.restored;
+  committedFinalAssembly.repairs.motifMemoryProvenanceRestored = committedMemoryProvenance.restored;
   selected.song.finalAssembly = createFinalAssemblyReport(
     selected.song.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
