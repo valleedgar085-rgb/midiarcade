@@ -1,3 +1,4 @@
+import { TRAP_REFERENCE_PACK_ID } from "./trap-reference-profile.js";
 import { cloneValue } from "./clone-value.js";
 import {
   acceptCompositionCandidate,
@@ -273,6 +274,8 @@ export function createSpecialistDirectorPlan(song) {
     tempo: song?.meta?.tempo,
     popReferenceEnabled: Boolean(usesPopReferenceCharacter),
     popReferencePack: sourceGrooveDNA?.referencePack,
+    trapReferenceEnabled: sourceGrooveDNA?.referencePack === TRAP_REFERENCE_PACK_ID,
+    trapReferencePack: sourceGrooveDNA?.referencePack,
     bars: song?.meta?.bars,
     beatsPerBar: song?.meta?.beatsPerBar,
     complexity: song?.settings?.complexity ?? song?.meta?.complexity ?? 0.58,

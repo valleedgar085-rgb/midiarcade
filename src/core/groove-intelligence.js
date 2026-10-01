@@ -1,4 +1,5 @@
 import { POP_REFERENCE_PACK_ID, popReferencePocketPosition } from "./pop-reference-profile.js";
+import { TRAP_REFERENCE_PACK_ID, hardTrapGrooveGrammar } from "./trap-reference-profile.js";
 const BASE_GRID_STEPS = 16;
 
 function finite(value, fallback = 0) {
@@ -584,6 +585,10 @@ function grooveProfileForInput(genre, input = {}) {
   const id = genreId(genre);
   const grammar = GENRE_GROOVE_GRAMMARS[id] ?? GENRE_GROOVE_GRAMMARS.general;
   const cellPolicy = GROOVE_CELL_POLICIES[id] ?? GROOVE_CELL_POLICIES.general;
+  if (id === "trap" && input.trapReferenceEnabled === true && input.trapReferencePack === TRAP_REFERENCE_PACK_ID) {
+    const cell = Math.floor(randomUnit(`${input.seed}:trap-reference-kick-cell`) * 3);
+    return { grammar: hardTrapGrooveGrammar(grammar, cell), cellPolicy };
+  }
   if (id !== "pop" || input?.popReferenceEnabled !== true) {
     return { grammar, cellPolicy };
   }
@@ -812,7 +817,9 @@ export function createGrooveDNA(input = {}, {
   const densityControl = clamp(input?.density ?? input?.complexity ?? 0.58, 0, 1);
   const variation = clamp(input?.variation ?? 0.48, 0, 1);
   const tripletAmount = clamp(input?.tripletAmount ?? 0, 0, 1);
-  const referencePack = genre === "pop" && input.popReferenceEnabled === true && input.popReferencePack === POP_REFERENCE_PACK_ID;
+  const popReference = genre === "pop" && input.popReferenceEnabled === true && input.popReferencePack === POP_REFERENCE_PACK_ID;
+  const trapReference = genre === "trap" && input.trapReferenceEnabled === true && input.trapReferencePack === TRAP_REFERENCE_PACK_ID;
+  const referencePack = popReference ? POP_REFERENCE_PACK_ID : trapReference ? TRAP_REFERENCE_PACK_ID : null;
   const normalizedSections = normalizeStructure(structure ?? input?.structure, bars, beatsPerBar);
   const barPlans = [];
 
@@ -853,10 +860,10 @@ export function createGrooveDNA(input = {}, {
       );
       const transformed = applyTransforms(probabilitySteps, grammar.transforms, {
         lane,
-        bar,
+        bar: referencePack ? bar - section.startBar : bar,
         section,
         gridSteps,
-        seed: `${seed}:${genre}:${lane}`,
+        seed: referencePack ? `${seed}:${genre}:${section.name}:${lane}` : `${seed}:${genre}:${lane}`,
         tripletAmount,
       });
       const factor = grammar.density[lane]
@@ -874,7 +881,7 @@ export function createGrooveDNA(input = {}, {
         protectedSteps,
         `${patternSeed}:${lane}:density`,
       );
-      const variationAmount = genre === "jazz"
+      const variationAmount = genre === "jazz" || (trapReference && ["kick", "snare", "hat"].includes(lane))
         ? 0
         : Math.round(variation * (lane === "hat" ? 2 : 1));
       const variedCandidate = (!referencePack || pocket.turnaround) && variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
@@ -958,7 +965,7 @@ export function createGrooveDNA(input = {}, {
     genre,
     grammarId: grammar.id,
     characterId: grammar.characterId ?? grammar.id,
-    ...(referencePack ? { referencePack: POP_REFERENCE_PACK_ID, pocketBars: 2, developmentBars: 4 } : {}),
+    ...(referencePack ? { referencePack, pocketBars: 2, developmentBars: 4 } : {}),
     philosophy: grammar.philosophy,
     barCount: bars,
     beatsPerBar,

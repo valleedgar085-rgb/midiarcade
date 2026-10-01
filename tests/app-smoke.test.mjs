@@ -618,6 +618,11 @@ test("browser app initializes against the engine contract", async () => {
   elementFor("#secondaryGenreControl").value = "techno";
   assert.equal(app.buildConfig("pop-fusion-reference-ui").popReferencePack, undefined, "fusions retain their selected genre balance");
   elementFor("#secondaryGenreControl").value = "none";
+  elementFor("#genreControl").value = "trap";
+  assert.equal(app.buildConfig("trap-reference-ui").trapReferencePack, "hard-trap-pocket-v1", "fresh solo Trap uses the uploaded reference direction");
+  elementFor("#secondaryGenreControl").value = "hipHop";
+  assert.equal(app.buildConfig("trap-fusion-reference-ui").trapReferencePack, undefined, "fusions retain their selected genre balance");
+  elementFor("#secondaryGenreControl").value = "none";
   elementFor("#genreControl").value = "neoSoul";
   elementFor("#sectionPacingControl").value = "roomier";
   elementFor("#sectionPacingControl").dispatch("change");

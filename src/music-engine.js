@@ -10,6 +10,7 @@ import { planMusicalLookahead } from "./core/musical-lookahead.js";
 import { preserveManualGenerationControls } from "./core/manual-generation-controls.js";
 import { resolveSectionPacing, roomierSectionSizes, roomierIntroEntryBars } from "./core/section-pacing.js";
 import { POP_REFERENCE_PACK_ID, usesGroovyPopReferences, applyGroovyPopStyle, shapeGroovyPopMotif } from "./core/pop-reference-profile.js";
+import { TRAP_REFERENCE_PACK_ID, usesHardTrapReferences, applyHardTrapStyle, shapeHardTrapMotif } from "./core/trap-reference-profile.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -1335,6 +1336,7 @@ export function normalizeConfig(input = {}) {
     isFusion: Boolean(profile.isFusion),
     professionalUpgrade,
     ...(usesGroovyPopReferences({ ...input, genre, secondaryGenre, professionalUpgrade }) ? { popReferencePack: POP_REFERENCE_PACK_ID } : {}),
+    ...(usesHardTrapReferences({ ...input, genre, secondaryGenre, professionalUpgrade }) ? { trapReferencePack: TRAP_REFERENCE_PACK_ID } : {}),
     genreLabel: profile.label,
     arrangementProfileId: arrangementProfile.id,
     chordPath,
@@ -2459,7 +2461,8 @@ function createRhythmIdentity(config, drumGroove, rng) {
   const hatMotions = nativeIdentity.hats ?? ["steady", "offbeat", "skip", "rising", "alternating"];
   const percussionVoices = nativeIdentity.percussion ?? ["ride", "tambourine", "cowbell", "shaker"];
   const popReferences = usesGroovyPopReferences(config);
-  const phraseCycles = popReferences ? [4, 8] : upgraded
+  const trapReferences = usesHardTrapReferences(config);
+  const phraseCycles = popReferences || trapReferences ? [4, 8] : upgraded
     ? arrangementProfile.phraseBars
       .map((bars) => clamp(Math.round(finite(bars, 4)), 2, 8))
       .filter((bars, index, values) => values.indexOf(bars) === index)
@@ -2467,7 +2470,7 @@ function createRhythmIdentity(config, drumGroove, rng) {
   const phraseShapes = ["questionAnswer", "syncopatedLoop", "longShort", "staircase", "sparseEcho"];
   const contourShapes = ["arch", "valley", "wave", "climbFall", "fallRebound", "pedalLaunch"];
   const timingPockets = nativeIdentity.pockets ?? ["centered", "laidBack", "pushed", "elastic"];
-  const motifBarChoices = popReferences ? [2] : config.bars >= 8 && config.complexity > 0.72
+  const motifBarChoices = popReferences || trapReferences ? [2] : config.bars >= 8 && config.complexity > 0.72
     ? [1, 2, 2, 3]
     : [1, 2, 2];
   const signature = hashSeed(`${rng.seed}|${config.genre}|${drumGroove}`).toString(36).slice(0, 5).toUpperCase();
@@ -2484,7 +2487,7 @@ function createRhythmIdentity(config, drumGroove, rng) {
     contourShape: rng.pick(contourShapes),
     motifBars: rng.pick(motifBarChoices),
     timingPocket: rng.pick(timingPockets),
-    cadenceGap: rng.pick(popReferences ? [0.75, 1] : [0, 0.25, 0.5, 0.75]),
+    cadenceGap: rng.pick(popReferences || trapReferences ? [0.75, 1] : [0, 0.25, 0.5, 0.75]),
     ...(upgraded ? {
       flowTemplateId: rhythmTemplate?.id ?? "grid-pocket",
       flowSteps: Array.isArray(rhythmTemplate?.steps) ? rhythmTemplate.steps.slice(0, 16) : [0, 4, 8, 12],
@@ -2531,7 +2534,7 @@ function createStyle(config, rng) {
     counterMotion: rng.pick(STYLE_CHOICES.counterMotion),
     padMotion: rng.pick(STYLE_CHOICES.padMotion),
   };
-  style = applyGroovyPopStyle(style, config);
+  style = applyHardTrapStyle(applyGroovyPopStyle(style, config), config);
   style.rhythmIdentity = createRhythmIdentity(config, style.drumGroove, rng.fork("rhythm-identity"));
   return style;
 }
@@ -2568,7 +2571,7 @@ function varyStyle(source, config, rng) {
       accentRotation: freshIdentity.accentRotation,
       mutationBias: round((finite(inheritedIdentity.mutationBias, 0.4) + freshIdentity.mutationBias) / 2, 3),
     };
-  return applyGroovyPopStyle(result, config);
+  return applyHardTrapStyle(applyGroovyPopStyle(result, config), config);
 }
 
 function progressionFamily(scale) {
@@ -3282,6 +3285,7 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     events,
   };
   if (usesGroovyPopReferences(config)) melody = shapeGroovyPopMotif(melody, barBeats, rng.fork("groovy-pop-phrase"));
+  if (usesHardTrapReferences(config)) melody = shapeHardTrapMotif(melody, barBeats, rng.fork("hard-trap-phrase"));
   const family = {};
   const hookRefinement = refineWeakHookMotif(
     relatedMotif(melody, "B", config, style, rng.fork("motif-b")),
@@ -4216,6 +4220,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     tempo: config.tempo,
     popReferenceEnabled: config.professionalUpgrade && config.genre === "pop" && !config.secondaryGenre,
     popReferencePack: config.popReferencePack,
+    trapReferenceEnabled: usesHardTrapReferences(config),
+    trapReferencePack: config.trapReferencePack,
     bars: config.bars,
     beatsPerBar: barBeats,
     complexity: config.complexity,
@@ -4783,8 +4789,9 @@ function generateBass(
     }
 
     const nextChord = harmony[eventIndex + 1];
-    const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
-    const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
+    const referenceBass = usesHardTrapReferences(config);
+    const dependableBassReply = (["hipHop", "rap"].includes(config.genre) || (referenceBass && settings.density >= 0.22)) && Boolean(grooveConductor);
+    const guaranteedPulseCount = dependableBassReply ? Math.min(2, offsets.length) : 1;
     for (let index = 0; index < offsets.length; index += 1) {
       // Keep a dependable statement/reply bass line without restoring the
       // unbounded all-pulse behavior that can overload mobile playback.
@@ -4819,8 +4826,12 @@ function generateBass(
         const target = rootMidi(nextChord ?? chord, bassOctave);
         pitch = nearestScalePitch(target + approach, config, Math.sign(approach));
       }
+      // The reference pocket holds the harmonic root through the statement;
+      // approaching movement is reserved for its phrase-ending pickup.
+      if (referenceBass && !(last && barPlan?.role === "turnaround")) pitch = rootMidi(chord, bassOctave);
       const harmonicLiftEligible = (
-        sectionPlan?.role === "peak"
+        (!referenceBass || barPlan?.role === "turnaround")
+        && sectionPlan?.role === "peak"
         && index === offsets.length - 1
         && pitch <= 52
       );
@@ -5347,6 +5358,7 @@ function applyOptionalArrangementLayers(rawTracks, config, structure, harmony, r
   let triggers = 0;
   for (const layer of arrangementProfile.optionalLayers ?? []) {
     if (!TRACK_DEFINITIONS[layer.trackId]) continue;
+    if (config.tracks[layer.trackId]?.density <= 0.001) continue;
     if (!Array.isArray(result[layer.trackId])) result[layer.trackId] = [];
     for (const section of structure) {
       if (Array.isArray(layer.sections) && layer.sections.length && !layer.sections.includes(section.name)) continue;
@@ -5780,8 +5792,8 @@ function phraseDevelopment(config, section, repeat, repeatStart, motif, counterp
   const repeatEnd = Math.min(repeatStart + motif.lengthBeats, section.endBeat);
   const sectionEnding = repeatEnd >= section.endBeat - 0.01;
   const phraseEnding = sectionEnding || repeat % 2 === 1;
-  // Let a two-bar Pop gesture settle before developing its answer.
-  if (usesGroovyPopReferences(config) && !counterpoint && !sectionEnding && repeat % 2 === 0) return null;
+  // Let a reference-inspired two-bar gesture settle before developing its answer.
+  if ((usesGroovyPopReferences(config) || usesHardTrapReferences(config)) && !counterpoint && !sectionEnding && repeat % 2 === 0) return null;
   const local = rng.fork(`development-${counterpoint ? "counter" : "lead"}-${section.id}-${repeat}`);
   const intensity = clamp(section.intensity * (0.52 + config.energy * 0.5), 0.3, 1.25);
   let plannedType = null;

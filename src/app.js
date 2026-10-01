@@ -17,6 +17,7 @@ import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { captureManualGenerationControls, MANUAL_GENERATION_CONTROL_IDS } from "./core/manual-generation-controls.js";
 import { resolveSectionPacing } from "./core/section-pacing.js";
 import { POP_REFERENCE_PACK_ID } from "./core/pop-reference-profile.js";
+import { TRAP_REFERENCE_PACK_ID } from "./core/trap-reference-profile.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
@@ -912,6 +913,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     genre: genreId,
     professionalUpgrade: true,
     ...(genreId === "pop" && !secondaryGenre ? { popReferencePack: POP_REFERENCE_PACK_ID } : {}),
+    ...(genreId === "trap" && !secondaryGenre ? { trapReferencePack: TRAP_REFERENCE_PACK_ID } : {}),
     ...(creativeRange ? { creativeRange } : {}),
     key: resolvedKey,
     root: resolvedKey,
