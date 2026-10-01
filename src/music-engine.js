@@ -34,11 +34,16 @@ import {
   pickGenreRhythmTemplate,
   progressionGoalsFor,
 } from "./core/genre-arrangement-profile.js";
-import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
+import { analyzeTonalIntegrity, evaluateTonalLicense, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
+import {
+  applyIntentionalChromaticApproaches,
+  applyLicensedHarmonyColor,
+  tonalLicenseForChordPitch,
+} from "./core/licensed-harmony-color.js";
 import {
   humanGrooveInfluence,
   humanGroovePriorForGenre,
@@ -2900,7 +2905,7 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
       }
     }
   }
-  return harmony;
+  return applyLicensedHarmonyColor(harmony, config);
 }
 
 function degreeMotion(shape, progress) {
@@ -4848,6 +4853,7 @@ function generateBass(
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
           ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
+          ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
         },
       );
     }
@@ -5700,7 +5706,10 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
           Math.min(step * 0.9, chord.duration - offset),
           eventVelocity(config, settings, intensity, rng, index % voicing.length === 0 ? 0.9 : 0.72),
           totalBeats,
-          synchronized.snapped ? { rhythmicFeature: "groove-magnet", grooveLane: "chordPulses" } : undefined,
+          {
+            ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet", grooveLane: "chordPulses" } : {}),
+            ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
+          },
         );
       }
       continue;
@@ -5737,7 +5746,10 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
           duration,
           eventVelocity(config, settings, intensity, rng, 0.74),
           totalBeats,
-          rockMetadata,
+          {
+            ...(rockMetadata ?? {}),
+            ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
+          },
         );
       }
     }
@@ -6195,6 +6207,7 @@ function generateLead(
               melodicMotionDegrees: developedRepeatShift,
             } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
+            ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
       }
@@ -6204,7 +6217,15 @@ function generateLead(
         let pitch = midiForDegree(config, (chord?.degree ?? 0) + sectionDegreeShift(section), settings.octave);
         if (chord) pitch = nearestChordTone(pitch, chord);
         if (!notes.some((note) => note.pitch === pitch && Math.abs(note.start - start) < 1e-6)) {
-          addNote(notes, pitch, start, Math.min(0.32, section.endBeat - start), eventVelocity(config, settings, intensity, rng, 0.96 + development.intensity * 0.06), totalBeats);
+          addNote(
+            notes,
+            pitch,
+            start,
+            Math.min(0.32, section.endBeat - start),
+            eventVelocity(config, settings, intensity, rng, 0.96 + development.intensity * 0.06),
+            totalBeats,
+            tonalLicenseForChordPitch(pitch, chord, config),
+          );
         }
       }
     }
@@ -6229,12 +6250,24 @@ function generateLead(
         let pitch = midiForDegree(config, baseDegree + motion[index], settings.octave);
         if (index === 0 && chord) pitch = nearestChordTone(pitch, chord);
         if (notes.some((note) => note.pitch === pitch && Math.abs(note.start - start) < 1e-6)) continue;
-        addNote(notes, pitch, start, Math.min(step * 0.7, 0.22), eventVelocity(config, settings, section.intensity, rng, index === count - 1 ? 0.9 : 0.68), totalBeats, { rhythmicFeature: step === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth" });
+        addNote(
+          notes,
+          pitch,
+          start,
+          Math.min(step * 0.7, 0.22),
+          eventVelocity(config, settings, section.intensity, rng, index === count - 1 ? 0.9 : 0.68),
+          totalBeats,
+          {
+            rhythmicFeature: step === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth",
+            ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
+          },
+        );
       }
       figures += 1;
     }
   }
-  return counterpoint || config.bars < 12 ? notes : protectExpressiveLeadSpacing(notes);
+  const spaced = counterpoint || config.bars < 12 ? notes : protectExpressiveLeadSpacing(notes);
+  return counterpoint ? spaced : applyIntentionalChromaticApproaches(spaced, config, "melody");
 }
 
 const FORWARD_COUNTER_ANSWER_GENRES = new Set(["pop", "hipHop", "rap", "trap"]);
@@ -6528,6 +6561,7 @@ function generatePad(
           sectionPatternId: barPlan?.sectionFamilyId ?? `${section.name}:pad`,
           phraseRole: barPlan?.role ?? "statement",
           plannedTension,
+          ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
         },
       );
     }
@@ -7190,13 +7224,24 @@ export function genreMicroTimingOffset({
   return 0;
 }
 
-function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null) {
+function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanceProfile = null, harmony = []) {
   const totalBeats = config.bars * beatsPerBar(config);
   const upgraded = Boolean(config.professionalUpgrade);
   const arrangementProfile = upgraded ? arrangementProfileForConfig(config) : null;
   const humanization = arrangementProfile?.humanization ?? {};
   const felt = [];
   const allowedScale = trackId === "drums" ? null : scalePitchClasses(config);
+  const orderedRawNotes = [...rawNotes].sort((left, right) => (
+    finite(left?.start) - finite(right?.start)
+    || finite(left?.pitch) - finite(right?.pitch)
+  ));
+  const nextByRawNote = new Map(orderedRawNotes.map((note, index) => [note, orderedRawNotes[index + 1] ?? null]));
+  const tonalMeta = {
+    genre: config.genre,
+    keyPc: config.keyPc,
+    scaleIntervals: config.scaleIntervals,
+    beatsPerBar: beatsPerBar(config),
+  };
   for (const note of rawNotes) {
     // Hip-Hop kick, snare, hat, and bass patterns are authored together.
     // Do not add a second random performance offset after that relationship
@@ -7248,8 +7293,19 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       7 * config.humanize * (upgraded ? clamp(finite(humanization.velocityVarianceScale, 1), 0.7, 1.4) : 1),
     );
     const velocity = clamp(Math.round(note.velocity + (rng.float() * 2 - 1) * velocityRange * settings.humanize), 1, 127);
+    const tonalLicense = trackId === "drums"
+      ? null
+      : evaluateTonalLicense(
+        note,
+        nextByRawNote.get(note),
+        harmonyAt(harmony, finite(note?.start)),
+        tonalMeta,
+      );
+    const renderedPitch = trackId === "drums" || tonalLicense?.valid
+      ? note.pitch
+      : nearestScalePitch(note.pitch, config, 0, allowedScale);
     felt.push({
-      pitch: trackId === "drums" ? note.pitch : nearestScalePitch(note.pitch, config, 0, allowedScale),
+      pitch: renderedPitch,
       // Keep six-decimal timing for authored triplet/subdivision notes. The
       // standard four-decimal rounding moves them off their intended grid.
       start: exactSubdivision ? round(start, 6) : round(start),
@@ -7286,6 +7342,12 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.melodyStoryRole ? { melodyStoryRole: note.melodyStoryRole } : {}),
       ...(note.melodyStoryReason ? { melodyStoryReason: note.melodyStoryReason } : {}),
       ...(note.melodySpacingProtected ? { melodySpacingProtected: true } : {}),
+      ...(note.tonalLicense ? { tonalLicense: note.tonalLicense } : {}),
+      ...(note.harmonicColorSource ? { harmonicColorSource: note.harmonicColorSource } : {}),
+      ...(note.harmonicColorChord ? { harmonicColorChord: note.harmonicColorChord } : {}),
+      ...(note.melodicColorIntent ? { melodicColorIntent: note.melodicColorIntent } : {}),
+      ...(Number.isFinite(note.resolvesToPitch) ? { resolvesToPitch: note.resolvesToPitch } : {}),
+      ...(tonalLicense?.valid ? { tonalIntegrityLicense: tonalLicense.type } : {}),
       ...(note.connectionId ? { connectionId: note.connectionId } : {}),
       ...(note.connectionRole ? { connectionRole: note.connectionRole } : {}),
       ...(note.sectionPatternId ? { sectionPatternId: note.sectionPatternId } : {}),
@@ -7334,14 +7396,39 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
   return deduped;
 }
 
-function enforceScaleSafety(sourceTracks, config) {
+function enforceScaleSafety(sourceTracks, config, harmony = []) {
   let corrections = 0;
+  let licensedColorNotes = 0;
   const correctionsByTrack = {};
   const allowedScale = scalePitchClasses(config);
+  const tonalMeta = {
+    genre: config.genre,
+    keyPc: config.keyPc,
+    scaleIntervals: config.scaleIntervals,
+    beatsPerBar: beatsPerBar(config),
+  };
+
   const tracks = sourceTracks.map((track) => {
     if (track.id === "drums") return track;
     let trackCorrections = 0;
+    const ordered = [...(track.notes ?? [])].sort((left, right) => (
+      finite(left?.start) - finite(right?.start)
+      || finite(left?.pitch) - finite(right?.pitch)
+    ));
+    const nextByNote = new Map(ordered.map((note, index) => [note, ordered[index + 1] ?? null]));
     const notes = (track.notes ?? []).map((note) => {
+      if (pitchFitsScale(note.pitch, config, allowedScale)) return note;
+
+      const chord = harmonyAt(harmony, finite(note?.start));
+      const license = evaluateTonalLicense(note, nextByNote.get(note), chord, tonalMeta);
+      if (license.valid) {
+        licensedColorNotes += 1;
+        return {
+          ...note,
+          tonalIntegrityLicense: note.tonalIntegrityLicense ?? license.type,
+        };
+      }
+
       const pitch = nearestScalePitch(note.pitch, config, 0, allowedScale);
       if (pitch !== note.pitch) {
         corrections += 1;
@@ -7352,16 +7439,41 @@ function enforceScaleSafety(sourceTracks, config) {
     correctionsByTrack[track.id] = trackCorrections;
     return { ...track, notes };
   });
-  const pitchedNotes = tracks
+
+  const pitchedEntries = tracks
     .filter((track) => track.id !== "drums")
-    .flatMap((track) => track.notes ?? []);
-  const scaleFit = pitchedNotes.length
-    ? pitchedNotes.filter((note) => pitchFitsScale(note.pitch, config, allowedScale)).length / pitchedNotes.length
-    : 1;
+    .flatMap((track) => {
+      const ordered = [...(track.notes ?? [])].sort((left, right) => (
+        finite(left?.start) - finite(right?.start)
+        || finite(left?.pitch) - finite(right?.pitch)
+      ));
+      return ordered.map((note, index) => ({
+        note,
+        nextNote: ordered[index + 1] ?? null,
+      }));
+    });
+
+  let safeCount = 0;
+  let literalScaleSafeCount = 0;
+  for (const entry of pitchedEntries) {
+    if (pitchFitsScale(entry.note.pitch, config, allowedScale)) {
+      safeCount += 1;
+      literalScaleSafeCount += 1;
+      continue;
+    }
+    const chord = harmonyAt(harmony, finite(entry.note?.start));
+    const license = evaluateTonalLicense(entry.note, entry.nextNote, chord, tonalMeta);
+    if (license.valid) safeCount += 1;
+  }
+
+  const scaleFit = pitchedEntries.length ? safeCount / pitchedEntries.length : 1;
+  const literalScaleFit = pitchedEntries.length ? literalScaleSafeCount / pitchedEntries.length : 1;
   return {
     tracks,
     corrections,
     correctionsByTrack,
+    licensedColorNotes,
+    literalScaleFit: round(literalScaleFit),
     scaleFit: round(scaleFit),
     passed: scaleFit >= 1 - 1e-9,
   };
@@ -10374,6 +10486,7 @@ function compose(config, options = {}) {
       rootRng.fork(`${id}-feel`),
       id,
       performanceProfile,
+      harmony,
     );
     const notes = articulatePerformance(
       feltNotes,
@@ -10421,7 +10534,7 @@ function compose(config, options = {}) {
   const spectral = applySpectrumPlan(produced.tracks, structure, spectrumPlan, config);
   spectrumPlan.metrics = spectral.metrics;
   produced.report.metrics.spectralSpan = spectral.metrics.span;
-  const scaleSafety = enforceScaleSafety(spectral.tracks, config);
+  const scaleSafety = enforceScaleSafety(spectral.tracks, config, harmony);
   produced.report.repairs.scaleCorrections = scaleSafety.corrections;
   produced.report.repairs.scaleCorrectionsByTrack = scaleSafety.correctionsByTrack;
   produced.report.metrics.scaleFit = scaleSafety.scaleFit;
@@ -10452,7 +10565,7 @@ function compose(config, options = {}) {
     config,
     songBlueprint,
   );
-  const finalScaleSafety = enforceScaleSafety(withSectionLandings, config);
+  const finalScaleSafety = enforceScaleSafety(withSectionLandings, config, harmony);
   const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
   const producerIntentEnforcement = enforceProducerIntentContract(
     characteristicVoice.tracks,
