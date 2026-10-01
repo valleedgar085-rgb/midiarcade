@@ -1,5 +1,6 @@
 import { authorizeQualityStage } from "./generation-repair-router.js";
 import { auditStageMutationAuthority } from "./mutation-authority.js";
+import { cloneValue } from "./clone-value.js";
 
 export function createQualityEvaluationContext({
   evaluateCandidate,
@@ -51,14 +52,27 @@ export function runQualityStageSequence(song, stages = [], { repairAuthority = n
       continue;
     }
     const before = current;
-    const result = stage.run(current);
-    const after = result?.song ?? current;
+    const stageInput = admission.stage?.strictMutations ? cloneValue(current) : current;
+    const result = stage.run(stageInput);
+    const after = result?.song ?? stageInput;
     const mutationAuthority = auditStageMutationAuthority(before, after, stage.id);
+    const strictViolation = Boolean(admission.stage?.strictMutations && !mutationAuthority.passed);
     const stageDiagnostics = result?.diagnostics ?? null;
-    diagnostics[stage.id] = stageDiagnostics && typeof stageDiagnostics === "object"
-      ? Object.freeze({ ...stageDiagnostics, repairAuthority: admission, mutationAuthority })
-      : stageDiagnostics;
-    if (result?.song) current = result.song;
+    if (strictViolation) {
+      diagnostics[stage.id] = Object.freeze({
+        ...(stageDiagnostics && typeof stageDiagnostics === "object" ? stageDiagnostics : {}),
+        accepted: false,
+        changed: false,
+        reason: "mutation-authority-violation",
+        repairAuthority: admission,
+        mutationAuthority,
+      });
+    } else {
+      diagnostics[stage.id] = stageDiagnostics && typeof stageDiagnostics === "object"
+        ? Object.freeze({ ...stageDiagnostics, repairAuthority: admission, mutationAuthority })
+        : stageDiagnostics;
+    }
+    if (result?.song && !strictViolation) current = after;
   }
   return Object.freeze({ song: current, diagnostics: Object.freeze(diagnostics) });
 }
