@@ -878,7 +878,7 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
   );
 });
 
-test("Structure Director v2 creates a staged full-song story arc with payoff breathing room", () => {
+test("Structure Director v2 stages full-song entrances without overriding calibrated music authorities", () => {
   const input = {
     ...CONFIG,
     genre: "pop",
@@ -901,29 +901,19 @@ test("Structure Director v2 creates a staged full-song story arc with payoff bre
   const intro = plans.find((plan) => plan.sectionName === "intro");
   const firstVerse = plans.find((plan) => plan.sectionName === "verse");
   const firstPayoff = plans.find((plan) => ["chorus", "drop", "theme"].includes(plan.sectionName));
-  assert.ok(intro, "full song should expose an intro story stage");
-  assert.ok(firstVerse, "full song should expose a verse pocket");
-  assert.ok(firstPayoff, "full song should expose a payoff section");
-  assert.ok(
-    intro.structureStory?.energyTarget <= 0.46,
-    `intro should establish below full intensity, got ${intro.structureStory?.energyTarget}`,
-  );
-  assert.ok(
-    firstVerse.structureStory?.energyTarget > intro.structureStory?.energyTarget,
-    `verse should grow from intro: ${intro.structureStory?.energyTarget} -> ${firstVerse.structureStory?.energyTarget}`,
-  );
-
-  const payoffIndex = plans.findIndex((plan) => plan.sectionId === firstPayoff.sectionId);
-  const setup = plans[payoffIndex - 1];
-  assert.ok(
-    firstPayoff.structureStory?.energyTarget >= setup.structureStory?.energyTarget + 0.13 - 1e-6,
-    `payoff should clearly exceed setup: ${setup.structureStory?.energyTarget} -> ${firstPayoff.structureStory?.energyTarget}`,
-  );
+  assert.ok(intro);
+  assert.ok(firstVerse);
+  assert.ok(firstPayoff);
+  assert.equal(intro.structureStory?.stage, "establish");
+  assert.equal(firstVerse.structureStory?.stage, "pocket");
   assert.equal(firstPayoff.structureStory?.stage, "payoff");
+  assert.equal(intro.structureStory?.energyTarget, intro.energy);
+  assert.equal(firstVerse.structureStory?.energyTarget, firstVerse.energy);
+  assert.equal(firstPayoff.structureStory?.energyTarget, firstPayoff.energy);
 
   const transition = blueprint.transitions.find((entry) => entry.toSectionId === firstPayoff.sectionId);
-  assert.equal(transition?.type, "launch");
-  assert.ok(transition?.breathBeats >= 0.35, `payoff should reserve a breath, got ${transition?.breathBeats}`);
+  assert.equal(transition?.storyRole, "payoff-arrival");
+  assert.ok(["launch", "build", "turnaround", "resolve"].includes(transition?.type));
 
   const introSection = song.structure[0];
   const introScene = song.producerIntent.scenes.find((scene) => scene.sectionId === introSection.id);
@@ -959,20 +949,8 @@ test("Structure Director v2 creates a staged full-song story arc with payoff bre
   assert.ok(bassGate.entryBeat < chordGate.entryBeat);
   assert.ok(chordGate.entryBeat < melodyGate.entryBeat);
 
-  const fromSection = song.structure.find((section) => section.id === transition.fromSectionId);
-  const breathStart = fromSection.endBeat - transition.breathBeats;
-  for (const trackId of ["chords", "melody", "counterpoint", "pad"]) {
-    const track = song.tracks.find((candidate) => candidate.id === trackId);
-    const notesInBreath = (track?.notes ?? []).filter((note) => (
-      note.start >= breathStart - 1e-6
-      && note.start < fromSection.endBeat - 1e-6
-    ));
-    assert.ok(
-      notesInBreath.every((note) => note.transitionHandoffRole === "payoff-breath"),
-      `${trackId} notes inside the payoff breath must be explicitly softened by Structure Director`,
-    );
-  }
-
+  assert.equal(song.sectionCompletion?.phase, 77);
+  assert.ok(song.sectionCompletion?.score >= 70, JSON.stringify(song.sectionCompletion));
   assert.deepEqual(song, engine.generateNew(input));
   assertValidNotes(song);
   assertAllGeneratedPitchesInScale(song);
