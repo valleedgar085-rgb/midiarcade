@@ -4821,8 +4821,14 @@ function generateBass(
         harmonicLifts += 1;
       }
       const lookahead = last && index > 0 && nextChord ? planMusicalLookahead({
-        pitch, start: absoluteStart, boundary: nextChord.start, totalBeats,
-        scalePitchClasses: scalePitchClasses(config), nextTones: [nextChord.rootPc], trackId: "bass",
+        pitch,
+        start: absoluteStart,
+        boundary: nextChord.start,
+        totalBeats,
+        scalePitchClasses: scalePitchClasses(config),
+        nextTones: [nextChord.rootPc],
+        nextRootPc: nextChord.rootPc,
+        trackId: "bass",
       }) : null;
       if (lookahead) pitch = lookahead.pitch;
       const nextOffset = offsets[index + 1] ?? chord.duration;
@@ -6162,6 +6168,28 @@ function generateLead(
           const escape = rng.bool(0.5) ? 2 : -2;
           pitch = nearestScalePitch(pitch + escape, config, Math.sign(escape));
         }
+
+        const nextChord = harmony.find((candidate) => (
+          finite(candidate?.start, Infinity) > start + 0.01
+        )) ?? null;
+        const protectedLookaheadLanding = (
+          development?.type === "resolution" && progress >= 0.82
+        ) || section.endBeat - start <= 0.28;
+        const lookahead = chord && nextChord ? planMusicalLookahead({
+          pitch,
+          start,
+          boundary: nextChord.start,
+          totalBeats,
+          scalePitchClasses: scalePitchClasses(config),
+          currentTones: chord.tones,
+          nextTones: nextChord.tones,
+          currentRootPc: chord.rootPc,
+          nextRootPc: nextChord.rootPc,
+          trackId: counterpoint ? "counterpoint" : "melody",
+          protectedLanding: protectedLookaheadLanding,
+        }) : null;
+        if (lookahead) pitch = lookahead.pitch;
+
         const maxDuration = section.endBeat - start;
         const rhythmFactor = development?.type === "rhythm" && progress >= 0.45
           ? (eventIndex % 2 ? 0.62 : 1.2)
@@ -6207,6 +6235,7 @@ function generateLead(
               melodicMotionDegrees: developedRepeatShift,
             } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
+            ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
             ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
@@ -9797,9 +9826,16 @@ function applyPhraseResolutions(
       const nextChord = harmonyAt(harmony, boundary + 0.01);
       const lookahead = nextChord?.start > chord.start ? planMusicalLookahead({
         pitch: nearestChordTone(landing.pitch, landingChord, direction),
-        start: landing.start, boundary, totalBeats: config.bars * barBeats,
-        scalePitchClasses: scalePitchClasses(config), currentTones: landingChord.tones,
-        nextTones: nextChord.tones, trackId, protectedLanding: forceTonic,
+        start: landing.start,
+        boundary,
+        totalBeats: config.bars * barBeats,
+        scalePitchClasses: scalePitchClasses(config),
+        currentTones: landingChord.tones,
+        nextTones: nextChord.tones,
+        currentRootPc: chord.rootPc,
+        nextRootPc: nextChord.rootPc,
+        trackId,
+        protectedLanding: forceTonic,
       }) : null;
       const target = lookahead?.pitch ?? nearestChordTone(landing.pitch, landingChord, direction);
       const maximumLeap = trackId === "counterpoint" ? 5 : 7;
