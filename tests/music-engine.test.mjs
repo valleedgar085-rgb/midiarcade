@@ -907,9 +907,16 @@ test("Structure Director v2 stages full-song entrances without overriding calibr
   assert.equal(intro.structureStory?.stage, "establish");
   assert.equal(firstVerse.structureStory?.stage, "pocket");
   assert.equal(firstPayoff.structureStory?.stage, "payoff");
-  assert.equal(intro.structureStory?.energyTarget, intro.energy);
-  assert.equal(firstVerse.structureStory?.energyTarget, firstVerse.energy);
-  assert.equal(firstPayoff.structureStory?.energyTarget, firstPayoff.energy);
+  assert.ok(
+    intro.structureStory?.energyTarget < firstVerse.structureStory?.energyTarget,
+    "Structure Director should keep the intro below the verse energy target",
+  );
+  assert.ok(
+    firstVerse.structureStory?.energyTarget < firstPayoff.structureStory?.energyTarget,
+    "Structure Director should reserve the largest target for the payoff",
+  );
+  assert.ok(intro.structureStory?.energyTarget <= 0.52);
+  assert.ok(firstPayoff.structureStory?.energyTarget >= 0.84);
 
   const transition = blueprint.transitions.find((entry) => entry.toSectionId === firstPayoff.sectionId);
   assert.equal(transition?.storyRole, "payoff-arrival");
