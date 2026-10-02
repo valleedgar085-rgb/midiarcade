@@ -11,6 +11,10 @@ import {
   generateNew,
   normalizeConfig,
 } from "../src/music-engine.js";
+import {
+  availableReferenceProfileGenres,
+  referenceProfileForGenre,
+} from "../src/reference-profiles/index.js";
 
 const HIP_HOP_REFERENCE = Object.freeze({
   version: 1,
@@ -119,6 +123,7 @@ test("reference profile nudges genre defaults when controls remain on Auto/defau
     seed: "reference-default-nudge",
     genre: "hipHop",
     professionalUpgrade: true,
+    referenceProfile: false,
   });
   const referenced = normalizeConfig({
     seed: "reference-default-nudge",
@@ -157,4 +162,49 @@ test("generated songs expose reference provenance and remain deterministic", () 
   assert.ok(first.referenceProfile?.confidenceWeight > 0);
   assert.ok(first.referenceProfile?.protectedAuthorities.includes("structure-director"));
   assert.ok(first.songBlueprint?.structureDirector);
+});
+
+
+test("analyzed user reference registry exposes the four populated genres", () => {
+  assert.deepEqual(
+    [...availableReferenceProfileGenres()].sort(),
+    ["hipHop", "pop", "rap", "trap"],
+  );
+  assert.equal(referenceProfileForGenre("hipHop")?.sourceCount, 6);
+  assert.equal(referenceProfileForGenre("trap")?.sourceCount, 12);
+  assert.equal(referenceProfileForGenre("rap")?.sourceCount, 4);
+  assert.equal(referenceProfileForGenre("pop")?.sourceCount, 6);
+});
+
+test("registered genre profile activates automatically and can be explicitly disabled", () => {
+  const automatic = normalizeConfig({
+    seed: "reference-registry-auto",
+    genre: "trap",
+    professionalUpgrade: true,
+  });
+  assert.equal(automatic.referenceInfluence.active, true);
+  assert.equal(automatic.referenceInfluence.profile?.id, "user-reference-trap-v1");
+  assert.equal(automatic.referenceInfluence.profile?.sourceCount, 12);
+
+  const disabled = normalizeConfig({
+    seed: "reference-registry-disabled",
+    genre: "trap",
+    professionalUpgrade: true,
+    referenceProfile: false,
+  });
+  assert.equal(disabled.referenceInfluence.active, false);
+  assert.equal(disabled.referenceInfluence.reason, "no-profile");
+});
+
+test("automatic reference generation records the analyzed profile provenance", () => {
+  const song = generateNew({
+    seed: "reference-auto-provenance",
+    genre: "hipHop",
+    bars: 16,
+    professionalUpgrade: true,
+    candidateCount: 1,
+  });
+  assert.equal(song.referenceProfile?.id, "user-reference-hipHop-v1");
+  assert.equal(song.referenceProfile?.sourceCount, 6);
+  assert.equal(song.referenceProfile?.genre, "hipHop");
 });
