@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   planMusicalLookahead,
+  planRhythmMelodyLookahead,
   rankPhraseTargetCandidates,
   scorePhraseTargetCandidate,
 } from "../src/core/musical-lookahead.js";
@@ -169,4 +170,128 @@ test("generated lead notes expose scored phrase-target intent before real chord 
   const nextChord = survivorSong.harmony.find((chord) => Math.abs(chord.start - plan.boundary) < 0.01);
   assert.ok(nextChord);
   assert.ok(nextChord.tones.includes(pc(plan.goalPitch)));
+});
+
+
+test("rhythm-melody lookahead chooses a nearby authored pulse away from backbeat congestion", () => {
+  const grooveConductor = {
+    bars: [
+      {
+        bar: 0,
+        sectionId: "verse",
+        anchors: [0, 2],
+        snarePulses: [1, 3],
+        bassPulses: [0, 1, 2],
+        leadPulses: [0.75, 1, 1.25, 2.75, 3],
+        counterPulses: [0.5, 1.5, 2.5, 3.5],
+        spaces: [],
+      },
+      {
+        bar: 1,
+        sectionId: "chorus",
+        anchors: [0, 2],
+        snarePulses: [1, 3],
+        bassPulses: [0, 0.5, 2],
+        chordPulses: [0, 0.5, 2],
+        leadPulses: [0.5, 1.5, 2.5, 3.5],
+        grooveDNA: { sectionRole: "payoff" },
+        spaces: [],
+      },
+    ],
+  };
+  const plan = planRhythmMelodyLookahead({
+    grooveConductor,
+    beat: 1,
+    beatsPerBar: 4,
+    genre: "hipHop",
+    lane: "leadPulses",
+  });
+  assert.ok(plan);
+  assert.equal(plan.beat, 0.75);
+  assert.ok(Math.abs(plan.shiftBeats) <= 0.25);
+  assert.equal(plan.role, "avoid-current-congestion");
+});
+
+test("lookahead reserves the tail before a busy payoff opening", () => {
+  const grooveConductor = {
+    bars: [
+      {
+        bar: 0,
+        sectionId: "build",
+        anchors: [0, 2],
+        snarePulses: [1, 3],
+        bassPulses: [0, 2],
+        leadPulses: [3.5, 3.75],
+        spaces: [],
+      },
+      {
+        bar: 1,
+        sectionId: "drop",
+        anchors: [0],
+        snarePulses: [1],
+        bassPulses: [0],
+        chordPulses: [0],
+        leadPulses: [0.5],
+        grooveDNA: { sectionRole: "payoff" },
+        spaces: [],
+      },
+    ],
+  };
+  const plan = planRhythmMelodyLookahead({
+    grooveConductor,
+    beat: 3.75,
+    beatsPerBar: 4,
+    genre: "hipHop",
+    lane: "leadPulses",
+  });
+  assert.ok(plan);
+  assert.equal(plan.beat, 3.5);
+  assert.equal(plan.reserveTail, true);
+  assert.equal(plan.incomingPayoff, true);
+  assert.ok(plan.nextOpeningLoad >= 2);
+});
+
+test("house rhythm lookahead stays micro-bounded", () => {
+  const grooveConductor = {
+    bars: [
+      {
+        bar: 0,
+        sectionId: "verse",
+        anchors: [0, 1, 2, 3],
+        snarePulses: [1, 3],
+        bassPulses: [0.5, 1.5, 2.5, 3.5],
+        leadPulses: [0.9375, 1, 1.0625],
+        spaces: [],
+      },
+    ],
+  };
+  const plan = planRhythmMelodyLookahead({
+    grooveConductor,
+    beat: 1,
+    beatsPerBar: 4,
+    genre: "house",
+    lane: "leadPulses",
+  });
+  if (plan) assert.ok(Math.abs(plan.shiftBeats) <= 0.0625 + 1e-9);
+});
+
+test("generated hip-hop exposes deterministic rhythm-melody lookahead intents", () => {
+  const config = {
+    seed: "rhythm-melody-lookahead-live",
+    genre: "hipHop",
+    bars: 16,
+    professionalUpgrade: true,
+    complexity: 0.76,
+    variation: 0.72,
+    candidateCount: 1,
+  };
+  const song = generateNew(config);
+  assert.deepEqual(song, generateNew(config));
+  const intents = song.tracks
+    .filter((track) => ["melody", "counterpoint"].includes(track.id))
+    .flatMap((track) => track.notes)
+    .map((note) => note.rhythmMelodyLookaheadIntent)
+    .filter(Boolean);
+  assert.ok(intents.length >= 1);
+  assert.ok(intents.every((intent) => Math.abs(intent.shiftBeats) <= 0.25 + 1e-9));
 });
