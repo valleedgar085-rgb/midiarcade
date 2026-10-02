@@ -112,6 +112,29 @@ function expressiveShape(notes) {
   return clamp(spread * 0.55 + Math.min(1, durationKinds / 3) * 0.45);
 }
 
+function phraseBreathing(notes, range, beatsPerBar = 4) {
+  if (notes.length < 3 || !range) return 0.55;
+  const ordered = [...notes].sort((left, right) => finite(left.start) - finite(right.start));
+  const gaps = [];
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    const currentEnd = finite(ordered[index].start)
+      + Math.max(0.05, finite(ordered[index].duration, 0.25));
+    const gap = finite(ordered[index + 1].start) - currentEnd;
+    if (gap > 0.05) gaps.push(gap);
+  }
+  const sectionLength = Math.max(0.25, finite(range.end) - finite(range.start));
+  const breathThreshold = Math.min(0.5, beatsPerBar * 0.125);
+  const meaningfulBreaths = gaps.filter((gap) => gap >= breathThreshold).length;
+  const expectedPhrases = Math.max(1, Math.ceil(sectionLength / Math.max(2, beatsPerBar * 2)));
+  const breathingRatio = meaningfulBreaths / expectedPhrases;
+  const occupancy = ordered.reduce(
+    (sum, note) => sum + Math.max(0.05, finite(note.duration, 0.25)),
+    0,
+  ) / sectionLength;
+  const continuousPenalty = gaps.length === 0 && occupancy >= 0.62 ? 0.34 : 0;
+  return clamp(0.48 + Math.min(1, breathingRatio) * 0.46 - continuousPenalty);
+}
+
 /**
  * Read-only melody phrase critic. It measures musical intent rather than density.
  * No notes are inserted, deleted, moved, or repitched here.
@@ -129,14 +152,16 @@ export function evaluateMelodyPhraseIntelligence(song) {
       groovePurpose: round(groovePurpose(song, notes, range)),
       harmonicLandings: round(harmonicLandings(song, notes)),
       expressiveShape: round(expressiveShape(notes)),
+      phraseBreathing: round(phraseBreathing(notes, range, Math.max(1, finite(song?.meta?.beatsPerBar, 4)))),
     };
     const score = Math.round(100 * (
-      metrics.motifIdentity * 0.21
-      + metrics.contourMovement * 0.14
+      metrics.motifIdentity * 0.2
+      + metrics.contourMovement * 0.13
       + metrics.leapDiscipline * 0.1
-      + metrics.groovePurpose * 0.21
-      + metrics.harmonicLandings * 0.21
-      + metrics.expressiveShape * 0.13
+      + metrics.groovePurpose * 0.19
+      + metrics.harmonicLandings * 0.2
+      + metrics.expressiveShape * 0.1
+      + metrics.phraseBreathing * 0.08
     ));
     return Object.freeze({ sectionId: String(section?.id ?? ""), notes: notes.length, score, metrics: Object.freeze(metrics) });
   });
