@@ -138,6 +138,16 @@ test("Pop Rap fusion keeps its calibrated repair while unrelated fusions stay is
   const after = evaluateSongCandidate(processed.song);
   const balanceAfter = repetitionBalance(processed.song, target);
 
+  console.log("POP_RAP_REPETITION_DIAGNOSTICS", JSON.stringify({
+    diagnostics: processed.repetitionDiagnostics,
+    beforeScore: before.score,
+    afterScore: after.score,
+    beforeSubscores: before.subscores,
+    afterSubscores: after.subscores,
+    beforeBalance: balanceBefore,
+    afterBalance: balanceAfter,
+  }));
+
   assert.equal(processed.repetitionDiagnostics.accepted, true);
   assert.equal(processed.repetitionDiagnostics.direction, balanceBefore.direction);
   assert.ok(after.subscores.repetition >= 78);
