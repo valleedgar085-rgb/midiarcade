@@ -286,11 +286,8 @@ test("generated hip-hop exposes deterministic rhythm-melody lookahead intents", 
   };
   const song = generateNew(config);
   assert.deepEqual(song, generateNew(config));
-  const intents = song.tracks
-    .filter((track) => ["melody", "counterpoint"].includes(track.id))
-    .flatMap((track) => track.notes)
-    .map((note) => note.rhythmMelodyLookaheadIntent)
-    .filter(Boolean);
-  assert.ok(intents.length >= 1);
-  assert.ok(intents.every((intent) => Math.abs(intent.shiftBeats) <= 0.25 + 1e-9));
+  const report = song.rhythmMelodyLookahead;
+  assert.ok(report);
+  assert.ok(report.plannedNotes >= 1);
+  assert.ok(report.maxAbsShift <= 0.25 + 1e-9);
 });
