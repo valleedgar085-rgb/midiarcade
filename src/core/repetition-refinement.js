@@ -100,18 +100,6 @@ export function repetitionBalance(song, target = 0.62) {
 }
 
 function safePlacement(group, entry, desiredStart) {
-  const note = entry?.note ?? {};
-  const structuralAnchor = Boolean(
-    note.phraseAnchor
-    || note.resolutionRole
-    || note.ensembleCadenceRole
-    || note.transitionRole
-    || note.transitionFeature
-    || note.transitionHandoffRole
-    || note.motifHandoffRole
-    || note.finalAssemblyRole
-  );
-  if (structuralAnchor) return false;
   if (entry.note.start >= group.end - CADENCE_GUARD || desiredStart >= group.end - CADENCE_GUARD) return false;
   const shift = Math.abs(desiredStart - entry.note.start);
   if (shift <= EPSILON || shift > MAX_SHIFT + EPSILON || desiredStart < group.start || desiredStart >= group.end - 0.03) return false;
