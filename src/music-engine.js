@@ -4813,9 +4813,9 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
   }
 
   // Look ahead from the completed structure as a final deterministic safety
-  // net. Some earlier drum branches may already spend the boundary's fill
-  // budget, so this pass only writes into a clean final bar and never stacks
-  // on an existing transition fill or roll.
+  // net. Normally this uses a clean final bar. At a high-energy chorus/drop
+  // boundary with no punctuation figure yet, the drum specialist may reuse or
+  // layer its own existing tail hits so the intended transition cannot vanish.
   for (const [sectionIndex, section] of structure.entries()) {
     const nextSection = structure[sectionIndex + 1];
     if (
@@ -4834,10 +4834,15 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       && note.start < section.endBeat - 1e-6
       && (note.transitionFeature || note.rhythmicFeature === "snare-roll")
     ));
-    if (!cleanTail || notes.some((note) => note.preDropPunctuation && note.start >= barStart && note.start < section.endBeat)) continue;
     const lookaheadRng = rng.fork(`pre-drop-lookahead-${section.id}`);
     const important = config.energy >= 0.72 && config.complexity >= 0.58 && config.drumFills >= 0.35;
     const force = important && preDropPunctuationFigures === 0;
+    const alreadyPunctuated = notes.some((note) => (
+      note.preDropPunctuation
+      && note.start >= barStart
+      && note.start < section.endBeat
+    ));
+    if (alreadyPunctuated || (!cleanTail && !force)) continue;
     const probability = clamp(settings.variation * (0.22 + config.energy * 0.28 + config.complexity * 0.18), 0, 0.68);
     if (!force && !lookaheadRng.bool(probability)) continue;
     const intensity = clamp(section.intensity * (0.58 + config.energy * 0.6), 0.35, 1.25);
