@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead, planRhythmMelodyLookahead } from "./core/musical-lookahead.js";
+import { referenceProfileForGenre } from "./reference-profiles/index.js";
 import { authorMotifMemoryVariants } from "./core/motif-memory-authoring.js";
 import {
   cadentialHarmonyDegree,
@@ -58,6 +59,13 @@ import {
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
 import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
+import {
+  referenceDensityNudge,
+  referenceSilenceBudgetNudge,
+  referenceStageEnergyNudge,
+  referenceStyleBonus,
+  resolveReferenceInfluence,
+} from "./core/reference-profile-engine.js";
 import {
   absoluteGroovePulses,
   grooveBarPlan,
@@ -1323,11 +1331,25 @@ export function normalizeConfig(input = {}) {
   const averageTrackDensity = TRACK_IDS.reduce((sum, id) => sum + finite(tracks[id]?.density, 0.5), 0) / TRACK_IDS.length;
   const layeringMode = String(input.layeringMode ?? input.layering ?? input.arrangementLayering ?? (professionalUpgrade ? "auto" : "off"));
   const layeringDensity = layerDensityMode(layeringMode, unit(input.variation, DEFAULT_CONFIG.variation), averageTrackDensity);
-  const phraseBars = professionalUpgrade
+  const genrePhraseBars = professionalUpgrade
     ? (arrangementProfile.phraseBars[
       hashSeed(`${seed}::${genre}::phrase-bars`) % arrangementProfile.phraseBars.length
     ] ?? profile.arrangement.phraseBars)
     : profile.arrangement.phraseBars;
+  const registeredReferenceProfile = referenceProfileForGenre(genre);
+  const referenceInput = input.referenceProfile == null && registeredReferenceProfile
+    ? { ...input, referenceProfile: registeredReferenceProfile }
+    : input;
+  const referenceInfluence = resolveReferenceInfluence(referenceInput, {
+    genre,
+    defaults: {
+      syncopation: profile.syncopation,
+      swing: profile.swing,
+      humanize: profile.humanize,
+      phraseBars: genrePhraseBars,
+    },
+  });
+  const phraseBars = referenceInfluence.controls.phraseBars ?? genrePhraseBars;
   const creativeMotifMutation = normalizeCreativeMotifMutation(input.creativeMotifMutation);
   const creativeSpotlightRotation = normalizeCreativeSpotlightRotation(input.creativeSpotlightRotation);
   const creativeMotifStrength = clamp(finite(input.creativeMotifStrength, 0), 0, 1.3);
@@ -1360,9 +1382,9 @@ export function normalizeConfig(input = {}) {
     evolution: unit(input.evolution, DEFAULT_CONFIG.evolution),
     surprise,
     similarity: unit(input.similarity, DEFAULT_CONFIG.similarity),
-    swing: unit(input.swing, profile.swing),
-    humanize: unit(input.humanize, profile.humanize),
-    syncopation: unit(input.syncopation, profile.syncopation),
+    swing: unit(input.swing, referenceInfluence.controls.swing),
+    humanize: unit(input.humanize, referenceInfluence.controls.humanize),
+    syncopation: unit(input.syncopation, referenceInfluence.controls.syncopation),
     harmonicRhythm: unit(input.harmonicRhythm, profile.harmonicRhythm),
     chordExtensions: unit(input.chordExtensions, profile.chordExtensions),
     melodicRange: clamp(Math.round(finite(input.melodicRange, DEFAULT_CONFIG.melodicRange)), 5, 36),
@@ -1376,6 +1398,9 @@ export function normalizeConfig(input = {}) {
       density: round(layeringDensity),
       enabled: professionalUpgrade && layeringDensity > 0.01,
     },
+    referenceProfile: referenceInfluence.profile,
+    referenceStrength: referenceInfluence.strength,
+    referenceInfluence,
     oneShotKitId: input.oneShotKitId == null && input.soundKitId == null
       ? null
       : String(input.oneShotKitId ?? input.soundKitId).slice(0, 80),
@@ -1829,7 +1854,15 @@ function applyStructureDirector(config, structure, plans) {
         version: 3,
         stage,
         occurrence,
-        energyTarget: structureDirectorEnergyTarget(stage, plan.energy, occurrence),
+        energyTarget: (() => {
+          const band = STRUCTURE_DIRECTOR_ENERGY[stage] ?? STRUCTURE_DIRECTOR_ENERGY.develop;
+          const baseTarget = structureDirectorEnergyTarget(stage, plan.energy, occurrence);
+          return round(clamp(
+            baseTarget + referenceStageEnergyNudge(config.referenceInfluence, stage),
+            band.min,
+            band.max,
+          ));
+        })(),
         changeBudget: stage === "payoff" ? 2 : 1,
         maxConcurrentMajorChanges: stage === "payoff" ? 2 : 1,
         payoffBreathBars,
@@ -2052,13 +2085,14 @@ function createProducerIntentContract(
           : purpose === "reset" ? "space"
             : purpose === "resolve" ? "release"
               : "statement";
+    const baseSilenceBudget = purpose === "reset" ? 0.34
+      : purpose === "establish" ? (section.name === "intro" ? 0.3 : 0.24)
+        : purpose === "resolve" ? 0.28
+          : purpose === "contrast" ? 0.2
+            : purpose === "payoff" ? 0.07
+              : 0.13;
     const silenceBudget = round(clamp(
-      purpose === "reset" ? 0.34
-        : purpose === "establish" ? (section.name === "intro" ? 0.3 : 0.24)
-          : purpose === "resolve" ? 0.28
-            : purpose === "contrast" ? 0.2
-              : purpose === "payoff" ? 0.07
-                : 0.13,
+      baseSilenceBudget + referenceSilenceBudgetNudge(config.referenceInfluence, purpose),
       0.05,
       0.4,
     ));
@@ -2099,11 +2133,15 @@ function createProducerIntentContract(
       foregroundTrack,
       answerTrack: roles[answerTrack] === "answer" ? answerTrack : null,
       silenceBudget,
-      densityCeiling: round(
-        purpose === "establish" && section.name === "intro"
-          ? clamp(0.52 + storyEnergy * 0.18 - silenceBudget * 0.1, 0.52, 0.68)
-          : clamp(0.64 + storyEnergy * 0.3 - silenceBudget * 0.12, 0.58, 0.96),
-      ),
+      densityCeiling: round(clamp(
+        (
+          purpose === "establish" && section.name === "intro"
+            ? clamp(0.52 + storyEnergy * 0.18 - silenceBudget * 0.1, 0.52, 0.68)
+            : clamp(0.64 + storyEnergy * 0.3 - silenceBudget * 0.12, 0.58, 0.96)
+        ) + referenceDensityNudge(config.referenceInfluence, purpose),
+        purpose === "establish" && section.name === "intro" ? 0.52 : 0.58,
+        purpose === "establish" && section.name === "intro" ? 0.68 : 0.96,
+      )),
       roles,
     };
   });
@@ -2614,25 +2652,30 @@ function createStyle(config, rng) {
     drumBass: "breakbeat", reggaeton: "electro", afrobeats: "electro",
     jazz: "breakbeat", ambient: "halfTime", funk: "backbeat", country: "backbeat", rock: "backbeat",
   }[config.genre];
-  const styleWeighted = (weights, bonusFor) => {
+  const styleWeighted = (field, weights, bonusFor) => {
     const exponent = 1.35 - config.surprise * 0.9;
     return rng.weighted(Object.entries(weights).map(([name, weight]) => [
       name,
-      Math.pow(Math.max(0.01, weight + bonusFor(name)), exponent),
+      Math.pow(Math.max(
+        0.01,
+        weight
+          + bonusFor(name)
+          + referenceStyleBonus(config.referenceInfluence, field, name, 1.4),
+      ), exponent),
     ]));
   };
   const style = {
-    drumGroove: genreDrumAnchor ?? styleWeighted(drumWeights, (name) => (
+    drumGroove: genreDrumAnchor ?? styleWeighted("drumGroove", drumWeights, (name) => (
       name === "fourFloor" ? config.energy * 0.7
         : name === "breakbeat" ? config.complexity * 0.8
           : name === "electro" ? config.syncopation * 0.45 : 0
     )),
-    bassGroove: styleWeighted(bassWeights, (name) => (
+    bassGroove: styleWeighted("bassGroove", bassWeights, (name) => (
       name === "syncopated" ? config.syncopation * 0.8
         : name === "pulse" ? config.energy * 0.55
           : name === "walking" ? config.complexity * 0.6 : 0
     )),
-    chordMotion: styleWeighted(chordWeights, (name) => (
+    chordMotion: styleWeighted("chordMotion", chordWeights, (name) => (
       name === "offbeat" ? config.syncopation * 0.65
         : name === "arpeggio" ? config.complexity * 0.65
           : name === "pulse" ? config.energy * 0.4 : 0
@@ -9920,6 +9963,7 @@ function publicSettings(config) {
     timeSignature: _timeSignature,
     excludeOneShotKitIds: _excludeOneShotKitIds,
     tasteProfile: _tasteProfile,
+    referenceInfluence: _referenceInfluence,
     ...settings
   } = config;
   return clone(settings);
@@ -11527,6 +11571,17 @@ function compose(config, options = {}) {
     oneShotKit: publicOneShotKit(oneShotKit),
     songBlueprint,
     performanceProfile,
+    referenceProfile: config.referenceInfluence?.active ? {
+      version: config.referenceInfluence.version,
+      authority: config.referenceInfluence.authority,
+      id: config.referenceInfluence.profile?.id ?? null,
+      genre: config.referenceInfluence.profile?.genre ?? config.genre,
+      sourceCount: config.referenceInfluence.profile?.sourceCount ?? 0,
+      confidence: config.referenceInfluence.profile?.confidence ?? 0,
+      strength: config.referenceInfluence.strength,
+      confidenceWeight: config.referenceInfluence.confidenceWeight,
+      protectedAuthorities: [...(config.referenceInfluence.protectedAuthorities ?? [])],
+    } : null,
     arrangementTransitions: clone(songBlueprint.transitions),
     orchestrationMatrix: clone(songBlueprint.orchestrationMatrix),
     memoryMap: clone(songBlueprint.memoryMap),
