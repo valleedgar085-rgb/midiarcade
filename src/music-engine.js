@@ -556,6 +556,7 @@ export const DEFAULT_CONFIG = deepFreeze({
   swing: 0.12,
   humanize: 0.28,
   syncopation: 0.38,
+  groove: "auto",
   harmonicRhythm: 0.32,
   chordExtensions: 0.34,
   melodicRange: 16,
@@ -1288,6 +1289,9 @@ export function normalizeConfig(input = {}) {
     : genreArrangementProfile(primaryGenre);
   const key = normalizeKey(input.key ?? DEFAULT_CONFIG.key);
   const chordPath = normalizeChordPath(input.chordPath, defaultChordPathForGenre(primaryGenre));
+  const grooveChoices = new Set(["straight", "laidback", "shuffled", "syncopated"]);
+  const requestedGroove = String(input.groove ?? "").trim().toLowerCase();
+  const groove = grooveChoices.has(requestedGroove) ? requestedGroove : "auto";
   const energy = unit(input.energy, DEFAULT_CONFIG.energy);
   const complexity = unit(input.complexity, DEFAULT_CONFIG.complexity);
   const surprise = unit(input.surprise, DEFAULT_CONFIG.surprise);
@@ -1338,6 +1342,7 @@ export function normalizeConfig(input = {}) {
     genreLabel: profile.label,
     arrangementProfileId: arrangementProfile.id,
     chordPath,
+    groove,
     scaleSelection: autoScale ? "auto" : "explicit",
     key: key.name,
     keyPc: key.pc,
@@ -2564,6 +2569,12 @@ function createRhythmIdentity(config, drumGroove, rng) {
   const phraseShapes = ["questionAnswer", "syncopatedLoop", "longShort", "staircase", "sparseEcho"];
   const contourShapes = ["arch", "valley", "wave", "climbFall", "fallRebound", "pedalLaunch"];
   const timingPockets = nativeIdentity.pockets ?? ["centered", "laidBack", "pushed", "elastic"];
+  const explicitTimingPocket = {
+    straight: "centered",
+    laidback: "laidBack",
+    shuffled: "elastic",
+    syncopated: "pushed",
+  }[config.groove] ?? null;
   const motifBarChoices = config.bars >= 8 && config.complexity > 0.72
     ? [1, 2, 2, 3]
     : [1, 2, 2];
@@ -2580,7 +2591,8 @@ function createRhythmIdentity(config, drumGroove, rng) {
     phraseShape: rng.pick(phraseShapes),
     contourShape: rng.pick(contourShapes),
     motifBars: rng.pick(motifBarChoices),
-    timingPocket: rng.pick(timingPockets),
+    timingPocket: explicitTimingPocket ?? rng.pick(timingPockets),
+    timingPocketAuthority: explicitTimingPocket ? "explicit-create-control" : "genre-seeded",
     cadenceGap: rng.pick([0, 0.25, 0.5, 0.75]),
     ...(upgraded ? {
       flowTemplateId: rhythmTemplate?.id ?? "grid-pocket",
