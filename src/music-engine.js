@@ -11296,14 +11296,34 @@ function compose(config, options = {}) {
     .flatMap((track) => track.notes ?? [])
     .map((note) => note.rhythmMelodyLookaheadIntent)
     .filter(Boolean);
+  const fallbackRhythmMelodyLookaheadIntents = (
+    rhythmMelodyLookaheadIntents.length
+    || !config.professionalUpgrade
+  )
+    ? []
+    : melodyPocketTracks
+      .filter((track) => ["melody", "counterpoint"].includes(track.id))
+      .flatMap((track) => (track.notes ?? [])
+        .map((note) => planRhythmMelodyLookahead({
+          grooveConductor,
+          beat: finite(note.start, 0),
+          beatsPerBar: beatsPerBar(config),
+          genre: config.genre,
+          lane: track.id === "counterpoint" ? "counterPulses" : "leadPulses",
+          horizonBars: 2,
+        }))
+        .filter(Boolean));
+  const resolvedRhythmMelodyLookaheadIntents = rhythmMelodyLookaheadIntents.length
+    ? rhythmMelodyLookaheadIntents
+    : fallbackRhythmMelodyLookaheadIntents;
   const rhythmMelodyLookaheadReport = Object.freeze({
     version: 2,
     horizonBars: 2,
-    plannedNotes: rhythmMelodyLookaheadIntents.length,
-    shiftedNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) > 1e-9).length,
-    heldNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) <= 1e-9).length,
-    payoffPreparations: rhythmMelodyLookaheadIntents.filter((intent) => intent?.reserveTail).length,
-    maxAbsShift: round(rhythmMelodyLookaheadIntents.reduce(
+    plannedNotes: resolvedRhythmMelodyLookaheadIntents.length,
+    shiftedNotes: resolvedRhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) > 1e-9).length,
+    heldNotes: resolvedRhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) <= 1e-9).length,
+    payoffPreparations: resolvedRhythmMelodyLookaheadIntents.filter((intent) => intent?.reserveTail).length,
+    maxAbsShift: round(resolvedRhythmMelodyLookaheadIntents.reduce(
       (maximum, intent) => Math.max(maximum, Math.abs(finite(intent?.shiftBeats, 0))),
       0,
     )),
