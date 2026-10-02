@@ -48,6 +48,7 @@ function sectionForBeat(song, beat) {
   }) ?? null;
 }
 function protectedMelodyNote(note) {
+  const rhythmicFeature = String(note?.rhythmicFeature ?? "");
   return Boolean(
     note?.phraseAnchor
     || note?.resolutionRole
@@ -59,6 +60,9 @@ function protectedMelodyNote(note) {
     || note?.ensembleCadenceRole
     || note?.tonalLicense
     || note?.harmonicColorSource
+    || note?.preserveSubdivision
+    || note?.preserveTiming
+    || /(?:triplet|roll|ratchet|stutter|burst)/i.test(rhythmicFeature)
   );
 }
 function profile(song) {
