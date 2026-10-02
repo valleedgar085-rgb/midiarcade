@@ -293,7 +293,8 @@ export function applyRepetitionRefinement(song, config, evaluateCandidate, evalu
   const before = evaluateCandidate(song);
   const beforeRepetition = finite(before?.subscores?.repetition);
   const target = repetitionTargetForSong(song);
-  if (beforeRepetition >= REPETITION_ATTEMPT_CEILING) {
+  const popRapCalibration = family === "pop-rap-fusion";
+  if (beforeRepetition >= REPETITION_ATTEMPT_CEILING && !popRapCalibration) {
     return {
       song,
       diagnostics: disabledDiagnostics(MAX_REPETITION_REFINEMENT_CANDIDATES, "already-strong", {
