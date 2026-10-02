@@ -59,6 +59,30 @@ function contourMovement(notes) {
   const extreme = intervals.filter((value) => value > 12).length / intervals.length;
   return clamp(moving - extreme * 0.8);
 }
+function leapDiscipline(notes) {
+  if (notes.length < 3) return 0.72;
+  const intervals = notes.slice(1).map((note, index) => Math.abs(finite(note.pitch) - finite(notes[index].pitch)));
+  const stepwiseRatio = intervals.filter((value) => value <= 5).length / Math.max(1, intervals.length);
+  let isolatedSpikes = 0;
+  let hugeLeaps = 0;
+  for (let index = 1; index < notes.length - 1; index += 1) {
+    const previous = finite(notes[index - 1]?.pitch);
+    const current = finite(notes[index]?.pitch);
+    const next = finite(notes[index + 1]?.pitch);
+    const left = Math.abs(current - previous);
+    const right = Math.abs(next - current);
+    const direct = Math.abs(next - previous);
+    if (left >= 7 && right >= 7 && direct <= 5) isolatedSpikes += 1;
+    if (left > 12 || right > 12) hugeLeaps += 1;
+  }
+  const interior = Math.max(1, notes.length - 2);
+  return clamp(
+    0.46
+      + stepwiseRatio * 0.5
+      - (isolatedSpikes / interior) * 0.72
+      - (hugeLeaps / interior) * 0.5,
+  );
+}
 function groovePurpose(song, notes, range) {
   if (!notes.length) return 0;
   const pulses = trackGroovePulses(song?.grooveConductor, "melody", range.start, range.end, range.beatsPerBar);
@@ -101,16 +125,18 @@ export function evaluateMelodyPhraseIntelligence(song) {
     const metrics = {
       motifIdentity: round(contourIdentity(notes)),
       contourMovement: round(contourMovement(notes)),
+      leapDiscipline: round(leapDiscipline(notes)),
       groovePurpose: round(groovePurpose(song, notes, range)),
       harmonicLandings: round(harmonicLandings(song, notes)),
       expressiveShape: round(expressiveShape(notes)),
     };
     const score = Math.round(100 * (
-      metrics.motifIdentity * 0.24
-      + metrics.contourMovement * 0.18
-      + metrics.groovePurpose * 0.22
-      + metrics.harmonicLandings * 0.22
-      + metrics.expressiveShape * 0.14
+      metrics.motifIdentity * 0.21
+      + metrics.contourMovement * 0.14
+      + metrics.leapDiscipline * 0.1
+      + metrics.groovePurpose * 0.21
+      + metrics.harmonicLandings * 0.21
+      + metrics.expressiveShape * 0.13
     ));
     return Object.freeze({ sectionId: String(section?.id ?? ""), notes: notes.length, score, metrics: Object.freeze(metrics) });
   });
