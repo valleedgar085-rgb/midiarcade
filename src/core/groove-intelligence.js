@@ -695,17 +695,71 @@ function applyTransforms(steps, transforms, {
   return { steps: out, densityMultiplier };
 }
 
+function sectionEvolutionProfile(section) {
+  const role = sectionRole(section);
+  const profiles = {
+    intro: { density: 0.78, bassLock: 1.08, bassReply: 0.72, fill: 0 },
+    body: { density: 1, bassLock: 1, bassReply: 1, fill: 0.12 },
+    prechorus: { density: 1.1, bassLock: 1.08, bassReply: 0.82, fill: 0.72 },
+    build: { density: 1.12, bassLock: 1.1, bassReply: 0.8, fill: 0.82 },
+    payoff: { density: 1.18, bassLock: 1.12, bassReply: 1.02, fill: 0.28 },
+    contrast: { density: 0.84, bassLock: 0.88, bassReply: 1.12, fill: 0.48 },
+    outro: { density: 0.76, bassLock: 1.06, bassReply: 0.7, fill: 0 },
+  };
+  return profiles[role] ?? profiles.body;
+}
+
 function sectionDensityMultiplier(genre, section) {
   const role = sectionRole(section);
+  const evolution = sectionEvolutionProfile(section);
+  let genreMultiplier = 1;
   if (genre === "pop") {
-    if (role === "prechorus") return 1.14;
-    if (role === "payoff") return 1.28;
+    if (role === "prechorus") genreMultiplier = 1.04;
+    if (role === "payoff") genreMultiplier = 1.08;
+  } else if (genre === "rock" && ["build", "payoff"].includes(role)) {
+    genreMultiplier = role === "payoff" ? 1.06 : 1.03;
+  } else if (genre === "trap" && role === "payoff") {
+    genreMultiplier = 1.04;
+  } else if (genre === "house" && role === "payoff") {
+    genreMultiplier = 1.03;
   }
-  if (genre === "rock" && ["build", "payoff"].includes(role)) return role === "payoff" ? 1.24 : 1.12;
-  if (genre === "trap" && role === "payoff") return 1.16;
-  if (genre === "house" && role === "payoff") return 1.1;
-  if (role === "intro" || role === "outro") return 0.78;
-  return 1;
+  return clamp(evolution.density * genreMultiplier, 0.68, 1.34);
+}
+
+function relationshipForSection(role, relationship, section) {
+  if (role !== "bass") return relationship;
+  const evolution = sectionEvolutionProfile(section);
+  return {
+    ...relationship,
+    lock: clamp(finite(relationship.lock, 0.65) * evolution.bassLock, 0.2, 0.96),
+    syncopation: clamp(finite(relationship.syncopation, 0.5) * evolution.bassReply, 0.08, 0.92),
+    sectionEvolution: sectionRole(section),
+  };
+}
+
+function transitionFillSteps({
+  lane,
+  bar,
+  section,
+  nextSection,
+  gridSteps,
+  seed,
+  protectedSteps = [],
+}) {
+  const finalBar = bar === section.startBar + section.bars - 1;
+  if (!finalBar || !nextSection || lane !== "snare") return [];
+  const profile = sectionEvolutionProfile(section);
+  if (profile.fill <= 0) return [];
+  if (randomUnit(`${seed}:transition-fill:${section.id}:${bar}`) > profile.fill) return [];
+
+  const candidates = sectionRole(nextSection) === "payoff"
+    ? [gridSteps - 3, gridSteps - 2, gridSteps - 1]
+    : [gridSteps - 2, gridSteps - 1];
+  return uniqueSorted(candidates.filter((step) => (
+    step >= 0
+    && step < gridSteps
+    && !protectedSteps.some((space) => Math.abs(space - step) < 1e-6)
+  )));
 }
 
 function humanizeSteps(steps, humanization, seed, beatsPerStep) {
@@ -816,6 +870,8 @@ export function createGrooveDNA(input = {}, {
 
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
+    const sectionIndex = normalizedSections.findIndex((candidate) => candidate.id === section.id);
+    const nextSection = sectionIndex >= 0 ? normalizedSections[sectionIndex + 1] ?? null : null;
     const protectedSpaceSteps = scaleSteps(cellPolicy.protectedSpaces, gridSteps);
     const openingBoundary = bars >= 12
       && bar === 0
@@ -857,9 +913,19 @@ export function createGrooveDNA(input = {}, {
         * (0.72 + densityControl * 0.56)
         * sectionDensityMultiplier(genre, section)
         * transformed.densityMultiplier;
-      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps]);
+      const fillSteps = transitionFillSteps({
+        lane,
+        bar,
+        section,
+        nextSection,
+        gridSteps,
+        seed: `${seed}:${genre}`,
+        protectedSteps,
+      });
+      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps, ...fillSteps]);
+      const densitySourceSteps = uniqueSorted([...transformed.steps, ...fillSteps]);
       const densitySteps = applyDensity(
-        transformed.steps,
+        densitySourceSteps,
         factor,
         lockedSteps,
         transformAuthorizedSteps,
@@ -892,6 +958,14 @@ export function createGrooveDNA(input = {}, {
         probabilitySteps: Object.freeze(probabilitySteps),
         densitySteps: Object.freeze(densitySteps),
         steps: Object.freeze(variedSteps),
+        transitionFillSteps: Object.freeze(fillSteps),
+        snareAuthority: lane === "snare"
+          ? Object.freeze({
+              requiredSteps: Object.freeze([...lockedSteps]),
+              transitionFillSteps: Object.freeze([...fillSteps]),
+              backbeatPreserved: lockedSteps.every((step) => variedSteps.some((value) => Math.abs(value - step) < 1e-6)),
+            })
+          : null,
         events: humanizeSteps(
           variedSteps,
           grammar.humanization,
@@ -903,16 +977,17 @@ export function createGrooveDNA(input = {}, {
 
     const relationships = {};
     for (const [role, relationship] of Object.entries(grammar.relationships)) {
+      const evolvedRelationship = relationshipForSection(role, relationship, section);
       const steps = relationshipSteps(
         lanePlans,
-        relationship,
+        evolvedRelationship,
         beatsPerStep,
         gridSteps,
         `${seed}:${genre}:${bar}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
-        ...relationship,
+        ...evolvedRelationship,
         steps: Object.freeze(steps),
         pulses: Object.freeze(steps.map((step) => round(step * beatsPerStep))),
       });
@@ -927,7 +1002,10 @@ export function createGrooveDNA(input = {}, {
       bar,
       sectionId: section.id,
       sectionRole: sectionRole(section),
+      sectionEvolution: Object.freeze({ ...sectionEvolutionProfile(section) }),
       openingBoundary,
+      transitionBoundary: Boolean(nextSection && bar === section.startBar + section.bars - 1),
+      nextSectionRole: nextSection ? sectionRole(nextSection) : null,
       kick: lanePlans.kick,
       snare: lanePlans.snare,
       hat: lanePlans.hat,
