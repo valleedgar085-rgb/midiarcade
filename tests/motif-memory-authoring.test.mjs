@@ -162,3 +162,27 @@ test("generated songs commit authored motif-memory variants into final melody no
     && note.motifMemoryRelationship === observed.sectionReport.relationship
   )));
 });
+
+
+test("hook return keeps its identity while reserving a deliberate breath before the landing", () => {
+  const result = authorMotifMemoryVariants({
+    family: FAMILY,
+    assignments: ASSIGNMENTS,
+    phraseMemory: PHRASE_MEMORY,
+    seed: "motif-memory-breath",
+  });
+  const source = FAMILY.A.melody;
+  const returned = result.sectionMotifs["outro-1"].melody;
+  const penultimate = returned.events.at(-2);
+  const landing = returned.events.at(-1);
+  const sourcePenultimate = source.events.at(-2);
+
+  assert.equal(returned.events[0].degree, source.events[0].degree);
+  assert.equal(landing.degree, source.events.at(-1).degree);
+  assert.equal(penultimate.phraseBreathAfter, true);
+  assert.ok(
+    penultimate.offset + penultimate.duration <= landing.offset - 0.249,
+    JSON.stringify({ penultimate, landing }),
+  );
+  assert.ok(penultimate.duration <= sourcePenultimate.duration);
+});
