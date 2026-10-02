@@ -16,12 +16,16 @@ import {
 } from "./composition-scope.js";
 import { normalizeCompositionSelection } from "./composition-selection.js";
 import { createJazzGrammarDirective } from "./jazz-musical-grammar.js";
+import {
+  createMusicalPayoffPlan,
+  createSectionPayoffIntent,
+} from "./musical-payoff-director.js";
 import { judgeCompositionCandidate } from "./composition-candidate-judge.js";
 import { generateSimilar } from "../music-engine.js";
 
 export { normalizeCompositionSelection };
 
-function createEnsembleContext(song, selection, sectionPlan, orchestration, interlock) {
+function createEnsembleContext(song, selection, sectionPlan, orchestration, interlock, payoffIntent = null) {
   const sectionId = selection.sectionId ?? null;
   const conductor = song?.grooveConductor ?? null;
   const section = sectionId == null
@@ -59,6 +63,13 @@ function createEnsembleContext(song, selection, sectionPlan, orchestration, inte
       featuredTrack: interlock?.featuredTrack ?? orchestration?.featuredTrack ?? null,
       motifId: interlock?.motifId ?? null,
       transitionOut: interlock?.transitionOut ?? null,
+      payoffPhase: payoffIntent?.phase ?? null,
+      payoffRole: payoffIntent?.role ?? null,
+      targetEnergy: payoffIntent?.targetEnergy ?? null,
+      targetTension: payoffIntent?.targetTension ?? null,
+      targetSpace: payoffIntent?.targetSpace ?? null,
+      mustBreathe: payoffIntent?.mustBreathe ?? false,
+      mustLiftFromPrevious: payoffIntent?.mustLiftFromPrevious ?? false,
     },
     lanes: cloneValue(orchestration?.lanes ?? {}),
     groove: {
@@ -90,6 +101,10 @@ export function createDirectorDirective(song, selection = {}) {
       (entry) => String(entry?.sectionId) === normalized.sectionId,
     ) ?? null;
   const jazzGrammar = createJazzGrammarDirective(song, normalized);
+  const payoffPlan = createMusicalPayoffPlan(song);
+  const payoffIntent = normalized.sectionId == null
+    ? null
+    : createSectionPayoffIntent(song, normalized.sectionId);
   const interlock = normalized.sectionId == null
     ? null
     : (song?.generationInterlock?.sectionContracts ?? []).find(
@@ -107,7 +122,16 @@ export function createDirectorDirective(song, selection = {}) {
     grooveConductor: cloneValue(songState.grooveConductor ?? null),
     songState,
     jazzGrammar: cloneValue(jazzGrammar),
-    ensembleContext: cloneValue(createEnsembleContext(song, normalized, sectionPlan, orchestration, interlock)),
+    musicalPayoffPlan: cloneValue(payoffPlan),
+    payoffIntent: cloneValue(payoffIntent),
+    ensembleContext: cloneValue(createEnsembleContext(
+      song,
+      normalized,
+      sectionPlan,
+      orchestration,
+      interlock,
+      payoffIntent,
+    )),
     sourceSongId: song?.id ?? null,
     sourceSeed: song?.seed ?? null,
   });
