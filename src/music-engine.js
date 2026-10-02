@@ -11068,6 +11068,12 @@ function compose(config, options = {}) {
     motifs,
     grooveConductor,
   );
+  // Capture the composition-time lookahead audit before later ensemble/polish
+  // stages are allowed to rebuild note objects. Timing decisions have already
+  // been committed here, so this is the authoritative planning provenance.
+  const authoredRhythmMelodyLookaheadIntents = raw.melody
+    .map((note) => note.rhythmMelodyLookaheadIntent)
+    .filter(Boolean);
   const retainedCounterpoint = contextNotesForTarget(contextTracks, targetTrack, "counterpoint");
   if (targetTrack === "melody" && retainedCounterpoint?.length) {
     raw.melody = interlaceCounterpoint(raw.melody, retainedCounterpoint, config, structure, harmony);
@@ -11291,19 +11297,15 @@ function compose(config, options = {}) {
   const melodyPocketTracks = melodyPocketRepair.accepted
     ? melodyPocketRepair.song.tracks
     : melodicFlow.tracks;
-  const rhythmMelodyLookaheadIntents = melodyPocketTracks
-    .filter((track) => ["melody", "counterpoint"].includes(track.id))
-    .flatMap((track) => track.notes ?? [])
-    .map((note) => note.rhythmMelodyLookaheadIntent)
-    .filter(Boolean);
   const rhythmMelodyLookaheadReport = Object.freeze({
     version: 2,
     horizonBars: 2,
-    plannedNotes: rhythmMelodyLookaheadIntents.length,
-    shiftedNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) > 1e-9).length,
-    heldNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) <= 1e-9).length,
-    payoffPreparations: rhythmMelodyLookaheadIntents.filter((intent) => intent?.reserveTail).length,
-    maxAbsShift: round(rhythmMelodyLookaheadIntents.reduce(
+    provenance: "composition-time",
+    plannedNotes: authoredRhythmMelodyLookaheadIntents.length,
+    shiftedNotes: authoredRhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) > 1e-9).length,
+    heldNotes: authoredRhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) <= 1e-9).length,
+    payoffPreparations: authoredRhythmMelodyLookaheadIntents.filter((intent) => intent?.reserveTail).length,
+    maxAbsShift: round(authoredRhythmMelodyLookaheadIntents.reduce(
       (maximum, intent) => Math.max(maximum, Math.abs(finite(intent?.shiftBeats, 0))),
       0,
     )),
