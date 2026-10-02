@@ -3950,3 +3950,41 @@ test("lead repeat development moves selected notes purposefully instead of rando
   assertValidNotes(song);
   assertAllGeneratedPitchesInScale(song);
 });
+
+
+test("explicit Create time pocket persists through normalization and generation", () => {
+  const expectations = {
+    straight: "centered",
+    laidback: "laidBack",
+    shuffled: "elastic",
+    syncopated: "pushed",
+  };
+  for (const [groove, timingPocket] of Object.entries(expectations)) {
+    const normalized = engine.normalizeConfig({
+      genre: "hipHop",
+      seed: `explicit-pocket-${groove}`,
+      bars: 8,
+      groove,
+    });
+    assert.equal(normalized.groove, groove);
+
+    const song = engine.generateNew({
+      genre: "hipHop",
+      seed: `explicit-pocket-${groove}`,
+      bars: 8,
+      candidateCount: 1,
+      groove,
+    });
+    assert.equal(song.settings.groove, groove);
+    assert.equal(song.style.rhythmIdentity.timingPocket, timingPocket);
+    assert.equal(song.style.rhythmIdentity.timingPocketAuthority, "explicit-create-control");
+  }
+});
+
+test("unspecified time pocket keeps seeded genre variation", () => {
+  const normalized = engine.normalizeConfig({ genre: "hipHop", seed: "auto-pocket-normalize", bars: 8 });
+  assert.equal(normalized.groove, "auto");
+  const song = engine.generateNew({ genre: "hipHop", seed: "auto-pocket-generate", bars: 8, candidateCount: 1 });
+  assert.equal(song.settings.groove, "auto");
+  assert.equal(song.style.rhythmIdentity.timingPocketAuthority, "genre-seeded");
+});
