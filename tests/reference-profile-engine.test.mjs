@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MAX_REFERENCE_STRENGTH,
   normalizeReferenceProfile,
+  referenceSilenceBudgetNudge,
   referenceStageEnergyNudge,
   resolveReferenceInfluence,
 } from "../src/core/reference-profile-engine.js";
@@ -207,4 +208,27 @@ test("automatic reference generation records the analyzed profile provenance", (
   assert.equal(song.referenceProfile?.id, "user-reference-hipHop-v1");
   assert.equal(song.referenceProfile?.sourceCount, 6);
   assert.equal(song.referenceProfile?.genre, "hipHop");
+});
+
+
+test("references cannot reduce Structure Director breathing minima", () => {
+  const influence = resolveReferenceInfluence({
+    referenceProfile: {
+      ...HIP_HOP_REFERENCE,
+      traits: {
+        ...HIP_HOP_REFERENCE.traits,
+        melodySpace: 0.1,
+        supportRestraint: 0.1,
+        transitionBreath: 0.1,
+      },
+    },
+    referenceStrength: 0.35,
+  }, {
+    genre: "hipHop",
+    defaults: { syncopation: 0.6, swing: 0.22, humanize: 0.32, phraseBars: 4 },
+  });
+
+  assert.equal(referenceSilenceBudgetNudge(influence, "establish"), 0);
+  assert.equal(referenceSilenceBudgetNudge(influence, "reset"), 0);
+  assert.equal(referenceSilenceBudgetNudge(influence, "resolve"), 0);
 });
