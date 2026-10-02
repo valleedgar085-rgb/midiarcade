@@ -5,6 +5,7 @@ import {
   generateNew,
   producerPacingDensityScale,
   producerRoleGateWindow,
+  structureDirectorEnergyTarget,
 } from "../src/music-engine.js";
 
 const FULL_STRUCTURE = [
@@ -135,4 +136,64 @@ test("final full-song intro retains pacing evidence while preserving core drum a
     note.trackId === "drums" && [36, 38, 39].includes(Math.round(note.pitch))
   ));
   assert.ok(coreDrums.length > 0, "intro must preserve kick/snare anchors while thinning ornamentation");
+});
+
+
+test("Structure Director v3 keeps a clear establish-to-payoff energy hierarchy", () => {
+  const intro = structureDirectorEnergyTarget("establish", 0.9, 1);
+  const verse = structureDirectorEnergyTarget("pocket", 0.9, 1);
+  const build = structureDirectorEnergyTarget("build", 0.9, 1);
+  const payoff = structureDirectorEnergyTarget("payoff", 0.9, 1);
+  const payoffReturn = structureDirectorEnergyTarget("payoff", 0.9, 2);
+  const reset = structureDirectorEnergyTarget("reset", 0.9, 1);
+
+  assert.ok(intro < verse, `intro should stay below verse: ${intro} < ${verse}`);
+  assert.ok(verse < build, `verse should stay below build: ${verse} < ${build}`);
+  assert.ok(build < payoff, `build should stay below payoff: ${build} < ${payoff}`);
+  assert.ok(reset < build, `reset should create contrast: ${reset} < ${build}`);
+  assert.ok(payoffReturn >= payoff, "later payoff should not shrink below the first payoff");
+  assert.ok(intro <= 0.52);
+  assert.ok(payoff >= 0.84);
+});
+
+test("build into payoff reserves a short bass/drum breath without muting the foreground", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBeat: 0, endBeat: 16, bars: 4 },
+    { id: "verse-1", name: "verse", startBeat: 16, endBeat: 32, bars: 4 },
+    { id: "prechorus-1", name: "prechorus", startBeat: 32, endBeat: 48, bars: 4 },
+    { id: "chorus-1", name: "chorus", startBeat: 48, endBeat: 64, bars: 4 },
+  ];
+  const scene = { purpose: "build", storyStage: "build", payoffBreathBars: 0.5 };
+  const config = { genre: "pop", timeSignature: [4, 4] };
+
+  const bass = producerRoleGateWindow(structure[2], structure, scene, "bass", "foundation", config);
+  const drums = producerRoleGateWindow(structure[2], structure, scene, "drums", "foundation", config);
+  const counter = producerRoleGateWindow(structure[2], structure, scene, "counterpoint", "answer", config);
+  const melody = producerRoleGateWindow(structure[2], structure, scene, "melody", "foreground", config);
+
+  assert.equal(bass?.exitBeat, 46);
+  assert.equal(drums?.exitBeat, 47);
+  assert.equal(counter?.exitBeat, 47);
+  assert.equal(melody?.exitBeat ?? null, null);
+});
+
+test("build pacing rises toward the payoff instead of staying flat", () => {
+  const structure = [
+    { id: "verse-1", name: "verse", startBeat: 0, endBeat: 32, bars: 8 },
+    { id: "prechorus-1", name: "prechorus", startBeat: 32, endBeat: 48, bars: 4 },
+    { id: "chorus-1", name: "chorus", startBeat: 48, endBeat: 64, bars: 4 },
+  ];
+  const scene = { purpose: "build", storyStage: "build", payoffBreathBars: 0.5 };
+  const config = { genre: "pop", timeSignature: [4, 4] };
+
+  const early = producerPacingDensityScale(
+    structure[1], structure, scene, "chords", "support", 32.25, config,
+  );
+  const late = producerPacingDensityScale(
+    structure[1], structure, scene, "chords", "support", 47.5, config,
+  );
+
+  assert.ok(early < late, `build should climb: ${early} -> ${late}`);
+  assert.ok(early >= 0.74 && early <= 0.8);
+  assert.ok(late > 0.95);
 });
