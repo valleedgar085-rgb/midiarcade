@@ -9963,6 +9963,7 @@ function publicSettings(config) {
     timeSignature: _timeSignature,
     excludeOneShotKitIds: _excludeOneShotKitIds,
     tasteProfile: _tasteProfile,
+    referenceInfluence: _referenceInfluence,
     ...settings
   } = config;
   return clone(settings);
