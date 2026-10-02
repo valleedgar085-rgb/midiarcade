@@ -187,3 +187,32 @@ test("pocket refinement stays explicit after calibration while opt-in and opt-ou
   assert.equal(enabled.groovePocketRefinement, true);
   assert.equal(disabled.groovePocketRefinement, false);
 });
+
+
+test("genre-aware pocket refinement keeps bass replies bounded instead of snapping everything to one relationship", () => {
+  const source = sourceSong();
+  source.genre = "trap";
+  source.meta.genre = "trap";
+  source.tracks.find((track) => track.id === "bass").notes = [
+    { id: "b0", start: 0.08, pitch: 36, duration: 0.5, velocity: 92 },
+    { id: "b1", start: 4.13, pitch: 38, duration: 0.5, velocity: 94 },
+    { id: "b2", start: 8.18, pitch: 41, duration: 0.5, velocity: 96 },
+    { id: "b3", start: 12.19, pitch: 43, duration: 0.5, velocity: 98 },
+  ];
+
+  const candidates = createGroovePocketCandidates(source, { groovePocketRefinement: true });
+  assert.ok(candidates.length >= 1);
+
+  for (const candidate of candidates) {
+    const relationship = candidate.relationshipAfter;
+    assert.ok(relationship.lock >= 1, JSON.stringify(candidate));
+    assert.ok(
+      relationship.replyRatio <= candidate.maxReplyShare + 0.080001,
+      JSON.stringify({ relationship, maxReplyShare: candidate.maxReplyShare }),
+    );
+    assert.equal(
+      relationship.lock + relationship.reply + relationship.independent,
+      source.tracks.find((track) => track.id === "bass").notes.length,
+    );
+  }
+});
