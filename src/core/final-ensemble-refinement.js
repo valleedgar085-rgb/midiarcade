@@ -149,7 +149,7 @@ function restoreLeadDialogue(song, sectionId) {
   const maxStart = bounds.endBeat - Math.max(0.12, finite(selected.note?.duration, 0.25));
   const nextStart = round(clamp(desired, bounds.startBeat, maxStart), 4);
   const shift = nextStart - noteStart(selected.note);
-  if (shift < 0.08 || shift > 0.75) return null;
+  if (shift < 0.08 || shift > 1) return null;
 
   const candidate = cloneValue(song);
   const candidateTrack = track(candidate, "counterpoint");
