@@ -231,9 +231,19 @@ export function planRhythmMelodyLookahead({
       pulseNear(0, next.chordPulses, nextOpeningWindow),
     ].filter(Boolean).length
     : 0;
-  const incomingPayoff = Boolean(
+  const transitionBoundary = Boolean(
     current?.transitionBoundary
-    && ["payoff", "chorus", "drop"].includes(String(current?.nextSectionRole ?? next?.sectionRole ?? "").toLowerCase())
+    ?? (next && String(current?.sectionId ?? "") !== String(next?.sectionId ?? ""))
+  );
+  const nextSectionRole = String(
+    current?.nextSectionRole
+    ?? next?.sectionRole
+    ?? next?.grooveDNA?.sectionRole
+    ?? "",
+  ).toLowerCase();
+  const incomingPayoff = Boolean(
+    transitionBoundary
+    && ["payoff", "chorus", "drop"].includes(nextSectionRole)
   );
   const reserveTail = nextOpeningLoad >= 2 || incomingPayoff;
 
