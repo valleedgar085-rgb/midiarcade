@@ -119,7 +119,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
 });
 
 test("Pop Rap fusion keeps its calibrated repair while unrelated fusions stay isolated and pure Hip-Hop uses Phase 5 repair", () => {
-  const config = configFor("pop", "rap", "fusion-quality-03:pop+rap");
+  const config = configFor("pop", "rap", "fusion-quality-01:pop+rap");
   const generated = generateNew(config);
   const before = evaluateSongCandidate(generated);
   const target = before.diagnostics?.repetitionTarget;
