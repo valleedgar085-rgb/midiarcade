@@ -8840,6 +8840,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       keyPc: resolvedConfig.keyPc,
       scaleIntervals: resolvedConfig.scaleIntervals,
       beatsPerBar: beatsPerBar(resolvedConfig),
+      genre: resolvedConfig.genre,
     },
     structure,
   );
@@ -11154,6 +11155,7 @@ function compose(config, options = {}) {
       keyPc: config.keyPc,
       scaleIntervals: config.scaleIntervals,
       beatsPerBar: beatsPerBar(config),
+      genre: config.genre,
     },
     structure,
   );
@@ -11778,6 +11780,7 @@ export function evaluateSongCandidate(song) {
       keyPc: finite(song.meta.keyPc, 0),
       scaleIntervals: song.meta.scaleIntervals ?? [],
       beatsPerBar: barBeats,
+      genre: song.meta.genre || song.genre,
     },
     song.structure ?? [],
   );
@@ -13963,6 +13966,7 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
       keyPc: config.keyPc,
       scaleIntervals: config.scaleIntervals,
       beatsPerBar: beatsPerBar(config),
+      genre: config.genre,
     },
     song.structure,
   );
