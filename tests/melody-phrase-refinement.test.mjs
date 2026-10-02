@@ -151,3 +151,45 @@ test("melody phrase stage is owned only by phrase, harmony, and ensemble authori
   assert.ok(authority.mutations.includes("duration"));
   assert.equal(authority.mutations.includes("register"), false);
 });
+
+
+test("melody phrase candidates repair an isolated contour spike without changing rhythm-section timing", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes = [
+    { start: 0.5, pitch: 60, duration: 0.5, velocity: 82 },
+    { start: 1.5, pitch: 64, duration: 0.25, velocity: 88 },
+    { start: 2.5, pitch: 79, duration: 0.25, velocity: 90 },
+    { start: 3.5, pitch: 65, duration: 0.75, velocity: 94 },
+    { start: 4.5, pitch: 67, duration: 0.5, velocity: 84 },
+    { start: 5.5, pitch: 69, duration: 0.25, velocity: 91 },
+    { start: 6.5, pitch: 72, duration: 0.5, velocity: 88 },
+    { start: 7.5, pitch: 69, duration: 0.75, velocity: 96 },
+  ];
+
+  const before = structuredClone(song);
+  const candidates = createMelodyPhraseCandidates(song);
+  const repair = candidates.find((candidate) => candidate.id === "contour-outlier-repair");
+
+  assert.ok(repair, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id,
+    delta: candidate.phraseScoreDelta,
+  }))));
+  const repairedMelody = repair.song.tracks.find((track) => track.id === "melody");
+  const repairedNote = repairedMelody.notes.find((note) => note.start === 2.5);
+
+  assert.notEqual(repairedNote.pitch, 79);
+  assert.ok(Math.abs(repairedNote.pitch - 64) < 15);
+  assert.ok(Math.abs(65 - repairedNote.pitch) < 14);
+  assert.equal(repairedNote.start, before.tracks.find((track) => track.id === "melody").notes[2].start);
+  assert.equal(repairedNote.duration, before.tracks.find((track) => track.id === "melody").notes[2].duration);
+  assert.equal(repairedNote.phraseIntentRole, "contour-outlier-repair");
+  assert.deepEqual(
+    repair.song.tracks.find((track) => track.id === "drums"),
+    before.tracks.find((track) => track.id === "drums"),
+  );
+  assert.deepEqual(
+    repair.song.tracks.find((track) => track.id === "bass"),
+    before.tracks.find((track) => track.id === "bass"),
+  );
+});
