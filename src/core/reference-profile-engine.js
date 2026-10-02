@@ -5,8 +5,8 @@ export const DEFAULT_REFERENCE_STRENGTH = 0.22;
 
 const GROOVE_CHOICES = Object.freeze({
   drumGroove: Object.freeze(["fourFloor", "backbeat", "halfTime", "breakbeat", "electro"]),
-  bassGroove: Object.freeze(["root", "syncopated", "pulse", "walking"]),
-  chordMotion: Object.freeze(["sustain", "pulse", "offbeat", "arpeggio"]),
+  bassGroove: Object.freeze(["rootFifth", "syncopated", "pulse", "walking"]),
+  chordMotion: Object.freeze(["sustained", "pulse", "offbeat", "arpeggio"]),
 });
 
 function finite(value, fallback = 0) {
