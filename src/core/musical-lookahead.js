@@ -280,18 +280,29 @@ export function planRhythmMelodyLookahead({
 
   const chosen = candidates[0];
   const sourceScore = scoreAt(offset);
-  if (!chosen || Math.abs(chosen.shift) < 1e-9 || chosen.score >= sourceScore - 0.45) return null;
-
-  return Object.freeze({
+  const base = {
     version: 2,
-    beat: Math.round((bar * barBeats + chosen.offset) * 10000) / 10000,
     sourceBeat: Math.round(absoluteBeat * 10000) / 10000,
-    shiftBeats: Math.round(chosen.shift * 10000) / 10000,
     bar,
     horizonBars: futureBars.length,
     nextOpeningLoad,
     incomingPayoff,
     reserveTail,
+  };
+  if (!chosen || Math.abs(chosen.shift) < 1e-9 || chosen.score >= sourceScore - 0.45) {
+    if (!futureBars.length && !lanePulses.length) return null;
+    return Object.freeze({
+      ...base,
+      beat: Math.round(absoluteBeat * 10000) / 10000,
+      shiftBeats: 0,
+      role: reserveTail ? "prepare-next-bar-hold" : "hold-authored-pocket",
+    });
+  }
+
+  return Object.freeze({
+    ...base,
+    beat: Math.round((bar * barBeats + chosen.offset) * 10000) / 10000,
+    shiftBeats: Math.round(chosen.shift * 10000) / 10000,
     role: reserveTail ? "prepare-next-bar" : "avoid-current-congestion",
   });
 }
