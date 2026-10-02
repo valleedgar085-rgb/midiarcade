@@ -68,3 +68,29 @@ test("critic exposes weak harmonic phrase landings", () => {
   const report = evaluateMelodyPhraseIntelligence(song);
   assert.ok(report.weakestSection.metrics.harmonicLandings < 0.6, JSON.stringify(report));
 });
+
+
+test("critic detects an isolated random leap spike inside an otherwise shaped phrase", () => {
+  const shaped = fixture([
+    { start: 0.5, pitch: 64, duration: 0.5, velocity: 82 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 91 },
+    { start: 2.5, pitch: 69, duration: 0.5, velocity: 86 },
+    { start: 3.5, pitch: 67, duration: 0.75, velocity: 96 },
+    { start: 4.5, pitch: 69, duration: 0.5, velocity: 84 },
+    { start: 5.5, pitch: 72, duration: 0.25, velocity: 93 },
+    { start: 6.5, pitch: 74, duration: 0.5, velocity: 88 },
+    { start: 7.5, pitch: 72, duration: 0.75, velocity: 99 },
+  ]);
+  const spiky = structuredClone(shaped);
+  spiky.tracks[0].notes[2].pitch = 79;
+
+  const shapedReport = evaluateMelodyPhraseIntelligence(shaped);
+  const spikyReport = evaluateMelodyPhraseIntelligence(spiky);
+
+  assert.ok(
+    spikyReport.weakestSection.metrics.leapDiscipline
+      < shapedReport.weakestSection.metrics.leapDiscipline,
+    JSON.stringify({ shaped: shapedReport, spiky: spikyReport }),
+  );
+  assert.ok(spikyReport.weakestSection.metrics.leapDiscipline < 0.72, JSON.stringify(spikyReport));
+});
