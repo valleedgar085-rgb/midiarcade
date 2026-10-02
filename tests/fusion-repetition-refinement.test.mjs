@@ -35,6 +35,8 @@ function configFor(primary, secondary, seed) {
     repetitionRefinement: true,
     // Phrase refinement has its own integration coverage in the fusion quality calibration.
     phraseResolutionRefinement: false,
+    // Register refinement has separate coverage and may intentionally octave-shift melody notes.
+    registerHealthRefinement: false,
   }, { kind: "new" });
   return applyOutputQualityEvolution(adapted, { kind: "new" });
 }
