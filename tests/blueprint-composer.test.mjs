@@ -125,6 +125,10 @@ test("Director directive publishes the exact section blueprint, orchestration, a
   assert.equal(directive.ensembleContext.sectionId, "chorus-1");
   assert.equal(directive.ensembleContext.intent.cadence, "resolve");
   assert.equal(directive.ensembleContext.intent.featuredTrack, "bass");
+  assert.equal(directive.payoffIntent.phase, "payoff");
+  assert.equal(directive.payoffIntent.role, "deliver");
+  assert.equal(directive.ensembleContext.intent.payoffPhase, "payoff");
+  assert.equal(directive.ensembleContext.intent.mustLiftFromPrevious, true);
   assert.deepEqual(directive.ensembleContext.coordination.rhythmSection, ["drums", "bass"]);
   assert.deepEqual(directive.ensembleContext.coordination.leadConversation, ["melody", "counterpoint"]);
 });
