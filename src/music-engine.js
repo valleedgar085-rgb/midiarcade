@@ -8201,6 +8201,7 @@ function ensureFinalPreDropPunctuation(sourceTracks, structure, config) {
       existing.rhythmicFeature = feature;
       existing.preserveSubdivision = true;
       existing.preDropCollisionReuse = true;
+      if (!existing.finalMasterRole) existing.finalMasterRole = "section-peak";
       reused += 1;
       continue;
     }
@@ -8214,6 +8215,7 @@ function ensureFinalPreDropPunctuation(sourceTracks, structure, config) {
       preserveSubdivision: true,
       grammarRole: pitch === 38 ? "transition-pickup" : "transition-burst",
       grooveSource: "final-drum-authority.pre-drop",
+      finalMasterRole: "section-peak",
     });
     added += 1;
   }
