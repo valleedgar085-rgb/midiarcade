@@ -18,89 +18,119 @@ function normalizeName(section) {
     .toLowerCase();
 }
 
-function sectionPhase(section, index, total) {
+function legacyPhase(section, index, total) {
   const name = normalizeName(section);
   if (/(intro|opening)/.test(name) || index === 0) return "opening";
   if (/(pre|build|riser|build-up|buildup)/.test(name)) return "build";
-  if (/(chorus|drop|hook|refrain|payoff)/.test(name)) return "payoff";
-  if (/(breakdown|break|bridge|interlude|reset)/.test(name)) return "recovery";
+  if (/(chorus|drop|hook|refrain|payoff|theme)/.test(name)) return "payoff";
+  if (/(breakdown|break|bridge|interlude|reset|solo)/.test(name)) return "recovery";
   if (/(outro|ending|end)/.test(name) || index === total - 1) return "release";
   return "body";
 }
 
-function blueprintArc(song) {
-  const arc = song?.songBlueprint?.intent?.energyArc
-    ?? song?.producerBrain?.blueprint?.intent?.energyArc
-    ?? {};
-  const fallbackEnergy = clamp(finite(
-    song?.songBlueprint?.intent?.energy
-      ?? song?.producerIntent?.energy
-      ?? song?.meta?.energy,
-    0.68,
+const STAGE_TO_PHASE = Object.freeze({
+  establish: "opening",
+  pocket: "body",
+  develop: "body",
+  build: "build",
+  payoff: "payoff",
+  reset: "recovery",
+  resolve: "release",
+});
+
+const PHASE_ROLE = Object.freeze({
+  opening: "establish",
+  body: "develop",
+  build: "withhold-and-rise",
+  payoff: "deliver",
+  recovery: "breathe",
+  release: "resolve",
+});
+
+function mapBySectionId(entries = []) {
+  return new Map(
+    (Array.isArray(entries) ? entries : [])
+      .filter((entry) => entry?.sectionId != null)
+      .map((entry) => [String(entry.sectionId), entry]),
+  );
+}
+
+function fallbackSpace(phase) {
+  if (phase === "opening") return 0.3;
+  if (phase === "recovery") return 0.34;
+  if (phase === "release") return 0.28;
+  if (phase === "payoff") return 0.07;
+  if (phase === "build") return 0.11;
+  return 0.13;
+}
+
+function fallbackTension(phase, energy) {
+  if (phase === "build") return clamp(0.58 + energy * 0.28);
+  if (phase === "payoff") return clamp(0.5 + energy * 0.18);
+  if (phase === "recovery") return clamp(0.24 + energy * 0.12);
+  if (phase === "release") return clamp(0.16 + energy * 0.1);
+  if (phase === "opening") return clamp(0.2 + energy * 0.16);
+  return clamp(0.36 + energy * 0.16);
+}
+
+function authorityIntentForSection(song, section, index, total, maps) {
+  const id = String(section?.id ?? "");
+  const directorStage = maps.director.get(id) ?? null;
+  const sectionPlan = maps.plans.get(id) ?? null;
+  const scene = maps.scenes.get(id) ?? null;
+
+  const stage = String(
+    directorStage?.stage
+      ?? sectionPlan?.structureStory?.stage
+      ?? scene?.storyStage
+      ?? "",
+  );
+  const phase = STAGE_TO_PHASE[stage] ?? legacyPhase(section, index, total);
+  const targetEnergy = clamp(finite(
+    directorStage?.energyTarget
+      ?? sectionPlan?.structureStory?.energyTarget
+      ?? scene?.energyTarget
+      ?? sectionPlan?.energy
+      ?? section?.intensity,
+    phase === "payoff" ? 0.88
+      : phase === "build" ? 0.76
+        : phase === "opening" ? 0.44
+          : phase === "recovery" ? 0.48
+            : phase === "release" ? 0.36
+              : 0.62,
   ));
+  const targetTension = clamp(finite(
+    sectionPlan?.tension
+      ?? sectionPlan?.tensionEnvelope?.peak,
+    fallbackTension(phase, targetEnergy),
+  ));
+  const targetSpace = clamp(finite(scene?.silenceBudget, fallbackSpace(phase)));
+  const densityCeiling = clamp(finite(scene?.densityCeiling, 1));
+  const payoffBreathBars = Math.max(0, finite(
+    directorStage?.payoffBreathBars
+      ?? sectionPlan?.structureStory?.payoffBreathBars
+      ?? scene?.payoffBreathBars,
+    0,
+  ));
+
   return Object.freeze({
-    opening: clamp(finite(arc?.opening, fallbackEnergy * 0.72)),
-    body: clamp(finite(arc?.body, fallbackEnergy * 0.96)),
-    peak: clamp(finite(arc?.peak, Math.min(1, fallbackEnergy + 0.14))),
-    release: clamp(finite(arc?.release, Math.max(0.18, fallbackEnergy * 0.58))),
+    sectionId: section?.id ?? null,
+    name: section?.name ?? section?.type ?? section?.id ?? null,
+    sourceAuthority: directorStage || sectionPlan?.structureStory || scene?.storyStage
+      ? "structure-director-v2"
+      : "legacy-section-fallback",
+    stage: stage || null,
+    phase,
+    role: PHASE_ROLE[phase] ?? "develop",
+    targetEnergy: round(targetEnergy),
+    targetTension: round(targetTension),
+    targetSpace: round(targetSpace),
+    densityCeiling: round(densityCeiling),
+    payoffBreathBars: round(payoffBreathBars),
+    payoff: phase === "payoff",
+    mustBreathe: ["opening", "recovery", "release"].includes(phase),
+    mustLiftFromPrevious: phase === "build" || phase === "payoff",
   });
-}
-
-function spaceReserve(song) {
-  return clamp(finite(
-    song?.songBlueprint?.intent?.spaceReserve
-      ?? song?.producerBrain?.blueprint?.intent?.spaceReserve,
-    0.5,
-  ));
-}
-
-function targetForPhase(phase, arc, reserve) {
-  if (phase === "opening") {
-    return {
-      energy: arc.opening,
-      tension: clamp(0.2 + arc.opening * 0.18),
-      space: clamp(reserve + 0.14),
-      role: "establish",
-    };
-  }
-  if (phase === "build") {
-    return {
-      energy: clamp(Math.max(arc.body + 0.04, arc.peak - 0.12)),
-      tension: clamp(0.68 + (arc.peak - arc.body) * 0.5),
-      space: clamp(reserve - 0.08),
-      role: "withhold-and-rise",
-    };
-  }
-  if (phase === "payoff") {
-    return {
-      energy: arc.peak,
-      tension: clamp(0.48 + arc.peak * 0.12),
-      space: clamp(reserve - 0.12),
-      role: "deliver",
-    };
-  }
-  if (phase === "recovery") {
-    return {
-      energy: clamp(Math.max(arc.release, arc.body - 0.12)),
-      tension: clamp(0.28 + arc.release * 0.12),
-      space: clamp(reserve + 0.16),
-      role: "breathe",
-    };
-  }
-  if (phase === "release") {
-    return {
-      energy: arc.release,
-      tension: clamp(0.16 + arc.release * 0.1),
-      space: clamp(reserve + 0.2),
-      role: "resolve",
-    };
-  }
-  return {
-    energy: arc.body,
-    tension: clamp(0.4 + arc.body * 0.14),
-    space: reserve,
-    role: "develop",
-  };
 }
 
 function sectionBounds(song, section) {
@@ -145,33 +175,34 @@ function observedSectionPressure(song, section) {
   });
 }
 
+/**
+ * Compatibility export: this is now a derived audit contract, not a second
+ * composition authority. Structure Director v2 and Producer Intent own the
+ * story arc; this module only normalizes those targets for auditing.
+ */
 export function createMusicalPayoffPlan(song) {
   const sections = Array.isArray(song?.structure) ? song.structure : [];
-  const arc = blueprintArc(song);
-  const reserve = spaceReserve(song);
-  const sectionPlans = sections.map((section, index) => {
-    const phase = sectionPhase(section, index, sections.length);
-    const target = targetForPhase(phase, arc, reserve);
-    return Object.freeze({
-      sectionId: section?.id ?? null,
-      name: section?.name ?? section?.type ?? section?.id ?? null,
-      phase,
-      role: target.role,
-      targetEnergy: round(target.energy),
-      targetTension: round(target.tension),
-      targetSpace: round(target.space),
-      payoff: phase === "payoff",
-      mustBreathe: ["opening", "recovery", "release"].includes(phase),
-      mustLiftFromPrevious: phase === "build" || phase === "payoff",
-    });
-  });
+  const maps = {
+    director: mapBySectionId(song?.songBlueprint?.structureDirector?.stages),
+    plans: mapBySectionId(song?.songBlueprint?.sectionPlans ?? song?.songBlueprint?.sections),
+    scenes: mapBySectionId(song?.producerIntent?.scenes),
+  };
+  const sectionPlans = sections.map((section, index) => (
+    authorityIntentForSection(song, section, index, sections.length, maps)
+  ));
+  const directorBackedSections = sectionPlans.filter(
+    (section) => section.sourceAuthority === "structure-director-v2",
+  ).length;
 
   return Object.freeze({
-    version: 1,
-    authority: "musical-payoff-director-v1",
-    mode: "pre-composition-intent",
-    energyArc: arc,
-    spaceReserve: reserve,
+    version: 2,
+    authority: "musical-payoff-audit-v2",
+    mode: "derived-read-only-contract",
+    sourceAuthority: directorBackedSections === sectionPlans.length && sectionPlans.length
+      ? "structure-director-v2"
+      : directorBackedSections
+        ? "mixed"
+        : "legacy-section-fallback",
     sections: Object.freeze(sectionPlans),
   });
 }
@@ -187,9 +218,10 @@ export function evaluateMusicalPayoffArc(song) {
   const sections = Array.isArray(song?.structure) ? song.structure : [];
   if (!sections.length || !Array.isArray(song?.tracks)) {
     return Object.freeze({
-      version: 1,
-      authority: "musical-payoff-director-v1",
+      version: 2,
+      authority: "musical-payoff-audit-v2",
       mode: "read-only",
+      sourceAuthority: plan.sourceAuthority,
       available: false,
       passed: true,
       score: 100,
@@ -210,6 +242,7 @@ export function evaluateMusicalPayoffArc(song) {
       meanVelocity: pressure.meanVelocity,
       foregroundShare: pressure.foregroundShare,
       targetError: round(Math.abs(pressure.pressure - intent.targetEnergy)),
+      densityWithinCeiling: pressure.notesPerBeat <= intent.densityCeiling * 6 + 1e-6,
     });
   });
 
@@ -248,7 +281,7 @@ export function evaluateMusicalPayoffArc(song) {
 
   const nonPayoffOverload = observed.filter((entry) => (
     entry.phase !== "payoff"
-    && entry.notesPerBeat > 5.2
+    && !entry.densityWithinCeiling
     && entry.activeRoles >= 6
   ));
   for (const entry of nonPayoffOverload) issues.push(`hectic-section:${entry.sectionId}`);
@@ -265,9 +298,10 @@ export function evaluateMusicalPayoffArc(song) {
   ) * 100);
 
   return Object.freeze({
-    version: 1,
-    authority: "musical-payoff-director-v1",
+    version: 2,
+    authority: "musical-payoff-audit-v2",
     mode: "read-only",
+    sourceAuthority: plan.sourceAuthority,
     available: true,
     passed: issues.length === 0,
     score,
