@@ -1775,6 +1775,23 @@ function structureStoryStage(sectionName) {
   return "develop";
 }
 
+const STRUCTURE_DIRECTOR_ENERGY = Object.freeze({
+  establish: Object.freeze({ target: 0.44, min: 0.34, max: 0.52 }),
+  pocket: Object.freeze({ target: 0.62, min: 0.54, max: 0.69 }),
+  build: Object.freeze({ target: 0.77, min: 0.7, max: 0.84 }),
+  payoff: Object.freeze({ target: 0.92, min: 0.84, max: 0.98 }),
+  reset: Object.freeze({ target: 0.48, min: 0.38, max: 0.57 }),
+  resolve: Object.freeze({ target: 0.36, min: 0.28, max: 0.46 }),
+  develop: Object.freeze({ target: 0.64, min: 0.54, max: 0.74 }),
+});
+
+export function structureDirectorEnergyTarget(stage, sourceEnergy = 0.58, occurrence = 1) {
+  const band = STRUCTURE_DIRECTOR_ENERGY[stage] ?? STRUCTURE_DIRECTOR_ENERGY.develop;
+  const source = clamp(finite(sourceEnergy, band.target), 0, 1);
+  const returnLift = stage === "payoff" ? Math.min(0.04, Math.max(0, finite(occurrence, 1) - 1) * 0.02) : 0;
+  return round(clamp(source * 0.36 + band.target * 0.64 + returnLift, band.min, band.max));
+}
+
 function applyStructureDirector(config, structure, plans) {
   if (!Array.isArray(plans) || plans.length !== structure.length) return plans;
   const fullSong = config.bars >= 12 && structure.length >= 3;
@@ -1786,6 +1803,8 @@ function applyStructureDirector(config, structure, plans) {
     const stage = structureStoryStage(section.name);
     const occurrence = (occurrences.get(section.name) ?? 0) + 1;
     occurrences.set(section.name, occurrence);
+    const nextStage = structureStoryStage(structure[index + 1]?.name);
+    const payoffBreathBars = stage === "build" && nextStage === "payoff" ? 0.5 : 0;
 
     const entranceDelaysBars = stage === "establish" && section.name === "intro"
       ? {
@@ -1801,12 +1820,13 @@ function applyStructureDirector(config, structure, plans) {
     return {
       ...plan,
       structureStory: {
-        version: 2,
+        version: 3,
         stage,
         occurrence,
-        energyTarget: round(finite(plan.energy, 0.58)),
+        energyTarget: structureDirectorEnergyTarget(stage, plan.energy, occurrence),
         changeBudget: stage === "payoff" ? 2 : 1,
         maxConcurrentMajorChanges: stage === "payoff" ? 2 : 1,
+        payoffBreathBars,
         ...(entranceDelaysBars ? { entranceDelaysBars } : {}),
       },
     };
@@ -2062,7 +2082,9 @@ function createProducerIntentContract(
       sectionName: section.name,
       purpose,
       storyStage: plan?.structureStory?.stage ?? structureStoryStage(section.name),
+      energyTarget: round(storyEnergy),
       changeBudget: plan?.structureStory?.changeBudget ?? 1,
+      payoffBreathBars: round(finite(plan?.structureStory?.payoffBreathBars, 0)),
       entryDelaysBars: plan?.structureStory?.entranceDelaysBars
         ? { ...plan.structureStory.entranceDelaysBars }
         : null,
@@ -2073,7 +2095,7 @@ function createProducerIntentContract(
       silenceBudget,
       densityCeiling: round(
         purpose === "establish" && section.name === "intro"
-          ? clamp(0.58 + storyEnergy * 0.18 - silenceBudget * 0.08, 0.58, 0.78)
+          ? clamp(0.52 + storyEnergy * 0.18 - silenceBudget * 0.1, 0.52, 0.68)
           : clamp(0.64 + storyEnergy * 0.3 - silenceBudget * 0.12, 0.58, 0.96),
       ),
       roles,
@@ -6823,10 +6845,10 @@ export function producerPacingDensityScale(
     return round(range[0] + (range[1] - range[0]) * smooth);
   }
 
-  if (scene.storyStage === "pocket") return round(0.9 + 0.1 * smooth);
-  if (scene.purpose === "build") return round(0.82 + 0.18 * smooth);
-  if (scene.purpose === "reset") return round(0.78 + 0.14 * smooth);
-  if (scene.purpose === "resolve") return round(1 - 0.2 * smooth);
+  if (scene.storyStage === "pocket") return round(0.88 + 0.1 * smooth);
+  if (scene.purpose === "build") return round(0.76 + 0.24 * smooth);
+  if (scene.purpose === "reset") return round(0.72 + 0.18 * smooth);
+  if (scene.purpose === "resolve") return round(0.94 - 0.16 * smooth);
   return 1;
 }
 
@@ -6895,6 +6917,27 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
     if (delayFraction > 0 && maxBars > 0) {
       const delay = Math.min(span * delayFraction, barBeats * maxBars);
       entryBeat = round(section.startBeat + Math.max(0.5, delay));
+    }
+  }
+
+  const sectionIndex = structure.findIndex((candidate) => candidate?.id === section.id);
+  const nextSection = sectionIndex >= 0 ? structure[sectionIndex + 1] : null;
+  const nextIsPayoff = ["chorus", "drop", "theme"].includes(String(nextSection?.name ?? "").toLowerCase());
+  const payoffBreathBars = clamp(finite(scene?.payoffBreathBars, 0), 0, 1);
+  if (
+    scene.purpose === "build"
+    && nextIsPayoff
+    && payoffBreathBars > 0
+    && span >= barBeats * 1.5
+  ) {
+    const breathScale = trackId === "bass" ? 1
+      : trackId === "drums" ? 0.5
+        : ["answer", "texture"].includes(producerRole) ? 0.5
+          : 0;
+    if (breathScale > 0) {
+      const breath = Math.min(barBeats * payoffBreathBars * breathScale, span * 0.25);
+      const breathExit = round(section.endBeat - Math.max(0.25, breath));
+      exitBeat = exitBeat == null ? breathExit : Math.min(exitBeat, breathExit);
     }
   }
 
@@ -7024,6 +7067,11 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         );
 
         if (id === "drums" && producerRole !== "rest") {
+          const outsideDrumGate = !protectedAnchor && Boolean(
+            (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
+            || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
+          );
+          if (outsideDrumGate) continue;
           const coreDrumAnchor = protectedAnchor
             || [36, 38, 39].includes(Math.round(finite(note.pitch, -1)))
             || Math.abs(barPosition) < 0.04;
