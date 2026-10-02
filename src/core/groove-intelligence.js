@@ -913,6 +913,11 @@ export function createGrooveDNA(input = {}, {
         * (0.72 + densityControl * 0.56)
         * sectionDensityMultiplier(genre, section)
         * transformed.densityMultiplier;
+      // Groove DNA plans the safe transition-fill window, but does not author
+      // fill hits into the snare lane. The drum specialist remains the single
+      // note-authoring authority for rolls, pickups, crashes, and pre-drop
+      // punctuation. This avoids two independent fill systems competing at the
+      // same section boundary.
       const fillSteps = transitionFillSteps({
         lane,
         bar,
@@ -922,10 +927,9 @@ export function createGrooveDNA(input = {}, {
         seed: `${seed}:${genre}`,
         protectedSteps,
       });
-      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps, ...fillSteps]);
-      const densitySourceSteps = uniqueSorted([...transformed.steps, ...fillSteps]);
+      const transformAuthorizedSteps = uniqueSorted([...optionalSteps, ...transformed.steps]);
       const densitySteps = applyDensity(
-        densitySourceSteps,
+        transformed.steps,
         factor,
         lockedSteps,
         transformAuthorizedSteps,
@@ -1006,6 +1010,13 @@ export function createGrooveDNA(input = {}, {
       openingBoundary,
       transitionBoundary: Boolean(nextSection && bar === section.startBar + section.bars - 1),
       nextSectionRole: nextSection ? sectionRole(nextSection) : null,
+      transitionFillIntent: Object.freeze({
+        enabled: Boolean(lanePlans.snare?.transitionFillSteps?.length),
+        lane: "snare",
+        steps: Object.freeze([...(lanePlans.snare?.transitionFillSteps ?? [])]),
+        preservesBackbeat: Boolean(lanePlans.snare?.snareAuthority?.backbeatPreserved),
+        authoringAuthority: "drum-specialist",
+      }),
       kick: lanePlans.kick,
       snare: lanePlans.snare,
       hat: lanePlans.hat,
