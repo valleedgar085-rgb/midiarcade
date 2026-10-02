@@ -11,6 +11,10 @@ on:
       - "scripts/benchmark-performance-shadow.mjs"
       - "tests/generation-benchmark.test.mjs"
       - "tests/song-quality-gauntlet.test.mjs"
+      - "tests/cross-authority-coherence.test.mjs"
+      - "tests/final-ensemble-refinement.test.mjs"
+      - "tests/generation-repair-router.test.mjs"
+      - "tests/mutation-authority.test.mjs"
       - "tests/performance-shadow.test.mjs"
       - "tests/performance-candidate.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
@@ -37,6 +41,8 @@ jobs:
         run: node --test tests/blueprint-composer.test.mjs
       - name: Run ensemble coordination authority regression tests
         run: node --test tests/ensemble-coordination-authority.test.mjs
+      - name: Run final ensemble checker v4 regression tests
+        run: node --test tests/cross-authority-coherence.test.mjs tests/final-ensemble-refinement.test.mjs tests/generation-repair-router.test.mjs tests/mutation-authority.test.mjs
       - name: Run section completion authority regression tests
         run: node --test tests/section-completion-authority.test.mjs
       - name: Run performance candidate promotion regression tests

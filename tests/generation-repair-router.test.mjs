@@ -6,6 +6,7 @@ import {
   authorizeQualityStage,
   decideGenerationRepairAuthority,
   qualityStageAuthority,
+  resolveFinalEnsembleRepairPlan,
   resolveWeaknessAuthority,
 } from "../src/core/generation-repair-router.js";
 
@@ -72,4 +73,44 @@ test("quality specialist admission follows the diagnosed mutation owner", () => 
   assert.equal(authorizeQualityStage("registerHealthRefinement", authority).allowed, true);
   assert.equal(authorizeQualityStage("groovePocket", authority).allowed, false);
   assert.equal(authorizeQualityStage("transitionFxRefinement", authority).allowed, true);
+});
+
+
+test("final ensemble repair plan returns at most two bounded subtractive-first directives", () => {
+  const report = {
+    sectionFailures: [
+      { sectionId: "verse-1", failures: ["density-balance", "melody-counterline"] },
+    ],
+    macroDiagnostics: {
+      payoffPairs: [
+        { fromSectionId: "pre-1", toSectionId: "chorus-1", healthy: false },
+      ],
+      transitions: [
+        { fromSectionId: "verse-1", toSectionId: "pre-1", hardReset: true, staged: false },
+      ],
+    },
+  };
+
+  const plan = resolveFinalEnsembleRepairPlan(report);
+  assert.equal(plan.version, 2);
+  assert.equal(plan.available, true);
+  assert.equal(plan.owner, "ensemble");
+  assert.equal(plan.specialist, "ensemble-specialist");
+  assert.equal(plan.allowsFullRegeneration, false);
+  assert.equal(plan.policy, "bounded-subtractive-first");
+  assert.equal(plan.directives.length, 2);
+  assert.equal(plan.directives[0].relationship, "density-balance");
+  assert.equal(plan.directives[0].preferredAction, "subtract-support-before-adding-notes");
+  assert.ok(plan.directives.every((directive) => directive.allowedMutations.length > 0));
+});
+
+test("final ensemble repair plan stays inert when the committed ensemble is coherent", () => {
+  const plan = resolveFinalEnsembleRepairPlan({
+    sectionFailures: [],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
+  });
+  assert.equal(plan.available, false);
+  assert.equal(plan.allowsFullRegeneration, false);
+  assert.equal(plan.allowsSurgicalPostprocess, false);
+  assert.deepEqual(plan.directives, []);
 });
