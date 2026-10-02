@@ -4548,6 +4548,23 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     return true;
   };
 
+  const hitOrTagPreDrop = (pitch, start, velocity, duration, metadata) => {
+    if (hit(pitch, start, velocity, duration, metadata)) return true;
+    const existing = notes.find((note) => (
+      note.pitch === pitch && Math.abs(note.start - start) < 1e-6
+    ));
+    if (!existing) return false;
+    existing.preDropPunctuation = true;
+    existing.rhythmicFeature = metadata?.rhythmicFeature ?? existing.rhythmicFeature;
+    existing.preserveSubdivision = Boolean(
+      existing.preserveSubdivision
+      || metadata?.preserveSubdivision
+      || /(?:triplet|roll|burst|ratchet|stutter)/i.test(String(metadata?.rhythmicFeature ?? "")),
+    );
+    existing.preDropCollisionReuse = true;
+    return true;
+  };
+
   for (let bar = 0; bar < config.bars; bar += 1) {
     const evolution = phraseEvolutionForBar(config, structure, bar, "drums", rng, rhythmIdentity);
     const { section, phraseRng } = evolution;
@@ -4726,20 +4743,20 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
       const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
       const burstNotes = config.genre === "trap" ? [42, 42, 46] : [42, 46, 42];
       burstNotes.forEach((pitch, index) => {
-        hit(
+        hitOrTagPreDrop(
           pitch,
           start + burstStart + index * burstStep,
           eventVelocity(config, settings, intensity, preDropRng.fork(`hat-burst-${index}`), 0.52 + index * 0.11),
           0.055,
-          { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+          { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true, preserveSubdivision: true },
         );
       });
-      hit(
+      hitOrTagPreDrop(
         38,
         start + Math.min(barBeats - 0.125, burstStart + burstStep * 3),
         eventVelocity(config, settings, intensity, preDropRng.fork("snare-pickup"), 0.92),
         0.08,
-        { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+        { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true, preserveSubdivision: true },
       );
       preDropPunctuationFigures += 1;
     } else if (useRoll) {
@@ -4827,20 +4844,20 @@ function generateDrums(config, structure, _harmony, style, settings, rng, songBl
     const burstStep = config.complexity >= 0.68 ? 0.1875 : 0.25;
     const burstNotes = config.genre === "trap" ? [42, 42, 46] : [42, 46, 42];
     burstNotes.forEach((pitch, index) => {
-      hit(
+      hitOrTagPreDrop(
         pitch,
         tailStart + index * burstStep,
         eventVelocity(config, settings, intensity, lookaheadRng.fork(`hat-${index}`), 0.52 + index * 0.11),
         0.055,
-        { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true },
+        { rhythmicFeature: "pre-drop-hat-burst", preDropPunctuation: true, preserveSubdivision: true },
       );
     });
-    hit(
+    hitOrTagPreDrop(
       38,
       Math.min(section.endBeat - 0.125, tailStart + burstStep * 3),
       eventVelocity(config, settings, intensity, lookaheadRng.fork("snare"), 0.92),
       0.08,
-      { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true },
+      { rhythmicFeature: "pre-drop-snare-pickup", preDropPunctuation: true, preserveSubdivision: true },
     );
     preDropPunctuationFigures += 1;
   }
