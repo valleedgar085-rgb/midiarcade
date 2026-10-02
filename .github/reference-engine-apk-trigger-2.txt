@@ -1,0 +1,2 @@
+Reference Engine v1 repaired APK validation trigger.
+Source head: bcbf16b5cabbc17704a08fe8b7a2232a4d6bc2c2
