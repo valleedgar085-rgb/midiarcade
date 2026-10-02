@@ -72,7 +72,12 @@ export function auditStageMutationAuthority(beforeSong, afterSong, stageId) {
   if (topologyChanged) changed.push("topology");
   if (!same(before.starts, after.starts)) changed.push("timing");
   if (!same(before.durations, after.durations)) changed.push("duration");
-  if (authority.strictMutations && !same(before.velocities, after.velocities)) changed.push("velocity");
+  // Once topology changes, one-to-one note attributes are no longer comparable.
+  // A deleted/added note changes the velocity arrays structurally, but that is
+  // a topology mutation rather than a velocity rewrite.
+  if (authority.strictMutations && !topologyChanged && !same(before.velocities, after.velocities)) {
+    changed.push("velocity");
+  }
 
   // Once topology changes, a one-to-one pitch comparison is not reliable.
   if (!topologyChanged) {
