@@ -6,7 +6,7 @@
  * expressed in quarter-note beats; MIDI conversion happens only in encodeMidi.
  */
 
-import { planMusicalLookahead } from "./core/musical-lookahead.js";
+import { planMusicalLookahead, planRhythmMelodyLookahead } from "./core/musical-lookahead.js";
 import { authorMotifMemoryVariants } from "./core/motif-memory-authoring.js";
 import {
   cadentialHarmonyDegree,
@@ -6311,11 +6311,22 @@ function generateLead(
         const timingMagnet = counterpoint
           ? 0.18 + config.syncopation * 0.08
           : 0.26 + config.syncopation * 0.12;
+        const rhythmLookahead = !memoryCore && !phraseAnchor
+          ? planRhythmMelodyLookahead({
+            grooveConductor,
+            beat: proposedStart,
+            beatsPerBar: barBeats,
+            genre: config.genre,
+            lane: counterpoint ? "counterPulses" : "leadPulses",
+            horizonBars: 2,
+          })
+          : null;
+        const lookaheadStart = rhythmLookahead?.beat ?? proposedStart;
         const synchronized = memoryCore
           ? { beat: proposedStart, snapped: false }
           : magnetizeBeatToGroove(
             grooveConductor,
-            proposedStart,
+            lookaheadStart,
             counterpoint ? "counterPulses" : "leadPulses",
             barBeats,
             timingMagnet,
@@ -6458,6 +6469,7 @@ function generateLead(
               melodicMotionDegrees: developedRepeatShift,
             } : {}),
             ...(synchronized.snapped ? { rhythmicFeature: "groove-magnet" } : {}),
+            ...(rhythmLookahead ? { rhythmMelodyLookaheadIntent: rhythmLookahead } : {}),
             ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
             ...(activeMotif?.memoryAuthoring ? {
               motifMemoryVariantId: `motif-memory:${activeMotif.memoryAuthoring.sectionId}`,
