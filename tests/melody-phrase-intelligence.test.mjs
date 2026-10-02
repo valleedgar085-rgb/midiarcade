@@ -94,3 +94,32 @@ test("critic detects an isolated random leap spike inside an otherwise shaped ph
   );
   assert.ok(spikyReport.weakestSection.metrics.leapDiscipline < 0.72, JSON.stringify(spikyReport));
 });
+
+
+test("phrase critic rewards deliberate breathing between melodic statements", () => {
+  const breathing = fixture([
+    { start: 0.5, pitch: 64, duration: 0.35, velocity: 82 },
+    { start: 1.25, pitch: 67, duration: 0.35, velocity: 90 },
+    { start: 2, pitch: 69, duration: 0.35, velocity: 86 },
+    { start: 3.5, pitch: 67, duration: 0.45, velocity: 94 },
+    { start: 4.5, pitch: 69, duration: 0.35, velocity: 84 },
+    { start: 5.25, pitch: 72, duration: 0.35, velocity: 92 },
+    { start: 6, pitch: 74, duration: 0.35, velocity: 88 },
+    { start: 7.5, pitch: 72, duration: 0.45, velocity: 97 },
+  ]);
+  const continuous = fixture(Array.from({ length: 16 }, (_, index) => ({
+    start: index * 0.5,
+    pitch: [64, 67, 69, 67][index % 4],
+    duration: 0.5,
+    velocity: 86 + (index % 4) * 2,
+  })));
+
+  const breathingReport = evaluateMelodyPhraseIntelligence(breathing);
+  const continuousReport = evaluateMelodyPhraseIntelligence(continuous);
+
+  assert.ok(
+    breathingReport.weakestSection.metrics.phraseBreathing
+      > continuousReport.weakestSection.metrics.phraseBreathing,
+    JSON.stringify({ breathingReport, continuousReport }),
+  );
+});
