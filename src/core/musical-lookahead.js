@@ -214,7 +214,6 @@ export function planRhythmMelodyLookahead({
 
   const profile = rhythmLookaheadProfile(genre);
   const lanePulses = Array.isArray(current?.[lane]) ? current[lane] : [];
-  if (!lanePulses.length) return null;
 
   const futureBars = [];
   for (let index = 1; index <= Math.max(1, Math.min(2, Math.round(horizonBars))); index += 1) {
