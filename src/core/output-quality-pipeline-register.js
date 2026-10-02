@@ -1072,11 +1072,17 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
   }
 
   const phraseBefore = evaluateMelodyPhraseIntelligence(song);
-  if (phraseBefore.passed && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING) {
+  const leapDiscipline = finite(phraseBefore?.weakestSection?.metrics?.leapDiscipline, 1);
+  if (
+    phraseBefore.passed
+    && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
+    && leapDiscipline >= 0.72
+  ) {
     return {
       song,
       diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES, "already-strong", {
         beforePhraseScore: phraseBefore.score,
+        leapDiscipline: round(leapDiscipline, 3),
       }),
     };
   }
