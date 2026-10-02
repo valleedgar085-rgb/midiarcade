@@ -212,7 +212,12 @@ export function referenceSilenceBudgetNudge(influence, purpose) {
     : purpose === "reset" || purpose === "resolve"
       ? transitionBreath
       : (melodySpace + restraint) / 2;
-  return round((base - 0.5) * 0.12 * influence.confidenceWeight);
+  const nudge = (base - 0.5) * 0.12 * influence.confidenceWeight;
+  // Structure Director breathing minima are safety/quality contracts.
+  // References may create more room in establish/reset/resolve sections,
+  // but must never make those sections busier than the Director baseline.
+  if (["establish", "reset", "resolve"].includes(purpose)) return round(Math.max(0, nudge));
+  return round(nudge);
 }
 
 export function referenceDensityNudge(influence, purpose) {
