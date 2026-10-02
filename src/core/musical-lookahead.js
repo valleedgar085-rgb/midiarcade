@@ -161,6 +161,131 @@ export function rankPhraseTargetCandidates({
   ));
 }
 
+const RHYTHM_MELODY_LOOKAHEAD = Object.freeze({
+  hipHop: Object.freeze({ maxShift: 0.25, tailReserve: 0.5 }),
+  rap: Object.freeze({ maxShift: 0.25, tailReserve: 0.5 }),
+  trap: Object.freeze({ maxShift: 0.1875, tailReserve: 0.5 }),
+  neoSoul: Object.freeze({ maxShift: 0.25, tailReserve: 0.5 }),
+  rnbSoul: Object.freeze({ maxShift: 0.25, tailReserve: 0.5 }),
+  pop: Object.freeze({ maxShift: 0.125, tailReserve: 0.375 }),
+  house: Object.freeze({ maxShift: 0.0625, tailReserve: 0.25 }),
+  techno: Object.freeze({ maxShift: 0.0625, tailReserve: 0.25 }),
+  jazz: Object.freeze({ maxShift: 0.25, tailReserve: 0.375 }),
+});
+
+function rhythmLookaheadProfile(genre) {
+  return RHYTHM_MELODY_LOOKAHEAD[String(genre ?? "")] ?? Object.freeze({
+    maxShift: 0.125,
+    tailReserve: 0.375,
+  });
+}
+
+function pulseNear(value, pulses = [], tolerance = 0.055) {
+  return (pulses ?? []).some((pulse) => Math.abs(finite(pulse) - value) <= tolerance);
+}
+
+function grooveBarAt(conductor, bar) {
+  return conductor?.bars?.find?.((candidate) => Number(candidate?.bar) === bar)
+    ?? conductor?.bars?.[bar]
+    ?? null;
+}
+
+/**
+ * Read 1-2 bars of the already-authored Groove Conductor before a lead onset is
+ * committed. This does not rewrite drums or bass; it lets melody/counterpoint
+ * choose a nearby authored lead pulse that leaves space for the current
+ * backbeat and for a busy incoming bar.
+ */
+export function planRhythmMelodyLookahead({
+  grooveConductor = null,
+  beat,
+  beatsPerBar = 4,
+  genre = "pop",
+  lane = "leadPulses",
+  horizonBars = 2,
+} = {}) {
+  if (!Number.isFinite(Number(beat)) || !grooveConductor?.bars?.length) return null;
+  const barBeats = Math.max(1, finite(beatsPerBar, 4));
+  const absoluteBeat = finite(beat);
+  const bar = Math.max(0, Math.floor(absoluteBeat / barBeats));
+  const offset = absoluteBeat - bar * barBeats;
+  const current = grooveBarAt(grooveConductor, bar);
+  if (!current) return null;
+
+  const profile = rhythmLookaheadProfile(genre);
+  const lanePulses = Array.isArray(current?.[lane]) ? current[lane] : [];
+  if (!lanePulses.length) return null;
+
+  const futureBars = [];
+  for (let index = 1; index <= Math.max(1, Math.min(2, Math.round(horizonBars))); index += 1) {
+    const candidate = grooveBarAt(grooveConductor, bar + index);
+    if (candidate) futureBars.push(candidate);
+  }
+  const next = futureBars[0] ?? null;
+  const nextOpeningWindow = 0.3;
+  const nextOpeningLoad = next
+    ? [
+      pulseNear(0, next.anchors, nextOpeningWindow),
+      pulseNear(0, next.snarePulses, nextOpeningWindow),
+      pulseNear(0, next.bassPulses, nextOpeningWindow),
+      pulseNear(0, next.chordPulses, nextOpeningWindow),
+    ].filter(Boolean).length
+    : 0;
+  const incomingPayoff = Boolean(
+    current?.transitionBoundary
+    && ["payoff", "chorus", "drop"].includes(String(current?.nextSectionRole ?? next?.sectionRole ?? "").toLowerCase())
+  );
+  const reserveTail = nextOpeningLoad >= 2 || incomingPayoff;
+
+  const scoreAt = (candidate) => {
+    let score = 0;
+    if (pulseNear(candidate, current.snarePulses, 0.08)) score += 4.2;
+    if (pulseNear(candidate, current.anchors, 0.06)) score += 1.3;
+    if (pulseNear(candidate, current.bassPulses, 0.06)) score += 1.5;
+    if (pulseNear(candidate, current.protectedSpaces ?? current.spaces, 0.03)) score += 8;
+    if (reserveTail && candidate >= barBeats - profile.tailReserve) {
+      score += 2.5 + (candidate - (barBeats - profile.tailReserve)) * 2;
+    }
+    score -= pulseNear(candidate, lanePulses, 0.02) ? 1.1 : 0;
+    return score;
+  };
+
+  const candidates = [...new Set([offset, ...lanePulses.map((pulse) => finite(pulse))])]
+    .filter((candidate) => (
+      candidate >= 0
+      && candidate < barBeats - 0.01
+      && Math.abs(candidate - offset) <= profile.maxShift + 1e-9
+      && !pulseNear(candidate, current.protectedSpaces ?? current.spaces, 0.02)
+    ))
+    .map((candidate) => ({
+      offset: candidate,
+      shift: candidate - offset,
+      score: scoreAt(candidate),
+    }))
+    .sort((left, right) => (
+      left.score - right.score
+      || Math.abs(left.shift) - Math.abs(right.shift)
+      || left.offset - right.offset
+    ));
+
+  const chosen = candidates[0];
+  const sourceScore = scoreAt(offset);
+  if (!chosen || Math.abs(chosen.shift) < 1e-9 || chosen.score >= sourceScore - 0.45) return null;
+
+  return Object.freeze({
+    version: 2,
+    beat: Math.round((bar * barBeats + chosen.offset) * 10000) / 10000,
+    sourceBeat: Math.round(absoluteBeat * 10000) / 10000,
+    shiftBeats: Math.round(chosen.shift * 10000) / 10000,
+    bar,
+    horizonBars: futureBars.length,
+    nextOpeningLoad,
+    incomingPayoff,
+    reserveTail,
+    role: reserveTail ? "prepare-next-bar" : "avoid-current-congestion",
+  });
+}
+
 /** Choose a nearby preparation for a real future chord, without adding notes or moving time. */
 export function planMusicalLookahead({
   pitch, start, boundary, totalBeats, scalePitchClasses = [], currentTones = [],
@@ -236,4 +361,4 @@ export function planMusicalLookahead({
   };
 }
 
-export const MUSICAL_LOOKAHEAD_VERSION = "2.0";
+export const MUSICAL_LOOKAHEAD_VERSION = "2.1";
