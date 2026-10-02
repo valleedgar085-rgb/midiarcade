@@ -8144,6 +8144,83 @@ function makeTrack(id, settings, notes, automation = []) {
   };
 }
 
+function ensureFinalPreDropPunctuation(sourceTracks, structure, config) {
+  if (
+    !["trap", "hipHop", "rap"].includes(config.genre)
+    || config.drumFills <= 0.001
+    || config.evolution <= 0.001
+  ) {
+    return { tracks: sourceTracks, added: 0, reused: 0 };
+  }
+
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const drums = tracks.find((track) => track.id === "drums");
+  if (!drums) return { tracks, added: 0, reused: 0 };
+
+  const punctuation = () => drums.notes.filter((note) => (
+    note.preDropPunctuation
+    || String(note.rhythmicFeature ?? "").startsWith("pre-drop-")
+  ));
+  const existingCount = punctuation().length;
+  if (existingCount >= 3) return { tracks, added: 0, reused: 0 };
+
+  const barBeats = beatsPerBar(config);
+  const qualifying = structure
+    .map((section, index) => ({ section, next: structure[index + 1] }))
+    .filter(({ section, next }) => (
+      section?.name !== "intro"
+      && ["chorus", "drop"].includes(next?.name)
+      && finite(section?.endBeat, 0) > finite(section?.startBeat, 0)
+    ));
+  if (!qualifying.length) return { tracks, added: 0, reused: 0 };
+
+  const { section } = qualifying[0];
+  const tailStart = Math.max(
+    finite(section.startBeat, 0),
+    finite(section.endBeat, 0) - Math.min(1, barBeats),
+  );
+  const step = config.complexity >= 0.68 ? 0.1875 : 0.25;
+  const figure = config.genre === "trap"
+    ? [[42, 0, 72], [42, step, 78], [46, step * 2, 82], [38, step * 3, 94]]
+    : [[42, 0, 70], [46, step, 76], [42, step * 2, 80], [38, step * 3, 92]];
+
+  let added = 0;
+  let reused = 0;
+  for (const [pitch, offset, velocity] of figure) {
+    if (punctuation().length >= 8) break;
+    const start = round(Math.min(finite(section.endBeat, tailStart + 1) - 0.125, tailStart + offset));
+    const feature = pitch === 38 ? "pre-drop-snare-pickup" : "pre-drop-hat-burst";
+    const existing = drums.notes.find((note) => (
+      note.pitch === pitch && Math.abs(note.start - start) < 1e-6
+    ));
+    if (existing) {
+      existing.preDropPunctuation = true;
+      existing.rhythmicFeature = feature;
+      existing.preserveSubdivision = true;
+      existing.preDropCollisionReuse = true;
+      reused += 1;
+      continue;
+    }
+    drums.notes.push({
+      pitch,
+      start,
+      duration: pitch === 38 ? 0.08 : 0.055,
+      velocity: clamp(Math.round(velocity), 1, 120),
+      rhythmicFeature: feature,
+      preDropPunctuation: true,
+      preserveSubdivision: true,
+      grammarRole: pitch === 38 ? "transition-pickup" : "transition-burst",
+      grooveSource: "final-drum-authority.pre-drop",
+    });
+    added += 1;
+  }
+  drums.notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+  return { tracks, added, reused };
+}
+
 function runProducerPass(sourceTracks, structure, songBlueprint) {
   const tracks = sourceTracks.map((track) => ({
     ...track,
@@ -11227,7 +11304,14 @@ function compose(config, options = {}) {
     harmony,
     config,
   );
-  const tracks = licensedColorVoice.tracks;
+  const finalPreDrop = ensureFinalPreDropPunctuation(
+    licensedColorVoice.tracks,
+    structure,
+    config,
+  );
+  const tracks = finalPreDrop.tracks;
+  finalAssemblyRepair.repairs.finalPreDropPunctuationAdded = finalPreDrop.added;
+  finalAssemblyRepair.repairs.finalPreDropPunctuationReused = finalPreDrop.reused;
   finalAssemblyRepair.repairs.motifMemoryProvenanceRestored = memoryProvenance.restored;
   finalAssemblyRepair.repairs.licensedHarmonyColorVoicesRestored = licensedColorVoice.restored;
   const finalTonalIntegrity = analyzeTonalIntegrity(
