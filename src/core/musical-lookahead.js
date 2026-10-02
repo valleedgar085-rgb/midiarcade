@@ -245,7 +245,10 @@ export function planRhythmMelodyLookahead({
     transitionBoundary
     && ["payoff", "chorus", "drop"].includes(nextSectionRole)
   );
-  const reserveTail = nextOpeningLoad >= 2 || incomingPayoff;
+  // Reserve the outgoing tail only for a real section handoff/payoff. A busy
+  // opening inside the same section should influence the next phrase without
+  // misclassifying ordinary backbeat congestion as a transition.
+  const reserveTail = Boolean(transitionBoundary && (nextOpeningLoad >= 2 || incomingPayoff));
 
   const scoreAt = (candidate) => {
     let score = 0;
