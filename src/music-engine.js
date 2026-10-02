@@ -6311,7 +6311,7 @@ function generateLead(
         const timingMagnet = counterpoint
           ? 0.18 + config.syncopation * 0.08
           : 0.26 + config.syncopation * 0.12;
-        const rhythmLookahead = !memoryCore && !phraseAnchor
+        const rawRhythmLookahead = config.professionalUpgrade && !memoryCore
           ? planRhythmMelodyLookahead({
             grooveConductor,
             beat: proposedStart,
@@ -6321,6 +6321,15 @@ function generateLead(
             horizonBars: 2,
           })
           : null;
+        const rhythmLookahead = rawRhythmLookahead && phraseAnchor
+          ? {
+            ...rawRhythmLookahead,
+            beat: proposedStart,
+            shiftBeats: 0,
+            role: "protected-anchor-hold",
+            proposedRole: rawRhythmLookahead.role,
+          }
+          : rawRhythmLookahead;
         const lookaheadStart = rhythmLookahead?.beat ?? proposedStart;
         const synchronized = memoryCore
           ? { beat: proposedStart, snapped: false }
