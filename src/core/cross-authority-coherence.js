@@ -351,6 +351,7 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
     || macroDiagnostics.checks.entrancesExitsStaged === true;
   if (!macroPayoffLiftCoherent) issues.push("payoff-lift-weak");
   if (!macroTransitionContinuityCoherent) issues.push("section-transition-reset");
+  if (!macroEntrancesExitsStaged) issues.push("section-entry-exit-staging-weak");
 
   const checks = Object.freeze({
     specialistsShareGrooveDNA,
