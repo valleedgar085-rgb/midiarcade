@@ -189,10 +189,10 @@ test("rhythm-melody lookahead chooses a nearby authored pulse away from backbeat
       {
         bar: 1,
         sectionId: "verse",
-        anchors: [0, 2],
+        anchors: [2],
         snarePulses: [1, 3],
-        bassPulses: [0, 0.5, 2],
-        chordPulses: [0, 0.5, 2],
+        bassPulses: [2],
+        chordPulses: [2],
         leadPulses: [0.5, 1.5, 2.5, 3.5],
         spaces: [],
       },
