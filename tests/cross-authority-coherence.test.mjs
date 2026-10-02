@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { evaluateCrossAuthorityCoherence } from "../src/core/cross-authority-coherence.js";
+import {
+  evaluateCrossAuthorityCoherence,
+  evaluateMacroEnsembleArc,
+} from "../src/core/cross-authority-coherence.js";
 import { createSpecialistDirectorPlan } from "../src/core/specialist-musicians.js";
 
 function song() {
@@ -106,4 +109,79 @@ test("relationship diagnostics remain read-only when ensemble contracts are unav
   assert.equal(report.checks.leadDialogueCoherent, true);
   assert.equal(report.checks.cadenceTeamCoherent, true);
   assert.equal(report.checks.sectionEvolutionCoherent, true);
+});
+
+
+function macroArcSong() {
+  return {
+    meta: { beatsPerBar: 4 },
+    structure: [
+      { id: "verse-1", name: "Verse", startBeat: 0, endBeat: 4, bars: 1 },
+      { id: "chorus-1", name: "Chorus", startBeat: 4, endBeat: 8, bars: 1 },
+    ],
+    tracks: [
+      {
+        id: "drums",
+        notes: [
+          { pitch: 36, start: 0, duration: 0.1, velocity: 96 },
+          { pitch: 38, start: 2, duration: 0.1, velocity: 92 },
+          { pitch: 36, start: 4, duration: 0.1, velocity: 96 },
+          { pitch: 38, start: 6, duration: 0.1, velocity: 92 },
+        ],
+      },
+      {
+        id: "bass",
+        notes: [
+          { pitch: 45, start: 0, duration: 0.75, velocity: 88 },
+          { pitch: 45, start: 4, duration: 0.75, velocity: 88 },
+        ],
+      },
+      {
+        id: "chords",
+        notes: [
+          { pitch: 57, start: 0, duration: 2, velocity: 76 },
+          { pitch: 57, start: 4, duration: 2, velocity: 76 },
+        ],
+      },
+      {
+        id: "melody",
+        notes: [
+          { pitch: 69, start: 1, duration: 0.5, velocity: 90 },
+          { pitch: 69, start: 5, duration: 0.5, velocity: 90 },
+        ],
+      },
+    ],
+  };
+}
+
+test("macro ensemble pass detects a payoff that does not lift above its setup", () => {
+  const source = macroArcSong();
+  const before = structuredClone(source);
+  const report = evaluateMacroEnsembleArc(source);
+
+  assert.deepEqual(source, before, "macro ensemble audit must remain read-only");
+  assert.equal(report.available, true);
+  assert.equal(report.payoffPairs.length, 1);
+  assert.equal(report.payoffPairs[0].toSectionId, "chorus-1");
+  assert.equal(report.payoffPairs[0].healthy, false, JSON.stringify(report.payoffPairs[0]));
+  assert.equal(report.checks.payoffLiftCoherent, false);
+});
+
+test("macro ensemble pass accepts contrast created by role and pressure lift", () => {
+  const source = macroArcSong();
+  source.tracks.push({
+    id: "counterpoint",
+    notes: [
+      { pitch: 72, start: 5.5, duration: 0.4, velocity: 102 },
+      { pitch: 74, start: 7, duration: 0.35, velocity: 104 },
+    ],
+  });
+  source.tracks.find((track) => track.id === "melody").notes.push(
+    { pitch: 72, start: 6.5, duration: 0.4, velocity: 104 },
+  );
+
+  const report = evaluateMacroEnsembleArc(source);
+  assert.equal(report.payoffPairs.length, 1);
+  assert.equal(report.payoffPairs[0].healthy, true, JSON.stringify(report.payoffPairs[0]));
+  assert.equal(report.checks.payoffLiftCoherent, true);
 });
