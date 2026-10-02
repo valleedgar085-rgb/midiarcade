@@ -36,6 +36,30 @@ async function waitForGenerationCommit(app, previousGenerationCount, timeoutMs =
   throw new Error(`Generation did not settle after generationCount ${previousGenerationCount}.`);
 }
 
+function dispatchGenerationClick(element) {
+  const originalNow = Date.now;
+  const originalRandom = Math.random;
+  const cryptoObject = globalThis.crypto;
+  const originalGetRandomValues = cryptoObject?.getRandomValues;
+  Date.now = () => 1_700_000_000_000;
+  Math.random = () => 0.5;
+  if (typeof originalGetRandomValues === "function") {
+    cryptoObject.getRandomValues = (values) => {
+      values[0] = 0x5eed;
+      return values;
+    };
+  }
+  try {
+    element.dispatch("click");
+  } finally {
+    Date.now = originalNow;
+    Math.random = originalRandom;
+    if (typeof originalGetRandomValues === "function") {
+      cryptoObject.getRandomValues = originalGetRandomValues;
+    }
+  }
+}
+
 test("Create Complexity slider strengthens user input without changing engine defaults", () => {
   assert.match(
     appSource,
@@ -607,7 +631,7 @@ test("browser app initializes against the engine contract", async () => {
 
   assert.equal(app.getAppStateSnapshot().song, null, "reopening the studio must begin with an empty song plate");
   const firstGenerationCount = app.getAppStateSnapshot().generationCount;
-  elementFor("#generateNew").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateNew"));
   const firstGeneratedSnapshot = await waitForGenerationCommit(app, firstGenerationCount);
   assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
 
@@ -810,8 +834,8 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(elementFor("#workflowProgress").textContent, "STEP 2 OF 4");
 
   const initialGeneration = app.getAppStateSnapshot();
-  elementFor("#generateNew").dispatch("click");
-  elementFor("#generateNew").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateNew"));
+  dispatchGenerationClick(elementFor("#generateNew"));
   assert.equal(app.getAppStateSnapshot().isGenerating, true);
   const freshGeneration = await waitForGenerationCommit(app, initialGeneration.generationCount);
   assert.equal(freshGeneration.generationCount, initialGeneration.generationCount + 1, "rapid taps must commit exactly one generation");
@@ -823,7 +847,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(freshGeneration.song.generationInterlock.phase, 39, "New must connect every generation stage");
   assert.equal(freshGeneration.song.producerPass.phase, 9, "New must complete the phase 9 producer pass");
 
-  elementFor("#generateSimilar").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateSimilar"));
   const relatedGeneration = await waitForGenerationCommit(app, freshGeneration.generationCount);
   assert.equal(relatedGeneration.generationCount, freshGeneration.generationCount + 1);
   assert.equal(relatedGeneration.songVariationCount, 3, "Similar must prepare three complete full-song directions");
@@ -1077,7 +1101,7 @@ test("browser app initializes against the engine contract", async () => {
     .map((match) => [match[1], Number(match[2])]));
   const previousPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   const manualNewGenerationCount = app.getAppStateSnapshot().generationCount;
-  elementFor("#generateNew").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateNew"));
   await waitForGenerationCommit(app, manualNewGenerationCount);
   const newPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   assert.equal(Object.keys(newPrograms).length, 6);
@@ -1095,7 +1119,7 @@ test("browser app initializes against the engine contract", async () => {
   }
 
   const manualSimilarGenerationCount = app.getAppStateSnapshot().generationCount;
-  elementFor("#generateSimilar").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateSimilar"));
   await waitForGenerationCommit(app, manualSimilarGenerationCount);
   const similarPrograms = selectedPrograms(elementFor("#trackRack").innerHTML);
   assert.deepEqual(similarPrograms, newPrograms, "More Like This must preserve every instrument program");
@@ -1116,7 +1140,7 @@ test("browser app initializes against the engine contract", async () => {
   const programsBeforeAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
     .map(([id, settings]) => [id, Number(settings.program)]));
   const autoNewGenerationCount = app.getAppStateSnapshot().generationCount;
-  elementFor("#generateNew").dispatch("click");
+  dispatchGenerationClick(elementFor("#generateNew"));
   await waitForGenerationCommit(app, autoNewGenerationCount);
   const programsAfterAutoNew = Object.fromEntries(Object.entries(app.getAppStateSnapshot().trackSettings)
     .map(([id, settings]) => [id, Number(settings.program)]));
