@@ -2,10 +2,12 @@ import { createGenerationFlightRecorder } from "./generation-flight-recorder.js"
 import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
+import { evaluateCrossAuthorityCoherence } from "./cross-authority-coherence.js";
 import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
   decideGenerationRepairAuthority,
+  resolveFinalEnsembleRepairPlan,
 } from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
@@ -42,6 +44,26 @@ export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
     outputQualityDiagnostics: {
       ...result.outputQualityDiagnostics,
       melodySectionMemoryAudit: report,
+    },
+  };
+}
+
+export function withCommittedFinalEnsembleDiagnostics(result, report, repairPlan) {
+  // Like the melody audit, this observes the exact committed song. It never
+  // changes notes and preserves legacy results that do not publish diagnostics.
+  if (
+    !result
+    || typeof result !== "object"
+    || !report
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      finalEnsembleAudit: report,
+      finalEnsembleRepairPlan: repairPlan ?? null,
     },
   };
 }
@@ -452,6 +474,20 @@ export function createGenerationExecutor({
         selectedResult,
         committedMelodySectionMemory,
       );
+
+      const committedFinalEnsembleAudit = selectedResult?.song
+        ? evaluateCrossAuthorityCoherence(selectedResult.song)
+        : null;
+      const finalEnsembleRepairPlan = resolveFinalEnsembleRepairPlan(
+        committedFinalEnsembleAudit,
+        { maxDirectives: 2 },
+      );
+      selectedResult = withCommittedFinalEnsembleDiagnostics(
+        selectedResult,
+        committedFinalEnsembleAudit,
+        finalEnsembleRepairPlan,
+      );
+
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       mark("finalize", {
         repairAuthority,
@@ -469,6 +505,8 @@ export function createGenerationExecutor({
         melodySectionMemoryAudit: committedMelodySectionMemory ?? stageDiagnostics.melodySectionMemoryAudit ?? null,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
+        finalEnsembleAudit: committedFinalEnsembleAudit ?? acceptedDiagnostics.finalEnsembleAudit ?? null,
+        finalEnsembleRepairPlan,
       });
 
       const shouldPersist = typeof persistGeneration === "function"
