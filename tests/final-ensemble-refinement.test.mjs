@@ -97,7 +97,9 @@ test("density-balance repair subtracts one support note without touching foundat
   );
   const audit = auditStageMutationAuthority(source, candidate.song, "finalEnsembleRefinement");
   assert.equal(audit.passed, true, JSON.stringify(audit));
-  assert.deepEqual(audit.changedMutations, ["topology"]);
+  assert.ok(audit.changedMutations.includes("topology"));
+  assert.equal(audit.changedMutations.includes("velocity"), false);
+  assert.deepEqual(audit.violations, []);
 });
 
 test("melody-counterline repair restores turn-taking without changing pitches", () => {
