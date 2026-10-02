@@ -56,6 +56,7 @@ import {
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
+import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
   absoluteGroovePulses,
@@ -11253,7 +11254,22 @@ function compose(config, options = {}) {
     )
     : { tracks: creativePolish.tracks, added: 0 };
   const melodicFlow = shapeRenderedMelodicFlow(counterCoverage.tracks, structure);
-  const finalMaster = runFinalMasterPass(melodicFlow.tracks, structure, songBlueprint, config);
+  const melodyPocketSource = {
+    genre: config.genre,
+    meta: {
+      genre: config.genre,
+      beatsPerBar: beatsPerBar(config),
+      totalBeats,
+    },
+    structure,
+    grooveConductor,
+    tracks: melodicFlow.tracks,
+  };
+  const melodyPocketRepair = refineMelodyRhythmPocket(melodyPocketSource);
+  const melodyPocketTracks = melodyPocketRepair.accepted
+    ? melodyPocketRepair.song.tracks
+    : melodicFlow.tracks;
+  const finalMaster = runFinalMasterPass(melodyPocketTracks, structure, songBlueprint, config);
   const withSectionLandings = ensureFinalMelodicSectionLandings(
     finalMaster.tracks,
     structure,
@@ -11423,6 +11439,20 @@ function compose(config, options = {}) {
     perceptualMix: perceptualMix.report,
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
+    melodyRhythmPocket: Object.freeze({
+      version: 1,
+      accepted: melodyPocketRepair.accepted,
+      changedNotes: melodyPocketRepair.changedNotes,
+      before: melodyPocketRepair.before.diagnostics,
+      after: melodyPocketRepair.after.diagnostics,
+      final: evaluateMelodyRhythmPocket({
+        genre: config.genre,
+        meta: { genre: config.genre, beatsPerBar: beatsPerBar(config), totalBeats },
+        structure,
+        grooveConductor,
+        tracks,
+      }),
+    }),
     melodicDialogue: melodicDialogue.report,
     ensembleCoordination: ensembleCoordination.report,
     pocketCohesion: creativePolish.pocketCohesion,
