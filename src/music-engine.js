@@ -11290,6 +11290,23 @@ function compose(config, options = {}) {
   const melodyPocketTracks = melodyPocketRepair.accepted
     ? melodyPocketRepair.song.tracks
     : melodicFlow.tracks;
+  const rhythmMelodyLookaheadIntents = melodyPocketTracks
+    .filter((track) => ["melody", "counterpoint"].includes(track.id))
+    .flatMap((track) => track.notes ?? [])
+    .map((note) => note.rhythmMelodyLookaheadIntent)
+    .filter(Boolean);
+  const rhythmMelodyLookaheadReport = Object.freeze({
+    version: 2,
+    horizonBars: 2,
+    plannedNotes: rhythmMelodyLookaheadIntents.length,
+    shiftedNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) > 1e-9).length,
+    heldNotes: rhythmMelodyLookaheadIntents.filter((intent) => Math.abs(finite(intent?.shiftBeats, 0)) <= 1e-9).length,
+    payoffPreparations: rhythmMelodyLookaheadIntents.filter((intent) => intent?.reserveTail).length,
+    maxAbsShift: round(rhythmMelodyLookaheadIntents.reduce(
+      (maximum, intent) => Math.max(maximum, Math.abs(finite(intent?.shiftBeats, 0))),
+      0,
+    )),
+  });
   const finalMaster = runFinalMasterPass(melodyPocketTracks, structure, songBlueprint, config);
   const withSectionLandings = ensureFinalMelodicSectionLandings(
     finalMaster.tracks,
@@ -11460,6 +11477,7 @@ function compose(config, options = {}) {
     perceptualMix: perceptualMix.report,
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
+    rhythmMelodyLookahead: rhythmMelodyLookaheadReport,
     melodyRhythmPocket: Object.freeze({
       version: 1,
       accepted: melodyPocketRepair.accepted,
