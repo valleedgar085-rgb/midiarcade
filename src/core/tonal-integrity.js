@@ -284,11 +284,21 @@ export function analyzeTonalIntegrity(tracks = [], harmony = [], meta = {}, stru
       contextualNotes += 1;
       const pitchClass = mod(notePitch(note), 12);
       const license = evaluateTonalLicense(note, nextNote, chord, meta);
-      const rawChordClasses = rawChordPitchClasses(chord);
-      if (chordClasses.has(pitchClass) || license.valid && rawChordClasses.has(pitchClass)) {
-        chordToneNotes += 1;
-      } else if (!license.valid && tonalRiskFor(note, chord, scaleClasses).risky) {
-        harshStrongNotes += 1;
+      const isSynthwave = meta?.genre === "synthwave";
+      if (isSynthwave) {
+        const isRisky = !license.valid && tonalRiskFor(note, chord, scaleClasses).risky;
+        if (chordClasses.has(pitchClass) || license.valid || !isRisky) {
+          chordToneNotes += 1;
+        } else if (isRisky) {
+          harshStrongNotes += 1;
+        }
+      } else {
+        const rawChordClasses = rawChordPitchClasses(chord);
+        if (chordClasses.has(pitchClass) || license.valid && rawChordClasses.has(pitchClass)) {
+          chordToneNotes += 1;
+        } else if (!license.valid && tonalRiskFor(note, chord, scaleClasses).risky) {
+          harshStrongNotes += 1;
+        }
       }
     }
   }
