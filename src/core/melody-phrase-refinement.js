@@ -95,39 +95,93 @@ function sectionLandingCandidate(song, sectionId) {
   note.phraseIntentRole = "cadential-landing";
   return { id: "cadential-landing", song: candidate, changedNotes: 1 };
 }
-function repeatedPitchContourCandidate(song, sectionId) {
+function protectedPhraseAnchor(note) {
+  return Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.ensembleCadenceRole
+    || note?.transitionRole
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.motifHandoffRole
+    || note?.finalAssemblyRole
+  );
+}
+function contourOutlierCandidate(song, sectionId) {
   const entries = notesInSection(song, sectionId);
   if (entries.length < 3) return null;
+
   let target = null;
-  for (let index = 1; index < entries.length - 1; index += 1) {
-    const previous = Math.round(finite(entries[index - 1].note.pitch));
-    const current = Math.round(finite(entries[index].note.pitch));
-    const next = Math.round(finite(entries[index + 1].note.pitch));
-    if (current === previous || current === next) {
-      target = entries[index];
-      break;
-    }
+  for (let ordinal = 1; ordinal < entries.length - 1; ordinal += 1) {
+    const entry = entries[ordinal];
+    if (protectedPhraseAnchor(entry.note)) continue;
+
+    const previous = Math.round(finite(entries[ordinal - 1].note.pitch));
+    const current = Math.round(finite(entry.note.pitch));
+    const next = Math.round(finite(entries[ordinal + 1].note.pitch));
+    const left = Math.abs(current - previous);
+    const right = Math.abs(next - current);
+    const direct = Math.abs(next - previous);
+    const isolatedSpike = left >= 7 && right >= 7 && direct <= 5;
+    const extremeTurn = Math.max(left, right) > 10 && direct <= 7;
+    if (!isolatedSpike && !extremeTurn) continue;
+
+    const severity = left + right - direct * 0.5;
+    if (!target || severity > target.severity) target = { entry, ordinal, severity };
   }
+
   if (!target) return null;
   const candidate = cloneValue(song);
-  const note = melodyTrack(candidate)?.notes?.[target.index];
-  if (!note) return null;
+  const track = melodyTrack(candidate);
+  const note = track?.notes?.[target.entry.index];
+  const previous = track?.notes?.[entries[target.ordinal - 1].index];
+  const next = track?.notes?.[entries[target.ordinal + 1].index];
+  if (!note || !previous || !next) return null;
+
   const sourcePitch = Math.round(finite(note.pitch, 60));
+  const previousPitch = Math.round(finite(previous.pitch, sourcePitch));
+  const nextPitch = Math.round(finite(next.pitch, sourcePitch));
+  const midpoint = (previousPitch + nextPitch) / 2;
   const scale = scalePitchClasses(candidate);
+  const chord = harmonyAt(candidate, finite(note.start));
+  const chordClasses = chordPitchClasses(chord);
+  const strongLanding = finite(note.duration, 0.25) >= 0.65
+    || Math.abs(finite(note.start) - Math.round(finite(note.start))) <= 0.08;
+
+  let allowed = strongLanding && chordClasses.length ? chordClasses : (scale?.size ? [...scale] : chordClasses);
+  if (scale?.size && allowed.length) allowed = allowed.filter((pitchClass) => scale.has(pitchClass));
+  if (!allowed.length && scale?.size) allowed = [...scale];
+  if (!allowed.length) allowed = Array.from({ length: 12 }, (_, index) => index);
+
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
-  const allowed = scale?.size ? [...scale] : Array.from({ length: 12 }, (_, index) => index);
-  const direction = (target.index + String(sectionId).length) % 2 === 0 ? 1 : -1;
+  const originalSpan = Math.max(
+    Math.abs(sourcePitch - previousPitch),
+    Math.abs(nextPitch - sourcePitch),
+  );
   const options = [];
-  for (let delta = 1; delta <= 5; delta += 1) {
-    const pitch = sourcePitch + direction * delta;
-    if (pitch >= window.min && pitch <= window.max && allowed.includes(mod12(pitch))) options.push(pitch);
+  for (let pitch = window.min; pitch <= window.max; pitch += 1) {
+    if (pitch === sourcePitch || !allowed.includes(mod12(pitch))) continue;
+    const span = Math.max(Math.abs(pitch - previousPitch), Math.abs(nextPitch - pitch));
+    if (span >= originalSpan) continue;
+    const score = Math.abs(pitch - midpoint) * 2
+      + Math.abs(pitch - previousPitch) * 0.35
+      + Math.abs(nextPitch - pitch) * 0.35
+      + Math.abs(pitch - sourcePitch) * 0.08;
+    options.push({ pitch, span, score });
   }
-  if (!options.length) return null;
-  note.pitch = options[0];
-  note.duration = round(clamp(finite(note.duration, 0.25) * 0.9, 0.12, 0.8));
-  note.velocity = Math.round(clamp(finite(note.velocity, 84) + 3, 1, 120));
-  note.phraseIntentRole = "contour-turn";
-  return { id: "contour-turn", song: candidate, changedNotes: 1 };
+  options.sort((left, right) => left.score - right.score || left.span - right.span || left.pitch - right.pitch);
+  const selected = options[0];
+  if (!selected) return null;
+
+  note.pitch = selected.pitch;
+  const neighborVelocity = Math.round((finite(previous.velocity, 84) + finite(next.velocity, 84)) / 2);
+  note.velocity = Math.round(clamp(
+    finite(note.velocity, 84) * 0.45 + neighborVelocity * 0.55,
+    1,
+    120,
+  ));
+  note.phraseIntentRole = "contour-outlier-repair";
+  return { id: "contour-outlier-repair", song: candidate, changedNotes: 1 };
 }
 function expressiveArcCandidate(song, sectionId) {
   const entries = notesInSection(song, sectionId);
@@ -164,7 +218,7 @@ export function createMelodyPhraseCandidates(song, {
   if (!sectionId) return [];
   const raw = [
     sectionLandingCandidate(song, sectionId),
-    repeatedPitchContourCandidate(song, sectionId),
+    contourOutlierCandidate(song, sectionId),
     expressiveArcCandidate(song, sectionId),
   ].filter(Boolean);
   const seen = new Set();
