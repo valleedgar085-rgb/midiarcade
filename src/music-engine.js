@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead, planRhythmMelodyLookahead } from "./core/musical-lookahead.js";
+import { referenceProfileForGenre } from "./reference-profiles/index.js";
 import { authorMotifMemoryVariants } from "./core/motif-memory-authoring.js";
 import {
   cadentialHarmonyDegree,
@@ -1335,7 +1336,11 @@ export function normalizeConfig(input = {}) {
       hashSeed(`${seed}::${genre}::phrase-bars`) % arrangementProfile.phraseBars.length
     ] ?? profile.arrangement.phraseBars)
     : profile.arrangement.phraseBars;
-  const referenceInfluence = resolveReferenceInfluence(input, {
+  const registeredReferenceProfile = referenceProfileForGenre(genre);
+  const referenceInput = input.referenceProfile == null && registeredReferenceProfile
+    ? { ...input, referenceProfile: registeredReferenceProfile }
+    : input;
+  const referenceInfluence = resolveReferenceInfluence(referenceInput, {
     genre,
     defaults: {
       syncopation: profile.syncopation,
@@ -1393,6 +1398,8 @@ export function normalizeConfig(input = {}) {
       density: round(layeringDensity),
       enabled: professionalUpgrade && layeringDensity > 0.01,
     },
+    referenceProfile: referenceInfluence.profile,
+    referenceStrength: referenceInfluence.strength,
     referenceInfluence,
     oneShotKitId: input.oneShotKitId == null && input.soundKitId == null
       ? null
@@ -11563,6 +11570,17 @@ function compose(config, options = {}) {
     oneShotKit: publicOneShotKit(oneShotKit),
     songBlueprint,
     performanceProfile,
+    referenceProfile: config.referenceInfluence?.active ? {
+      version: config.referenceInfluence.version,
+      authority: config.referenceInfluence.authority,
+      id: config.referenceInfluence.profile?.id ?? null,
+      genre: config.referenceInfluence.profile?.genre ?? config.genre,
+      sourceCount: config.referenceInfluence.profile?.sourceCount ?? 0,
+      confidence: config.referenceInfluence.profile?.confidence ?? 0,
+      strength: config.referenceInfluence.strength,
+      confidenceWeight: config.referenceInfluence.confidenceWeight,
+      protectedAuthorities: [...(config.referenceInfluence.protectedAuthorities ?? [])],
+    } : null,
     arrangementTransitions: clone(songBlueprint.transitions),
     orchestrationMatrix: clone(songBlueprint.orchestrationMatrix),
     memoryMap: clone(songBlueprint.memoryMap),
