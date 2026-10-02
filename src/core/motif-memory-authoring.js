@@ -86,6 +86,22 @@ function developReturn(source, memory, seed) {
     ));
   }
 
+  // Preserve the source hook's opening and landing, but make a return breathe
+  // before its final answer instead of filling every available subdivision.
+  if (motif.events.length >= 5 && finite(motif.lengthBeats, 0) >= 2) {
+    const landing = motif.events[motif.events.length - 1];
+    const previous = motif.events[motif.events.length - 2];
+    const available = finite(landing.offset) - finite(previous.offset);
+    if (available >= 0.5) {
+      previous.duration = round(clamp(
+        Math.min(finite(previous.duration, 0.5), Math.max(0.16, available - 0.25)),
+        0.16,
+        3.5,
+      ));
+      previous.phraseBreathAfter = true;
+    }
+  }
+
   motif.phraseShape = motif.phraseShape ?? "return";
   return motif;
 }
