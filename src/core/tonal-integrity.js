@@ -371,12 +371,12 @@ export function refineTonalIntegrity(tracks = [], harmony = [], meta = {}, struc
 
       if (!["melody", "counterpoint"].includes(String(track.id)) || license.valid) continue;
       const risk = tonalRiskFor(note, chord, scaleClasses);
-      const hipHopStrongAnchor = meta?.genre === "hipHop"
+      const genreStrongAnchor = ["hipHop", "synthwave"].includes(String(meta?.genre))
         && isStrongBeat(note)
         && !protectedStructuralTension(note)
         && !risk.chordClasses.has(mod(notePitch(note), 12))
         && risk.nearestDistance <= 2;
-      if (!risk.risky && !hipHopStrongAnchor) continue;
+      if (!risk.risky && !genreStrongAnchor) continue;
 
       const section = sectionForBeat(structure, finite(note?.start));
       const sectionKey = `${track.id}:${section?.id ?? "song"}`;
