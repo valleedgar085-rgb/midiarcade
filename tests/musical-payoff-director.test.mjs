@@ -11,10 +11,36 @@ function fixture() {
   return {
     meta: { beatsPerBar: 4 },
     songBlueprint: {
-      intent: {
-        energyArc: { opening: 0.42, body: 0.62, peak: 0.88, release: 0.34 },
-        spaceReserve: 0.54,
+      structureDirector: {
+        version: 2,
+        id: "story-arc-v2",
+        stages: [
+          { sectionId: "intro-1", stage: "establish", energyTarget: 0.44 },
+          { sectionId: "verse-1", stage: "pocket", energyTarget: 0.62 },
+          { sectionId: "pre-1", stage: "build", energyTarget: 0.77, payoffBreathBars: 0.5 },
+          { sectionId: "chorus-1", stage: "payoff", energyTarget: 0.92 },
+          { sectionId: "break-1", stage: "reset", energyTarget: 0.48 },
+          { sectionId: "outro-1", stage: "resolve", energyTarget: 0.36 },
+        ],
       },
+      sectionPlans: [
+        { sectionId: "intro-1", tension: 0.28 },
+        { sectionId: "verse-1", tension: 0.46 },
+        { sectionId: "pre-1", tension: 0.72 },
+        { sectionId: "chorus-1", tension: 0.66 },
+        { sectionId: "break-1", tension: 0.32 },
+        { sectionId: "outro-1", tension: 0.2 },
+      ],
+    },
+    producerIntent: {
+      scenes: [
+        { sectionId: "intro-1", storyStage: "establish", silenceBudget: 0.3, densityCeiling: 0.64 },
+        { sectionId: "verse-1", storyStage: "pocket", silenceBudget: 0.13, densityCeiling: 0.78 },
+        { sectionId: "pre-1", storyStage: "build", silenceBudget: 0.11, densityCeiling: 0.86 },
+        { sectionId: "chorus-1", storyStage: "payoff", silenceBudget: 0.07, densityCeiling: 0.94 },
+        { sectionId: "break-1", storyStage: "reset", silenceBudget: 0.34, densityCeiling: 0.62 },
+        { sectionId: "outro-1", storyStage: "resolve", silenceBudget: 0.28, densityCeiling: 0.58 },
+      ],
     },
     structure: [
       { id: "intro-1", name: "Intro", startBeat: 0, endBeat: 4, bars: 1 },
@@ -80,8 +106,9 @@ function fixture() {
 
 test("payoff plan classifies song sections into a musical arc", () => {
   const plan = createMusicalPayoffPlan(fixture());
-  assert.equal(plan.version, 1);
-  assert.equal(plan.authority, "musical-payoff-director-v1");
+  assert.equal(plan.version, 2);
+  assert.equal(plan.authority, "musical-payoff-audit-v2");
+  assert.equal(plan.sourceAuthority, "structure-director-v2");
   assert.deepEqual(
     plan.sections.map((section) => section.phase),
     ["opening", "body", "build", "payoff", "recovery", "release"],
@@ -99,7 +126,9 @@ test("section payoff intent exposes exact target role and pressure goals", () =>
   assert.equal(intent.phase, "payoff");
   assert.equal(intent.role, "deliver");
   assert.equal(intent.payoff, true);
-  assert.equal(intent.targetEnergy, 0.88);
+  assert.equal(intent.sourceAuthority, "structure-director-v2");
+  assert.equal(intent.targetEnergy, 0.92);
+  assert.equal(intent.targetSpace, 0.07);
   assert.ok(intent.targetSpace < createSectionPayoffIntent(fixture(), "intro-1").targetSpace);
 });
 
@@ -129,4 +158,18 @@ test("payoff evaluator flags a chorus that fails to lift", () => {
 
   const report = evaluateMusicalPayoffArc(source);
   assert.ok(report.issues.includes("weak-lift:chorus-1"), JSON.stringify(report));
+});
+
+
+test("payoff audit falls back safely for legacy songs without Structure Director", () => {
+  const source = fixture();
+  delete source.songBlueprint.structureDirector;
+  delete source.producerIntent;
+  const plan = createMusicalPayoffPlan(source);
+  assert.equal(plan.version, 2);
+  assert.equal(plan.sourceAuthority, "legacy-section-fallback");
+  assert.deepEqual(
+    plan.sections.map((section) => section.phase),
+    ["opening", "body", "build", "payoff", "recovery", "release"],
+  );
 });
