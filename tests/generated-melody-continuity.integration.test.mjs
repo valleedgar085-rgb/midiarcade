@@ -67,6 +67,7 @@ test("generated active verse and chorus melodies have no actionable interior sil
           maxScoreCost: diagnostics.maxScoreCost,
           floorDelta: diagnostics.floorDelta,
           maxFloorCost: diagnostics.maxFloorCost,
+          releaseFailures: diagnostics.releaseFailures,
           beforeContinuityDeficit: diagnostics.beforeContinuityDeficit,
           afterContinuityDeficit: diagnostics.afterContinuityDeficit,
           continuityErrorDelta: diagnostics.continuityErrorDelta,
