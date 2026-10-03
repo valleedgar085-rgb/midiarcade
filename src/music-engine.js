@@ -6326,6 +6326,12 @@ function generateLead(
           || eventIndex === activeMotif.events.length - 1
           || eventIndex === Math.floor(activeMotif.events.length / 2)
         );
+        const hookSignatureSlot = !counterpoint
+          && ["chorus", "drop", "theme"].includes(section.name)
+          && eventIndex === Math.max(
+            1,
+            Math.min(activeMotif.events.length - 2, Math.floor(activeMotif.events.length * 0.58)),
+          );
         // Counterpoint needs a reliable answer gesture, otherwise its lower
         // density and groove-space filtering can erase an entire phrase. Keep
         // the answer bounded and alternating: one anchor per phrase, with a
@@ -6387,7 +6393,7 @@ function generateLead(
             horizonBars: 2,
           })
           : null;
-        const protectedRhythmAnchor = phraseAnchor || memoryCore;
+        const protectedRhythmAnchor = phraseAnchor || memoryCore || hookSignatureSlot;
         const rhythmLookahead = rawRhythmLookahead && protectedRhythmAnchor
           ? {
             ...rawRhythmLookahead,
@@ -6415,7 +6421,7 @@ function generateLead(
           * (counterpointDialogue ? 0.86 : counterpoint ? 0.86 : 1.04)
           * (0.78 + plannedDensity * 0.32)
           * tensionDensity;
-        const anchor = phraseAnchor;
+        const anchor = phraseAnchor || hookSignatureSlot;
         const groove = grooveInfluenceForBeat(
           grooveConductor,
           start,
