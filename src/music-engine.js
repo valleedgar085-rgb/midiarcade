@@ -62,7 +62,6 @@ import {
   constrainMelodicDegree,
   hookSignatureAdjustment,
   melodyIntentRole,
-  shouldAllowOrnamentalTurn,
   shouldApplyMelodyIntentMutations,
 } from "./core/melody-intent-authority.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
