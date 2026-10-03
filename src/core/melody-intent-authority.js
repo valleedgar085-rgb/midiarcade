@@ -22,6 +22,7 @@ const ROLE_BUDGETS = Object.freeze({
   approach: 2,
   answer: 2,
   "hook-signature": 2,
+  "ornamental-run": 1,
   climax: 3,
   resolution: 1,
 });
@@ -72,7 +73,7 @@ export function constrainMelodicDegree({
   const budget = melodicMovementBudget(role);
   let result = clamp(proposed, base - budget, base + budget);
 
-  if (Number.isFinite(Number(previousDegree))) {
+  if (previousDegree != null && Number.isFinite(Number(previousDegree))) {
     const previous = Math.round(Number(previousDegree));
     const maxMotion = role === "climax" ? 3
       : role === "hook-signature" || role === "answer" || role === "approach" ? 2
