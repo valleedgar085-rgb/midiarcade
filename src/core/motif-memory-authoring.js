@@ -69,11 +69,16 @@ function shiftDegree(event, amount) {
 function developReturn(source, memory, seed) {
   const motif = clone(source);
   const strength = clamp(memory?.recallStrength ?? 0.8, 0, 1);
-  const changeCount = motif.events.length >= 6 ? 2 : 1;
+  // Strong returns should sound developed, not rewritten. Preserve more of the
+  // authored contour as recall strength rises so a chorus return remains
+  // recognizable before any post-generation repair is considered.
+  const changeCount = strength >= 0.86
+    ? 1
+    : motif.events.length >= 6 ? 2 : 1;
   const positions = interiorPositions(motif.events.length, seed, `return:${memory.sectionId}`, changeCount);
   for (const [ordinal, index] of positions.entries()) {
     const direction = deterministicSign(seed, `return-degree:${memory.sectionId}:${index}`);
-    const magnitude = strength >= 0.82 && ordinal > 0 ? 1 : 2;
+    const magnitude = strength >= 0.82 ? 1 : (ordinal > 0 ? 1 : 2);
     shiftDegree(motif.events[index], direction * magnitude);
   }
 
