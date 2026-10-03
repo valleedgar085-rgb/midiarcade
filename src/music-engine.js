@@ -11812,6 +11812,7 @@ function compose(config, options = {}) {
     ensembleCoordination: ensembleCoordination.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
+    melodyBreathing: creativePolish.melodyBreathing,
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
