@@ -372,6 +372,7 @@ export function createGenerationExecutor({
           reason: comparison.reason,
           scoreDelta: comparison.scoreDelta,
           creativeFloorDelta: comparison.creativeFloorDelta,
+          criticalFloorDelta: comparison.criticalFloorDelta,
         });
       } else {
         mark("compare", {
