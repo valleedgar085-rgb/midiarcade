@@ -372,10 +372,10 @@ test("continuity links prefer Groove DNA pulses that do not collide with counter
   ];
 
   const candidates = createMelodyContinuityCandidates(source);
-  const balanced = candidates.find((candidate) => candidate.id === "balanced-links") ?? candidates[0];
-  assert.ok(balanced);
+  const focused = candidates.find((candidate) => candidate.id === "focused-echo");
+  assert.ok(focused);
 
-  const additions = balanced.song.tracks
+  const additions = focused.song.tracks
     .find((track) => track.id === "melody").notes
     .filter((note) => note.continuityRole === "phrase-link");
   assert.ok(additions.length > 0);
