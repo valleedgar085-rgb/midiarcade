@@ -387,3 +387,32 @@ test("continuity links prefer Groove DNA pulses that do not collide with counter
     assert.equal(collides, false, `continuity link should avoid counterpoint onset at ${addition.start}`);
   }
 });
+
+
+test("balanced continuity can anticipate the next melody pitch to avoid counterline dissonance", () => {
+  const source = song();
+  source.grooveConductor = {
+    bars: Array.from({ length: 8 }, (_, bar) => ({
+      bar,
+      sectionId: bar < 2 ? "intro-1" : bar < 4 ? "verse-1" : bar < 6 ? "chorus-1" : "outro-1",
+      leadPulses: [0.75, 2.25],
+    })),
+  };
+  source.tracks.find((track) => track.id === "counterpoint").notes = [
+    { id: "cp-held", start: 9, pitch: 72, duration: 5.5, velocity: 76 },
+  ];
+
+  const balanced = createMelodyContinuityCandidates(source)
+    .find((candidate) => candidate.id === "balanced-links");
+  assert.ok(balanced);
+
+  const firstVerseLink = balanced.song.tracks
+    .find((track) => track.id === "melody").notes
+    .find((note) => note.continuityRole === "phrase-link" && note.start >= 8 && note.start < 16);
+  assert.ok(firstVerseLink);
+  assert.equal(
+    firstVerseLink.pitch,
+    76,
+    "the first verse link should borrow the upcoming melody pitch instead of sustaining a unison clash",
+  );
+});
