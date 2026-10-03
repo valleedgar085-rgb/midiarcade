@@ -13,6 +13,15 @@ function normalizedName(value) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+export function shouldApplyMelodyIntentMutations(config = {}) {
+  const genre = String(config?.genre ?? "");
+  const secondaryGenre = String(config?.secondaryGenre ?? "").trim();
+  return ["hipHop", "rap", "trap", "pop"].includes(genre)
+    && secondaryGenre.length === 0
+    && finite(config?.bars, 0) >= 12
+    && finite(config?.variation, 0) >= 0.6;
+}
+
 const ROLE_BUDGETS = Object.freeze({
   "memory-anchor": 0,
   anchor: 0,
