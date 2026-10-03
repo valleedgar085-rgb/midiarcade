@@ -1,0 +1,27 @@
+name: Melody Continuity Fast Gate
+
+on:
+  push:
+    branches:
+      - phase-apk-melody-v2-counterline-fix
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  melody-continuity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify melody continuity
+        run: node --test tests/melody-continuity-refinement.test.mjs tests/generated-melody-continuity.integration.test.mjs
