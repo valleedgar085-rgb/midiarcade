@@ -7,8 +7,38 @@ import {
   melodyIntentRole,
   melodicMovementBudget,
   shouldAllowOrnamentalTurn,
+  shouldApplyMelodyIntentMutations,
 } from "../src/core/melody-intent-authority.js";
 import { generateNew } from "../src/music-engine.js";
+
+test("Melody Intent mutations stay inside their owned full-song lane", () => {
+  assert.equal(shouldApplyMelodyIntentMutations({
+    genre: "hipHop",
+    bars: 32,
+    variation: 0.78,
+  }), true);
+  assert.equal(shouldApplyMelodyIntentMutations({
+    genre: "hipHop",
+    secondaryGenre: "pop",
+    bars: 32,
+    variation: 0.78,
+  }), false);
+  assert.equal(shouldApplyMelodyIntentMutations({
+    genre: "trap",
+    bars: 8,
+    variation: 0.8,
+  }), false);
+  assert.equal(shouldApplyMelodyIntentMutations({
+    genre: "jazz",
+    bars: 32,
+    variation: 0.8,
+  }), false);
+  assert.equal(shouldApplyMelodyIntentMutations({
+    genre: "pop",
+    bars: 32,
+    variation: 0.52,
+  }), false);
+});
 
 test("Melody Intent Authority gives anchors no wandering budget", () => {
   const role = melodyIntentRole({
