@@ -318,7 +318,8 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
       || Number(entry.collisionControl ?? 1) < 0.5
     ) failures.push("melody-counterline");
     if (Number(entry.roleHierarchy ?? 1) < 0.55) failures.push("density-balance");
-    if (Number(entry.cadenceTeam ?? 1) < 0.5) failures.push("transition-continuity");
+    if (Number(entry.entranceExit ?? 1) < 0.5) failures.push("entrance-exit");
+    if (Number(entry.transitionContinuity ?? 1) < 0.5) failures.push("transition-continuity");
     return Object.freeze({
       sectionId: entry.sectionId ?? null,
       score: Number(entry.score ?? 0),
@@ -329,9 +330,9 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
         bassHarmony: Number(entry.harmonicSupport ?? 0),
         chordMelody: Number(entry.leadHarmonySeparation ?? 0),
         melodyCounterline: Number(entry.leadDialogue ?? 0),
-        entranceExit: Number(entry.cadenceTeam ?? 0),
+        entranceExit: Number(entry.entranceExit ?? 0),
         densityBalance: Number(entry.roleHierarchy ?? 0),
-        transitionContinuity: Number(entry.cadenceTeam ?? 0),
+        transitionContinuity: Number(entry.transitionContinuity ?? 0),
       }),
     });
   }));
