@@ -6624,17 +6624,32 @@ function generateLead(
             Math.min(0.32, section.endBeat - start),
             eventVelocity(config, settings, intensity, rng, 0.96 + development.intensity * 0.06),
             totalBeats,
-            tonalLicenseForChordPitch(pitch, chord, config),
+            {
+              melodyIntentRole: "resolution",
+              melodyIntentBudget: 1,
+              melodyIntentConstrained: false,
+              melodyIntentBaseDegree: (chord?.degree ?? 0) + sectionDegreeShift(section),
+              melodyStoryRole: "resolve",
+              melodyStoryReason: "section-ending-cadence",
+              ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
+            },
           );
         }
       }
     }
   }
   if (!counterpoint && config.tripletAmount > 0) {
-    const maxFigures = Math.max(1, Math.floor(structure.length / 3));
+    const controlledLeadOrnamentGenre = ["hipHop", "rap", "trap", "pop"].includes(config.genre);
+    const maxFigures = controlledLeadOrnamentGenre
+      ? 1
+      : Math.max(1, Math.floor(structure.length / 3));
     let figures = 0;
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
       const section = structure[sectionIndex];
+      if (
+        controlledLeadOrnamentGenre
+        && !["prechorus", "build", "chorus", "drop", "theme"].includes(section.name)
+      ) continue;
       const closingMotif = motifForSection(motifProgram, section, false, motif);
       const closingMemoryRelationship = String(closingMotif?.memoryAuthoring?.relationship ?? "");
       if (["recall", "return"].includes(closingMemoryRelationship)) continue;
@@ -6661,6 +6676,12 @@ function generateLead(
           totalBeats,
           {
             rhythmicFeature: step === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth",
+            melodyIntentRole: "ornamental-run",
+            melodyIntentBudget: 1,
+            melodyIntentConstrained: false,
+            melodyIntentBaseDegree: baseDegree + motion[index],
+            melodyStoryRole: "payoff-ornament",
+            melodyStoryReason: "single-deliberate-section-ornament",
             ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
