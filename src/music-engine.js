@@ -10628,11 +10628,14 @@ function applyPhraseResolutions(
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
-    const phraseBars = clamp(
-      Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
-      2,
-      4,
-    );
+    const melodyDirectorPlan = trackId === "melody" ? sectionPhraseMemory?.melodyDirector : null;
+    const phraseBars = melodyDirectorPlan
+      ? clamp(Math.round(finite(melodyDirectorPlan.phraseBars, 4)), 2, 8)
+      : clamp(
+        Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
+        2,
+        4,
+      );
     const boundaries = [];
     for (
       let boundary = section.startBeat + phraseBars * barBeats;
@@ -10660,15 +10663,35 @@ function applyPhraseResolutions(
       const previous = candidates.at(-2);
       const sectionBoundary = boundary >= section.endBeat - 0.05;
       const cadence = sectionBoundary ? (plan?.cadence ?? "resolve") : "continue";
-      const landingRole = phraseLandingRole({
+      const fallbackLandingRole = phraseLandingRole({
         boundaryIndex,
         boundaryCount: boundaries.length,
         cadence,
         trackId,
       });
+      const directorPhrase = melodyDirectorPlan?.phrases?.[
+        Math.min(boundaryIndex, Math.max(0, (melodyDirectorPlan?.phrases?.length ?? 1) - 1))
+      ] ?? null;
+      const directorLandingRole = {
+        question: "question",
+        answer: "answer",
+        resolve: "resolution",
+        resolution: "resolution",
+        lift: "lift",
+        suspension: "suspension",
+      }[directorPhrase?.landingIntent] ?? null;
+      const landingRole = directorLandingRole ?? fallbackLandingRole;
       const landingProfile = phraseLandingProfile(landingRole);
       const melodicDirection = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
-      const direction = landingProfile.direction || melodicDirection;
+      const directorDirection = trackId === "melody"
+        ? ({
+          up: 1,
+          "slight-up": 1,
+          down: -1,
+          "slight-down": -1,
+        }[directorPhrase?.registerMotion] ?? 0)
+        : 0;
+      const direction = directorDirection || landingProfile.direction || melodicDirection;
       const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
       const forceTonic = finalSongLanding || sectionBoundary && cadence === "resolve";
       const contract = generationInterlock?.sectionContracts?.find((candidate) => candidate.sectionId === section.id);
@@ -10722,6 +10745,17 @@ function applyPhraseResolutions(
         landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
         landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
         landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
+        if (directorPhrase) {
+          landing.melodyDirectorVersion = melodyDirectorPlan.version;
+          landing.melodyDirectorSentenceRole = directorPhrase.sentenceRole;
+          landing.melodyDirectorLandingIntent = directorPhrase.landingIntent;
+          landing.melodyDirectorRegisterMotion = directorPhrase.registerMotion;
+          landing.melodyDirectorTargetKind = directorPhrase.targetKind;
+          landing.melodyDirectorRestBudget = directorPhrase.restBudget;
+          if (directorPhrase.lookAhead?.enabled) {
+            landing.melodyDirectorNextSectionId = directorPhrase.lookAhead.nextSectionId;
+          }
+        }
       }
     }
   }
