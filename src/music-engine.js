@@ -6308,6 +6308,14 @@ function generateLead(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const counterpointDialogue = counterpoint && ["hipHop", "pop", "rap", "trap"].includes(config.genre);
+  const memoryOwnedSectionIds = new Set(
+    (motifProgram?.motifMemoryAuthoring?.sections ?? [])
+      .flatMap((memory) => [
+        String(memory?.sectionId ?? ""),
+        String(memory?.sourceSectionId ?? ""),
+      ])
+      .filter(Boolean),
+  );
   for (const [sectionIndex, section] of structure.entries()) {
     const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
@@ -6472,7 +6480,7 @@ function generateLead(
           storyRole: storyIntent.role,
         });
         const melodyIntentMutationActive = shouldApplyMelodyIntentMutations(config)
-          && !memoryRecallSection;
+          && !memoryOwnedSectionIds.has(String(section.id ?? ""));
         const signature = melodyIntentMutationActive && !counterpoint
           ? hookSignatureAdjustment({
             sectionName: section.name,
