@@ -46,13 +46,15 @@ export function melodyIntentRole({
   if (memoryCore) return "memory-anchor";
   if (eventIndex === 0) return "anchor";
   if (last) return "resolution";
-  if (phraseAnchor && midpoint) return "pivot";
   if (development === "climax" || development === "octavelift") return "climax";
   if (development === "answer" || story === "answer" || story === "declare-answer") return "answer";
   if (["prechorus", "build"].includes(name) && progress >= 0.45) return "approach";
+  // In payoff sections the recognizable hook gesture outranks a generic
+  // midpoint pivot. Short motifs often place both jobs on the same event.
   if (["chorus", "drop", "theme"].includes(name) && progress >= 0.3 && progress <= 0.76) {
     return "hook-signature";
   }
+  if (phraseAnchor && midpoint) return "pivot";
   if (development === "resolution" || story === "resolve") return "resolution";
   if (development === "rhythm") return "passing";
   return "continuation";
