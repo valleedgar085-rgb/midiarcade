@@ -166,3 +166,27 @@ test("Melody Director v2 breathing pass is deterministic and bounded", () => {
   assert.ok(first.melodyBreathing.notesRemoved >= 0);
   assert.ok(first.tracks.find((track) => track.id === "melody")?.notes?.length > 0);
 });
+
+
+test("Melody Director v2 phrase re-entry is chord-aware and leap-bounded", () => {
+  const song = generateNew({
+    genre: "hipHop",
+    seed: "melody-director-v2-reentry",
+    bars: 32,
+    candidateCount: 1,
+  });
+
+  assert.equal(song.melodyReentry.authority, "melody-director-v2");
+  assert.equal(song.melodyReentry.policy, "bounded-chord-aware-phrase-reentry");
+  assert.ok(song.melodyReentry.entries.length > 0);
+  assert.ok(song.melodyReentry.entries.every((entry) => (
+    Math.abs(entry.afterPitch - entry.beforePitch) <= 7
+  )));
+  assert.ok(song.melodyReentry.entries.every((entry) => [
+    "question", "answer", "statement", "resolution", "return", "callback", "contrast",
+  ].includes(entry.sentenceRole)));
+  const taggedEntries = song.tracks.find((track) => track.id === "melody").notes
+    .filter((note) => note.melodyDirectorEntry === true);
+  assert.ok(taggedEntries.length > 0);
+  assert.equal(taggedEntries.length, song.melodyReentry.entries.length);
+});
