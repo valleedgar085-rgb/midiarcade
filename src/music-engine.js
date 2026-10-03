@@ -7905,6 +7905,18 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(Number.isFinite(note.melodicMotionDegrees) ? { melodicMotionDegrees: note.melodicMotionDegrees } : {}),
       ...(note.melodyStoryRole ? { melodyStoryRole: note.melodyStoryRole } : {}),
       ...(note.melodyStoryReason ? { melodyStoryReason: note.melodyStoryReason } : {}),
+      ...(note.melodyIntentRole ? { melodyIntentRole: note.melodyIntentRole } : {}),
+      ...(Number.isFinite(note.melodyIntentBudget) ? { melodyIntentBudget: note.melodyIntentBudget } : {}),
+      ...(typeof note.melodyIntentConstrained === "boolean" ? {
+        melodyIntentConstrained: note.melodyIntentConstrained,
+      } : {}),
+      ...(Number.isFinite(note.melodyIntentBaseDegree) ? {
+        melodyIntentBaseDegree: note.melodyIntentBaseDegree,
+      } : {}),
+      ...(note.hookSignature ? { hookSignature: true } : {}),
+      ...(Number.isFinite(note.hookSignatureDegreeShift) ? {
+        hookSignatureDegreeShift: note.hookSignatureDegreeShift,
+      } : {}),
       ...(note.melodySpacingProtected ? { melodySpacingProtected: true } : {}),
       ...(note.tonalLicense ? { tonalLicense: note.tonalLicense } : {}),
       ...(note.harmonicColorSource ? { harmonicColorSource: note.harmonicColorSource } : {}),
@@ -10729,6 +10741,12 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
       phraseBoundary: round(end),
       articulationIntent: "held-resolution",
       preserveTiming: true,
+      melodyIntentRole: "resolution",
+      melodyIntentBudget: 1,
+      melodyIntentConstrained: false,
+      melodyIntentBaseDegree: chord.degree ?? 0,
+      melodyStoryRole: "resolve",
+      melodyStoryReason: "final-section-landing",
     });
   }
 
