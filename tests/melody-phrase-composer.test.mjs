@@ -142,3 +142,27 @@ test("generated melody landings publish and follow Melody Director v2 intent", (
     );
   }
 });
+
+
+test("Melody Director v2 breathing pass is deterministic and bounded", () => {
+  const input = {
+    genre: "neoSoul",
+    seed: "melody-director-v2-breathing",
+    bars: 32,
+    candidateCount: 1,
+  };
+  const first = generateNew(input);
+  const second = generateNew(input);
+
+  assert.deepEqual(first.melodyBreathing, second.melodyBreathing);
+  assert.equal(first.melodyBreathing.authority, "melody-director-v2");
+  assert.equal(first.melodyBreathing.policy, "protected-phrase-ending-breaths");
+  assert.ok(first.melodyBreathing.windows.length > 0);
+  assert.ok(first.melodyBreathing.windows.every((window) => (
+    window.end > window.start
+    && window.restBudget >= 0.08
+    && window.restBudget <= 0.42
+  )));
+  assert.ok(first.melodyBreathing.notesRemoved >= 0);
+  assert.ok(first.tracks.find((track) => track.id === "melody")?.notes?.length > 0);
+});
