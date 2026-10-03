@@ -5,11 +5,13 @@ function round(value, digits = 3) {
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
 }
 
-function normalizeBars(value) {
+function normalizeBars(value, { relationship = "statement", role = "" } = {}) {
   const bars = Math.max(1, Math.round(finite(value, 1)));
   if (bars <= 2) return 2;
   if (bars <= 4) return 4;
-  return 8;
+  const longThought = ["recall", "return"].includes(String(relationship))
+    || String(role).toLowerCase() === "peak";
+  return longThought ? 8 : 4;
 }
 
 function phraseCount(sectionBars, phraseBars) {
@@ -74,10 +76,10 @@ export function createMelodyPhrasePlan({
   beatsPerBar = 4,
 } = {}) {
   const sectionBars = Math.max(1, Math.round(finite(section?.bars, 1)));
-  const phraseBars = normalizeBars(sectionBars);
-  const count = phraseCount(sectionBars, phraseBars);
   const role = String(section?.role ?? section?.name ?? "").toLowerCase();
   const relationship = String(memory?.relationship ?? "statement");
+  const phraseBars = normalizeBars(sectionBars, { relationship, role });
+  const count = phraseCount(sectionBars, phraseBars);
   const sectionSentenceRole = memory?.sentenceRole ?? "statement";
   const sectionLandingRole = memory?.landingRole ?? "answer";
   const registerStrategy = memory?.registerStrategy ?? "preserve";
