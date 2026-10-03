@@ -105,6 +105,16 @@ test("contrast keeps a small family fingerprint while using the contrasting moti
 
   assert.equal(contrast.events.length, FAMILY.C.melody.events.length);
   assert.equal(contrast.events[0].degree, FAMILY.A.melody.events[0].degree);
+  assert.equal(
+    contrast.events.at(-1).degree,
+    FAMILY.A.melody.events.at(-1).degree,
+    "contrast should retain the source landing",
+  );
+  assert.equal(
+    Math.sign(contrast.events.at(-1).degree - contrast.events.at(-2).degree),
+    Math.sign(FAMILY.A.melody.events.at(-1).degree - FAMILY.A.melody.events.at(-2).degree),
+    "contrast should retain the source cadence direction",
+  );
   assert.notEqual(signature(contrast), signature(FAMILY.A.melody));
   assert.equal(contrast.memoryAuthoring.relationship, "contrast");
   assert.equal(contrast.memoryAuthoring.fallbackMotifId, "C");
