@@ -3412,27 +3412,13 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     const leap = !recoveringFromLeap && distance > 1 && rng.bool(melodyGrammar.leapChance + config.complexity * 0.2)
       ? Math.min(distance, rng.pick([2, 2, 3]))
       : 1;
-    const ornamentalRole = events.length === Math.floor(durations.length * 0.62)
-      ? "hook-signature"
-      : "continuation";
-    // Consume the exact legacy ornament RNG decisions first, then decide
-    // whether Melody Intent is allowed to use the result. This suppresses
-    // unwanted turns without shifting every later deterministic decision.
+    // Preserve the authored motif family exactly. Melody Intent operates on
+    // rendered non-memory melody events, not on the source material used by
+    // motif-memory authoring, so recall/return/contrast relationships remain
+    // calibrated and deterministic.
     const legacyOrnamentTriggered = !recoveringFromLeap
       && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08);
-    const legacyOrnamentTurn = legacyOrnamentTriggered ? rng.pick([-1, 1]) : 0;
-    const ornamentalTurn = (
-      !shouldApplyMelodyIntentMutations(config)
-      || shouldAllowOrnamentalTurn({
-        genre: config.genre,
-        surprise: config.surprise,
-        eventIndex: events.length,
-        eventCount: durations.length,
-        role: ornamentalRole,
-      })
-    )
-      ? legacyOrnamentTurn
-      : 0;
+    const ornamentalTurn = legacyOrnamentTriggered ? rng.pick([-1, 1]) : 0;
     const nextDegree = clamp(degree + direction * leap + ornamentalTurn, -maximumDegree, maximumDegree);
     previousMotion = nextDegree - degree;
     degree = nextDegree;
