@@ -23,6 +23,10 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, finite(value, min)));
 }
 
+function mod(value, divisor) {
+  return ((value % divisor) + divisor) % divisor;
+}
+
 function normalizeName(section) {
   return String(section?.name ?? section?.type ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
@@ -158,7 +162,35 @@ export function analyzeMelodyContinuity(song) {
   });
 }
 
-function chooseInsertionBeat(song, window, slot = 0, slots = 1) {
+function connectorDuration(window, start) {
+  const available = Math.max(0.12, window.end - start);
+  return round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
+}
+
+function counterpointCollisionCost(song, start, duration, pitch) {
+  const counterpoint = (song?.tracks ?? []).find((track) => track?.id === "counterpoint");
+  let attackCollisions = 0;
+  let dissonantOverlaps = 0;
+  for (const note of counterpoint?.notes ?? []) {
+    const noteStart = finite(note?.start, -1);
+    const noteDuration = Math.max(0.05, finite(note?.duration, 0.25));
+    if (Math.abs(noteStart - start) < 0.12) attackCollisions += 1;
+    const overlaps = start < noteStart + noteDuration && noteStart < start + duration;
+    const interval = mod(Math.abs(finite(note?.pitch, pitch) - pitch), 12);
+    if (overlaps && [0, 1, 6, 11].includes(interval)) dissonantOverlaps += 1;
+  }
+  return attackCollisions + dissonantOverlaps;
+}
+
+function quantizedInsertionBeats(window) {
+  const first = Math.ceil(window.start * 4 - 1e-6) / 4;
+  const last = window.end - 0.12;
+  const beats = [];
+  for (let beat = first; beat <= last + 1e-6; beat += 0.25) beats.push(round(beat, 4));
+  return beats;
+}
+
+function chooseInsertionBeat(song, window, pitch, slot = 0, slots = 1) {
   const ratio = slots > 1 ? (slot + 1) / (slots + 1) : 0.5;
   const midpoint = window.start + (window.end - window.start) * ratio;
   const groovePulses = trackGroovePulses(
@@ -168,23 +200,35 @@ function chooseInsertionBeat(song, window, slot = 0, slots = 1) {
     window.end - 0.12,
     Math.max(1, finite(song?.meta?.beatsPerBar, 4)),
   );
-  if (groovePulses.length) {
-    return round([...groovePulses].sort((left, right) => Math.abs(left - midpoint) - Math.abs(right - midpoint) || left - right)[0], 4);
+  const candidates = [...new Set(
+    (groovePulses.length ? groovePulses : quantizedInsertionBeats(window))
+      .map((beat) => round(beat, 4)),
+  )];
+  if (!candidates.length) {
+    const quantized = Math.round(midpoint * 4) / 4;
+    return round(clamp(quantized, window.start, window.end - 0.12), 4);
   }
-  const quantized = Math.round(midpoint * 4) / 4;
-  return round(clamp(quantized, window.start, window.end - 0.12), 4);
+
+  return [...candidates].sort((left, right) => {
+    const leftDuration = connectorDuration(window, left);
+    const rightDuration = connectorDuration(window, right);
+    const collisionDelta = counterpointCollisionCost(song, left, leftDuration, pitch)
+      - counterpointCollisionCost(song, right, rightDuration, pitch);
+    if (collisionDelta) return collisionDelta;
+    return Math.abs(left - midpoint) - Math.abs(right - midpoint) || left - right;
+  })[0];
 }
 
 function connectorNote(song, window, sectionId, mode, ordinal, slot = 0, slots = 1) {
   const source = mode === "anticipation" ? window.next : window.previous;
-  const start = chooseInsertionBeat(song, window, slot, slots);
-  const available = Math.max(0.12, window.end - start);
-  const duration = round(clamp(Math.min(0.5, available * 0.72), 0.12, 0.5), 4);
+  const pitch = finite(source?.pitch, 60);
+  const start = chooseInsertionBeat(song, window, pitch, slot, slots);
+  const duration = connectorDuration(window, start);
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
   return {
     ...source,
     id: `${String(source?.id ?? "melody-link")}:continuity-${sectionId}-${ordinal}`,
-    pitch: finite(source?.pitch, 60),
+    pitch,
     start,
     duration,
     velocity,
