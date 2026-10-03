@@ -221,6 +221,7 @@ export function applyIntentionalChromaticApproaches(notes = [], config = {}, tra
     if (note?.phraseAnchor || note?.tonalLicense) continue;
     if (
       ["hipHop", "rap", "trap", "pop"].includes(String(config?.genre ?? ""))
+      && note?.melodyIntentMutationActive === true
       && note?.melodyIntentRole
       && !["approach", "answer", "hook-signature"].includes(String(note.melodyIntentRole))
     ) continue;
