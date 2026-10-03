@@ -9644,6 +9644,105 @@ function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, 
   };
 }
 
+
+function runMelodyDirectorReentryPass(sourceTracks, structure, harmony, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) {
+    return {
+      tracks,
+      report: { phase: 50.5, version: 2, status: "complete", changedNotes: 0, entries: [] },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const entries = [];
+  let changedNotes = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const phraseEnd = Math.min(
+        section.endBeat,
+        phraseStart + Math.max(1, finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const candidates = melody.notes
+        .filter((note) => (
+          note.start >= phraseStart - 1e-6
+          && note.start < Math.min(phraseEnd, phraseStart + barBeats * 1.25)
+        ))
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const entry = candidates.find((note) => !protectedNote(note));
+      if (!entry) continue;
+
+      const chord = harmonyAt(harmony, entry.start + 0.001);
+      if (!chord?.tones?.length) continue;
+      const direction = ({
+        up: 1,
+        "slight-up": 1,
+        down: -1,
+        "slight-down": -1,
+      })[phrase.registerMotion] ?? 0;
+      const beforePitch = Math.round(finite(entry.pitch, 60));
+      const chordTarget = nearestChordTone(beforePitch, chord, direction);
+      const scaledTarget = nearestScalePitch(chordTarget, config, direction);
+      const maxLeap = phrase.sentenceRole === "question" ? 5 : 7;
+      const targetPitch = Math.abs(scaledTarget - beforePitch) <= maxLeap
+        ? scaledTarget
+        : beforePitch;
+
+      if (targetPitch !== beforePitch) {
+        entry.pitch = targetPitch;
+        changedNotes += 1;
+      }
+      entry.melodyDirectorEntry = true;
+      entry.melodyDirectorEntryRole = phrase.sentenceRole;
+      entry.melodyDirectorEntryTargetKind = phrase.targetKind;
+      entry.melodyDirectorEntryRegisterMotion = phrase.registerMotion;
+      entries.push({
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(entry.start),
+        beforePitch,
+        afterPitch: Math.round(entry.pitch),
+        changed: targetPitch !== beforePitch,
+        sentenceRole: phrase.sentenceRole,
+        targetKind: phrase.targetKind,
+        registerMotion: phrase.registerMotion,
+      });
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50.5,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      changedNotes,
+      entries,
+      maxLeapSemitones: 7,
+      policy: "bounded-chord-aware-phrase-reentry",
+    },
+  };
+}
+
 const VOCAL_LED_GENRES = new Set(["rap", "hipHop", "trap", "drill", "rnbSoul", "neoSoul", "pop", "reggaeton", "afrobeats"]);
 
 function runVocalSpacePass(sourceTracks, structure, config) {
@@ -10032,7 +10131,14 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
     songBlueprint,
     config,
   );
-  const vocalSpace = runVocalSpacePass(melodyBreathing.tracks, structure, config);
+  const melodyReentry = runMelodyDirectorReentryPass(
+    melodyBreathing.tracks,
+    structure,
+    harmony,
+    songBlueprint,
+    config,
+  );
+  const vocalSpace = runVocalSpacePass(melodyReentry.tracks, structure, config);
   const ensembleCadence = runEnsembleCadencePass(
     vocalSpace.tracks,
     structure,
@@ -10051,6 +10157,7 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
     pocketCohesion: pocketCohesion.report,
     negativeSpace: negativeSpace.report,
     melodyBreathing: melodyBreathing.report,
+    melodyReentry: melodyReentry.report,
     vocalSpace: vocalSpace.report,
     ensembleCadence: ensembleCadence.report,
     transitionHandoff: transitionHandoff.report,
@@ -11813,6 +11920,7 @@ function compose(config, options = {}) {
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
     melodyBreathing: creativePolish.melodyBreathing,
+    melodyReentry: creativePolish.melodyReentry,
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
