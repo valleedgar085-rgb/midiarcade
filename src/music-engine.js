@@ -3724,6 +3724,45 @@ function recenterLinearRegisterTrack(track, structure, { preserveTensionContrast
   let previousOriginal = null;
   let previousSectionId = null;
 
+  // Recall/return motifs own their internal contour. Register normalization may
+  // move that contour by octaves for safety/placement, but it must move the
+  // authored memory variant coherently instead of folding individual notes
+  // into different octaves.
+  const memoryGroupShifts = new Map();
+  if (["melody", "counterpoint"].includes(track.id)) {
+    const groups = new Map();
+    for (const note of notes) {
+      const relationship = String(note?.motifMemoryRelationship ?? "");
+      const variantId = String(note?.motifMemoryVariantId ?? "");
+      if (!variantId || !["recall", "return"].includes(relationship)) continue;
+      if (!groups.has(variantId)) groups.set(variantId, []);
+      groups.get(variantId).push(note);
+    }
+    for (const [variantId, group] of groups.entries()) {
+      const validShifts = [];
+      for (let shift = -48; shift <= 48; shift += 12) {
+        const valid = group.every((note) => {
+          const section = registerSectionAtBeat(structure, note.start);
+          const bounds = registerBoundsForNote(track.id, section, note);
+          if (!bounds) return false;
+          const pitch = note.pitch + shift;
+          return pitch >= bounds.min && pitch <= bounds.max;
+        });
+        if (valid) validShifts.push(shift);
+      }
+      if (!validShifts.length) continue;
+      validShifts.sort((left, right) => {
+        const score = (shift) => average(group.map((note) => {
+          const section = registerSectionAtBeat(structure, note.start);
+          const bounds = registerBoundsForNote(track.id, section, note);
+          return Math.abs(note.pitch + shift - bounds.target) + Math.abs(shift) * 0.08;
+        }), 0);
+        return score(left) - score(right) || Math.abs(left) - Math.abs(right);
+      });
+      memoryGroupShifts.set(variantId, validShifts[0]);
+    }
+  }
+
   for (const note of notes) {
     const section = registerSectionAtBeat(structure, note.start);
     const bounds = registerBoundsForNote(track.id, section, note);
@@ -3737,26 +3776,33 @@ function recenterLinearRegisterTrack(track, structure, { preserveTensionContrast
     if (previousOriginal && phraseConnected) {
       maximumLeapBefore = Math.max(maximumLeapBefore, Math.abs(originalPitch - previousOriginal.pitch));
     }
-    const candidates = registerOctaveCandidates(originalPitch, bounds.min, bounds.max);
+    const memoryVariantId = String(note?.motifMemoryVariantId ?? "");
+    const memoryShift = memoryGroupShifts.get(memoryVariantId);
+    const candidates = Number.isFinite(memoryShift)
+      ? [originalPitch + memoryShift]
+      : registerOctaveCandidates(originalPitch, bounds.min, bounds.max);
     if (candidates.length) {
-      candidates.sort((left, right) => {
-        const score = (pitch) => {
-          let value = Math.abs(pitch - bounds.target) + Math.abs(pitch - originalPitch) * 0.08;
-          if (phraseConnected) {
-            const leap = Math.abs(pitch - previous.pitch);
-            value += leap * 0.25;
-            value += Math.max(0, leap - policy.preferredLeap) * 5;
-            value += Math.max(0, leap - 12) * 12;
-          }
-          return value;
-        };
-        return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
-      });
+      if (!Number.isFinite(memoryShift)) {
+        candidates.sort((left, right) => {
+          const score = (pitch) => {
+            let value = Math.abs(pitch - bounds.target) + Math.abs(pitch - originalPitch) * 0.08;
+            if (phraseConnected) {
+              const leap = Math.abs(pitch - previous.pitch);
+              value += leap * 0.25;
+              value += Math.max(0, leap - policy.preferredLeap) * 5;
+              value += Math.max(0, leap - 12) * 12;
+            }
+            return value;
+          };
+          return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
+        });
+      }
       const selected = candidates[0];
       if (selected !== originalPitch) {
         note.pitch = selected;
         note.dawRegisterShift = selected - originalPitch;
         note.dawRegisterAdjusted = true;
+        if (Number.isFinite(memoryShift)) note.dawRegisterMemoryGroupShift = memoryShift;
         adjusted += 1;
       }
     }
