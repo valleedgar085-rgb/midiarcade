@@ -9523,7 +9523,6 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
   const phraseBars = Math.max(2, GENRE_PROFILES[config.genre]?.arrangement?.phraseBars ?? 4);
   const barBeats = beatsPerBar(config);
   let notesRemoved = 0;
-  let notesShortened = 0;
   const windows = [];
   if (breathSection) {
     for (
@@ -9581,6 +9580,7 @@ function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, 
   const barBeats = beatsPerBar(config);
   const windows = [];
   let notesRemoved = 0;
+  let notesShortened = 0;
   const protectedNote = (note) => Boolean(
     note?.motifMemoryCore
     || note?.motifMemoryVariantId
@@ -9660,7 +9660,7 @@ function runMelodyDirectorReentryPass(sourceTracks, structure, harmony, songBlue
     notes: (track.notes ?? []).map((note) => ({ ...note })),
   }));
   const melody = tracks.find((track) => track.id === "melody");
-  if (!melody) {
+  if (!melody || !MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) {
     return {
       tracks,
       report: { phase: 50.5, version: 2, status: "complete", changedNotes: 0, entries: [] },
