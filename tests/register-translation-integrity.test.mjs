@@ -113,6 +113,40 @@ test("role-register refinement is octave-only and moves fatigue-prone parts into
   assert.ok(result.tracks.find((track) => track.id === "melody").notes[0].pitch <= 84);
 });
 
+test("authored motif-memory register survives preferred-window folding while hard safety still wins", () => {
+  const structure = [{ id: "chorus-2", startBeat: 0, endBeat: 4, intent: { role: "develop" } }];
+  const memoryNote = {
+    pitch: 83,
+    start: 0,
+    duration: 0.5,
+    velocity: 88,
+    motifMemoryVariantId: "motif-memory:chorus-2",
+    motifMemoryCore: true,
+  };
+  const plainNote = { pitch: 83, start: 1, duration: 0.5, velocity: 88 };
+  const hardViolation = {
+    pitch: 95,
+    start: 2,
+    duration: 0.5,
+    velocity: 88,
+    motifMemoryVariantId: "motif-memory:chorus-2",
+    motifMemoryCore: true,
+  };
+
+  const result = refineRoleRegisters([
+    { id: "melody", notes: [memoryNote, plainNote, hardViolation] },
+  ], structure);
+  const notes = result.tracks.find((track) => track.id === "melody").notes;
+
+  assert.equal(notes.find((note) => note.start === 0).pitch, 83,
+    "memory-authored pitch inside the hard window must keep its authored octave");
+  assert.notEqual(notes.find((note) => note.start === 1).pitch, 83,
+    "ordinary high foreground should still fold into the preferred window");
+  assert.ok(notes.find((note) => note.start === 2).pitch <= 84,
+    "memory provenance must never bypass the hard role-register ceiling");
+  assert.equal(pitchClass(notes.find((note) => note.start === 2).pitch), pitchClass(95));
+});
+
 test("raising bass body never sacrifices the seven-semitone harmony separation contract", () => {
   const tracks = [
     { id: "bass", notes: [{ pitch: 34, start: 0, duration: 2, velocity: 90 }] },
