@@ -355,3 +355,35 @@ test("larger melody continuity repairs keep truthful score accounting inside the
   assert.ok(result.diagnostics.maxScoreCost >= 3);
   assert.ok(result.diagnostics.scoreDelta >= -result.diagnostics.maxScoreCost);
 });
+
+
+test("continuity links prefer Groove DNA pulses that do not collide with counterpoint", () => {
+  const source = song();
+  source.grooveConductor = {
+    bars: Array.from({ length: 8 }, (_, bar) => ({
+      bar,
+      sectionId: bar < 2 ? "intro-1" : bar < 4 ? "verse-1" : bar < 6 ? "chorus-1" : "outro-1",
+      leadPulses: [0.75, 2.25],
+    })),
+  };
+  source.tracks.find((track) => track.id === "counterpoint").notes = [
+    { id: "cp-v", start: 10.25, pitch: 72, duration: 0.5, velocity: 74 },
+    { id: "cp-c", start: 18.25, pitch: 79, duration: 0.5, velocity: 76 },
+  ];
+
+  const candidates = createMelodyContinuityCandidates(source);
+  const balanced = candidates.find((candidate) => candidate.id === "balanced-links") ?? candidates[0];
+  assert.ok(balanced);
+
+  const additions = balanced.song.tracks
+    .find((track) => track.id === "melody").notes
+    .filter((note) => note.continuityRole === "phrase-link");
+  assert.ok(additions.length > 0);
+
+  for (const addition of additions) {
+    const collides = source.tracks.find((track) => track.id === "counterpoint").notes.some(
+      (counter) => Math.abs(counter.start - addition.start) < 0.12,
+    );
+    assert.equal(collides, false, `continuity link should avoid counterpoint onset at ${addition.start}`);
+  }
+});
