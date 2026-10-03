@@ -138,9 +138,19 @@ function contourRecallCandidate(song, report, {
       const source = sourceEntries[sourcePosition]?.note;
       const target = targetEntries[targetPosition];
       const note = target?.note;
-      const nextPitch = source && note
-        ? nearestPitchWithClass(finite(note.pitch, 60), mod12(source.pitch), window)
+      const currentPitch = Math.round(finite(note?.pitch, 60));
+      const matchedPitch = source && note
+        ? nearestPitchWithClass(currentPitch, mod12(source.pitch), window)
         : null;
+      // This stage owns harmonic identity, not register. If matching the source
+      // pitch class would only move the note by one or more octaves, leave that
+      // register decision to the register specialist instead of smuggling it
+      // through a memory repair.
+      const nextPitch = matchedPitch != null
+        && matchedPitch !== currentPitch
+        && mod12(matchedPitch) === mod12(currentPitch)
+        ? null
+        : matchedPitch;
       const start = finite(note?.start);
       const offStrongBeat = Math.abs(start - Math.round(start)) > 0.09;
       return {
@@ -237,13 +247,17 @@ function endingRecallCandidate(song, report) {
     const target = targetEntries[targetEntries.length - tail];
     const note = track?.notes?.[target?.index];
     if (!source || !note) continue;
-    const nextPitch = nearestPitchWithClass(finite(note.pitch, 60), mod12(source.pitch), window);
+    const currentPitch = Math.round(finite(note.pitch, 60));
+    const matchedPitch = nearestPitchWithClass(currentPitch, mod12(source.pitch), window);
+    const registerOnlyPitchChange = matchedPitch !== currentPitch
+      && mod12(matchedPitch) === mod12(currentPitch);
+    const nextPitch = registerOnlyPitchChange ? currentPitch : matchedPitch;
     const nextDuration = round(clamp(
       finite(note.duration, 0.5) * 0.55 + finite(source.duration, 0.5) * 0.45,
       0.12,
       1.5,
     ));
-    if (nextPitch !== Math.round(finite(note.pitch)) || Math.abs(nextDuration - finite(note.duration, 0.5)) > 1e-6) changed += 1;
+    if (nextPitch !== currentPitch || Math.abs(nextDuration - finite(note.duration, 0.5)) > 1e-6) changed += 1;
     note.pitch = nextPitch;
     note.duration = nextDuration;
     tag(note, report.sourceSectionId, tail === 1 ? "memory-landing" : "memory-approach");
