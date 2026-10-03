@@ -1,0 +1,2 @@
+Trigger repaired Melody Intent Authority v1 APK build.
+Preserves deterministic RNG consumption while retaining melody intent constraints.
