@@ -7181,8 +7181,6 @@ function isProtectedArrangementNote(note) {
     || note?.transitionFeature
     || note?.transitionHandoffRole
     || note?.memoryRole
-    || note?.motifMemoryCore
-    || note?.motifMemoryVariantId
     || note?.motifHandoffRole
     // Licensed non-diatonic chord tones are deliberate harmony-authority
     // decisions. Orchestration may thin the chord, but it must not silently
@@ -7554,9 +7552,7 @@ function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifL
       note.start >= target.startBeat - 1e-6 && note.start < targetWindowEnd - 1e-6
     ));
     const authoredMemoryNotes = targetWindowNotes.filter((note) => (
-      note.motifMemoryCore === true
-      || note.motifMemoryVariantId
-      || note.phraseAnchor === true
+      note.motifMemoryCore === true || note.motifMemoryVariantId
     ));
     // Motif-memory authoring already wrote a developed recall/return into this
     // window. Replacing it with a literal origin copy destroys that identity and
@@ -9593,14 +9589,7 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
-        if (
-          note.phraseAnchor
-          || note.motifMemoryCore
-          || note.motifMemoryVariantId
-          || ["recall", "return"].includes(String(note.memoryRole ?? ""))
-        ) {
-          return true;
-        }
+        if (note.motifMemoryCore || note.motifMemoryVariantId) return true;
         const bar = Math.floor(note.start / barBeats);
         const keepFill = bar % 4 === 3 && ["lift", "phrase-ending"].includes(note.performanceRole);
         if (keepFill && id === "melody") {
