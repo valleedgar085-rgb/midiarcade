@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 
-import { encodeMidi, generateNew } from "../src/music-engine.js";
+import { applyDawRegisterPolicy, encodeMidi, generateNew } from "../src/music-engine.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "../src/core/pitch-contract.js";
 import { refineRoleRegisters } from "../src/core/role-register-refinement.js";
 import { roleRegisterWindow } from "../src/core/role-register-policy.js";
@@ -145,6 +145,46 @@ test("authored motif-memory register survives preferred-window folding while har
   assert.ok(notes.find((note) => note.start === 2).pitch <= 84,
     "memory provenance must never bypass the hard role-register ceiling");
   assert.equal(pitchClass(notes.find((note) => note.start === 2).pitch), pitchClass(95));
+});
+
+test("DAW register normalization shifts motif-memory returns as one coherent octave group", () => {
+  const sourcePitches = [100, 96, 101, 93];
+  const tracks = [{
+    id: "melody",
+    notes: sourcePitches.map((pitch, index) => ({
+      pitch,
+      start: index,
+      duration: 0.5,
+      velocity: 88,
+      motifMemoryVariantId: "motif-memory:chorus-2",
+      motifMemorySourceSectionId: "chorus-1",
+      motifMemoryRelationship: "return",
+      motifMemoryTransform: "motif-return",
+      motifMemoryCore: true,
+    })),
+  }];
+  const structure = [{
+    id: "chorus-2",
+    name: "chorus",
+    startBeat: 0,
+    endBeat: 4,
+    intent: {
+      role: "peak",
+      phraseRegisterStrategy: "lift",
+      memoryRelationship: "return",
+    },
+  }];
+
+  const result = applyDawRegisterPolicy(tracks, structure, { genre: "hipHop" });
+  const notes = result.tracks.find((track) => track.id === "melody").notes;
+  const shifts = notes.map((note, index) => note.pitch - sourcePitches[index]);
+
+  assert.equal(new Set(shifts).size, 1, "memory return contour must move by one shared octave shift");
+  assert.ok(shifts[0] % 12 === 0, "memory group shift must remain octave-only");
+  assert.ok(notes.every((note) => note.pitch >= 55 && note.pitch <= 88),
+    "coherent memory shift must still obey the DAW melody hard window");
+  assert.ok(notes.every((note, index) => pitchClass(note.pitch) === pitchClass(sourcePitches[index])));
+  assert.ok(notes.every((note) => note.dawRegisterMemoryGroupShift === shifts[0]));
 });
 
 test("raising bass body never sacrifices the seven-semitone harmony separation contract", () => {
