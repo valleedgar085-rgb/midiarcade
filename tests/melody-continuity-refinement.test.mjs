@@ -49,6 +49,32 @@ test("continuity analysis targets sparse body sections but preserves intro/outro
   assert.ok(["verse-1", "chorus-1"].includes(result.weakestSectionId));
 });
 
+test("motif-memory recall and return sections stay topology-owned by memory authority", () => {
+  const source = song();
+  const chorus = source.structure.find((section) => section.id === "chorus-1");
+  chorus.intent = { memoryRelationship: "return" };
+
+  const analysis = analyzeMelodyContinuity(source);
+  assert.equal(
+    analysis.sections.some((section) => section.id === "chorus-1"),
+    false,
+    "return section must not become a continuity repair target",
+  );
+
+  const candidates = createMelodyContinuityCandidates(source);
+  assert.ok(candidates.length > 0, "non-memory body sections should remain repairable");
+  for (const candidate of candidates) {
+    const linksInReturn = candidate.song.tracks
+      .find((track) => track.id === "melody").notes
+      .filter((note) => (
+        note.continuityRole === "phrase-link"
+        && note.start >= 16
+        && note.start < 24
+      ));
+    assert.equal(linksInReturn.length, 0, "continuity must not add topology inside a return section");
+  }
+});
+
 test("continuity candidates add only bounded deterministic melody connectors", () => {
   const source = song();
   const before = structuredClone(source);
