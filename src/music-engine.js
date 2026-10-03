@@ -9558,6 +9558,92 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
   };
 }
 
+
+function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) {
+    return {
+      tracks,
+      report: { phase: 50, version: 2, status: "complete", windows: [], notesRemoved: 0 },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const windows = [];
+  let notesRemoved = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.phraseAnchor
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+    || note?.phraseCadenceRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const boundary = Math.min(
+        section.endBeat,
+        section.startBeat + (finite(phrase.startBarOffset) + finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const restBudget = clamp(finite(phrase.restBudget, 0.2), 0.08, 0.42);
+      const windowBeats = round(clamp(restBudget * 2.1, 0.22, 0.9));
+      const window = {
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(Math.max(phraseStart, boundary - windowBeats)),
+        end: round(boundary),
+        restBudget: round(restBudget),
+      };
+      windows.push(window);
+
+      const phraseNotes = melody.notes
+        .filter((note) => note.start >= phraseStart - 1e-6 && note.start < boundary - 1e-6)
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      if (phraseNotes.length < 4) continue;
+
+      const removable = phraseNotes.filter((note) => (
+        note.start >= window.start
+        && note.start < window.end - 0.04
+        && !protectedNote(note)
+      ));
+      const maxRemove = restBudget >= 0.3 ? 2 : 1;
+      const removeSet = new Set(removable.slice(-maxRemove));
+      if (!removeSet.size) continue;
+
+      melody.notes = melody.notes.filter((note) => {
+        if (!removeSet.has(note)) return true;
+        notesRemoved += 1;
+        return false;
+      });
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      windows,
+      notesRemoved,
+      policy: "protected-phrase-ending-breaths",
+    },
+  };
+}
+
 const VOCAL_LED_GENRES = new Set(["rap", "hipHop", "trap", "drill", "rnbSoul", "neoSoul", "pop", "reggaeton", "afrobeats"]);
 
 function runVocalSpacePass(sourceTracks, structure, config) {
@@ -9940,7 +10026,13 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
   const voiceLeading = runVoiceLeadingPass(sourceTracks, config);
   const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure, grooveConductor, config);
   const negativeSpace = runNegativeSpacePass(pocketCohesion.tracks, structure, config);
-  const vocalSpace = runVocalSpacePass(negativeSpace.tracks, structure, config);
+  const melodyBreathing = runMelodyDirectorBreathingPass(
+    negativeSpace.tracks,
+    structure,
+    songBlueprint,
+    config,
+  );
+  const vocalSpace = runVocalSpacePass(melodyBreathing.tracks, structure, config);
   const ensembleCadence = runEnsembleCadencePass(
     vocalSpace.tracks,
     structure,
@@ -9958,6 +10050,7 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
     voiceLeading: voiceLeading.report,
     pocketCohesion: pocketCohesion.report,
     negativeSpace: negativeSpace.report,
+    melodyBreathing: melodyBreathing.report,
     vocalSpace: vocalSpace.report,
     ensembleCadence: ensembleCadence.report,
     transitionHandoff: transitionHandoff.report,
