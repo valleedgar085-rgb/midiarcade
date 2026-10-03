@@ -58,6 +58,12 @@ import {
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
 import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import {
+  constrainMelodicDegree,
+  hookSignatureAdjustment,
+  melodyIntentRole,
+  shouldAllowOrnamentalTurn,
+} from "./core/melody-intent-authority.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
   referenceDensityNudge,
@@ -3366,7 +3372,12 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   let degree = rng.pick([0, 2, 4]);
   const homeDegree = degree;
   let previousMotion = 0;
-  const motifEventCap = config.genre === "hipHop" ? 7 : 20;
+  const motifEventCap = ({
+    hipHop: 7,
+    rap: 8,
+    trap: 8,
+    pop: 10,
+  })[config.genre] ?? 20;
   while (cursor < lengthBeats - 0.125 && events.length < motifEventCap) {
     const cellIndex = events.length % durations.length;
     const duration = Math.min(durations[cellIndex] * melodyGrammar.durationScale, lengthBeats - cursor);
@@ -3403,7 +3414,18 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     const leap = !recoveringFromLeap && distance > 1 && rng.bool(melodyGrammar.leapChance + config.complexity * 0.2)
       ? Math.min(distance, rng.pick([2, 2, 3]))
       : 1;
-    const ornamentalTurn = !recoveringFromLeap && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08)
+    const ornamentalRole = events.length === Math.floor(durations.length * 0.62)
+      ? "hook-signature"
+      : "continuation";
+    const ornamentalTurn = !recoveringFromLeap
+      && shouldAllowOrnamentalTurn({
+        genre: config.genre,
+        surprise: config.surprise,
+        eventIndex: events.length,
+        eventCount: durations.length,
+        role: ornamentalRole,
+      })
+      && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08)
       ? rng.pick([-1, 1])
       : 0;
     const nextDegree = clamp(degree + direction * leap + ornamentalTurn, -maximumDegree, maximumDegree);
@@ -6291,6 +6313,7 @@ function generateLead(
     const sectionLength = section.endBeat - section.startBeat;
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
+      let previousIntentDegree = null;
       const memoryCore = memoryRecallSection && repeat === 0;
       const development = memoryCore
         ? null
@@ -6405,6 +6428,7 @@ function generateLead(
         const motifDegree = Math.round(finite(event.degree, 0));
         let degree = motifDegree + sectionDegreeShift(section);
         if (section.name === "bridge" && !counterpoint) degree = -degree + 3;
+        const phraseBaseDegree = degree;
         // Preserve the historical RNG stream so fixed-seed downstream
         // decisions remain calibrated, but never use the random pitch choice.
         const legacyVariationTrigger = repeat > 0
@@ -6431,6 +6455,35 @@ function generateLead(
         if (development?.type === "sequence") degree += development.direction * (1 + Math.round(progress * 2));
         if (development?.type === "climax") degree += 2 + Math.round(progress * 2);
         if (development?.type === "resolution" && progress >= 0.55) degree = progress > 0.82 ? 0 : Math.round(degree * (1 - progress));
+
+        const intentRole = melodyIntentRole({
+          sectionName: section.name,
+          eventIndex,
+          eventCount: activeMotif.events.length,
+          progress,
+          phraseAnchor,
+          memoryCore,
+          developmentType: development?.type ?? null,
+          storyRole: storyIntent.role,
+        });
+        const signature = counterpoint
+          ? { degreeShift: 0, durationScale: 1, velocityScale: 1 }
+          : hookSignatureAdjustment({
+            sectionName: section.name,
+            role: intentRole,
+            eventIndex,
+            eventCount: activeMotif.events.length,
+            repeat,
+          });
+        degree += signature.degreeShift;
+        const intentDegree = constrainMelodicDegree({
+          baseDegree: phraseBaseDegree,
+          proposedDegree: degree,
+          role: intentRole,
+          previousDegree: previousIntentDegree,
+        });
+        degree = intentDegree.degree;
+        previousIntentDegree = degree;
         let pitch = midiForDegree(config, degree, settings.octave);
         if ((development?.type === "octaveLift" || development?.type === "climax") && progress >= 0.42) pitch += counterpoint ? -12 : 12;
         if (
@@ -6486,14 +6539,24 @@ function generateLead(
               ? 1.18
               : 1;
         const duration = Math.min(
-          clamp(finite(event.duration, 0.5) * rhythmFactor * notationIntent.durationScale, 0.08, 4),
+          clamp(
+            finite(event.duration, 0.5)
+              * rhythmFactor
+              * notationIntent.durationScale
+              * signature.durationScale,
+            0.08,
+            4,
+          ),
           maxDuration,
         );
         const developmentAccent = development
           ? 0.9 + development.intensity * 0.08 + progress * 0.06 + plannedTension * 0.1
           : 0.94 + plannedTension * 0.1;
         const accent = clamp(
-          finite(event.accent, 0.75) * developmentAccent * notationIntent.velocityScale,
+          finite(event.accent, 0.75)
+            * developmentAccent
+            * notationIntent.velocityScale
+            * signature.velocityScale,
           0.38,
           1.3,
         );
@@ -6517,6 +6580,14 @@ function generateLead(
             melodyVelocityIntent: round(notationIntent.velocityScale),
             melodyStoryRole: storyIntent.role,
             melodyStoryReason: storyIntent.reason,
+            melodyIntentRole: intentRole,
+            melodyIntentBudget: intentDegree.budget,
+            melodyIntentConstrained: intentDegree.constrained,
+            melodyIntentBaseDegree: intentDegree.baseDegree,
+            ...(signature.degreeShift || signature.durationScale !== 1 || signature.velocityScale !== 1 ? {
+              hookSignature: true,
+              hookSignatureDegreeShift: signature.degreeShift,
+            } : {}),
             ...(developedRepeatShift ? {
               melodicMotionIntent: "story-arc",
               melodicMotionDegrees: developedRepeatShift,
