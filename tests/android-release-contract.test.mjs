@@ -33,7 +33,7 @@ test("pause, seek, restart, and disposal preserve explicit playback ownership", 
   const pause = player.match(/pause\(\)\s*\{[\s\S]*?\n\s*stop\(\)/)?.[0] ?? "";
   const seek = player.match(/seek\(position\)\s*\{[\s\S]*?\n\s*restart\(\)/)?.[0] ?? "";
   const dispose = player.match(/dispose\(\)\s*\{[\s\S]*?\n\s*\}/)?.[0] ?? "";
-  assert.match(pause, /this\.position = this\.offset \+ \(this\.context\.currentTime - this\.startedAt\)/);
+  assert.match(pause, /this\.position = this\.currentSongTime\(\)/);
   assert.match(pause, /this\.cancelPendingPlay\(\)/);
   assert.match(seek, /const wasPlaying = this\.playing/);
   assert.match(seek, /this\.pause\(\)/);
