@@ -3372,12 +3372,9 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   let degree = rng.pick([0, 2, 4]);
   const homeDegree = degree;
   let previousMotion = 0;
-  const motifEventCap = ({
-    hipHop: 7,
-    rap: 8,
-    trap: 8,
-    pop: 10,
-  })[config.genre] ?? 20;
+  // Keep the historical motif loop length so Melody Intent does not perturb
+  // the shared deterministic RNG stream used by downstream composition stages.
+  const motifEventCap = config.genre === "hipHop" ? 7 : 20;
   while (cursor < lengthBeats - 0.125 && events.length < motifEventCap) {
     const cellIndex = events.length % durations.length;
     const duration = Math.min(durations[cellIndex] * melodyGrammar.durationScale, lengthBeats - cursor);
@@ -3417,16 +3414,20 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     const ornamentalRole = events.length === Math.floor(durations.length * 0.62)
       ? "hook-signature"
       : "continuation";
-    const ornamentalTurn = !recoveringFromLeap
-      && shouldAllowOrnamentalTurn({
-        genre: config.genre,
-        surprise: config.surprise,
-        eventIndex: events.length,
-        eventCount: durations.length,
-        role: ornamentalRole,
-      })
-      && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08)
-      ? rng.pick([-1, 1])
+    // Consume the exact legacy ornament RNG decisions first, then decide
+    // whether Melody Intent is allowed to use the result. This suppresses
+    // unwanted turns without shifting every later deterministic decision.
+    const legacyOrnamentTriggered = !recoveringFromLeap
+      && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08);
+    const legacyOrnamentTurn = legacyOrnamentTriggered ? rng.pick([-1, 1]) : 0;
+    const ornamentalTurn = shouldAllowOrnamentalTurn({
+      genre: config.genre,
+      surprise: config.surprise,
+      eventIndex: events.length,
+      eventCount: durations.length,
+      role: ornamentalRole,
+    })
+      ? legacyOrnamentTurn
       : 0;
     const nextDegree = clamp(degree + direction * leap + ornamentalTurn, -maximumDegree, maximumDegree);
     previousMotion = nextDegree - degree;
@@ -6326,12 +6327,6 @@ function generateLead(
           || eventIndex === activeMotif.events.length - 1
           || eventIndex === Math.floor(activeMotif.events.length / 2)
         );
-        const hookSignatureSlot = !counterpoint
-          && ["chorus", "drop", "theme"].includes(section.name)
-          && eventIndex === Math.max(
-            1,
-            Math.min(activeMotif.events.length - 2, Math.floor(activeMotif.events.length * 0.58)),
-          );
         // Counterpoint needs a reliable answer gesture, otherwise its lower
         // density and groove-space filtering can erase an entire phrase. Keep
         // the answer bounded and alternating: one anchor per phrase, with a
@@ -6393,7 +6388,7 @@ function generateLead(
             horizonBars: 2,
           })
           : null;
-        const protectedRhythmAnchor = phraseAnchor || memoryCore || hookSignatureSlot;
+        const protectedRhythmAnchor = phraseAnchor || memoryCore;
         const rhythmLookahead = rawRhythmLookahead && protectedRhythmAnchor
           ? {
             ...rawRhythmLookahead,
@@ -6421,7 +6416,7 @@ function generateLead(
           * (counterpointDialogue ? 0.86 : counterpoint ? 0.86 : 1.04)
           * (0.78 + plannedDensity * 0.32)
           * tensionDensity;
-        const anchor = phraseAnchor || hookSignatureSlot;
+        const anchor = phraseAnchor;
         const groove = grooveInfluenceForBeat(
           grooveConductor,
           start,
@@ -6645,17 +6640,13 @@ function generateLead(
     }
   }
   if (!counterpoint && config.tripletAmount > 0) {
-    const controlledLeadOrnamentGenre = ["hipHop", "rap", "trap", "pop"].includes(config.genre);
-    const maxFigures = controlledLeadOrnamentGenre
-      ? 1
-      : Math.max(1, Math.floor(structure.length / 3));
+    // Keep the historical figure count to preserve deterministic RNG
+    // consumption. Intent metadata/constraints may shape the figure, but this
+    // stage must not silently alter the downstream random stream.
+    const maxFigures = Math.max(1, Math.floor(structure.length / 3));
     let figures = 0;
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
       const section = structure[sectionIndex];
-      if (
-        controlledLeadOrnamentGenre
-        && !["prechorus", "build", "chorus", "drop", "theme"].includes(section.name)
-      ) continue;
       const closingMotif = motifForSection(motifProgram, section, false, motif);
       const closingMemoryRelationship = String(closingMotif?.memoryAuthoring?.relationship ?? "");
       if (["recall", "return"].includes(closingMemoryRelationship)) continue;
