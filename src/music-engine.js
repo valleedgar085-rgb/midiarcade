@@ -6481,7 +6481,7 @@ function generateLead(
         });
         const melodyIntentMutationActive = shouldApplyMelodyIntentMutations(config)
           && !memoryOwnedSectionIds.has(String(section.id ?? ""));
-        const signature = melodyIntentMutationActive && !counterpoint
+        const signatureIntent = !counterpoint
           ? hookSignatureAdjustment({
             sectionName: section.name,
             role: intentRole,
@@ -6489,6 +6489,14 @@ function generateLead(
             eventCount: activeMotif.events.length,
             repeat,
           })
+          : { degreeShift: 0, durationScale: 1, velocityScale: 1 };
+        const hookSignatureMarked = (
+          signatureIntent.degreeShift !== 0
+          || signatureIntent.durationScale !== 1
+          || signatureIntent.velocityScale !== 1
+        );
+        const signature = melodyIntentMutationActive
+          ? signatureIntent
           : { degreeShift: 0, durationScale: 1, velocityScale: 1 };
         degree += signature.degreeShift;
         const intentDegree = melodyIntentMutationActive
@@ -6606,9 +6614,9 @@ function generateLead(
             melodyIntentConstrained: intentDegree.constrained,
             melodyIntentBaseDegree: intentDegree.baseDegree,
             melodyIntentMutationActive,
-            ...(signature.degreeShift || signature.durationScale !== 1 || signature.velocityScale !== 1 ? {
+            ...(hookSignatureMarked ? {
               hookSignature: true,
-              hookSignatureDegreeShift: signature.degreeShift,
+              hookSignatureDegreeShift: signatureIntent.degreeShift,
             } : {}),
             ...(developedRepeatShift ? {
               melodicMotionIntent: "story-arc",
