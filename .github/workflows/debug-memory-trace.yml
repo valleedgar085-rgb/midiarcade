@@ -1,0 +1,21 @@
+name: Debug Melody Memory Trace
+
+on:
+  push:
+    branches:
+      - debug-memory-trace-pr227
+  workflow_dispatch:
+
+jobs:
+  trace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Trace Hip-Hop 16-bar memory
+        run: node scripts/debug-memory-trace.mjs
