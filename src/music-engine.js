@@ -9523,6 +9523,7 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
   const phraseBars = Math.max(2, GENRE_PROFILES[config.genre]?.arrangement?.phraseBars ?? 4);
   const barBeats = beatsPerBar(config);
   let notesRemoved = 0;
+  let notesShortened = 0;
   const windows = [];
   if (breathSection) {
     for (
@@ -9558,6 +9559,11 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
   };
 }
 
+
+const MELODY_DIRECTOR_AUDIBLE_GENRES = new Set([
+  "hipHop", "rap", "trap", "pop", "popRadio", "neoSoul", "rnbSoul",
+  "house", "reggaeton", "afrobeats", "loFiHipHop", "synthwave",
+]);
 
 function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, config) {
   const tracks = sourceTracks.map((track) => ({
@@ -9613,20 +9619,22 @@ function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, 
         .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
       if (phraseNotes.length < 4) continue;
 
-      const removable = phraseNotes.filter((note) => (
-        note.start >= window.start
-        && note.start < window.end - 0.04
-        && !protectedNote(note)
-      ));
-      const maxRemove = restBudget >= 0.3 ? 2 : 1;
-      const removeSet = new Set(removable.slice(-maxRemove));
-      if (!removeSet.size) continue;
+      if (!MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) continue;
+      const tail = [...phraseNotes]
+        .reverse()
+        .find((note) => !protectedNote(note) && note.start < window.end - 0.04);
+      if (!tail) continue;
 
-      melody.notes = melody.notes.filter((note) => {
-        if (!removeSet.has(note)) return true;
-        notesRemoved += 1;
-        return false;
-      });
+      const desiredEnd = Math.max(
+        tail.start + 0.08,
+        window.end - clamp(restBudget * 0.65, 0.12, 0.32),
+      );
+      const originalEnd = tail.start + Math.max(0.04, finite(tail.duration, 0.25));
+      if (originalEnd > desiredEnd + 0.03) {
+        tail.duration = round(Math.max(0.08, desiredEnd - tail.start));
+        tail.melodyDirectorBreathTail = true;
+        notesShortened += 1;
+      }
     }
   }
 
@@ -9639,6 +9647,7 @@ function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, 
       authority: "melody-director-v2",
       windows,
       notesRemoved,
+      notesShortened,
       policy: "protected-phrase-ending-breaths",
     },
   };
@@ -10841,7 +10850,9 @@ function applyPhraseResolutions(
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
-    const melodyDirectorPlan = trackId === "melody" ? sectionPhraseMemory?.melodyDirector : null;
+    const melodyDirectorPlan = trackId === "melody" && MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)
+      ? sectionPhraseMemory?.melodyDirector
+      : null;
     const phraseBars = melodyDirectorPlan
       ? clamp(Math.round(finite(melodyDirectorPlan.phraseBars, 4)), 2, 8)
       : clamp(
