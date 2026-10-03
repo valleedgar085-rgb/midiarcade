@@ -63,6 +63,7 @@ import {
   hookSignatureAdjustment,
   melodyIntentRole,
   shouldAllowOrnamentalTurn,
+  shouldApplyMelodyIntentMutations,
 } from "./core/melody-intent-authority.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
@@ -3420,13 +3421,16 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     const legacyOrnamentTriggered = !recoveringFromLeap
       && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08);
     const legacyOrnamentTurn = legacyOrnamentTriggered ? rng.pick([-1, 1]) : 0;
-    const ornamentalTurn = shouldAllowOrnamentalTurn({
-      genre: config.genre,
-      surprise: config.surprise,
-      eventIndex: events.length,
-      eventCount: durations.length,
-      role: ornamentalRole,
-    })
+    const ornamentalTurn = (
+      !shouldApplyMelodyIntentMutations(config)
+      || shouldAllowOrnamentalTurn({
+        genre: config.genre,
+        surprise: config.surprise,
+        eventIndex: events.length,
+        eventCount: durations.length,
+        role: ornamentalRole,
+      })
+    )
       ? legacyOrnamentTurn
       : 0;
     const nextDegree = clamp(degree + direction * leap + ornamentalTurn, -maximumDegree, maximumDegree);
@@ -6467,22 +6471,30 @@ function generateLead(
           developmentType: development?.type ?? null,
           storyRole: storyIntent.role,
         });
-        const signature = counterpoint
-          ? { degreeShift: 0, durationScale: 1, velocityScale: 1 }
-          : hookSignatureAdjustment({
+        const melodyIntentMutationActive = shouldApplyMelodyIntentMutations(config)
+          && !memoryRecallSection;
+        const signature = melodyIntentMutationActive && !counterpoint
+          ? hookSignatureAdjustment({
             sectionName: section.name,
             role: intentRole,
             eventIndex,
             eventCount: activeMotif.events.length,
             repeat,
-          });
+          })
+          : { degreeShift: 0, durationScale: 1, velocityScale: 1 };
         degree += signature.degreeShift;
-        const intentDegree = constrainMelodicDegree({
-          baseDegree: phraseBaseDegree,
-          proposedDegree: degree,
-          role: intentRole,
-          previousDegree: previousIntentDegree,
-        });
+        const intentDegree = melodyIntentMutationActive
+          ? constrainMelodicDegree({
+            baseDegree: phraseBaseDegree,
+            proposedDegree: degree,
+            role: intentRole,
+            previousDegree: previousIntentDegree,
+          })
+          : constrainMelodicDegree({
+            baseDegree: degree,
+            proposedDegree: degree,
+            role: intentRole,
+          });
         degree = intentDegree.degree;
         previousIntentDegree = degree;
         let pitch = midiForDegree(config, degree, settings.octave);
@@ -6585,6 +6597,7 @@ function generateLead(
             melodyIntentBudget: intentDegree.budget,
             melodyIntentConstrained: intentDegree.constrained,
             melodyIntentBaseDegree: intentDegree.baseDegree,
+            melodyIntentMutationActive,
             ...(signature.degreeShift || signature.durationScale !== 1 || signature.velocityScale !== 1 ? {
               hookSignature: true,
               hookSignatureDegreeShift: signature.degreeShift,
@@ -7909,6 +7922,9 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       } : {}),
       ...(Number.isFinite(note.melodyIntentBaseDegree) ? {
         melodyIntentBaseDegree: note.melodyIntentBaseDegree,
+      } : {}),
+      ...(typeof note.melodyIntentMutationActive === "boolean" ? {
+        melodyIntentMutationActive: note.melodyIntentMutationActive,
       } : {}),
       ...(note.hookSignature ? { hookSignature: true } : {}),
       ...(Number.isFinite(note.hookSignatureDegreeShift) ? {
