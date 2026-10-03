@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createMelodyPhrasePlan } from "../src/core/melody-phrase-composer.js";
 import { createPhraseMemoryContract } from "../src/core/phrase-memory.js";
+import { generateNew } from "../src/music-engine.js";
 
 test("Melody Director v2 creates deterministic 4-bar question/answer phrases", () => {
   const input = {
@@ -103,4 +104,41 @@ test("phrase-memory contract exposes Melody Director v2 without changing existin
   assert.equal(contract.sections[0].melodyDirector.phrases[0].lookAhead.nextSectionId, "chorus-1");
   assert.equal(contract.sections[1].melodyDirector.phrases[0].landingIntent, "resolution");
   assert.equal(contract.sections[1].melodyDirector.mutatesNotes, false);
+});
+
+
+test("generated melody landings publish and follow Melody Director v2 intent", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "melody-director-v2-render",
+    bars: 32,
+    candidateCount: 1,
+  });
+  const melody = song.tracks.find((track) => track.id === "melody");
+  assert.ok(melody?.notes?.length > 0);
+
+  const directedLandings = melody.notes.filter((note) => note.melodyDirectorVersion === 2);
+  assert.ok(directedLandings.length > 0, "melody phrase landings should expose Melody Director v2 intent");
+  assert.ok(directedLandings.every((note) => [
+    "question", "answer", "statement", "resolution", "return", "callback", "contrast",
+  ].includes(note.melodyDirectorSentenceRole)));
+  assert.ok(directedLandings.every((note) => [
+    "up", "down", "slight-up", "slight-down", "contrast", "center",
+  ].includes(note.melodyDirectorRegisterMotion)));
+  assert.ok(directedLandings.every((note) => note.melodyDirectorRestBudget >= 0.08 && note.melodyDirectorRestBudget <= 0.42));
+
+  const eightBarSections = song.phraseMemory.sections.filter((entry) => entry.melodyDirector?.phraseBars === 8);
+  for (const memory of eightBarSections) {
+    const section = song.structure.find((entry) => entry.id === memory.sectionId);
+    if (!section) continue;
+    const boundaries = directedLandings.filter((note) => (
+      note.start >= section.startBeat - 1e-6
+      && note.start < section.endBeat - 1e-6
+      && Number.isFinite(note.phraseBoundary)
+    ));
+    assert.ok(
+      boundaries.length <= Math.max(1, Math.ceil(section.bars / 8)),
+      `8-bar melody thought in ${section.id} should not restart every 2-4 bars`,
+    );
+  }
 });
