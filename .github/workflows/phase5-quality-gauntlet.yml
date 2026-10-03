@@ -17,6 +17,7 @@ on:
       - "tests/mutation-authority.test.mjs"
       - "tests/musical-payoff-director.test.mjs"
       - "tests/reference-profile-engine.test.mjs"
+      - "tests/melody-intent-authority.test.mjs"
       - "tests/performance-shadow.test.mjs"
       - "tests/performance-candidate.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
@@ -49,6 +50,8 @@ jobs:
         run: node --test tests/musical-payoff-director.test.mjs tests/blueprint-composer.test.mjs
       - name: Run reference profile engine regression tests
         run: node --test tests/reference-profile-engine.test.mjs
+      - name: Run melody intent authority regression tests
+        run: node --test tests/melody-intent-authority.test.mjs
       - name: Run section completion authority regression tests
         run: node --test tests/section-completion-authority.test.mjs
       - name: Run performance candidate promotion regression tests

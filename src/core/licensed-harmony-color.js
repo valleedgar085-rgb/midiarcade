@@ -219,6 +219,12 @@ export function applyIntentionalChromaticApproaches(notes = [], config = {}, tra
     const note = ordered[index];
     const next = ordered[index + 1];
     if (note?.phraseAnchor || note?.tonalLicense) continue;
+    if (
+      ["hipHop", "rap", "trap", "pop"].includes(String(config?.genre ?? ""))
+      && note?.melodyIntentMutationActive === true
+      && note?.melodyIntentRole
+      && !["approach", "answer", "hook-signature"].includes(String(note.melodyIntentRole))
+    ) continue;
 
     const start = finite(note?.start);
     const nextStart = finite(next?.start, Infinity);

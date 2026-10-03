@@ -69,11 +69,16 @@ function shiftDegree(event, amount) {
 function developReturn(source, memory, seed) {
   const motif = clone(source);
   const strength = clamp(memory?.recallStrength ?? 0.8, 0, 1);
-  const changeCount = motif.events.length >= 6 ? 2 : 1;
+  // Strong returns should sound developed, not rewritten. Preserve more of the
+  // authored contour as recall strength rises so a chorus return remains
+  // recognizable before any post-generation repair is considered.
+  const changeCount = strength >= 0.86
+    ? 1
+    : motif.events.length >= 6 ? 2 : 1;
   const positions = interiorPositions(motif.events.length, seed, `return:${memory.sectionId}`, changeCount);
   for (const [ordinal, index] of positions.entries()) {
     const direction = deterministicSign(seed, `return-degree:${memory.sectionId}:${index}`);
-    const magnitude = strength >= 0.82 && ordinal > 0 ? 1 : 2;
+    const magnitude = strength >= 0.82 ? 1 : (ordinal > 0 ? 1 : 2);
     shiftDegree(motif.events[index], direction * magnitude);
   }
 
@@ -160,18 +165,29 @@ function developContrast(source, fallback, memory, seed) {
   const motif = clone(fallback);
   if (!validMotif(source)) return motif;
 
-  // Preserve only a small family fingerprint: one opening contour cue and the
-  // final pitch direction. The target stays genuinely contrasting.
+  // Preserve a small but measurable family fingerprint while keeping the
+  // contrasting motif in charge. The opening identifies the family; the
+  // landing and final direction preserve cadence memory. Interior pitches and
+  // rhythm remain the contrasting motif, so this cannot collapse into a clone.
   motif.events[0].degree = Math.round(finite(source.events[0]?.degree, motif.events[0].degree));
   if (motif.events.length >= 3 && source.events.length >= 3) {
     const sourceTail = source.events.slice(-2);
-    const sourceDirection = Math.sign(
+    const sourceLanding = Math.round(finite(
+      sourceTail[1]?.degree,
+      motif.events[motif.events.length - 1].degree,
+    ));
+    const sourceInterval = Math.round(
       finite(sourceTail[1]?.degree) - finite(sourceTail[0]?.degree),
-    ) || deterministicSign(seed, `contrast-tail:${memory.sectionId}`);
+    );
+    const sourceDirection = Math.sign(sourceInterval)
+      || deterministicSign(seed, `contrast-tail:${memory.sectionId}`);
+    const intervalMagnitude = Math.max(1, Math.min(2, Math.abs(sourceInterval) || 1));
     const targetIndex = motif.events.length - 2;
     const final = motif.events[motif.events.length - 1];
+
+    final.degree = Math.round(clamp(sourceLanding, -9, 9));
     motif.events[targetIndex].degree = Math.round(clamp(
-      finite(final.degree) - sourceDirection,
+      finite(final.degree) - sourceDirection * intervalMagnitude,
       -9,
       9,
     ));

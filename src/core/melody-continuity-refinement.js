@@ -27,6 +27,15 @@ function normalizeName(section) {
   return String(section?.name ?? section?.type ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function memoryOwnsSection(section) {
+  const relationship = String(
+    section?.intent?.memoryRelationship
+    ?? section?.memoryRelationship
+    ?? "",
+  ).trim().toLowerCase();
+  return relationship === "recall" || relationship === "return";
+}
+
 function sectionBounds(song, section) {
   const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
   const startBeat = finite(section?.startBeat, finite(section?.startBar, 0) * beatsPerBar);
@@ -66,7 +75,11 @@ function melodicSections(song) {
       name,
       ...sectionBounds(song, section),
     };
-  }).filter(({ name }) => name && !isExcludedSectionName(name));
+  }).filter(({ name, section }) => (
+    name
+    && !isExcludedSectionName(name)
+    && !memoryOwnsSection(section)
+  ));
 }
 
 function melodyTrack(song) {

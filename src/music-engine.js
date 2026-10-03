@@ -58,6 +58,12 @@ import {
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
 import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import {
+  constrainMelodicDegree,
+  hookSignatureAdjustment,
+  melodyIntentRole,
+  shouldApplyMelodyIntentMutations,
+} from "./core/melody-intent-authority.js";
 import { resolveWeaknessAuthority } from "./core/generation-repair-router.js";
 import {
   referenceDensityNudge,
@@ -3366,6 +3372,8 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
   let degree = rng.pick([0, 2, 4]);
   const homeDegree = degree;
   let previousMotion = 0;
+  // Keep the historical motif loop length so Melody Intent does not perturb
+  // the shared deterministic RNG stream used by downstream composition stages.
   const motifEventCap = config.genre === "hipHop" ? 7 : 20;
   while (cursor < lengthBeats - 0.125 && events.length < motifEventCap) {
     const cellIndex = events.length % durations.length;
@@ -3403,9 +3411,13 @@ function createMotif(config, style, rng, structure = [], songBlueprint = null) {
     const leap = !recoveringFromLeap && distance > 1 && rng.bool(melodyGrammar.leapChance + config.complexity * 0.2)
       ? Math.min(distance, rng.pick([2, 2, 3]))
       : 1;
-    const ornamentalTurn = !recoveringFromLeap && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08)
-      ? rng.pick([-1, 1])
-      : 0;
+    // Preserve the authored motif family exactly. Melody Intent operates on
+    // rendered non-memory melody events, not on the source material used by
+    // motif-memory authoring, so recall/return/contrast relationships remain
+    // calibrated and deterministic.
+    const legacyOrnamentTriggered = !recoveringFromLeap
+      && rng.bool(melodyGrammar.ornamentChance + config.surprise * 0.08);
+    const ornamentalTurn = legacyOrnamentTriggered ? rng.pick([-1, 1]) : 0;
     const nextDegree = clamp(degree + direction * leap + ornamentalTurn, -maximumDegree, maximumDegree);
     previousMotion = nextDegree - degree;
     degree = nextDegree;
@@ -3712,6 +3724,45 @@ function recenterLinearRegisterTrack(track, structure, { preserveTensionContrast
   let previousOriginal = null;
   let previousSectionId = null;
 
+  // Recall/return motifs own their internal contour. Register normalization may
+  // move that contour by octaves for safety/placement, but it must move the
+  // authored memory variant coherently instead of folding individual notes
+  // into different octaves.
+  const memoryGroupShifts = new Map();
+  if (["melody", "counterpoint"].includes(track.id)) {
+    const groups = new Map();
+    for (const note of notes) {
+      const relationship = String(note?.motifMemoryRelationship ?? "");
+      const variantId = String(note?.motifMemoryVariantId ?? "");
+      if (!variantId || !["recall", "return"].includes(relationship)) continue;
+      if (!groups.has(variantId)) groups.set(variantId, []);
+      groups.get(variantId).push(note);
+    }
+    for (const [variantId, group] of groups.entries()) {
+      const validShifts = [];
+      for (let shift = -48; shift <= 48; shift += 12) {
+        const valid = group.every((note) => {
+          const section = registerSectionAtBeat(structure, note.start);
+          const bounds = registerBoundsForNote(track.id, section, note);
+          if (!bounds) return false;
+          const pitch = note.pitch + shift;
+          return pitch >= bounds.min && pitch <= bounds.max;
+        });
+        if (valid) validShifts.push(shift);
+      }
+      if (!validShifts.length) continue;
+      validShifts.sort((left, right) => {
+        const score = (shift) => average(group.map((note) => {
+          const section = registerSectionAtBeat(structure, note.start);
+          const bounds = registerBoundsForNote(track.id, section, note);
+          return Math.abs(note.pitch + shift - bounds.target) + Math.abs(shift) * 0.08;
+        }), 0);
+        return score(left) - score(right) || Math.abs(left) - Math.abs(right);
+      });
+      memoryGroupShifts.set(variantId, validShifts[0]);
+    }
+  }
+
   for (const note of notes) {
     const section = registerSectionAtBeat(structure, note.start);
     const bounds = registerBoundsForNote(track.id, section, note);
@@ -3725,26 +3776,33 @@ function recenterLinearRegisterTrack(track, structure, { preserveTensionContrast
     if (previousOriginal && phraseConnected) {
       maximumLeapBefore = Math.max(maximumLeapBefore, Math.abs(originalPitch - previousOriginal.pitch));
     }
-    const candidates = registerOctaveCandidates(originalPitch, bounds.min, bounds.max);
+    const memoryVariantId = String(note?.motifMemoryVariantId ?? "");
+    const memoryShift = memoryGroupShifts.get(memoryVariantId);
+    const candidates = Number.isFinite(memoryShift)
+      ? [originalPitch + memoryShift]
+      : registerOctaveCandidates(originalPitch, bounds.min, bounds.max);
     if (candidates.length) {
-      candidates.sort((left, right) => {
-        const score = (pitch) => {
-          let value = Math.abs(pitch - bounds.target) + Math.abs(pitch - originalPitch) * 0.08;
-          if (phraseConnected) {
-            const leap = Math.abs(pitch - previous.pitch);
-            value += leap * 0.25;
-            value += Math.max(0, leap - policy.preferredLeap) * 5;
-            value += Math.max(0, leap - 12) * 12;
-          }
-          return value;
-        };
-        return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
-      });
+      if (!Number.isFinite(memoryShift)) {
+        candidates.sort((left, right) => {
+          const score = (pitch) => {
+            let value = Math.abs(pitch - bounds.target) + Math.abs(pitch - originalPitch) * 0.08;
+            if (phraseConnected) {
+              const leap = Math.abs(pitch - previous.pitch);
+              value += leap * 0.25;
+              value += Math.max(0, leap - policy.preferredLeap) * 5;
+              value += Math.max(0, leap - 12) * 12;
+            }
+            return value;
+          };
+          return score(left) - score(right) || Math.abs(left - originalPitch) - Math.abs(right - originalPitch);
+        });
+      }
       const selected = candidates[0];
       if (selected !== originalPitch) {
         note.pitch = selected;
         note.dawRegisterShift = selected - originalPitch;
         note.dawRegisterAdjusted = true;
+        if (Number.isFinite(memoryShift)) note.dawRegisterMemoryGroupShift = memoryShift;
         adjusted += 1;
       }
     }
@@ -6281,6 +6339,14 @@ function generateLead(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const counterpointDialogue = counterpoint && ["hipHop", "pop", "rap", "trap"].includes(config.genre);
+  const memoryOwnedSectionIds = new Set(
+    (motifProgram?.motifMemoryAuthoring?.sections ?? [])
+      .flatMap((memory) => [
+        String(memory?.sectionId ?? ""),
+        String(memory?.sourceSectionId ?? ""),
+      ])
+      .filter(Boolean),
+  );
   for (const [sectionIndex, section] of structure.entries()) {
     const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
@@ -6291,8 +6357,14 @@ function generateLead(
     const sectionLength = section.endBeat - section.startBeat;
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
+      let previousIntentDegree = null;
       const memoryCore = memoryRecallSection && repeat === 0;
-      const development = memoryCore
+      // Motif Memory already authored the recall/return transformation. Do not
+      // stack generic Phrase Development on later repeats of that same section;
+      // doing so erases the very contour/rhythm evidence the memory contract
+      // requires. Performance feel still applies downstream, but structural
+      // pitch/timing development yields to the memory authority here.
+      const development = memoryRecallSection
         ? null
         : phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
       for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
@@ -6405,6 +6477,7 @@ function generateLead(
         const motifDegree = Math.round(finite(event.degree, 0));
         let degree = motifDegree + sectionDegreeShift(section);
         if (section.name === "bridge" && !counterpoint) degree = -degree + 3;
+        const phraseBaseDegree = degree;
         // Preserve the historical RNG stream so fixed-seed downstream
         // decisions remain calibrated, but never use the random pitch choice.
         const legacyVariationTrigger = repeat > 0
@@ -6431,6 +6504,51 @@ function generateLead(
         if (development?.type === "sequence") degree += development.direction * (1 + Math.round(progress * 2));
         if (development?.type === "climax") degree += 2 + Math.round(progress * 2);
         if (development?.type === "resolution" && progress >= 0.55) degree = progress > 0.82 ? 0 : Math.round(degree * (1 - progress));
+
+        const intentRole = melodyIntentRole({
+          sectionName: section.name,
+          eventIndex,
+          eventCount: activeMotif.events.length,
+          progress,
+          phraseAnchor,
+          memoryCore,
+          developmentType: development?.type ?? null,
+          storyRole: storyIntent.role,
+        });
+        const melodyIntentMutationActive = shouldApplyMelodyIntentMutations(config)
+          && !memoryOwnedSectionIds.has(String(section.id ?? ""));
+        const signatureIntent = !counterpoint
+          ? hookSignatureAdjustment({
+            sectionName: section.name,
+            role: intentRole,
+            eventIndex,
+            eventCount: activeMotif.events.length,
+            repeat,
+          })
+          : { degreeShift: 0, durationScale: 1, velocityScale: 1 };
+        const hookSignatureMarked = (
+          signatureIntent.degreeShift !== 0
+          || signatureIntent.durationScale !== 1
+          || signatureIntent.velocityScale !== 1
+        );
+        const signature = melodyIntentMutationActive
+          ? signatureIntent
+          : { degreeShift: 0, durationScale: 1, velocityScale: 1 };
+        degree += signature.degreeShift;
+        const intentDegree = melodyIntentMutationActive
+          ? constrainMelodicDegree({
+            baseDegree: phraseBaseDegree,
+            proposedDegree: degree,
+            role: intentRole,
+            previousDegree: previousIntentDegree,
+          })
+          : constrainMelodicDegree({
+            baseDegree: degree,
+            proposedDegree: degree,
+            role: intentRole,
+          });
+        degree = intentDegree.degree;
+        previousIntentDegree = degree;
         let pitch = midiForDegree(config, degree, settings.octave);
         if ((development?.type === "octaveLift" || development?.type === "climax") && progress >= 0.42) pitch += counterpoint ? -12 : 12;
         if (
@@ -6486,14 +6604,24 @@ function generateLead(
               ? 1.18
               : 1;
         const duration = Math.min(
-          clamp(finite(event.duration, 0.5) * rhythmFactor * notationIntent.durationScale, 0.08, 4),
+          clamp(
+            finite(event.duration, 0.5)
+              * rhythmFactor
+              * notationIntent.durationScale
+              * signature.durationScale,
+            0.08,
+            4,
+          ),
           maxDuration,
         );
         const developmentAccent = development
           ? 0.9 + development.intensity * 0.08 + progress * 0.06 + plannedTension * 0.1
           : 0.94 + plannedTension * 0.1;
         const accent = clamp(
-          finite(event.accent, 0.75) * developmentAccent * notationIntent.velocityScale,
+          finite(event.accent, 0.75)
+            * developmentAccent
+            * notationIntent.velocityScale
+            * signature.velocityScale,
           0.38,
           1.3,
         );
@@ -6517,6 +6645,15 @@ function generateLead(
             melodyVelocityIntent: round(notationIntent.velocityScale),
             melodyStoryRole: storyIntent.role,
             melodyStoryReason: storyIntent.reason,
+            melodyIntentRole: intentRole,
+            melodyIntentBudget: intentDegree.budget,
+            melodyIntentConstrained: intentDegree.constrained,
+            melodyIntentBaseDegree: intentDegree.baseDegree,
+            melodyIntentMutationActive,
+            ...(hookSignatureMarked ? {
+              hookSignature: true,
+              hookSignatureDegreeShift: signatureIntent.degreeShift,
+            } : {}),
             ...(developedRepeatShift ? {
               melodicMotionIntent: "story-arc",
               melodicMotionDegrees: developedRepeatShift,
@@ -6553,13 +6690,24 @@ function generateLead(
             Math.min(0.32, section.endBeat - start),
             eventVelocity(config, settings, intensity, rng, 0.96 + development.intensity * 0.06),
             totalBeats,
-            tonalLicenseForChordPitch(pitch, chord, config),
+            {
+              melodyIntentRole: "resolution",
+              melodyIntentBudget: 1,
+              melodyIntentConstrained: false,
+              melodyIntentBaseDegree: (chord?.degree ?? 0) + sectionDegreeShift(section),
+              melodyStoryRole: "resolve",
+              melodyStoryReason: "section-ending-cadence",
+              ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
+            },
           );
         }
       }
     }
   }
   if (!counterpoint && config.tripletAmount > 0) {
+    // Keep the historical figure count to preserve deterministic RNG
+    // consumption. Intent metadata/constraints may shape the figure, but this
+    // stage must not silently alter the downstream random stream.
     const maxFigures = Math.max(1, Math.floor(structure.length / 3));
     let figures = 0;
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
@@ -6590,6 +6738,12 @@ function generateLead(
           totalBeats,
           {
             rhythmicFeature: step === 1 / 6 ? "triplet-sixteenth" : "triplet-eighth",
+            melodyIntentRole: "ornamental-run",
+            melodyIntentBudget: 1,
+            melodyIntentConstrained: false,
+            melodyIntentBaseDegree: baseDegree + motion[index],
+            melodyStoryRole: "payoff-ornament",
+            melodyStoryReason: "single-deliberate-section-ornament",
             ...(tonalLicenseForChordPitch(pitch, chord, config) ?? {}),
           },
         );
@@ -7813,6 +7967,21 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(Number.isFinite(note.melodicMotionDegrees) ? { melodicMotionDegrees: note.melodicMotionDegrees } : {}),
       ...(note.melodyStoryRole ? { melodyStoryRole: note.melodyStoryRole } : {}),
       ...(note.melodyStoryReason ? { melodyStoryReason: note.melodyStoryReason } : {}),
+      ...(note.melodyIntentRole ? { melodyIntentRole: note.melodyIntentRole } : {}),
+      ...(Number.isFinite(note.melodyIntentBudget) ? { melodyIntentBudget: note.melodyIntentBudget } : {}),
+      ...(typeof note.melodyIntentConstrained === "boolean" ? {
+        melodyIntentConstrained: note.melodyIntentConstrained,
+      } : {}),
+      ...(Number.isFinite(note.melodyIntentBaseDegree) ? {
+        melodyIntentBaseDegree: note.melodyIntentBaseDegree,
+      } : {}),
+      ...(typeof note.melodyIntentMutationActive === "boolean" ? {
+        melodyIntentMutationActive: note.melodyIntentMutationActive,
+      } : {}),
+      ...(note.hookSignature ? { hookSignature: true } : {}),
+      ...(Number.isFinite(note.hookSignatureDegreeShift) ? {
+        hookSignatureDegreeShift: note.hookSignatureDegreeShift,
+      } : {}),
       ...(note.melodySpacingProtected ? { melodySpacingProtected: true } : {}),
       ...(note.tonalLicense ? { tonalLicense: note.tonalLicense } : {}),
       ...(note.harmonicColorSource ? { harmonicColorSource: note.harmonicColorSource } : {}),
@@ -10637,6 +10806,12 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
       phraseBoundary: round(end),
       articulationIntent: "held-resolution",
       preserveTiming: true,
+      melodyIntentRole: "resolution",
+      melodyIntentBudget: 1,
+      melodyIntentConstrained: false,
+      melodyIntentBaseDegree: chord.degree ?? 0,
+      melodyStoryRole: "resolve",
+      melodyStoryReason: "final-section-landing",
     });
   }
 
