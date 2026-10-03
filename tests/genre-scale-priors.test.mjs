@@ -40,6 +40,8 @@ test("research rankings use current engine names where equivalents exist", () =>
 
 test("genre aliases normalize without forcing unrelated MIDI Arcade genres", () => {
   assert.equal(normalizeGenreScalePriorId("Latin Jazz"), "afroCubanLatinJazz");
+  assert.equal(normalizeGenreScalePriorId("Metal"), "metal");
+  assert.equal(normalizeGenreScalePriorId("Blues"), "blues");
   assert.equal(normalizeGenreScalePriorId("hip hop"), "hipHop");
   assert.deepEqual(genreScalePalette("hipHop"), []);
 });
@@ -51,4 +53,13 @@ test("prior lookup is deterministic, soft, and neutral for unknown choices", () 
   assert.equal(genreScalePriorBonus("hipHop", "minor"), 0);
   assert.equal(genreScalePriorRank("jazz", "altered"), 5);
   assert.equal(genreScalePriorRank("jazz", "blues"), null);
+});
+
+
+test("genre prior lookup ignores inherited object properties", () => {
+  for (const unsupported of ["constructor", "toString", "__proto__"]) {
+    assert.deepEqual(genreScalePalette(unsupported), []);
+    assert.equal(genreScalePriorBonus(unsupported, "major"), 0);
+    assert.equal(genreScalePriorRank(unsupported, "major"), null);
+  }
 });
