@@ -208,6 +208,25 @@ test("missing source section fails closed when the phrase-memory contract cannot
   assert.equal(report.sections[0].available, false);
 });
 
+test("missing contrast comparison is non-blocking when required recall relationships remain evaluable", () => {
+  const song = songWith(TRANSFORMED_RECALL);
+  song.structure.push({ id: "bridge-1", name: "bridge", startBeat: 16, endBeat: 24, bars: 2 });
+  song.phraseMemory.sections.push({
+    sectionId: "bridge-1",
+    sourceSectionId: "verse-1",
+    relationship: "contrast",
+    recallStrength: 0.7,
+    transform: "harmonic-reframe",
+  });
+
+  const report = evaluateMelodySectionMemory(song);
+  const bridge = report.sections.find((entry) => entry.sectionId === "bridge-1");
+
+  assert.equal(bridge?.available, false);
+  assert.equal(report.passed, true, JSON.stringify(report));
+  assert.equal(report.reason, "memory-development-coherent");
+});
+
 test("songs with no recall/return/contrast contract are neutral and unavailable", () => {
   const song = songWith(TRANSFORMED_RECALL);
   song.phraseMemory.sections = song.phraseMemory.sections.map((memory) => ({

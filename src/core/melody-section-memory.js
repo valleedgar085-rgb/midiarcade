@@ -136,29 +136,39 @@ function rhythmSimilarity(source, target, sourceRange, targetRange) {
 }
 
 function endingSimilarity(source, target) {
-  const sourceTail = source.slice(-Math.min(3, source.length));
-  const targetTail = target.slice(-Math.min(3, target.length));
-  const exactShape = multisetSimilarity(
-    ngrams(endingShape(source), 2),
-    ngrams(endingShape(target), 2),
-  );
+  const endingEvidence = (leftNotes, rightNotes) => {
+    const leftTail = leftNotes.slice(-Math.min(3, leftNotes.length));
+    const rightTail = rightNotes.slice(-Math.min(3, rightNotes.length));
+    const exactShape = multisetSimilarity(
+      ngrams(endingShape(leftNotes), 2),
+      ngrams(endingShape(rightNotes), 2),
+    );
+    const leftDirections = directionSequence(leftTail);
+    const rightDirections = directionSequence(rightTail);
+    const directionEvidence = multisetSimilarity(leftDirections, rightDirections);
+    const leftIntervals = intervalSequence(leftTail)
+      .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
+    const rightIntervals = intervalSequence(rightTail)
+      .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
+    const intervalEvidence = multisetSimilarity(leftIntervals, rightIntervals);
+    return clamp(Math.max(
+      exactShape,
+      directionEvidence * 0.42 + intervalEvidence * 0.28,
+    ));
+  };
 
-  // Cadence identity can survive a chord-aware final revoicing even when the
-  // literal normalized pitch shape changes. Preserve credit for matching
-  // directional/interval evidence instead of collapsing that musical memory
-  // to zero.
-  const sourceDirections = directionSequence(sourceTail);
-  const targetDirections = directionSequence(targetTail);
-  const directionEvidence = multisetSimilarity(sourceDirections, targetDirections);
-  const sourceIntervals = intervalSequence(sourceTail)
-    .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
-  const targetIntervals = intervalSequence(targetTail)
-    .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
-  const intervalEvidence = multisetSimilarity(sourceIntervals, targetIntervals);
+  const trimCadenceOrnaments = (notes) => {
+    const trimmed = notes.slice();
+    while (trimmed.length > 2 && finite(trimmed.at(-1)?.duration, 0) < 0.09) trimmed.pop();
+    return trimmed;
+  };
 
+  // Cadence identity can survive chord-aware final revoicing and tiny terminal
+  // grace notes. Preserve memory evidence through both literal tails and
+  // de-ornamented cadence tails, then keep the stronger reading.
   return clamp(Math.max(
-    exactShape,
-    directionEvidence * 0.42 + intervalEvidence * 0.28,
+    endingEvidence(source, target),
+    endingEvidence(trimCadenceOrnaments(source), trimCadenceOrnaments(target)),
   ));
 }
 
@@ -372,9 +382,14 @@ export function evaluateMelodySectionMemory(song) {
   }
 
   const score = Math.round(available.reduce((sum, entry) => sum + entry.score, 0) / Math.max(1, available.length));
+  const requiredTargets = targets.filter((target) => String(target?.relationship) !== "contrast");
+  const availableRequired = reports.filter((entry) => (
+    entry.available && String(entry.relationship) !== "contrast"
+  ));
+  const missingRequired = requiredTargets.length - availableRequired.length;
   const cloneViolations = available.filter((entry) => entry.metrics.cloneRisk >= 0.92);
   const weak = available.filter((entry) => entry.metrics.relationshipFit < 0.48);
-  const passed = available.length === targets.length && score >= 62 && cloneViolations.length === 0 && weak.length === 0;
+  const passed = missingRequired <= 0 && score >= 62 && cloneViolations.length === 0 && weak.length === 0;
   const weakestSection = [...available].sort((left, right) => left.score - right.score)[0] ?? null;
 
   return Object.freeze({
@@ -384,7 +399,7 @@ export function evaluateMelodySectionMemory(song) {
     status: available.length ? "evaluated" : "unavailable",
     passed,
     score,
-    reason: available.length !== targets.length ? "incomplete-memory-comparison"
+    reason: missingRequired > 0 ? "incomplete-memory-comparison"
       : cloneViolations.length ? "memory-clone-risk"
         : weak.length ? "memory-relationship-weak"
           : score < 62 ? "memory-development-weak"
