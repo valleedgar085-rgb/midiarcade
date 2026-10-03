@@ -59,6 +59,11 @@ const REPETITION_PROTECTED_DIMENSIONS = Object.freeze([
 const FUSION_PERFORMANCE_FAMILY = new Set(["pop", "hipHop", "rap"]);
 const GENRE_IDENTITY_CANDIDATE_LIMIT = 1;
 const FUSION_PERFORMANCE_CANDIDATE_LIMIT = 1;
+const MELODY_SECTION_DEVELOPMENT_PROTECTED_DIMENSIONS = Object.freeze([
+  "groove", "density", "separation", "cadence", "repetition", "transitions",
+  "performance", "orchestration", "production", "drumVariety", "registerHealth",
+  "stageInterlock", "genreAuthenticity",
+]);
 
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -1173,9 +1178,11 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
   const release = evaluateReleaseGate(candidate.song, after);
   const scoreDelta = finite(after?.score) - finite(before?.score);
   const floorDelta = creativeFloor(after) - beforeFloor;
-  const dimensions = Object.keys(before?.subscores ?? {});
+  const dimensions = MELODY_SECTION_DEVELOPMENT_PROTECTED_DIMENSIONS.filter((dimension) => (
+    Object.hasOwn(before?.subscores ?? {}, dimension)
+  ));
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
-  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
+  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
   const localImprovement = candidate.sectionScoreDelta >= 4 || candidate.afterReport?.passed === true;
   const accepted = Boolean(
@@ -1183,8 +1190,8 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
     && scaleSafe
     && localImprovement
     && candidate.memoryScoreDelta > 0
-    && scoreDelta >= -0.5
-    && floorDelta >= -0.5
+    && scoreDelta >= -1
+    && floorDelta >= -1
     && protectedSafe
   );
   return {
@@ -1200,7 +1207,7 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
       : !scaleSafe ? "scale-safety"
         : !localImprovement ? "memory-gain-too-small"
           : !protectedSafe ? "protected-dimension-regression"
-            : scoreDelta < -0.5 || floorDelta < -0.5 ? "full-song-regression"
+            : scoreDelta < -1 || floorDelta < -1 ? "full-song-regression"
               : accepted ? "melody-section-development-win" : "critic-regression",
   };
 }

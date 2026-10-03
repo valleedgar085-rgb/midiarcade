@@ -7181,6 +7181,8 @@ function isProtectedArrangementNote(note) {
     || note?.transitionFeature
     || note?.transitionHandoffRole
     || note?.memoryRole
+    || note?.motifMemoryCore
+    || note?.motifMemoryVariantId
     || note?.motifHandoffRole
     // Licensed non-diatonic chord tones are deliberate harmony-authority
     // decisions. Orchestration may thin the chord, but it must not silently
@@ -7547,6 +7549,26 @@ function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifL
       continue;
     }
 
+    const targetWindowEnd = target.startBeat + window;
+    const targetWindowNotes = melody.filter((note) => (
+      note.start >= target.startBeat - 1e-6 && note.start < targetWindowEnd - 1e-6
+    ));
+    const authoredMemoryNotes = targetWindowNotes.filter((note) => (
+      note.motifMemoryCore === true
+      || note.motifMemoryVariantId
+      || note.phraseAnchor === true
+    ));
+    // Motif-memory authoring already wrote a developed recall/return into this
+    // window. Replacing it with a literal origin copy destroys that identity and
+    // can leave later thinning with nothing comparable to audit.
+    if (authoredMemoryNotes.length >= Math.min(3, source.length)) {
+      for (const note of targetWindowNotes) {
+        note.memoryRole = memory.relationship;
+        note.memoryOriginSectionId = origin.id;
+      }
+      continue;
+    }
+
     const desired = Math.max(2, Math.round(source.length * clamp(memory.recallStrength, 0.35, 1)));
     const recalled = source.slice(0, desired).map((note, index) => {
       const relativeStart = note.start - origin.startBeat;
@@ -7566,7 +7588,6 @@ function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifL
         memoryOriginSectionId: origin.id,
       };
     });
-    const targetWindowEnd = target.startBeat + window;
     const retained = melody.filter((note) => note.start < target.startBeat - 1e-6 || note.start >= targetWindowEnd - 1e-6);
     melody.length = 0;
     melody.push(...retained, ...recalled);
@@ -9572,6 +9593,14 @@ function runVocalSpacePass(sourceTracks, structure, config) {
       if (!track) continue;
       track.notes = track.notes.filter((note) => {
         if (!inVocalWindow(note)) return true;
+        if (
+          note.phraseAnchor
+          || note.motifMemoryCore
+          || note.motifMemoryVariantId
+          || ["recall", "return"].includes(String(note.memoryRole ?? ""))
+        ) {
+          return true;
+        }
         const bar = Math.floor(note.start / barBeats);
         const keepFill = bar % 4 === 3 && ["lift", "phrase-ending"].includes(note.performanceRole);
         if (keepFill && id === "melody") {
