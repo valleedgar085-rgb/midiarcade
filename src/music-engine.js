@@ -10767,6 +10767,19 @@ function applyGenerationInterlocks(
           phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
           phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
           phraseRecallStrength: contract.phraseMemory.recallStrength,
+          ...(trackId === "melody" && contract.phraseMemory.melodyDirector ? {
+            melodyDirectorVersion: contract.phraseMemory.melodyDirector.version,
+            melodyDirectorSentenceRole: contract.phraseMemory.melodyDirector.phrases?.[0]?.sentenceRole
+              ?? contract.phraseMemory.sentenceRole,
+            melodyDirectorLandingIntent: contract.phraseMemory.melodyDirector.phrases?.[0]?.landingIntent
+              ?? contract.phraseMemory.landingRole,
+            melodyDirectorRegisterMotion: contract.phraseMemory.melodyDirector.phrases?.[0]?.registerMotion
+              ?? "center",
+            melodyDirectorTargetKind: contract.phraseMemory.melodyDirector.phrases?.[0]?.targetKind
+              ?? "guide-tone",
+            melodyDirectorRestBudget: contract.phraseMemory.melodyDirector.phrases?.[0]?.restBudget
+              ?? 0.2,
+          } : {}),
         } : {}),
         ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
         ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
