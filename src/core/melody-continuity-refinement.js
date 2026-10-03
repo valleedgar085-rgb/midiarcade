@@ -219,11 +219,35 @@ function chooseInsertionBeat(song, window, pitch, slot = 0, slots = 1) {
   })[0];
 }
 
-function connectorNote(song, window, sectionId, mode, ordinal, slot = 0, slots = 1) {
+function connectorPlacement(song, window, mode, slot = 0, slots = 1) {
   const source = mode === "anticipation" ? window.next : window.previous;
   const pitch = finite(source?.pitch, 60);
   const start = chooseInsertionBeat(song, window, pitch, slot, slots);
   const duration = connectorDuration(window, start);
+  return {
+    mode,
+    source,
+    pitch,
+    start,
+    duration,
+    collisionCost: counterpointCollisionCost(song, start, duration, pitch),
+  };
+}
+
+function chooseConnectorMode(song, window, slot = 0, slots = 1) {
+  return ["echo", "anticipation"]
+    .map((mode) => connectorPlacement(song, window, mode, slot, slots))
+    .sort((left, right) => (
+      left.collisionCost - right.collisionCost
+      || Math.abs(left.start - ((window.start + window.end) / 2))
+        - Math.abs(right.start - ((window.start + window.end) / 2))
+      || (left.mode === "echo" ? -1 : 1)
+    ))[0]?.mode ?? "echo";
+}
+
+function connectorNote(song, window, sectionId, mode, ordinal, slot = 0, slots = 1) {
+  const placement = connectorPlacement(song, window, mode, slot, slots);
+  const { source, pitch, start, duration } = placement;
   const velocity = Math.max(1, Math.min(127, Math.round(finite(source?.velocity, 84) * 0.84)));
   return {
     ...source,
@@ -273,7 +297,11 @@ function candidateRequestSets(song, maxCandidates = MAX_MELODY_CONTINUITY_CANDID
       .sort((left, right) => right.deficit - left.deficit || right.maxSilenceBeats - left.maxSilenceBeats || left.index - right.index)[0];
     const window = next?.windows?.[0];
     if (!next || !window) break;
-    const request = { sectionId: next.id, window, mode: "echo" };
+    const request = {
+      sectionId: next.id,
+      window,
+      mode: chooseConnectorMode(balancedSong, window),
+    };
     balanced.push(request);
     balancedSong = addConnectors(balancedSong, [request]);
   }
