@@ -40,6 +40,12 @@ function intentionalRegisterLift(trackId, note, section) {
     || note?.ensembleCadenceRole
     || note?.resolutionRole
     || note?.transitionHandoffRole
+    // Authored motif-memory variants deliberately preserve a recognizable
+    // register contour between source and recall/return sections. Treat that
+    // register as intentional inside the hard role window; hard safety still
+    // wins below because hardViolation forces an octave correction.
+    || note?.motifMemoryVariantId
+    || note?.motifMemoryCore
   );
 }
 
