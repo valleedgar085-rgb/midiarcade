@@ -9558,6 +9558,200 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
   };
 }
 
+
+const MELODY_DIRECTOR_AUDIBLE_GENRES = new Set([
+  "hipHop", "rap", "trap", "pop", "popRadio", "neoSoul", "rnbSoul",
+  "house", "reggaeton", "afrobeats", "loFiHipHop", "synthwave",
+]);
+
+function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) {
+    return {
+      tracks,
+      report: { phase: 50, version: 2, status: "complete", windows: [], notesRemoved: 0 },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const windows = [];
+  let notesRemoved = 0;
+  let notesShortened = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.phraseAnchor
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+    || note?.phraseCadenceRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const boundary = Math.min(
+        section.endBeat,
+        section.startBeat + (finite(phrase.startBarOffset) + finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const restBudget = clamp(finite(phrase.restBudget, 0.2), 0.08, 0.42);
+      const windowBeats = round(clamp(restBudget * 2.1, 0.22, 0.9));
+      const window = {
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(Math.max(phraseStart, boundary - windowBeats)),
+        end: round(boundary),
+        restBudget: round(restBudget),
+      };
+      windows.push(window);
+
+      const phraseNotes = melody.notes
+        .filter((note) => note.start >= phraseStart - 1e-6 && note.start < boundary - 1e-6)
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      if (phraseNotes.length < 4) continue;
+
+      if (!MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) continue;
+      const tail = [...phraseNotes]
+        .reverse()
+        .find((note) => !protectedNote(note) && note.start < window.end - 0.04);
+      if (!tail) continue;
+
+      const desiredEnd = Math.max(
+        tail.start + 0.08,
+        window.end - clamp(restBudget * 0.65, 0.12, 0.32),
+      );
+      const originalEnd = tail.start + Math.max(0.04, finite(tail.duration, 0.25));
+      if (originalEnd > desiredEnd + 0.03) {
+        tail.duration = round(Math.max(0.08, desiredEnd - tail.start));
+        tail.melodyDirectorBreathTail = true;
+        notesShortened += 1;
+      }
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      windows,
+      notesRemoved,
+      notesShortened,
+      policy: "protected-phrase-ending-breaths",
+    },
+  };
+}
+
+
+function runMelodyDirectorReentryPass(sourceTracks, structure, harmony, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody || !MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) {
+    return {
+      tracks,
+      report: { phase: 50.5, version: 2, status: "complete", changedNotes: 0, entries: [] },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const entries = [];
+  let changedNotes = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const phraseEnd = Math.min(
+        section.endBeat,
+        phraseStart + Math.max(1, finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const candidates = melody.notes
+        .filter((note) => (
+          note.start >= phraseStart - 1e-6
+          && note.start < Math.min(phraseEnd, phraseStart + barBeats * 1.25)
+        ))
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const entry = candidates.find((note) => !protectedNote(note));
+      if (!entry) continue;
+
+      const chord = harmonyAt(harmony, entry.start + 0.001);
+      if (!chord?.tones?.length) continue;
+      const direction = ({
+        up: 1,
+        "slight-up": 1,
+        down: -1,
+        "slight-down": -1,
+      })[phrase.registerMotion] ?? 0;
+      const beforePitch = Math.round(finite(entry.pitch, 60));
+      const chordTarget = nearestChordTone(beforePitch, chord, direction);
+      const scaledTarget = nearestScalePitch(chordTarget, config, direction);
+      const maxLeap = phrase.sentenceRole === "question" ? 5 : 7;
+      const targetPitch = Math.abs(scaledTarget - beforePitch) <= maxLeap
+        ? scaledTarget
+        : beforePitch;
+
+      if (targetPitch !== beforePitch) {
+        entry.pitch = targetPitch;
+        changedNotes += 1;
+      }
+      entry.melodyDirectorEntry = true;
+      entry.melodyDirectorEntryRole = phrase.sentenceRole;
+      entry.melodyDirectorEntryTargetKind = phrase.targetKind;
+      entry.melodyDirectorEntryRegisterMotion = phrase.registerMotion;
+      entries.push({
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(entry.start),
+        beforePitch,
+        afterPitch: Math.round(entry.pitch),
+        changed: targetPitch !== beforePitch,
+        sentenceRole: phrase.sentenceRole,
+        targetKind: phrase.targetKind,
+        registerMotion: phrase.registerMotion,
+      });
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50.5,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      changedNotes,
+      entries,
+      maxLeapSemitones: 7,
+      policy: "bounded-chord-aware-phrase-reentry",
+    },
+  };
+}
+
 const VOCAL_LED_GENRES = new Set(["rap", "hipHop", "trap", "drill", "rnbSoul", "neoSoul", "pop", "reggaeton", "afrobeats"]);
 
 function runVocalSpacePass(sourceTracks, structure, config) {
@@ -9940,7 +10134,20 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
   const voiceLeading = runVoiceLeadingPass(sourceTracks, config);
   const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure, grooveConductor, config);
   const negativeSpace = runNegativeSpacePass(pocketCohesion.tracks, structure, config);
-  const vocalSpace = runVocalSpacePass(negativeSpace.tracks, structure, config);
+  const melodyBreathing = runMelodyDirectorBreathingPass(
+    negativeSpace.tracks,
+    structure,
+    songBlueprint,
+    config,
+  );
+  const melodyReentry = runMelodyDirectorReentryPass(
+    melodyBreathing.tracks,
+    structure,
+    harmony,
+    songBlueprint,
+    config,
+  );
+  const vocalSpace = runVocalSpacePass(melodyReentry.tracks, structure, config);
   const ensembleCadence = runEnsembleCadencePass(
     vocalSpace.tracks,
     structure,
@@ -9958,6 +10165,8 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
     voiceLeading: voiceLeading.report,
     pocketCohesion: pocketCohesion.report,
     negativeSpace: negativeSpace.report,
+    melodyBreathing: melodyBreathing.report,
+    melodyReentry: melodyReentry.report,
     vocalSpace: vocalSpace.report,
     ensembleCadence: ensembleCadence.report,
     transitionHandoff: transitionHandoff.report,
@@ -10567,6 +10776,19 @@ function applyGenerationInterlocks(
           phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
           phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
           phraseRecallStrength: contract.phraseMemory.recallStrength,
+          ...(trackId === "melody" && contract.phraseMemory.melodyDirector ? {
+            melodyDirectorVersion: contract.phraseMemory.melodyDirector.version,
+            melodyDirectorSentenceRole: contract.phraseMemory.melodyDirector.phrases?.[0]?.sentenceRole
+              ?? contract.phraseMemory.sentenceRole,
+            melodyDirectorLandingIntent: contract.phraseMemory.melodyDirector.phrases?.[0]?.landingIntent
+              ?? contract.phraseMemory.landingRole,
+            melodyDirectorRegisterMotion: contract.phraseMemory.melodyDirector.phrases?.[0]?.registerMotion
+              ?? "center",
+            melodyDirectorTargetKind: contract.phraseMemory.melodyDirector.phrases?.[0]?.targetKind
+              ?? "guide-tone",
+            melodyDirectorRestBudget: contract.phraseMemory.melodyDirector.phrases?.[0]?.restBudget
+              ?? 0.2,
+          } : {}),
         } : {}),
         ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
         ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
@@ -10628,11 +10850,16 @@ function applyPhraseResolutions(
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
-    const phraseBars = clamp(
-      Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
-      2,
-      4,
-    );
+    const melodyDirectorPlan = trackId === "melody" && MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)
+      ? sectionPhraseMemory?.melodyDirector
+      : null;
+    const phraseBars = melodyDirectorPlan
+      ? clamp(Math.round(finite(melodyDirectorPlan.phraseBars, 4)), 2, 8)
+      : clamp(
+        Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
+        2,
+        4,
+      );
     const boundaries = [];
     for (
       let boundary = section.startBeat + phraseBars * barBeats;
@@ -10660,15 +10887,35 @@ function applyPhraseResolutions(
       const previous = candidates.at(-2);
       const sectionBoundary = boundary >= section.endBeat - 0.05;
       const cadence = sectionBoundary ? (plan?.cadence ?? "resolve") : "continue";
-      const landingRole = phraseLandingRole({
+      const fallbackLandingRole = phraseLandingRole({
         boundaryIndex,
         boundaryCount: boundaries.length,
         cadence,
         trackId,
       });
+      const directorPhrase = melodyDirectorPlan?.phrases?.[
+        Math.min(boundaryIndex, Math.max(0, (melodyDirectorPlan?.phrases?.length ?? 1) - 1))
+      ] ?? null;
+      const directorLandingRole = {
+        question: "question",
+        answer: "answer",
+        resolve: "resolution",
+        resolution: "resolution",
+        lift: "lift",
+        suspension: "suspension",
+      }[directorPhrase?.landingIntent] ?? null;
+      const landingRole = directorLandingRole ?? fallbackLandingRole;
       const landingProfile = phraseLandingProfile(landingRole);
       const melodicDirection = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
-      const direction = landingProfile.direction || melodicDirection;
+      const directorDirection = trackId === "melody"
+        ? ({
+          up: 1,
+          "slight-up": 1,
+          down: -1,
+          "slight-down": -1,
+        }[directorPhrase?.registerMotion] ?? 0)
+        : 0;
+      const direction = directorDirection || landingProfile.direction || melodicDirection;
       const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
       const forceTonic = finalSongLanding || sectionBoundary && cadence === "resolve";
       const contract = generationInterlock?.sectionContracts?.find((candidate) => candidate.sectionId === section.id);
@@ -10722,6 +10969,17 @@ function applyPhraseResolutions(
         landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
         landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
         landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
+        if (directorPhrase) {
+          landing.melodyDirectorVersion = melodyDirectorPlan.version;
+          landing.melodyDirectorSentenceRole = directorPhrase.sentenceRole;
+          landing.melodyDirectorLandingIntent = directorPhrase.landingIntent;
+          landing.melodyDirectorRegisterMotion = directorPhrase.registerMotion;
+          landing.melodyDirectorTargetKind = directorPhrase.targetKind;
+          landing.melodyDirectorRestBudget = directorPhrase.restBudget;
+          if (directorPhrase.lookAhead?.enabled) {
+            landing.melodyDirectorNextSectionId = directorPhrase.lookAhead.nextSectionId;
+          }
+        }
       }
     }
   }
@@ -11685,6 +11943,8 @@ function compose(config, options = {}) {
     ensembleCoordination: ensembleCoordination.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
+    melodyBreathing: creativePolish.melodyBreathing,
+    melodyReentry: creativePolish.melodyReentry,
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,
