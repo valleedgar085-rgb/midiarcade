@@ -5,13 +5,13 @@ import { createMelodyPhrasePlan } from "../src/core/melody-phrase-composer.js";
 import { createPhraseMemoryContract } from "../src/core/phrase-memory.js";
 import { generateNew } from "../src/music-engine.js";
 
-test("Melody Director v2 creates deterministic 4-bar question/answer phrases", () => {
+test("Melody Director v2 creates deterministic long phrases only for musically justified returns", () => {
   const input = {
-    section: { id: "verse-1", name: "verse", role: "verse", bars: 8 },
+    section: { id: "verse-2", name: "verse", role: "verse", bars: 8 },
     memory: {
       sourceSectionId: "verse-1",
-      relationship: "statement",
-      sentenceRole: "statement",
+      relationship: "return",
+      sentenceRole: "return",
       landingRole: "answer",
       registerStrategy: "preserve",
       motifMemory: { contourRecall: 1, rhythmRecall: 1, endingRecall: 1 },
