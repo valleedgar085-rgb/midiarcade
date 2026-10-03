@@ -106,6 +106,11 @@ function multisetSimilarity(leftValues, rightValues) {
   return union ? intersection / union : 1;
 }
 
+function wrappedInterval(delta) {
+  const wrapped = ((Math.round(finite(delta)) % 12) + 12) % 12;
+  return wrapped > 6 ? wrapped - 12 : wrapped;
+}
+
 function contourSimilarity(source, target) {
   const sourceDirections = directionSequence(source);
   const targetDirections = directionSequence(target);
@@ -113,7 +118,19 @@ function contourSimilarity(source, target) {
   const sourceIntervals = intervalSequence(source).map((value) => Math.sign(value) * Math.min(7, Math.abs(value)));
   const targetIntervals = intervalSequence(target).map((value) => Math.sign(value) * Math.min(7, Math.abs(value)));
   const intervalScore = multisetSimilarity(ngrams(sourceIntervals, 2), ngrams(targetIntervals, 2));
-  return clamp(directionScore * 0.62 + intervalScore * 0.38);
+  const sourceWrapped = intervalSequence(source).map(wrappedInterval);
+  const targetWrapped = intervalSequence(target).map(wrappedInterval);
+  const wrappedScore = multisetSimilarity(ngrams(sourceWrapped, 2), ngrams(targetWrapped, 2));
+  const wrappedDirectionScore = multisetSimilarity(
+    ngrams(sourceWrapped.map((value) => Math.sign(value)), 2),
+    ngrams(targetWrapped.map((value) => Math.sign(value)), 2),
+  );
+  // Register-lifted returns keep pitch-class contour even when a raw MIDI leap
+  // looks like the opposite direction. Take the stronger of the two readings.
+  return clamp(Math.max(
+    directionScore * 0.62 + intervalScore * 0.38,
+    wrappedDirectionScore * 0.62 + wrappedScore * 0.38,
+  ));
 }
 
 function rhythmSimilarity(source, target, sourceRange, targetRange) {
@@ -155,10 +172,19 @@ function endingSimilarity(source, target) {
   const targetIntervals = intervalSequence(targetTail)
     .map((value) => Math.sign(value) * Math.min(4, Math.abs(value)));
   const intervalEvidence = multisetSimilarity(sourceIntervals, targetIntervals);
+  const wrappedEvidence = multisetSimilarity(
+    intervalSequence(sourceTail).map(wrappedInterval),
+    intervalSequence(targetTail).map(wrappedInterval),
+  );
+  const wrappedDirectionEvidence = multisetSimilarity(
+    intervalSequence(sourceTail).map((value) => Math.sign(wrappedInterval(value))),
+    intervalSequence(targetTail).map((value) => Math.sign(wrappedInterval(value))),
+  );
 
   return clamp(Math.max(
     exactShape,
     directionEvidence * 0.42 + intervalEvidence * 0.28,
+    wrappedDirectionEvidence * 0.42 + wrappedEvidence * 0.28,
   ));
 }
 

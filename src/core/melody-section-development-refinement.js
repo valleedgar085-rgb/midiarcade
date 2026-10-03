@@ -142,13 +142,21 @@ function contourRecallCandidate(song, report, {
       const matchedPitch = source && note
         ? nearestPitchWithClass(currentPitch, mod12(source.pitch), window)
         : null;
-      // This stage owns harmonic identity, not register. If matching the source
-      // pitch class would only move the note by one or more octaves, leave that
-      // register decision to the register specialist instead of smuggling it
-      // through a memory repair.
-      const nextPitch = matchedPitch != null
+      const previousTarget = targetPosition > 0 ? targetEntries[targetPosition - 1]?.note : null;
+      const previousSource = sourcePosition > 0 ? sourceEntries[sourcePosition - 1]?.note : null;
+      const sourceDirection = previousSource && source
+        ? Math.sign(finite(source.pitch) - finite(previousSource.pitch))
+        : 0;
+      const currentDirection = previousTarget && note
+        ? Math.sign(finite(note.pitch) - finite(previousTarget.pitch))
+        : 0;
+      const restoresContour = sourceDirection !== 0 && currentDirection !== sourceDirection;
+      // This stage owns harmonic identity, not register. Skip octave-only moves
+      // unless that register correction restores the source contour direction.
+      const registerOnly = matchedPitch != null
         && matchedPitch !== currentPitch
-        && mod12(matchedPitch) === mod12(currentPitch)
+        && mod12(matchedPitch) === mod12(currentPitch);
+      const nextPitch = matchedPitch != null && registerOnly && !restoresContour
         ? null
         : matchedPitch;
       const start = finite(note?.start);
@@ -249,9 +257,18 @@ function endingRecallCandidate(song, report) {
     if (!source || !note) continue;
     const currentPitch = Math.round(finite(note.pitch, 60));
     const matchedPitch = nearestPitchWithClass(currentPitch, mod12(source.pitch), window);
+    const previousTarget = targetEntries[targetEntries.length - tail - 1]?.note;
+    const previousSource = sourceEntries[sourceEntries.length - tail - 1]?.note;
+    const sourceDirection = previousSource && source
+      ? Math.sign(finite(source.pitch) - finite(previousSource.pitch))
+      : 0;
+    const currentDirection = previousTarget
+      ? Math.sign(finite(note.pitch) - finite(previousTarget.pitch))
+      : 0;
+    const restoresEndingContour = sourceDirection !== 0 && currentDirection !== sourceDirection;
     const registerOnlyPitchChange = matchedPitch !== currentPitch
       && mod12(matchedPitch) === mod12(currentPitch);
-    const nextPitch = registerOnlyPitchChange ? currentPitch : matchedPitch;
+    const nextPitch = registerOnlyPitchChange && !restoresEndingContour ? currentPitch : matchedPitch;
     const nextDuration = round(clamp(
       finite(note.duration, 0.5) * 0.55 + finite(source.duration, 0.5) * 0.45,
       0.12,
