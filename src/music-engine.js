@@ -6313,7 +6313,12 @@ function generateLead(
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
       let previousIntentDegree = null;
       const memoryCore = memoryRecallSection && repeat === 0;
-      const development = memoryCore
+      // Motif Memory already authored the recall/return transformation. Do not
+      // stack generic Phrase Development on later repeats of that same section;
+      // doing so erases the very contour/rhythm evidence the memory contract
+      // requires. Performance feel still applies downstream, but structural
+      // pitch/timing development yields to the memory authority here.
+      const development = memoryRecallSection
         ? null
         : phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
       for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
