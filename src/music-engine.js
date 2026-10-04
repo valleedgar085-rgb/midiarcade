@@ -1855,8 +1855,8 @@ function creativeReturnFeaturedTrack(section, config, occurrence) {
 }
 
 function featuredTrackForSection(section, plan, config, occurrence = 0) {
-  if (config.genre === "hipHop") return "bass";
   if (section.name === "intro" || ["breakdown", "outro"].includes(section.name)) return "pad";
+  if (config.genre === "hipHop") return "bass";
   if (section.name === "bridge") return "counterpoint";
   if (section.name === "solo") return occurrence % 2 ? "melody" : "counterpoint";
   if (section.name === "drop") return plan.role === "peak" ? "bass" : "drums";
@@ -1975,7 +1975,7 @@ function createProducerIntentContract(
               : "statement";
     const silenceBudget = round(clamp(
       purpose === "reset" ? 0.34
-        : purpose === "establish" ? 0.24
+        : purpose === "establish" ? (section.name === "intro" ? 0.3 : 0.24)
           : purpose === "resolve" ? 0.28
             : purpose === "contrast" ? 0.2
               : purpose === "payoff" ? 0.07
@@ -2013,7 +2013,11 @@ function createProducerIntentContract(
       foregroundTrack,
       answerTrack: roles[answerTrack] === "answer" ? answerTrack : null,
       silenceBudget,
-      densityCeiling: round(clamp(0.64 + plan.energy * 0.3 - silenceBudget * 0.12, 0.58, 0.96)),
+      densityCeiling: round(
+        purpose === "establish" && section.name === "intro"
+          ? clamp(0.58 + plan.energy * 0.18 - silenceBudget * 0.08, 0.58, 0.78)
+          : clamp(0.64 + plan.energy * 0.3 - silenceBudget * 0.12, 0.58, 0.96),
+      ),
       roles,
     };
   });
@@ -3736,7 +3740,7 @@ function cleanupRegisterPitchCollisions(track) {
       }
       if (previous.start + previous.duration > note.start + 1e-6) {
         const repaired = Math.max(0.02, note.start - previous.start);
-        if (repaired < previous.duration - 0.001) {
+        if (repaired < previous.duration - 1e-6) {
           previous.duration = round(repaired, 6);
           previous.dawRegisterOverlapTrimmed = true;
           overlapsTrimmed += 1;
@@ -6624,6 +6628,55 @@ function generatePad(
 
 const STAGGERED_ENTRY_GENRES = new Set(["hipHop", "rap", "trap"]);
 
+export function producerPacingDensityScale(
+  section,
+  structure,
+  scene,
+  trackId,
+  producerRole,
+  noteStart,
+  config,
+) {
+  if (!section || !scene || !config || !structure?.length) return 1;
+  const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
+  if (span < 1.5) return 1;
+  const barBeats = Math.max(1, beatsPerBar(config));
+  const arrangementStart = Math.min(...structure.map((candidate) => finite(candidate?.startBeat, 0)));
+  const arrangementEnd = Math.max(0, ...structure.map((candidate) => finite(candidate?.endBeat, 0)));
+  if (arrangementEnd - arrangementStart < barBeats * 12 - 1e-6) return 1;
+
+  const progress = clamp((finite(noteStart, section.startBeat) - section.startBeat) / span, 0, 1);
+  const smooth = progress * progress * (3 - 2 * progress);
+  const isOpeningIntro = section.id === structure[0]?.id
+    && String(section.name ?? "").toLowerCase() === "intro"
+    && scene.purpose === "establish";
+
+  if (isOpeningIntro) {
+    const urban = STAGGERED_ENTRY_GENRES.has(config.genre);
+    let range;
+    if (producerRole === "foreground") {
+      range = trackId === "pad" ? [0.82, 1] : [0.7, 1];
+    } else if (producerRole === "foundation") {
+      range = trackId === "drums"
+        ? [urban ? 0.5 : 0.58, 1]
+        : [urban ? 0.42 : 0.5, 0.96];
+    } else {
+      range = {
+        answer: [0.34, 0.88],
+        support: [0.46, 0.92],
+        texture: [0.4, 0.9],
+        rest: [0.08, 0.2],
+      }[producerRole] ?? [0.68, 1];
+    }
+    return round(range[0] + (range[1] - range[0]) * smooth);
+  }
+
+  if (scene.purpose === "build") return round(0.82 + 0.18 * smooth);
+  if (scene.purpose === "reset") return round(0.76 + 0.16 * smooth);
+  if (scene.purpose === "resolve") return round(1 - 0.22 * smooth);
+  return 1;
+}
+
 export function producerRoleGateWindow(section, structure, scene, trackId, producerRole, config) {
   if (!section || !scene || producerRole === "rest") return null;
   const span = Math.max(0, finite(section.endBeat) - finite(section.startBeat));
@@ -6650,31 +6703,31 @@ export function producerRoleGateWindow(section, structure, scene, trackId, produ
     let delayFraction = 0;
     let maxBars = 0;
 
-    if (trackId === "bass" && producerRole === "foundation") {
-      // Let the opening downbeat read before low-end motion completes the
-      // pocket. Drums keep the first beat, but Groove DNA thins bar one.
-      delayFraction = urbanStagger ? 0.08 : 0.1;
-      maxBars = 0.5;
+    if (trackId === "bass" && ["foundation", "foreground"].includes(producerRole)) {
+      // Let the opening gesture establish itself before low-end motion
+      // completes the pocket. Short loops remain exempt above.
+      delayFraction = urbanStagger ? 0.14 : 0.12;
+      maxBars = urbanStagger ? 0.75 : 0.5;
     } else if (!["foreground", "foundation"].includes(producerRole)) {
       const urbanFractions = {
-        answer: 0.24,
-        support: 0.14,
-        texture: 0.34,
+        answer: 0.3,
+        support: 0.18,
+        texture: 0.38,
       };
       const urbanMaxBars = {
-        answer: 1,
-        support: 0.5,
+        answer: 1.25,
+        support: 0.75,
         texture: 1.5,
       };
       const universalFractions = {
-        answer: 0.18,
-        support: 0.1,
-        texture: 0.26,
+        answer: 0.22,
+        support: 0.13,
+        texture: 0.3,
       };
       const universalMaxBars = {
-        answer: 0.75,
-        support: 0.35,
-        texture: 1,
+        answer: 1,
+        support: 0.5,
+        texture: 1.25,
       };
       delayFraction = (urbanStagger ? urbanFractions : universalFractions)[producerRole] ?? 0;
       maxBars = (urbanStagger ? urbanMaxBars : universalMaxBars)[producerRole] ?? 0;
@@ -6748,6 +6801,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
         })));
         continue;
       }
+
       const kept = [];
       const foregroundAttacks = scene?.foregroundTrack && scene.foregroundTrack !== id
         ? (rawTracks[scene.foregroundTrack] ?? []).filter((note) => (
@@ -6769,6 +6823,15 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           : scene?.developmentAxis === "space" && !["foreground", "foundation"].includes(producerRole)
             ? 0.68
             : 1;
+      const roleVelocity = {
+        foreground: 1.05,
+        foundation: 0.98,
+        answer: 0.94,
+        support: 0.9,
+        texture: 0.84,
+        rest: 0.76,
+      }[producerRole] ?? 0.9;
+
       const rockPowerChordGroups = new Map();
       if (config.genre === "rock" && id === "chords") {
         for (const note of notes) {
@@ -6780,41 +6843,54 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       }
       const rockPowerChordStarts = [...rockPowerChordGroups.keys()].sort((left, right) => left - right);
       const rockPowerChordDecisions = new Map();
-      const roleVelocity = {
-        foreground: 1.05,
-        foundation: 0.98,
-        answer: 0.94,
-        support: 0.9,
-        texture: 0.84,
-        rest: 0.76,
-      }[producerRole] ?? 0.9;
+
       for (let index = 0; index < notes.length; index += 1) {
         const note = notes[index];
+        const barPosition = mod(note.start, beatsPerBar(config));
+        const protectedAnchor = isProtectedArrangementNote(note);
+        const local = rng.fork(`phase7-${section.id}-${id}-${round(note.start, 4)}-${note.pitch}-${index}`);
+        const pacingScale = producerPacingDensityScale(
+          section,
+          structure,
+          scene,
+          id,
+          producerRole,
+          note.start,
+          config,
+        );
+
         if (id === "drums" && producerRole !== "rest") {
+          const coreDrumAnchor = protectedAnchor
+            || [36, 38, 39].includes(Math.round(finite(note.pitch, -1)))
+            || Math.abs(barPosition) < 0.04;
+          if (!coreDrumAnchor && pacingScale < 0.999 && !local.bool(clamp(pacingScale, 0.08, 1))) continue;
           kept.push({
             ...note,
-            velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
+            velocity: clamp(
+              Math.round(note.velocity * lane.velocity * roleVelocity * (0.92 + pacingScale * 0.08)),
+              1,
+              127,
+            ),
             orchestrationRole: lane.role,
             producerRole,
             producerScenePurpose: scene?.purpose ?? "develop",
+            ...(pacingScale < 0.999 ? { producerPacingDensityScale: pacingScale } : {}),
           });
           continue;
         }
-        const barPosition = mod(note.start, beatsPerBar(config));
-        const protectedAnchor = isProtectedArrangementNote(note);
+
         const outsideRoleGate = !protectedAnchor && Boolean(
           (roleGate?.entryBeat != null && note.start < roleGate.entryBeat - 1e-6)
           || (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6)
         );
         const structuralAnchor = (producerRole !== "rest" && index === 0)
           || protectedAnchor
-          || (id === "drums" && ([36, 38, 39].includes(note.pitch) || Math.abs(barPosition) < 0.04))
           || (id === "bass" && Math.abs(note.start - Math.round(note.start)) < 0.04)
           || (["chords", "pad"].includes(id) && note.start <= section.startBeat + 0.04);
-        const local = rng.fork(`phase7-${section.id}-${id}-${round(note.start, 4)}-${note.pitch}-${index}`);
         const answerCollision = producerRole === "answer" && foregroundAttacks.some((foreground) => (
           Math.abs(foreground.start - note.start) < 0.105
         ));
+
         const rockPowerChordAttack = rockPowerChordStarts.length > 0
           && note.genrePhrase === "power-chord-drive";
         if (rockPowerChordAttack) {
@@ -6838,7 +6914,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
               && (producerRole !== "rest" || attackProtected)
               && (attackProtected || !attackCollision)
               && (attackStructural || attackRng.bool(clamp(
-                lane.presence * rolePresence * developmentPresence,
+                lane.presence * rolePresence * developmentPresence * pacingScale,
                 0.04,
                 1,
               )));
@@ -6851,21 +6927,29 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
             orchestrationRole: lane.role,
             producerRole,
             producerScenePurpose: scene?.purpose ?? "develop",
+            ...(pacingScale < 0.999 ? { producerPacingDensityScale: pacingScale } : {}),
           });
           continue;
         }
+
         if (outsideRoleGate) continue;
         if (!protectedAnchor && answerCollision) continue;
         if (producerRole === "rest" && !protectedAnchor) continue;
-        if (!structuralAnchor && !local.bool(clamp(lane.presence * rolePresence * developmentPresence, 0.04, 1))) continue;
+        if (!structuralAnchor && !local.bool(clamp(
+          lane.presence * rolePresence * developmentPresence * pacingScale,
+          0.04,
+          1,
+        ))) continue;
         kept.push({
           ...note,
           velocity: clamp(Math.round(note.velocity * lane.velocity * roleVelocity), 1, 127),
           orchestrationRole: lane.role,
           producerRole,
           producerScenePurpose: scene?.purpose ?? "develop",
+          ...(pacingScale < 0.999 ? { producerPacingDensityScale: pacingScale } : {}),
         });
       }
+
       if (!kept.length && notes.length && producerRole !== "rest") {
         const fallbackNotes = notes.filter((note) => {
           const protectedAnchor = isProtectedArrangementNote(note);
@@ -6874,13 +6958,24 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
           if (roleGate?.exitBeat != null && note.start >= roleGate.exitBeat - 1e-6) return false;
           return true;
         });
-        const anchor = [...fallbackNotes].sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
+        const anchor = [...fallbackNotes]
+          .sort((left, right) => right.velocity - left.velocity || left.start - right.start)[0];
         if (anchor) {
+          const pacingScale = producerPacingDensityScale(
+            section,
+            structure,
+            scene,
+            id,
+            producerRole,
+            anchor.start,
+            config,
+          );
           kept.push({
             ...anchor,
             orchestrationRole: lane.role,
             producerRole,
             producerScenePurpose: scene?.purpose ?? "develop",
+            ...(pacingScale < 0.999 ? { producerPacingDensityScale: pacingScale } : {}),
           });
         }
       }
@@ -6889,7 +6984,6 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
     return [id, result.sort((left, right) => left.start - right.start || left.pitch - right.pitch)];
   }));
 }
-
 function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
   const sectionForNote = (note) => structure.find((section) => (
@@ -7377,6 +7471,9 @@ function finalizeNotes(rawNotes, config, settings, rng, trackId = "", performanc
       ...(note.rhythmTurnaroundId ? { rhythmTurnaroundId: note.rhythmTurnaroundId } : {}),
       ...(note.rhythmTurnaroundRole ? { rhythmTurnaroundRole: note.rhythmTurnaroundRole } : {}),
       ...(note.orchestrationRole ? { orchestrationRole: note.orchestrationRole } : {}),
+      ...(Number.isFinite(note.producerPacingDensityScale) ? {
+        producerPacingDensityScale: round(note.producerPacingDensityScale),
+      } : {}),
       ...(note.memoryRole ? { memoryRole: note.memoryRole } : {}),
       ...(note.memoryOriginSectionId ? { memoryOriginSectionId: note.memoryOriginSectionId } : {}),
       ...(note.memoryTransform ? { memoryTransform: note.memoryTransform } : {}),
@@ -8275,6 +8372,7 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     maxPitch: counterWindow.max,
     marker: "final-assembly-lead-space",
   });
+
   return {
     tracks,
     repairs: {
@@ -8289,7 +8387,19 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
 }
 
 function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
-  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
+  const assembly = runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
+  let samePitchDuplicatesMerged = 0;
+  let samePitchOverlapsTrimmed = 0;
+  for (const track of assembly.tracks) {
+    if (track.id === "drums") continue;
+    const cleaned = cleanupRegisterPitchCollisions(track);
+    track.notes = cleaned.track.notes;
+    samePitchDuplicatesMerged += cleaned.mergedDuplicates + cleaned.coalescedNearOnsets;
+    samePitchOverlapsTrimmed += cleaned.overlapsTrimmed;
+  }
+  assembly.repairs.samePitchDuplicatesMerged = samePitchDuplicatesMerged;
+  assembly.repairs.samePitchOverlapsTrimmed = samePitchOverlapsTrimmed;
+  return assembly;
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
