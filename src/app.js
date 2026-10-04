@@ -4979,7 +4979,13 @@ export class PreviewPlayer {
     this.scheduler = createPreviewWakeScheduler({
       intervalMs: this.previewRuntime.scheduleIntervalMs,
       workerUrl: new URL("./preview-scheduler-worker.js", import.meta.url),
-      onTick: () => this.schedule(),
+      onTick: () => {
+        if (!this.playing) {
+          this.stopScheduler();
+          return;
+        }
+        this.schedule();
+      },
     });
     this.lastScheduleAt = 0;
     this.lastDetailRefreshAt = -Infinity;
