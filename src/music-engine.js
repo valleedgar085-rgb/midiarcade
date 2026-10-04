@@ -3740,7 +3740,7 @@ function cleanupRegisterPitchCollisions(track) {
       }
       if (previous.start + previous.duration > note.start + 1e-6) {
         const repaired = Math.max(0.02, note.start - previous.start);
-        if (repaired < previous.duration - 0.001) {
+        if (repaired < previous.duration - 1e-6) {
           previous.duration = round(repaired, 6);
           previous.dawRegisterOverlapTrimmed = true;
           overlapsTrimmed += 1;
@@ -8372,6 +8372,7 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
     maxPitch: counterWindow.max,
     marker: "final-assembly-lead-space",
   });
+
   return {
     tracks,
     repairs: {
@@ -8386,7 +8387,19 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
 }
 
 function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBlueprint, config) {
-  return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
+  const assembly = runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
+  let samePitchDuplicatesMerged = 0;
+  let samePitchOverlapsTrimmed = 0;
+  for (const track of assembly.tracks) {
+    if (track.id === "drums") continue;
+    const cleaned = cleanupRegisterPitchCollisions(track);
+    track.notes = cleaned.track.notes;
+    samePitchDuplicatesMerged += cleaned.mergedDuplicates + cleaned.coalescedNearOnsets;
+    samePitchOverlapsTrimmed += cleaned.overlapsTrimmed;
+  }
+  assembly.repairs.samePitchDuplicatesMerged = samePitchDuplicatesMerged;
+  assembly.repairs.samePitchOverlapsTrimmed = samePitchOverlapsTrimmed;
+  return assembly;
 }
 
 function createFinalAssemblyReport(tracks, structure, songBlueprint, repairs) {
