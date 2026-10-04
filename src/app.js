@@ -32,6 +32,7 @@ import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { previewAudioTimeForEvent, previewTimelineTime } from "./core/preview-clock.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -5140,7 +5141,12 @@ export class PreviewPlayer {
   currentSongTime() {
     if (!this.playing || !this.context) return this.position;
     const song = this.playbackSong ?? state.song;
-    return clamp(this.offset + (this.context.currentTime - this.startedAt), 0, totalSeconds(song));
+    const timelineTime = previewTimelineTime({
+      timelineStartSeconds: this.offset,
+      audioStartSeconds: this.startedAt,
+      audioNowSeconds: this.context.currentTime,
+    });
+    return clamp(timelineTime, 0, totalSeconds(song));
   }
 
   handleContextStateChange(context) {
@@ -5352,13 +5358,22 @@ export class PreviewPlayer {
       void this.recoverAudioContext(this.context);
       return;
     }
-    this.lastScheduleAt = this.context.currentTime;
-    const currentSongTime = this.offset + (this.context.currentTime - this.startedAt);
+    const audioNow = this.context.currentTime;
+    this.lastScheduleAt = audioNow;
+    const currentSongTime = previewTimelineTime({
+      timelineStartSeconds: this.offset,
+      audioStartSeconds: this.startedAt,
+      audioNowSeconds: audioNow,
+    });
     const horizon = currentSongTime + this.previewRuntime.lookAheadSeconds;
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
       const event = this.events[this.eventIndex++];
       if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
-        const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
+        const when = previewAudioTimeForEvent({
+          eventTimelineSeconds: event.time,
+          timelineNowSeconds: currentSongTime,
+          audioNowSeconds: audioNow,
+        });
         this.scheduleEvent(event, when);
       }
     }
@@ -5971,7 +5986,11 @@ export class PreviewPlayer {
     if (!this.playing || !this.context) return;
     const playbackSong = this.playbackSong ?? state.song;
     const duration = totalSeconds(playbackSong);
-    this.position = this.offset + (this.context.currentTime - this.startedAt);
+    this.position = previewTimelineTime({
+      timelineStartSeconds: this.offset,
+      audioStartSeconds: this.startedAt,
+      audioNowSeconds: this.context.currentTime,
+    });
     if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm(playbackSong))) {
       const targetSec = state.queuedSection;
       state.queuedSection = null;
@@ -6044,7 +6063,7 @@ export class PreviewPlayer {
 
   pause() {
     this.cancelPendingPlay();
-    if (this.playing && this.context) this.position = this.offset + (this.context.currentTime - this.startedAt);
+    if (this.playing && this.context) this.position = this.currentSongTime();
     this.playing = false;
     setPlaybackPresentation(false);
     this.clearTimers();
