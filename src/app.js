@@ -6110,6 +6110,7 @@ export class PreviewPlayer {
 
   clearScheduledAudio() {
     for (const voice of [...this.scheduledVoices]) this.cleanupScheduledVoice(voice, true);
+    this.loopPreviewEventIndex = 0;
   }
 
   resetDynamicBuses() {
