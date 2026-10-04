@@ -33,8 +33,9 @@ import { performanceTransformForNote, resolvePerformedNote } from "./core/perfor
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import { previewAudioTimeForEvent, previewTimelineTime } from "./core/preview-clock.js";
+import { beatsToSeconds, previewAudioTimeForBeat, previewBeatAtAudioTime, previewBeatLookAhead, secondsToBeats } from "./core/preview-beat-clock.js";
 import { createPreviewWakeScheduler } from "./core/preview-scheduler.js";
-import { loopHeadHorizonSeconds, wrappedLoopPosition } from "./core/preview-loop-timing.js";
+import { loopHeadHorizonBeats, loopHeadHorizonSeconds, wrappedLoopBeat, wrappedLoopPosition } from "./core/preview-loop-timing.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -1575,14 +1576,14 @@ function renderArrangeWorkflow() {
     : "Shape its notes";
 }
 
-export function totalSeconds(song = state.song) {
+export function totalSongBeats(song = state.song) {
   const metaBeats = Number(song?.meta?.totalBeats);
   const beatsPerBar = Number(song?.meta?.beatsPerBar);
   const signature = song?.meta?.timeSignature ?? song?.timeSignature;
   const signatureBeats = Array.isArray(signature)
     ? Number(signature[0]) * (4 / Math.max(1, Number(signature[1])))
     : NaN;
-  const totalBeats = Number.isFinite(metaBeats) && metaBeats > 0
+  return Number.isFinite(metaBeats) && metaBeats > 0
     ? metaBeats
     : songBars(song) * (
       Number.isFinite(beatsPerBar) && beatsPerBar > 0
@@ -1591,7 +1592,10 @@ export function totalSeconds(song = state.song) {
           ? signatureBeats
           : 4
     );
-  return totalBeats * 60 / songBpm(song);
+}
+
+export function totalSeconds(song = state.song) {
+  return beatsToSeconds(totalSongBeats(song), songBpm(song));
 }
 
 function formatTime(seconds) {
@@ -2356,7 +2360,7 @@ function renderMobileSectionJump() {
 export function queueMobileSectionJump(sectionId) {
   const section = normalizeSections().find((candidate) => candidate.id === sectionId);
   if (!section || !state.song) return false;
-  const currentBeat = player.currentSongTime() * songBpm() / 60;
+  const currentBeat = player.currentSongBeat();
   const jumpInfo = calculateNextQueuedSection(currentBeat, section.id, state.song);
   if (!jumpInfo) return false;
   state.queuedSection = jumpInfo;
@@ -4717,6 +4721,7 @@ export function buildPreviewEvents(song = state.song, options = {}) {
       const expressionCurve = (id === "drums" ? noteExpressionCurve.slice(0, 1) : noteExpressionCurve)
         .map((point) => ({
           beat: point.beat,
+          beatOffset: point.beat - startBeat,
           offset: (point.beat - startBeat) * secondsPerBeat,
           value: point.value,
         }));
@@ -4734,6 +4739,8 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         pitch: canonicalMidiPitch(performedNote.pitch),
         velocity: clamp(baseVelocity * expressionStart, 1, 127),
         baseVelocity,
+        beat: startBeat,
+        durationBeats: audibleDurationBeats,
         time: startBeat * secondsPerBeat,
         duration: Math.max(0.03, audibleDurationBeats * secondsPerBeat),
         expressionStart,
@@ -4749,10 +4756,11 @@ export function buildPreviewEvents(song = state.song, options = {}) {
         gate: clamp(Number(settings.gate ?? defaults.gate ?? 0.9), 0.08, 1.5),
         articulation: String(performedNote.articulation || "natural"),
         glideFromSemitones: Number.isFinite(Number(note.glideFromSemitones)) ? Number(note.glideFromSemitones) : 0,
+        glideDurationBeats: Math.max(0, Number(note.glideBeats || 0)),
         glideDuration: Math.max(0, Number(note.glideBeats || 0) * secondsPerBeat),
       };
     });
-  }).sort((a, b) => a.time - b.time);
+  }).sort((a, b) => a.beat - b.beat || a.time - b.time);
 }
 
 const PREVIEW_VOICE_DEFAULTS = Object.freeze({
@@ -4966,6 +4974,7 @@ export class PreviewPlayer {
     this.loopPreviewEventIndex = 0;
     this.startedAt = 0;
     this.offset = 0;
+    this.offsetBeat = 0;
     this.position = 0;
     this.playing = false;
     this.playRequestGeneration = 0;
@@ -5011,6 +5020,7 @@ export class PreviewPlayer {
             if (document.visibilityState === "hidden" && this.playing && this.context?.state === "running") {
               this.position = this.currentSongTime();
               this.offset = this.position;
+              this.offsetBeat = secondsToBeats(this.position, songBpm(this.playbackSong ?? state.song));
               this.startedAt = this.context.currentTime;
               this.clearTimers();
               this.clearScheduledAudio();
@@ -5152,15 +5162,21 @@ export class PreviewPlayer {
     this.periodicWaves.clear();
   }
 
-  currentSongTime() {
-    if (!this.playing || !this.context) return this.position;
+  currentSongBeat() {
     const song = this.playbackSong ?? state.song;
-    const timelineTime = previewTimelineTime({
-      timelineStartSeconds: this.offset,
+    const bpm = songBpm(song);
+    if (!this.playing || !this.context) return clamp(secondsToBeats(this.position, bpm), 0, totalSongBeats(song));
+    return clamp(previewBeatAtAudioTime({
+      beatStart: this.offsetBeat,
       audioStartSeconds: this.startedAt,
       audioNowSeconds: this.context.currentTime,
-    });
-    return clamp(timelineTime, 0, totalSeconds(song));
+      bpm,
+    }), 0, totalSongBeats(song));
+  }
+
+  currentSongTime() {
+    const song = this.playbackSong ?? state.song;
+    return clamp(beatsToSeconds(this.currentSongBeat(), songBpm(song)), 0, totalSeconds(song));
   }
 
   handleContextStateChange(context) {
@@ -5174,7 +5190,8 @@ export class PreviewPlayer {
     if (!this.playing || !interruptedContext) return false;
     if (this.recoveryPromise) return this.recoveryPromise;
     const requestGeneration = this.playRequestGeneration;
-    const resumePosition = this.currentSongTime();
+    const resumeBeat = this.currentSongBeat();
+    const resumePosition = beatsToSeconds(resumeBeat, songBpm(this.playbackSong ?? state.song));
     const recovery = (async () => {
       this.clearScheduledAudio();
       if (interruptedContext.state === "closed") this.resetContextReferences(interruptedContext);
@@ -5188,8 +5205,11 @@ export class PreviewPlayer {
       }
       this.position = resumePosition;
       this.offset = resumePosition;
+      this.offsetBeat = resumeBeat;
       this.startedAt = this.context.currentTime;
-      this.eventIndex = this.events.findIndex((event) => event.time >= resumePosition - this.previewRuntime.lateEventGraceSeconds);
+      const resumeBpm = songBpm(this.playbackSong ?? state.song);
+      const lateGraceBeats = secondsToBeats(this.previewRuntime.lateEventGraceSeconds, resumeBpm);
+      this.eventIndex = this.events.findIndex((event) => event.beat >= resumeBeat - lateGraceBeats);
       if (this.eventIndex < 0) this.eventIndex = this.events.length;
       this.lastScheduleAt = this.context.currentTime;
       this.schedule();
@@ -5344,8 +5364,11 @@ export class PreviewPlayer {
     const duration = totalSeconds(song);
     if (this.position >= duration - 0.05) this.position = 0;
     this.offset = this.position;
+    const bpm = songBpm(song);
+    this.offsetBeat = secondsToBeats(this.position, bpm);
     this.startedAt = this.context.currentTime;
-    this.eventIndex = this.events.findIndex((event) => event.time >= this.offset - this.previewRuntime.lateEventGraceSeconds);
+    const lateGraceBeats = secondsToBeats(this.previewRuntime.lateEventGraceSeconds, bpm);
+    this.eventIndex = this.events.findIndex((event) => event.beat >= this.offsetBeat - lateGraceBeats);
     if (this.eventIndex < 0) this.eventIndex = this.events.length;
     this.lastScheduleAt = this.context.currentTime;
     this.playing = true;
@@ -5376,52 +5399,57 @@ export class PreviewPlayer {
     }
 
     const song = this.playbackSong ?? state.song;
-    const duration = totalSeconds(song);
+    const bpm = songBpm(song);
+    const totalBeats = totalSongBeats(song);
     const audioNow = this.context.currentTime;
     this.lastScheduleAt = audioNow;
-    const currentSongTime = previewTimelineTime({
-      timelineStartSeconds: this.offset,
+    const currentBeat = previewBeatAtAudioTime({
+      beatStart: this.offsetBeat,
       audioStartSeconds: this.startedAt,
       audioNowSeconds: audioNow,
+      bpm,
     });
 
-    if (state.loop && duration > 0 && currentSongTime >= duration) {
-      this.commitLoopBoundary(duration, currentSongTime, audioNow);
+    if (state.loop && totalBeats > 0 && currentBeat >= totalBeats) {
+      this.commitLoopBoundary(totalBeats, currentBeat, audioNow);
       return;
     }
 
-    const horizon = currentSongTime + this.previewRuntime.lookAheadSeconds;
-    while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
+    const lateGraceBeats = secondsToBeats(this.previewRuntime.lateEventGraceSeconds, bpm);
+    const horizonBeat = currentBeat + previewBeatLookAhead(this.previewRuntime.lookAheadSeconds, bpm);
+    while (this.eventIndex < this.events.length && this.events[this.eventIndex].beat <= horizonBeat) {
       const event = this.events[this.eventIndex++];
-      if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
-        const when = previewAudioTimeForEvent({
-          eventTimelineSeconds: event.time,
-          timelineNowSeconds: currentSongTime,
+      if (event.beat >= currentBeat - lateGraceBeats) {
+        const when = previewAudioTimeForBeat({
+          eventBeat: event.beat,
+          beatNow: currentBeat,
           audioNowSeconds: audioNow,
+          bpm,
         });
         this.scheduleEvent(event, when);
       }
     }
 
-    if (!state.loop || !(duration > 0)) return;
-    const headHorizon = loopHeadHorizonSeconds({
-      timelineNowSeconds: currentSongTime,
-      horizonSeconds: horizon,
-      durationSeconds: duration,
+    if (!state.loop || !(totalBeats > 0)) return;
+    const headHorizonBeat = loopHeadHorizonBeats({
+      beatNow: currentBeat,
+      horizonBeat,
+      totalBeats,
     });
-    if (headHorizon == null) return;
+    if (headHorizonBeat == null) return;
 
     while (
       this.loopPreviewEventIndex < this.events.length
-      && this.events[this.loopPreviewEventIndex].time <= headHorizon
+      && this.events[this.loopPreviewEventIndex].beat <= headHorizonBeat
     ) {
       const event = this.events[this.loopPreviewEventIndex++];
-      const timelineTime = duration + event.time;
-      if (timelineTime < currentSongTime - this.previewRuntime.lateEventGraceSeconds) continue;
-      const when = previewAudioTimeForEvent({
-        eventTimelineSeconds: timelineTime,
-        timelineNowSeconds: currentSongTime,
+      const timelineBeat = totalBeats + event.beat;
+      if (timelineBeat < currentBeat - lateGraceBeats) continue;
+      const when = previewAudioTimeForBeat({
+        eventBeat: timelineBeat,
+        beatNow: currentBeat,
         audioNowSeconds: audioNow,
+        bpm,
       });
       this.scheduleEvent({ ...event, __loopPreview: true }, when);
     }
@@ -5693,6 +5721,24 @@ export class PreviewPlayer {
   }
 
   scheduleEvent(event, when) {
+    const bpm = songBpm(this.playbackSong ?? state.song);
+    event = {
+      ...event,
+      duration: Number.isFinite(Number(event.durationBeats))
+        ? Math.max(0.03, beatsToSeconds(event.durationBeats, bpm))
+        : event.duration,
+      glideDuration: Number.isFinite(Number(event.glideDurationBeats))
+        ? Math.max(0, beatsToSeconds(event.glideDurationBeats, bpm))
+        : event.glideDuration,
+      expressionCurve: Array.isArray(event.expressionCurve)
+        ? event.expressionCurve.map((point) => ({
+          ...point,
+          offset: Number.isFinite(Number(point.beatOffset))
+            ? beatsToSeconds(point.beatOffset, bpm)
+            : point.offset,
+        }))
+        : event.expressionCurve,
+    };
     if (event.id === "drums") {
       this.scheduleDrum(event, when);
       return;
@@ -6037,20 +6083,24 @@ export class PreviewPlayer {
     if (this.playing) this.schedule();
   }
 
-  commitLoopBoundary(duration = totalSeconds(this.playbackSong ?? state.song), timelineNow = null, audioNow = null) {
-    if (!this.playing || !this.context || !(duration > 0)) return;
+  commitLoopBoundary(totalBeats = totalSongBeats(this.playbackSong ?? state.song), beatNow = null, audioNow = null) {
+    if (!this.playing || !this.context || !(totalBeats > 0)) return;
+    const song = this.playbackSong ?? state.song;
+    const bpm = songBpm(song);
     const currentAudioTime = Number.isFinite(Number(audioNow)) ? Number(audioNow) : this.context.currentTime;
-    const currentTimelineTime = Number.isFinite(Number(timelineNow))
-      ? Number(timelineNow)
-      : previewTimelineTime({
-        timelineStartSeconds: this.offset,
+    const currentBeat = Number.isFinite(Number(beatNow))
+      ? Number(beatNow)
+      : previewBeatAtAudioTime({
+        beatStart: this.offsetBeat,
         audioStartSeconds: this.startedAt,
         audioNowSeconds: currentAudioTime,
+        bpm,
       });
-    const wrappedPosition = wrappedLoopPosition(currentTimelineTime, duration);
+    const wrappedBeat = wrappedLoopBeat(currentBeat, totalBeats);
 
-    this.position = wrappedPosition;
-    this.offset = wrappedPosition;
+    this.offsetBeat = wrappedBeat;
+    this.position = beatsToSeconds(wrappedBeat, bpm);
+    this.offset = this.position;
     this.startedAt = currentAudioTime;
     this.promoteLoopPreviewVoices();
     this.eventIndex = this.loopPreviewEventIndex;
@@ -6072,12 +6122,9 @@ export class PreviewPlayer {
     if (!this.playing || !this.context) return;
     const playbackSong = this.playbackSong ?? state.song;
     const duration = totalSeconds(playbackSong);
-    this.position = previewTimelineTime({
-      timelineStartSeconds: this.offset,
-      audioStartSeconds: this.startedAt,
-      audioNowSeconds: this.context.currentTime,
-    });
-    if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm(playbackSong))) {
+    const currentBeat = this.currentSongBeat();
+    this.position = beatsToSeconds(currentBeat, songBpm(playbackSong));
+    if (state.queuedSection && currentBeat >= state.queuedSection.triggerBeat) {
       const targetSec = state.queuedSection;
       state.queuedSection = null;
       syncMobileSectionJump(targetSec.targetSectionId);
@@ -6087,7 +6134,7 @@ export class PreviewPlayer {
     }
     if (this.position >= duration) {
       if (state.loop) {
-        this.commitLoopBoundary(duration, this.position, this.context.currentTime);
+        this.commitLoopBoundary(totalSongBeats(playbackSong), currentBeat, this.context.currentTime);
         return;
       }
       this.stop();
@@ -6189,6 +6236,7 @@ export class PreviewPlayer {
 
     if (!this.playing || !this.context || this.context.state !== "running") {
       this.position = target;
+      this.offsetBeat = secondsToBeats(target, songBpm(playbackSong));
       this.loopPreviewEventIndex = 0;
       updatePlaybackUi(this.position, duration, {
         view: this.playbackView ?? playbackViewForSong(playbackSong),
@@ -6201,9 +6249,13 @@ export class PreviewPlayer {
     this.resetDynamicBuses();
     this.position = target;
     this.offset = target;
+    const bpm = songBpm(playbackSong);
+    const targetBeat = secondsToBeats(target, bpm);
+    this.offsetBeat = targetBeat;
     this.startedAt = this.context.currentTime;
+    const lateGraceBeats = secondsToBeats(this.previewRuntime.lateEventGraceSeconds, bpm);
     this.eventIndex = this.events.findIndex(
-      (event) => event.time >= target - this.previewRuntime.lateEventGraceSeconds,
+      (event) => event.beat >= targetBeat - lateGraceBeats,
     );
     if (this.eventIndex < 0) this.eventIndex = this.events.length;
     this.loopPreviewEventIndex = 0;
