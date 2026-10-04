@@ -805,6 +805,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(await recoveryPlayer.recoverAudioContext(interruptedContext), true);
   assert.equal(interruptedContext.state, "running", "an interrupted context must be resumed and resynchronized");
   recoveryPlayer.playing = false;
+  recoveryPlayer.stopScheduler();
 
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:keys", "native:keys"), false, "an older waiter for a shared same-port connect must not tear down the winner");
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:old", "native:new"), true, "a stale different-port connection should be disposed");
