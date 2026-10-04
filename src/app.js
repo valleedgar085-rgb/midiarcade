@@ -35,6 +35,7 @@ import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, pre
 import { previewAudioTimeForEvent, previewTimelineTime } from "./core/preview-clock.js";
 import { createPreviewWakeScheduler } from "./core/preview-scheduler.js";
 import { loopHeadHorizonSeconds, wrappedLoopPosition } from "./core/preview-loop-timing.js";
+import { queuedSectionJumpDue } from "./core/preview-section-jump.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -5385,6 +5386,8 @@ export class PreviewPlayer {
       audioNowSeconds: audioNow,
     });
 
+    if (this.applyQueuedSectionJump(currentSongTime * songBpm(song) / 60)) return;
+
     if (state.loop && duration > 0 && currentSongTime >= duration) {
       this.commitLoopBoundary(duration, currentSongTime, audioNow);
       return;
@@ -6037,6 +6040,16 @@ export class PreviewPlayer {
     if (this.playing) this.schedule();
   }
 
+  applyQueuedSectionJump(currentBeat) {
+    const targetSection = state.queuedSection;
+    if (!queuedSectionJumpDue(currentBeat, targetSection)) return false;
+    state.queuedSection = null;
+    syncMobileSectionJump(targetSection.targetSectionId);
+    this.seek(targetSection.targetStartBeat * 60 / songBpm(this.playbackSong ?? state.song));
+    showToast(`Jumped to ${targetSection.targetSectionName}`);
+    return true;
+  }
+
   commitLoopBoundary(duration = totalSeconds(this.playbackSong ?? state.song), timelineNow = null, audioNow = null) {
     if (!this.playing || !this.context || !(duration > 0)) return;
     const currentAudioTime = Number.isFinite(Number(audioNow)) ? Number(audioNow) : this.context.currentTime;
@@ -6077,14 +6090,7 @@ export class PreviewPlayer {
       audioStartSeconds: this.startedAt,
       audioNowSeconds: this.context.currentTime,
     });
-    if (state.queuedSection && this.position >= (state.queuedSection.triggerBeat * 60 / songBpm(playbackSong))) {
-      const targetSec = state.queuedSection;
-      state.queuedSection = null;
-      syncMobileSectionJump(targetSec.targetSectionId);
-      this.seek(targetSec.targetStartBeat * 60 / songBpm(playbackSong));
-      showToast(`Jumped to ${targetSec.targetSectionName}`);
-      return;
-    }
+    if (this.applyQueuedSectionJump(this.position * songBpm(playbackSong) / 60)) return;
     if (this.position >= duration) {
       if (state.loop) {
         this.commitLoopBoundary(duration, this.position, this.context.currentTime);
