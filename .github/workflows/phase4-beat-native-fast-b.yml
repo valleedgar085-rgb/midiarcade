@@ -1,0 +1,36 @@
+name: Phase 4 Beat-Native Fast Gate B
+
+on:
+  push:
+    branches: [validate-master-audio-clock-4-fast-b]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  beat-native-fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify beat-native transport contracts
+        run: >
+          node --test
+          tests/preview-clock.test.mjs
+          tests/preview-beat-clock.test.mjs
+          tests/preview-scheduler.test.mjs
+          tests/preview-loop-timing.test.mjs
+          tests/preview-loop-continuity-contract.test.mjs
+          tests/android-release-contract.test.mjs
+          tests/app-smoke.test.mjs
+      - name: Verify production web build
+        run: npm run build
