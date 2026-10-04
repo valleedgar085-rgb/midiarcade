@@ -27,7 +27,7 @@ test("Android release gate keeps playback lifecycle recovery wired", () => {
   assert.match(player, /document\.removeEventListener\("visibilitychange", this\.visibilityHandler\)/);
   assert.match(player, /removeEventListener\?\.\("devicechange", this\.deviceChangeHandler\)/);
   assert.match(player, /createPreviewWakeScheduler/);
-  assert.match(player, /workerUrl: new URL\("\.\/preview-scheduler-worker", import\.meta\.url\)/);
+  assert.match(player, /workerUrl: new URL\("\.\/preview-scheduler-worker\.js", import\.meta\.url\)/);
   assert.match(player, /startScheduler\(\)/);
   assert.match(player, /stopScheduler\(\)/);
   assert.doesNotMatch(player, /setInterval\(\(\) => this\.schedule\(\)/);
