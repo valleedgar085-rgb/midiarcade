@@ -33,6 +33,7 @@ import { performanceTransformForNote, resolvePerformedNote } from "./core/perfor
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
 import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import { previewAudioTimeForEvent, previewTimelineTime } from "./core/preview-clock.js";
+import { createPreviewWakeScheduler } from "./core/preview-scheduler.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -4956,7 +4957,7 @@ export class PreviewPlayer {
     this.drumSampleBuffers = new Map();
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
-    this.timer = null;
+    this.scheduler = null;
     this.frame = null;
     this.idleTimer = null;
     this.events = [];
@@ -4973,6 +4974,11 @@ export class PreviewPlayer {
       deviceMemory: typeof navigator === "undefined" ? 8 : navigator.deviceMemory,
     });
     this.previewBudget = previewGraphBudget(this.previewRuntime);
+    this.scheduler = createPreviewWakeScheduler({
+      intervalMs: this.previewRuntime.scheduleIntervalMs,
+      workerUrl: new URL("./preview-scheduler-worker.js", import.meta.url),
+      onTick: () => this.schedule(),
+    });
     this.lastScheduleAt = 0;
     this.lastDetailRefreshAt = -Infinity;
     this.playbackView = null;
@@ -5179,6 +5185,7 @@ export class PreviewPlayer {
       if (this.eventIndex < 0) this.eventIndex = this.events.length;
       this.lastScheduleAt = this.context.currentTime;
       this.schedule();
+      this.startScheduler();
       return true;
     })();
     this.recoveryPromise = recovery;
@@ -5346,7 +5353,7 @@ export class PreviewPlayer {
     }
     $("#playhead").classList.add("visible");
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startScheduler();
     this.updateFrame();
     setWorkflowStep(3);
     return true;
@@ -5978,8 +5985,17 @@ export class PreviewPlayer {
     this.eventIndex = 0;
     this.lastScheduleAt = this.context.currentTime;
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startScheduler();
     this.updateFrame();
+  }
+
+  startScheduler() {
+    if (!this.playing) return;
+    this.scheduler?.start();
+  }
+
+  stopScheduler() {
+    this.scheduler?.stop();
   }
 
   updateFrame() {
@@ -6023,9 +6039,8 @@ export class PreviewPlayer {
   }
 
   clearTimers() {
-    clearInterval(this.timer);
+    this.stopScheduler();
     clearTimeout(this.frame);
-    this.timer = null;
     this.frame = null;
   }
 
