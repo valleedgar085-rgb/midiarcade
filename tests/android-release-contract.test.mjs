@@ -31,6 +31,8 @@ test("Android release gate keeps playback lifecycle recovery wired", () => {
   assert.match(player, /startScheduler\(\)/);
   assert.match(player, /stopScheduler\(\)/);
   assert.doesNotMatch(player, /setInterval\(\(\) => this\.schedule\(\)/);
+  assert.match(player, /cancelLoopPreviewVoices\(\)/);
+  assert.match(player, /commitLoopBoundary\(/);
 });
 
 test("pause, seek, restart, and disposal preserve explicit playback ownership", () => {
@@ -40,10 +42,13 @@ test("pause, seek, restart, and disposal preserve explicit playback ownership", 
   const dispose = player.match(/dispose\(\)\s*\{[\s\S]*?\n\s*\}/)?.[0] ?? "";
   assert.match(pause, /this\.position = this\.currentSongTime\(\)/);
   assert.match(pause, /this\.cancelPendingPlay\(\)/);
-  assert.match(seek, /const wasPlaying = this\.playing/);
-  assert.match(seek, /this\.pause\(\)/);
-  assert.match(seek, /this\.position = clamp\(position, 0, totalSeconds\(playbackSong\)\)/);
-  assert.match(seek, /if \(wasPlaying\) this\.play\(\)/);
+  assert.match(seek, /this\.stopScheduler\(\)/);
+  assert.match(seek, /this\.clearScheduledAudio\(\)/);
+  assert.match(seek, /this\.offset = target/);
+  assert.match(seek, /this\.startedAt = this\.context\.currentTime/);
+  assert.match(seek, /this\.schedule\(\)[\s\S]*?this\.startScheduler\(\)/);
+  assert.doesNotMatch(seek, /this\.pause\(\)/);
+  assert.doesNotMatch(seek, /this\.play\(\)/);
   assert.match(dispose, /this\.cancelPendingPlay\(\)/);
   assert.match(dispose, /this\.stopAllLiveNotes\(\)/);
 });
