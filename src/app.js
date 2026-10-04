@@ -4976,7 +4976,7 @@ export class PreviewPlayer {
     this.previewBudget = previewGraphBudget(this.previewRuntime);
     this.scheduler = createPreviewWakeScheduler({
       intervalMs: this.previewRuntime.scheduleIntervalMs,
-      workerUrl: new URL("./preview-scheduler-worker", import.meta.url),
+      workerUrl: new URL("./preview-scheduler-worker.js", import.meta.url),
       onTick: () => this.schedule(),
     });
     this.lastScheduleAt = 0;
