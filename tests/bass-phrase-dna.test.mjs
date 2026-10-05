@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { generateNew } from "../src/music-engine.js";
 import {
   BASS_PHRASE_DNA,
   bassPhraseFamily,
@@ -147,6 +148,27 @@ test("Groove DNA publishes Bass Phrase DNA provenance into the shared conductor"
   assert.ok(first.phraseCharacter);
   assert.ok(first.phraseTargets);
   assert.deepEqual(grooveDNAConductorLanes(result, 0).bassPulses, first.pulses);
+});
+
+test("generated full songs realize the authored final bass resolution pulse", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "bass-final-resolution-integration",
+    bars: 16,
+    candidateCount: 1,
+    targetedRepair: false,
+    energy: 0.76,
+    complexity: 0.68,
+    variation: 0.72,
+  });
+  const bass = song.tracks.find((track) => track.id === "bass")?.notes ?? [];
+  const resolutions = bass.filter((note) => note.bassPhraseDnaResolution === true);
+  assert.ok(resolutions.length > 0, "final Bass Phrase DNA resolution must be rendered");
+  const last = resolutions.at(-1);
+  assert.ok(
+    last.start >= song.meta.totalBeats - song.meta.beatsPerBar - 1e-6,
+    `final bass resolution should land in the last bar, got ${last.start}`,
+  );
 });
 
 test("House remains offbeat-led while Hip-Hop publishes lock-and-answer phrase provenance", () => {
