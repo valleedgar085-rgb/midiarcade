@@ -113,10 +113,12 @@ function laneAlignment(song, trackId, { protectedOnly = false, freeOnly = false 
     (!protectedOnly || protectedNote(note))
     && (!freeOnly || !protectedNote(note))
   ));
-  if (!notes.length) return { compared: 0, alignment: 1 };
+  if (!notes.length) return { compared: 0, alignment: 1, precision: 1, meanDistance: 0 };
   const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
   let compared = 0;
   let aligned = 0;
+  let totalDistance = 0;
+  let precisionTotal = 0;
   for (const note of notes) {
     const beat = start(note);
     const bounds = sectionBounds(song, beat);
@@ -129,10 +131,18 @@ function laneAlignment(song, trackId, { protectedOnly = false, freeOnly = false 
       beatsPerBar,
     );
     if (!pulses.length) continue;
+    const distance = nearestDistance(beat, pulses);
     compared += 1;
-    if (nearestDistance(beat, pulses) <= 0.14 + 1e-9) aligned += 1;
+    totalDistance += distance;
+    precisionTotal += clamp(1 - distance / 0.14);
+    if (distance <= 0.14 + 1e-9) aligned += 1;
   }
-  return { compared, alignment: compared ? aligned / compared : 1 };
+  return {
+    compared,
+    alignment: compared ? aligned / compared : 1,
+    precision: compared ? precisionTotal / compared : 1,
+    meanDistance: compared ? totalDistance / compared : 0,
+  };
 }
 
 export function evaluateCompositionPocketLock(song) {
@@ -143,9 +153,11 @@ export function evaluateCompositionPocketLock(song) {
   const melodyPocket = evaluateMelodyRhythmPocket(song);
   const melodySpace = clamp((melodyPocket?.diagnostics?.score ?? 100) / 100);
   const score = Math.round(100 * (
-    clamp(bass.alignment) * 0.35
+    clamp(bass.alignment) * 0.2
+    + clamp(bass.precision) * 0.15
     + clamp(kickBass.connected) * 0.2
-    + clamp(melody.alignment) * 0.25
+    + clamp(melody.alignment) * 0.15
+    + clamp(melody.precision) * 0.1
     + melodySpace * 0.2
   ));
 
@@ -164,6 +176,8 @@ export function evaluateCompositionPocketLock(song) {
     metrics: Object.freeze({
       bassCompared: bass.compared,
       bassGrooveAlignment: round(bass.alignment),
+      bassGroovePrecision: round(bass.precision),
+      bassMeanPulseDistance: round(bass.meanDistance),
       kickBassCompared: kickBass.compared,
       kickBassConnection: round(kickBass.connected),
       exactKickBassLocks: kickBass.exactLock,
@@ -172,8 +186,11 @@ export function evaluateCompositionPocketLock(song) {
       independentBassNotes: kickBass.independent,
       melodyCompared: melody.compared,
       melodyGrooveAlignment: round(melody.alignment),
+      melodyGroovePrecision: round(melody.precision),
+      melodyMeanPulseDistance: round(melody.meanDistance),
       phraseAnchorCompared: phraseAnchors.compared,
       phraseAnchorAlignment: round(phraseAnchors.alignment),
+      phraseAnchorPrecision: round(phraseAnchors.precision),
       melodyCollisionRatio: melodyPocket.diagnostics.collisionRatio,
       melodySpaceScore: melodyPocket.diagnostics.score,
     }),
