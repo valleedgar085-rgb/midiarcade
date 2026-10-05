@@ -152,6 +152,52 @@ function rhythmSimilarity(source, target, sourceRange, targetRange) {
   return clamp(onsetScore * 0.8 + durationScore * 0.2);
 }
 
+function motifCoreSimilarity(source, target) {
+  if (source.length < 3 || target.length < 3) return 0;
+
+  const windows = (notes) => {
+    const result = [];
+    for (let index = 0; index <= notes.length - 3; index += 1) {
+      const slice = notes.slice(index, index + 3);
+      const intervals = intervalSequence(slice).map(wrappedInterval);
+      const gaps = [
+        Math.max(0.0625, finite(slice[1]?.start) - finite(slice[0]?.start)),
+        Math.max(0.0625, finite(slice[2]?.start) - finite(slice[1]?.start)),
+      ];
+      const totalGap = Math.max(0.125, gaps[0] + gaps[1]);
+      result.push({
+        index,
+        intervals,
+        directions: intervals.map((value) => Math.sign(value)),
+        rhythmShape: gaps.map((value) => value / totalGap),
+      });
+    }
+    return result;
+  };
+
+  const left = windows(source);
+  const right = windows(target);
+  let best = 0;
+
+  for (const sourceWindow of left) {
+    for (const targetWindow of right) {
+      const intervalFit = sourceWindow.intervals.reduce((sum, value, index) => {
+        const other = targetWindow.intervals[index] ?? 0;
+        const distance = Math.min(6, Math.abs(value - other));
+        const exactness = 1 - distance / 6;
+        const directionMatch = sourceWindow.directions[index] === targetWindow.directions[index] ? 1 : 0;
+        return sum + exactness * 0.72 + directionMatch * 0.28;
+      }, 0) / 2;
+      const rhythmFit = sourceWindow.rhythmShape.reduce((sum, value, index) => (
+        sum + (1 - Math.min(1, Math.abs(value - (targetWindow.rhythmShape[index] ?? 0)) * 2.5))
+      ), 0) / 2;
+      best = Math.max(best, intervalFit * 0.82 + rhythmFit * 0.18);
+    }
+  }
+
+  return clamp(best);
+}
+
 function endingSimilarity(source, target) {
   const sourceTail = source.slice(-Math.min(3, source.length));
   const targetTail = target.slice(-Math.min(3, target.length));
@@ -329,6 +375,7 @@ export function evaluateMelodySectionMemory(song) {
     const contour = contourSimilarity(sourceNotes, targetNotes);
     const rhythm = rhythmSimilarity(sourceNotes, targetNotes, sourceRange, targetRange);
     const ending = endingSimilarity(sourceNotes, targetNotes);
+    const motifCore = motifCoreSimilarity(sourceNotes, targetNotes);
     const familiarity = clamp(contour * 0.46 + rhythm * 0.34 + ending * 0.2);
     const cloneRisk = exactCloneRisk(sourceNotes, targetNotes, sourceRange, targetRange);
     const metadata = metadataCoverage(targetNotes, memory.sourceSectionId);
@@ -370,6 +417,7 @@ export function evaluateMelodySectionMemory(song) {
       score,
       metrics: Object.freeze({
         contourSimilarity: round(contour),
+        motifCoreSimilarity: round(motifCore),
         rhythmSimilarity: round(rhythm),
         endingSimilarity: round(ending),
         familiarity: round(familiarity),
@@ -400,8 +448,22 @@ export function evaluateMelodySectionMemory(song) {
   const score = Math.round(available.reduce((sum, entry) => sum + entry.score, 0) / Math.max(1, available.length));
   const cloneViolations = available.filter((entry) => entry.metrics.cloneRisk >= 0.92);
   const weak = available.filter((entry) => entry.metrics.relationshipFit < 0.48);
-  const passed = available.length === targets.length && score >= 62 && cloneViolations.length === 0 && weak.length === 0;
-  const weakestSection = [...available].sort((left, right) => left.score - right.score)[0] ?? null;
+  const motifViolations = available.filter((entry) => {
+    if (entry.relationship === "contrast") return false;
+    const threshold = entry.relationship === "return" ? 0.56 : 0.42;
+    return finite(entry.metrics.motifCoreSimilarity) < threshold;
+  });
+  const passed = available.length === targets.length
+    && score >= 62
+    && cloneViolations.length === 0
+    && weak.length === 0
+    && motifViolations.length === 0;
+  const weakestSection = motifViolations.length
+    ? [...motifViolations].sort((left, right) => (
+      finite(left.metrics?.motifCoreSimilarity) - finite(right.metrics?.motifCoreSimilarity)
+      || left.score - right.score
+    ))[0]
+    : [...available].sort((left, right) => left.score - right.score)[0] ?? null;
 
   return Object.freeze({
     version: 1,
@@ -412,9 +474,10 @@ export function evaluateMelodySectionMemory(song) {
     score,
     reason: available.length !== targets.length ? "incomplete-memory-comparison"
       : cloneViolations.length ? "memory-clone-risk"
-        : weak.length ? "memory-relationship-weak"
-          : score < 62 ? "memory-development-weak"
-            : "memory-development-coherent",
+        : motifViolations.length ? "motif-core-weak"
+          : weak.length ? "memory-relationship-weak"
+            : score < 62 ? "memory-development-weak"
+              : "memory-development-coherent",
     weakestSection,
     sections: Object.freeze(reports),
   });
