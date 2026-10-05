@@ -1,7 +1,10 @@
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
 import { evaluateMelodySectionMemory } from "../src/core/melody-section-memory.js";
-import { createMelodySectionDevelopmentCandidates } from "../src/core/melody-section-development-refinement.js";
+import {
+  createMelodySectionDevelopmentCandidates,
+  sectionStoryPayoffCandidates,
+} from "../src/core/melody-section-development-refinement.js";
 import { applyMelodySectionDevelopmentRefinement } from "../src/core/output-quality-pipeline-register.js";
 
 const CASES = [
@@ -78,6 +81,9 @@ test("diagnose five remaining memory seeds", { timeout: 180_000 }, () => {
     const after = evaluateMelodySectionMemory(repaired.song);
     const afterWeak = after.weakestSection ?? {};
     const afterCandidates = createMelodySectionDevelopmentCandidates(repaired.song);
+    const rawStoryCandidates = afterWeak?.available
+      ? sectionStoryPayoffCandidates(repaired.song, afterWeak)
+      : [];
 
     console.log("MEMORY_DIAGNOSTIC", JSON.stringify({
       label: `${genre}/${bars}`,
@@ -113,6 +119,22 @@ test("diagnose five remaining memory seeds", { timeout: 180_000 }, () => {
           afterWeakest: candidate.afterReport?.weakestSection ?? null,
           critic: critic(candidate.song),
         })),
+        rawStoryCandidates: rawStoryCandidates.map((candidate) => {
+          const memory = evaluateMelodySectionMemory(candidate.song);
+          const targetReport = (memory.sections ?? []).find(
+            (entry) => String(entry.sectionId) === String(afterWeak.sectionId),
+          ) ?? null;
+          return {
+            id: candidate.id,
+            changedNotes: candidate.changedNotes,
+            targetReport,
+            finalReason: memory.reason,
+            finalScore: memory.score,
+            weakest: memory.weakestSection ?? null,
+            critic: critic(candidate.song),
+            notes: sectionNotes(candidate.song, afterWeak.sectionId),
+          };
+        }),
       },
     }));
   }
