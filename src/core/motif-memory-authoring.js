@@ -75,7 +75,11 @@ function developReturn(source, memory, seed) {
   const changeCount = strength >= 0.86
     ? 1
     : motif.events.length >= 6 ? 2 : 1;
-  const positions = interiorPositions(motif.events.length, seed, `return:${memory.sectionId}`, changeCount);
+  const positions = interiorPositions(motif.events.length, seed, `return:${memory.sectionId}`, changeCount)
+    // 5G defines the opening three-note cell as the audible memory core.
+    // Develop after that cell so a return cannot erase the identity the
+    // memory critic is explicitly responsible for protecting.
+    .filter((index) => index >= 3);
   for (const [ordinal, index] of positions.entries()) {
     const direction = deterministicSign(seed, `return-degree:${memory.sectionId}:${index}`);
     const magnitude = strength >= 0.82 ? 1 : (ordinal > 0 ? 1 : 2);
@@ -121,8 +125,11 @@ function developRecall(source, memory, seed) {
     `recall:${memory.sectionId}`,
     motif.events.length >= 7 ? 3 : 2,
   ).filter((index) => (
-    transform !== "ending-answer"
-    || index < motif.events.length - 3
+    index >= 3
+    && (
+      transform !== "ending-answer"
+      || index < motif.events.length - 3
+    )
   ));
 
   for (const [ordinal, index] of positions.entries()) {
