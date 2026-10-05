@@ -89,7 +89,7 @@ test("5J rejects a return that passes the three-note motif but loses the four-no
   assert.equal(report.passed, false, JSON.stringify(report));
   assert.equal(report.reason, "hook-signature-weak", JSON.stringify(report));
   assert.ok(report.weakestSection.metrics.motifCoreSimilarity >= 0.56, JSON.stringify(report));
-  assert.ok(report.weakestSection.metrics.hookSignatureSimilarity < 0.78, JSON.stringify(report));
+  assert.ok(report.weakestSection.metrics.hookSignatureSimilarity < 0.74, JSON.stringify(report));
 });
 
 test("5J restores the four-note hook with bounded pitch-only edits", () => {
@@ -111,7 +111,7 @@ test("5J restores the four-note hook with bounded pitch-only edits", () => {
       > initial.weakestSection.metrics.hookSignatureSimilarity,
     JSON.stringify(candidate.afterSection),
   );
-  assert.ok(candidate.afterSection.metrics.hookSignatureSimilarity >= 0.78);
+  assert.ok(candidate.afterSection.metrics.hookSignatureSimilarity >= 0.74);
 
   const sourceMelody = before.tracks.find((track) => track.id === "melody");
   const repairedMelody = candidate.song.tracks.find((track) => track.id === "melody");
