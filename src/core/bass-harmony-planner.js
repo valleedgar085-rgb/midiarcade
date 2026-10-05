@@ -61,10 +61,10 @@ function tonePcs(chord) {
   return tones;
 }
 
-function harmonicRole(bassGrooveRole, isLast, nextChord) {
+function harmonicRole(bassGrooveRole) {
   const role = String(bassGrooveRole ?? "movement");
   if (role === "anchor") return "ANCHOR";
-  if (role === "pickup" || (isLast && nextChord)) return "ANTICIPATION";
+  if (role === "pickup") return "ANTICIPATION";
   if (role.includes("response")) return "REPLY";
   return "MOVEMENT";
 }
@@ -188,8 +188,7 @@ export function planBassHarmonyTarget({
   complexity = 0.58,
 } = {}) {
   const family = normalizeGenre(genre);
-  const isLast = Math.max(0, Math.round(finite(index))) >= Math.max(0, Math.round(finite(eventCount, 1)) - 1);
-  const role = harmonicRole(bassGrooveRole, isLast, nextChord);
+  const role = harmonicRole(bassGrooveRole);
   const recipe = GENRE_TARGET_RECIPES[family] ?? GENRE_TARGET_RECIPES.general;
   const strategies = recipe[role] ?? GENRE_TARGET_RECIPES.general[role] ?? ["root"];
 
