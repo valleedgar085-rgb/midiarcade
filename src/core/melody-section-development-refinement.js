@@ -339,6 +339,231 @@ function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
   return result;
 }
 
+
+
+function hookSignaturePitchFit(sourceNotes, targetNotes) {
+  if (sourceNotes.length < 4 || targetNotes.length < 4) return 0;
+  const sourceIntervals = sourceNotes.slice(1, 4).map((note, index) => (
+    wrappedInterval(finite(note?.pitch) - finite(sourceNotes[index]?.pitch))
+  ));
+  const targetIntervals = targetNotes.slice(1, 4).map((note, index) => (
+    wrappedInterval(finite(note?.pitch) - finite(targetNotes[index]?.pitch))
+  ));
+  return sourceIntervals.reduce((sum, value, index) => {
+    const other = targetIntervals[index] ?? 0;
+    const distance = Math.min(6, Math.abs(value - other));
+    const exactness = 1 - distance / 6;
+    const directionMatch = Math.sign(value) === Math.sign(other) ? 1 : 0;
+    return sum + exactness * 0.72 + directionMatch * 0.28;
+  }, 0) / 3;
+}
+
+function hookSignatureSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
+  const relationship = String(report?.relationship ?? "");
+  if (!["recall", "return"].includes(relationship)) return [];
+  const threshold = relationship === "return" ? 0.74 : 0.60;
+  if (finite(report?.metrics?.hookSignatureSimilarity, 1) >= threshold) return [];
+
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 4 || targetEntries.length < 4) return [];
+
+  const source = sourceEntries.slice(0, 4).map((entry) => entry.note);
+  const target = targetEntries.slice(0, 4);
+  const localPitches = target.map(({ note }) => Math.round(finite(note?.pitch, 60)));
+  const baseWindow = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const minPitch = Math.max(48, Math.min(baseWindow.min, ...localPitches));
+  const maxPitch = Math.min(88, Math.max(baseWindow.max, ...localPitches));
+  const scale = scalePitchClasses(song);
+
+  const allowedFor = ({ note }, position) => {
+    const current = localPitches[position];
+    if (isProtectedAnchor(note)) return [current];
+    const options = [current];
+    for (
+      let pitch = Math.max(minPitch, current - 7);
+      pitch <= Math.min(maxPitch, current + 7);
+      pitch += 1
+    ) {
+      if (scale?.size && !scale.has(mod12(pitch))) continue;
+      options.push(pitch);
+    }
+    return [...new Set(options)]
+      .sort((left, right) => (
+        Math.abs(left - current) - Math.abs(right - current)
+        || left - right
+      ))
+      .slice(0, 7);
+  };
+
+  const allowed = target.map(allowedFor);
+  const currentFit = hookSignaturePitchFit(source, target.map(({ note }) => note));
+  const observed = finite(report?.metrics?.hookSignatureSimilarity, 0);
+  const nonPitchContribution = clamp(observed - currentFit * 0.80, 0, 0.20);
+  const requiredPitchFit = clamp(
+    ((threshold + 0.012) - nonPitchContribution) / 0.80,
+    0,
+    1,
+  );
+  const nextOutside = targetEntries[4]?.note ?? null;
+  const scored = [];
+
+  for (const p0 of allowed[0]) {
+    for (const p1 of allowed[1]) {
+      if (Math.abs(p1 - p0) > 12) continue;
+      for (const p2 of allowed[2]) {
+        if (Math.abs(p2 - p1) > 12) continue;
+        for (const p3 of allowed[3]) {
+          if (Math.abs(p3 - p2) > 12) continue;
+          if (nextOutside && Math.abs(finite(nextOutside.pitch, p3) - p3) > 12) continue;
+          const pitches = [p0, p1, p2, p3];
+          const changed = pitches.filter((pitch, index) => pitch !== localPitches[index]).length;
+          if (!changed || changed > 3) continue;
+          const fit = hookSignaturePitchFit(
+            source,
+            pitches.map((pitch, index) => ({ ...target[index].note, pitch })),
+          );
+          if (fit <= currentFit + 1e-6) continue;
+          const movement = pitches.reduce(
+            (sum, pitch, index) => sum + Math.abs(pitch - localPitches[index]),
+            0,
+          );
+          const maxMove = Math.max(
+            ...pitches.map((pitch, index) => Math.abs(pitch - localPitches[index])),
+          );
+          scored.push({ pitches, changed, fit, movement, maxMove });
+        }
+      }
+    }
+  }
+
+  const sufficient = scored
+    .filter((entry) => entry.fit >= requiredPitchFit - 1e-9)
+    .sort((left, right) => (
+      left.changed - right.changed
+      || left.movement - right.movement
+      || left.maxMove - right.maxMove
+      || right.fit - left.fit
+      || left.pitches.join(",").localeCompare(right.pitches.join(","))
+    ));
+  const strongest = [...scored].sort((left, right) => (
+    right.fit - left.fit
+    || left.changed - right.changed
+    || left.movement - right.movement
+    || left.maxMove - right.maxMove
+    || left.pitches.join(",").localeCompare(right.pitches.join(","))
+  ));
+  const ordered = [...sufficient, ...strongest];
+
+  const result = [];
+  const seen = new Set();
+  for (const option of ordered) {
+    const signature = option.pitches.join(",");
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+
+    const candidate = cloneValue(song);
+    const track = melodyTrack(candidate);
+    let changed = 0;
+    for (let position = 0; position < 4; position += 1) {
+      if (option.pitches[position] === localPitches[position]) continue;
+      const entry = target[position];
+      const note = track?.notes?.[entry.index];
+      if (!note || isProtectedAnchor(note)) continue;
+      note.pitch = option.pitches[position];
+      tag(
+        note,
+        report.sourceSectionId,
+        position === 3 ? "hook-signature-payoff" : "hook-signature-search",
+      );
+      changed += 1;
+    }
+    if (!changed) continue;
+    result.push({
+      id: `restore-hook-signature-search-${result.length + 1}`,
+      song: candidate,
+      changedNotes: changed,
+      hookPitchFit: round(option.fit),
+      pitchMovement: option.movement,
+    });
+    if (result.length >= Math.max(1, Math.min(3, Math.floor(maxCandidates)))) break;
+  }
+  return result;
+}
+
+function hookSignatureRecallCandidate(song, report) {
+  const relationship = String(report?.relationship ?? "");
+  if (!["recall", "return"].includes(relationship)) return null;
+  const threshold = relationship === "return" ? 0.74 : 0.60;
+  if (finite(report?.metrics?.hookSignatureSimilarity, 1) >= threshold) return null;
+
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 4 || targetEntries.length < 4) return null;
+
+  const source = sourceEntries.slice(0, 4).map((entry) => entry.note);
+  const target = targetEntries.slice(0, 4);
+  const sourceIntervals = source.slice(1).map((note, index) => (
+    wrappedInterval(finite(note?.pitch) - finite(source[index]?.pitch))
+  ));
+  const localPitches = target.map(({ note }) => Math.round(finite(note?.pitch, 60)));
+  const baseWindow = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const minPitch = Math.max(48, Math.min(baseWindow.min, ...localPitches));
+  const maxPitch = Math.min(88, Math.max(baseWindow.max, ...localPitches));
+  const scale = scalePitchClasses(song);
+
+  const nearestAllowed = (desired) => {
+    const choices = [];
+    for (let pitch = minPitch; pitch <= maxPitch; pitch += 1) {
+      if (scale?.size && !scale.has(mod12(pitch))) continue;
+      choices.push(pitch);
+    }
+    return choices.sort((left, right) => (
+      Math.abs(left - desired) - Math.abs(right - desired)
+      || Math.abs(left - localPitches[0]) - Math.abs(right - localPitches[0])
+      || left - right
+    ))[0] ?? Math.round(desired);
+  };
+
+  // Keep the section's authored register anchor, but restore the four-note
+  // identity path that a listener actually remembers.
+  const desired = [localPitches[0]];
+  for (let index = 0; index < sourceIntervals.length; index += 1) {
+    desired.push(nearestAllowed(desired[index] + sourceIntervals[index]));
+  }
+
+  for (let position = 0; position < 4; position += 1) {
+    if (
+      isProtectedAnchor(target[position]?.note)
+      && desired[position] !== localPitches[position]
+    ) return null;
+    if (position > 0 && Math.abs(desired[position] - desired[position - 1]) > 12) return null;
+  }
+  const nextOutside = targetEntries[4]?.note ?? null;
+  if (nextOutside && Math.abs(finite(nextOutside.pitch, desired[3]) - desired[3]) > 12) return null;
+
+  const candidate = cloneValue(song);
+  const track = melodyTrack(candidate);
+  let changed = 0;
+  for (let position = 1; position < 4; position += 1) {
+    if (desired[position] === localPitches[position]) continue;
+    const entry = target[position];
+    const note = track?.notes?.[entry.index];
+    if (!note || isProtectedAnchor(note)) continue;
+    note.pitch = desired[position];
+    tag(note, report.sourceSectionId, position === 3 ? "hook-signature-payoff" : "hook-signature-recall");
+    changed += 1;
+  }
+
+  return changed
+    ? {
+      id: "restore-hook-signature",
+      song: candidate,
+      changedNotes: changed,
+    }
+    : null;
+}
+
 function motifCoreDirectionCandidates(song, report) {
   const relationship = String(report?.relationship ?? "");
   if (!["recall", "return"].includes(relationship)) return [];
@@ -757,6 +982,8 @@ export function createMelodySectionDevelopmentCandidates(song, {
   const motifSearch = motifCoreSearchCandidates(song, report, { maxCandidates: 2 });
   const motifDirection = motifCoreDirectionCandidates(song, report);
   const motifExact = motifCoreRecallCandidate(song, report);
+  const hookSignatureSearch = hookSignatureSearchCandidates(song, report, { maxCandidates: 2 });
+  const hookSignature = hookSignatureRecallCandidate(song, report);
   const story = sectionStoryPayoffCandidates(song, report);
   const general = [
     cloneBreakCandidate(song, report),
@@ -769,12 +996,14 @@ export function createMelodySectionDevelopmentCandidates(song, {
   // identifies one of those defects, reserve the tiny candidate budget for its
   // actual owner instead of letting unrelated contour/ending moves crowd it out.
   const raw = before.reason === "motif-core-weak"
-    ? [...motifSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
-    : before.reason === "section-story-payoff-weak"
-      // 5H owns this defect. If it can author a payoff candidate, do not let a
-      // larger generic 5G delta starve the actual failing authority.
-      ? (story.length ? [...story] : [...general]).filter(Boolean)
-      : [motifExact, ...story, ...general].filter(Boolean);
+    ? [...motifSearch, ...hookSignatureSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
+    : before.reason === "hook-signature-weak"
+      ? [...hookSignatureSearch, hookSignature, motifExact, ...general].filter(Boolean)
+      : before.reason === "section-story-payoff-weak"
+        // 5H owns this defect. If it can author a payoff candidate, do not let a
+        // larger generic 5G delta starve the actual failing authority.
+        ? (story.length ? [...story] : [...general]).filter(Boolean)
+        : [hookSignature, motifExact, ...story, ...general].filter(Boolean);
   const seen = new Set();
   const limit = Math.max(
     0,
@@ -792,13 +1021,19 @@ export function createMelodySectionDevelopmentCandidates(song, {
       ]) ?? []);
       if (seen.has(signature)) return null;
       seen.add(signature);
-      const authorityPhase = candidate.id === "lift-chorus-payoff" ? "5H" : "5G";
+      const authorityPhase = candidate.id.startsWith("restore-hook-signature")
+        ? "5J"
+        : candidate.id.startsWith("lift-chorus-payoff")
+          ? "5H"
+          : "5G";
       return {
         ...candidate,
         candidateIndex,
-        authorityId: authorityPhase === "5H"
-          ? "5h-section-story-payoff"
-          : "5g-motif-recall",
+        authorityId: authorityPhase === "5J"
+          ? "5j-hook-signature-recognizability"
+          : authorityPhase === "5H"
+            ? "5h-section-story-payoff"
+            : "5g-motif-recall",
         authorityPhase,
         sectionId: report.sectionId,
         sourceSectionId: report.sourceSectionId,

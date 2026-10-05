@@ -19,15 +19,17 @@ const SOURCE = [
   note(7.5, 67, 0.75),
 ];
 
-const WEAK_RETURN = [
-  note(8.5, 60),
-  note(9.5, 62, 0.25),
-  note(10.5, 60),
-  note(11.5, 65, 0.5),
-  note(12.5, 64),
-  note(13.5, 67, 0.25),
-  note(14.5, 71),
-  note(15.5, 69, 1, { phraseRole: "turnaround" }),
+const DRIFTED_RETURN = [
+  note(8.5, 72),
+  note(9.5, 76, 0.25),
+  note(10.5, 79),
+  // First three notes still identify the old 5G motif, but this fourth note
+  // destroys the listener-facing four-note hook shape.
+  note(11.5, 84, 0.75),
+  note(12.5, 76),
+  note(13.5, 79, 0.25),
+  note(14.5, 83),
+  note(15.5, 81, 0.75, { phraseRole: "turnaround" }),
 ];
 
 function song() {
@@ -43,9 +45,15 @@ function song() {
     ],
     phraseMemory: {
       version: 1,
-      familyId: "motif-family",
+      familyId: "hook-signature-family",
       sections: [
-        { sectionId: "verse-1", sourceSectionId: "verse-1", relationship: "statement", recallStrength: 1 },
+        {
+          sectionId: "verse-1",
+          sourceSectionId: "verse-1",
+          relationship: "statement",
+          recallStrength: 1,
+          transform: "statement",
+        },
         {
           sectionId: "verse-2",
           sourceSectionId: "verse-1",
@@ -56,19 +64,13 @@ function song() {
       ],
     },
     tracks: [
-      {
-        id: "drums",
-        notes: [note(0, 36, 0.1, 100), note(8, 36, 0.1, 100)],
-      },
-      {
-        id: "bass",
-        notes: [note(0, 36, 0.5, 92), note(8, 36, 0.5, 92)],
-      },
+      { id: "drums", notes: [note(0, 36, 0.1, 100), note(8, 36, 0.1, 100)] },
+      { id: "bass", notes: [note(0, 36, 0.5, 92), note(8, 36, 0.5, 92)] },
       {
         id: "melody",
         notes: [
           ...SOURCE,
-          ...WEAK_RETURN.map((entry) => ({
+          ...DRIFTED_RETURN.map((entry) => ({
             ...entry,
             phraseMemorySourceSectionId: "verse-1",
           })),
@@ -78,65 +80,63 @@ function song() {
   };
 }
 
-test("5G motif critic rejects a return whose opening hook identity drifted", () => {
+test("5J rejects a return that passes the three-note motif but loses the four-note hook", () => {
   const input = song();
   const before = structuredClone(input);
   const report = evaluateMelodySectionMemory(input);
 
-  assert.deepEqual(input, before, "5G memory critic must remain read-only");
+  assert.deepEqual(input, before, "5J recognizability critic must remain read-only");
   assert.equal(report.passed, false, JSON.stringify(report));
-  assert.equal(report.reason, "motif-core-weak", JSON.stringify(report));
-  assert.equal(report.weakestSection.sectionId, "verse-2");
-  assert.ok(report.weakestSection.metrics.motifCoreSimilarity < 0.56, JSON.stringify(report));
-  assert.ok(report.weakestSection.metrics.cloneRisk < 0.92, JSON.stringify(report));
+  assert.equal(report.reason, "hook-signature-weak", JSON.stringify(report));
+  assert.ok(report.weakestSection.metrics.motifCoreSimilarity >= 0.56, JSON.stringify(report));
+  assert.ok(report.weakestSection.metrics.hookSignatureSimilarity < 0.74, JSON.stringify(report));
 });
 
-test("5G restores a recognizable motif core with a bounded three-note search", () => {
+test("5J restores the four-note hook with bounded pitch-only edits", () => {
   const input = song();
   const before = structuredClone(input);
   const initial = evaluateMelodySectionMemory(input);
   const first = createMelodySectionDevelopmentCandidates(input);
   const second = createMelodySectionDevelopmentCandidates(input);
 
-  assert.deepEqual(first, second, "5G candidate generation must be deterministic");
-  assert.deepEqual(input, before, "5G candidate generation must not mutate its source");
+  assert.deepEqual(first, second, "5J candidate generation must be deterministic");
+  assert.deepEqual(input, before, "5J must not mutate the source song");
 
-  const candidate = first.find((entry) => (
-    entry.authorityPhase === "5G"
-    && entry.changedNotes > 0
-    && entry.changedNotes <= 3
-    && entry.afterSection.metrics.motifCoreSimilarity
-      > initial.weakestSection.metrics.motifCoreSimilarity
-  ));
+  const candidate = first.find((entry) => entry.id === "restore-hook-signature");
   assert.ok(candidate, JSON.stringify(first.map((entry) => entry.id)));
-  assert.ok(candidate.changedNotes > 0 && candidate.changedNotes <= 3);
+  assert.equal(candidate.authorityPhase, "5J");
+  assert.ok(candidate.changedNotes >= 1 && candidate.changedNotes <= 3);
   assert.ok(
-    candidate.afterSection.metrics.motifCoreSimilarity
-      > initial.weakestSection.metrics.motifCoreSimilarity,
+    candidate.afterSection.metrics.hookSignatureSimilarity
+      > initial.weakestSection.metrics.hookSignatureSimilarity,
     JSON.stringify(candidate.afterSection),
   );
+  assert.ok(candidate.afterSection.metrics.hookSignatureSimilarity >= 0.74);
 
   const sourceMelody = before.tracks.find((track) => track.id === "melody");
   const repairedMelody = candidate.song.tracks.find((track) => track.id === "melody");
+
   assert.deepEqual(
     repairedMelody.notes.map((entry) => entry.start),
     sourceMelody.notes.map((entry) => entry.start),
-    "5G must not rewrite note timing",
+    "5J must not rewrite canonical timing",
   );
   assert.deepEqual(
     repairedMelody.notes.map((entry) => entry.duration),
     sourceMelody.notes.map((entry) => entry.duration),
-    "5G must not rewrite durations",
+    "5J must preserve articulation timing",
   );
   assert.deepEqual(
     repairedMelody.notes.map((entry) => entry.velocity),
     sourceMelody.notes.map((entry) => entry.velocity),
-    "5G must not rewrite velocities",
+    "5J must preserve velocity",
   );
+  assert.equal(repairedMelody.notes[8].pitch, 72, "return register anchor must stay intact");
+  assert.equal(repairedMelody.notes[11].pitch, 76, "fourth hook note should restore the source shape");
   assert.equal(
     repairedMelody.notes.at(-1).pitch,
     sourceMelody.notes.at(-1).pitch,
-    "protected turnaround landing must remain exact",
+    "protected turnaround must remain untouched",
   );
   assert.deepEqual(
     candidate.song.tracks.find((track) => track.id === "drums"),

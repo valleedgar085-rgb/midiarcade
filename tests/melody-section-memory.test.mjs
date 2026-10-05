@@ -147,7 +147,13 @@ test("unrelated return is rejected even when metadata points at the right source
     recallStrength: 0.9,
   }));
   assert.equal(report.passed, false, JSON.stringify(report));
-  assert.ok(report.sections[0].metrics.relationshipFit < 0.48 || report.score < 62, JSON.stringify(report));
+  assert.ok(
+    report.sections[0].metrics.relationshipFit < 0.48
+      || report.sections[0].metrics.motifCoreSimilarity < 0.56
+      || report.sections[0].metrics.hookSignatureSimilarity < 0.78
+      || report.score < 62,
+    JSON.stringify(report),
+  );
 });
 
 test("contrast can stay in the same melodic family without becoming a clone", () => {
