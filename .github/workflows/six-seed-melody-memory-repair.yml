@@ -16,6 +16,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Diagnose remaining memory seeds
+        run: node --test tests/melody-memory-six-seed-diagnostic.test.mjs
       - name: Run six-seed memory matrix
         run: node --test tests/melody-section-memory-gauntlet.test.mjs
       - name: Run focused melody regressions
