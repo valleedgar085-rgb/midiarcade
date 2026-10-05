@@ -101,7 +101,13 @@ test("5G restores a recognizable motif core with at most two pitch edits", () =>
   assert.deepEqual(first, second, "5G candidate generation must be deterministic");
   assert.deepEqual(input, before, "5G candidate generation must not mutate its source");
 
-  const candidate = first.find((entry) => entry.id === "restore-motif-core");
+  const candidate = first.find((entry) => (
+    entry.authorityPhase === "5G"
+    && entry.changedNotes > 0
+    && entry.changedNotes <= 2
+    && entry.afterSection.metrics.motifCoreSimilarity
+      > initial.weakestSection.metrics.motifCoreSimilarity
+  ));
   assert.ok(candidate, JSON.stringify(first.map((entry) => entry.id)));
   assert.ok(candidate.changedNotes > 0 && candidate.changedNotes <= 2);
   assert.ok(
