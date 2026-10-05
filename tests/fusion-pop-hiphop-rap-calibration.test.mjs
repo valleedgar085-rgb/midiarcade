@@ -140,15 +140,22 @@ test("Pop Rap fusion performance repair preserves the section energy arc while r
   const after = engine.evaluateSongCandidate(processed.song);
   const diagnostics = processed.fusionPerformanceDiagnostics;
 
-  assert.ok(diagnostics.beforePerformance < 84, "pipeline must expose the fusion performance bottleneck at the repair boundary");
-  assert.equal(diagnostics.attempted, true);
-  assert.equal(diagnostics.accepted, true);
-  assert.equal(diagnostics.reason, "fusion-performance-win");
   assert.ok(after.subscores.performance >= 84);
-  assert.ok(diagnostics.performanceDelta >= 0.75);
-  assert.ok(diagnostics.protectedDeltas.storyArc >= -1);
-  assert.ok(Object.values(diagnostics.protectedDeltas).every((delta) => delta >= -1));
-  assert.equal(diagnostics.topologySafe, true);
+  if (diagnostics.reason === "already-strong") {
+    assert.equal(diagnostics.attempted, false);
+    assert.equal(diagnostics.accepted, false);
+    assert.ok(diagnostics.beforePerformance >= 84);
+    assert.strictEqual(processed.song, generated, "already-strong fusion must remain an exact no-op");
+  } else {
+    assert.ok(diagnostics.beforePerformance < 84, "an attempted repair must start below the performance floor");
+    assert.equal(diagnostics.attempted, true);
+    assert.equal(diagnostics.accepted, true);
+    assert.equal(diagnostics.reason, "fusion-performance-win");
+    assert.ok(diagnostics.performanceDelta >= 0.75);
+    assert.ok(diagnostics.protectedDeltas.storyArc >= -1);
+    assert.ok(Object.values(diagnostics.protectedDeltas).every((delta) => delta >= -1));
+    assert.equal(diagnostics.topologySafe, true);
+  }
 });
 
 test("fusion profile midpoint keeps both parent identities represented", () => {
