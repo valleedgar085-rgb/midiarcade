@@ -453,6 +453,10 @@ export function sectionStoryPayoffCandidates(song, report) {
   if (!eligible.length) return [];
 
   const result = [];
+  // A deliberate chorus/drop payoff may use an octave-sized leap. Keep this
+  // slightly wider than ordinary contour repair, but still bounded and subject
+  // to the full release/critic gates before it can commit.
+  const maxPayoffLeap = 12;
   const originalPitches = targetEntries.map(({ note }) => Math.round(finite(note?.pitch, 60)));
 
   const nearestAllowedInRange = (desired, minPitch, maxPitch) => (
@@ -478,7 +482,7 @@ export function sectionStoryPayoffCandidates(song, report) {
     let safe = true;
 
     for (let position = peakPosition - 1; position >= 0; position -= 1) {
-      if (Math.abs(pitches[position] - pitches[position + 1]) <= 10) break;
+      if (Math.abs(pitches[position] - pitches[position + 1]) <= maxPayoffLeap) break;
       const entry = targetEntries[position];
       if (!entry?.note || isProtectedAnchor(entry.note)) {
         safe = false;
@@ -487,8 +491,8 @@ export function sectionStoryPayoffCandidates(song, report) {
       const nextPitch = pitches[position + 1];
       const repaired = nearestAllowedInRange(
         originalPitches[position],
-        Math.max(window.min, nextPitch - 10),
-        Math.min(dynamicMax, nextPitch + 10),
+        Math.max(window.min, nextPitch - maxPayoffLeap),
+        Math.min(dynamicMax, nextPitch + maxPayoffLeap),
       );
       if (repaired == null) {
         safe = false;
@@ -504,7 +508,7 @@ export function sectionStoryPayoffCandidates(song, report) {
     if (!safe) continue;
 
     for (let position = peakPosition + 1; position < targetEntries.length; position += 1) {
-      if (Math.abs(pitches[position] - pitches[position - 1]) <= 10) break;
+      if (Math.abs(pitches[position] - pitches[position - 1]) <= maxPayoffLeap) break;
       const entry = targetEntries[position];
       if (!entry?.note || isProtectedAnchor(entry.note)) {
         safe = false;
@@ -513,8 +517,8 @@ export function sectionStoryPayoffCandidates(song, report) {
       const previousPitch = pitches[position - 1];
       const repaired = nearestAllowedInRange(
         originalPitches[position],
-        Math.max(window.min, previousPitch - 10),
-        Math.min(dynamicMax, previousPitch + 10),
+        Math.max(window.min, previousPitch - maxPayoffLeap),
+        Math.min(dynamicMax, previousPitch + maxPayoffLeap),
       );
       if (repaired == null) {
         safe = false;
@@ -532,8 +536,8 @@ export function sectionStoryPayoffCandidates(song, report) {
     // Only enforce leap safety on pairs touched by this repair. Existing
     // authored leaps elsewhere in the section are outside 5H's authority.
     const touchedPairsSafe = [...changedPositions].every((position) => {
-      const leftSafe = position <= 0 || Math.abs(pitches[position] - pitches[position - 1]) <= 10;
-      const rightSafe = position >= pitches.length - 1 || Math.abs(pitches[position + 1] - pitches[position]) <= 10;
+      const leftSafe = position <= 0 || Math.abs(pitches[position] - pitches[position - 1]) <= maxPayoffLeap;
+      const rightSafe = position >= pitches.length - 1 || Math.abs(pitches[position + 1] - pitches[position]) <= maxPayoffLeap;
       return leftSafe && rightSafe;
     });
     if (!touchedPairsSafe) continue;
