@@ -1,0 +1,37 @@
+name: Phase 5H Fast APK
+on:
+  push:
+    branches: [phase-5h-apk]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fast-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      - name: Sync Android assets
+        run: npx cap sync android
+      - name: Build Phase 5H Preview APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+      - name: Upload Phase 5H APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-phase-5h-preview-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
