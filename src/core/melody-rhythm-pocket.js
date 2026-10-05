@@ -1,4 +1,5 @@
 import { cloneValue } from "./clone-value.js";
+import { trackGroovePulses } from "./groove-contract.js";
 
 const GENRE_POCKET = Object.freeze({
   hipHop: Object.freeze({ maxShift: 0.25, snareWindow: 0.11, congestionWindow: 0.075, candidates: Object.freeze([0.125, 0.25, -0.125]) }),
@@ -85,6 +86,10 @@ function drumFoundation(song) {
 function nearAny(beat, notes, tolerance) {
   return notes.some((note) => Math.abs(beat - start(note)) <= tolerance);
 }
+function nearestDistance(value, candidates = []) {
+  if (!candidates.length) return Infinity;
+  return Math.min(...candidates.map((candidate) => Math.abs(value - candidate)));
+}
 function onsetDiagnostics(song) {
   const melody = track(song, "melody")?.notes ?? [];
   const foundation = drumFoundation(song);
@@ -165,16 +170,34 @@ export function refineMelodyRhythmPocket(sourceSong) {
     const original = start(note);
     const section = sectionForBeat(song, original);
     if (!section) continue;
-    const bounds = sectionBounds(section, Math.max(1, finite(song?.meta?.beatsPerBar, 4)));
-    const candidates = p.candidates
-      .map((delta) => ({ delta, beat: round(original + delta) }))
+    const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+    const bounds = sectionBounds(section, beatsPerBar);
+    const leadPulses = trackGroovePulses(
+      song?.grooveConductor,
+      "melody",
+      bounds.startBeat,
+      bounds.endBeat,
+      beatsPerBar,
+    );
+    const candidates = [
+      ...leadPulses.map((beat) => ({
+        delta: round(beat - original),
+        beat: round(beat),
+        grooveAligned: true,
+      })),
+      ...p.candidates.map((delta) => ({ delta, beat: round(original + delta), grooveAligned: false })),
+    ]
       .filter(({ delta, beat }) => (
         Math.abs(delta) <= p.maxShift + 1e-9
+        && Math.abs(delta) > 1e-9
         && beat >= bounds.startBeat - 1e-6
         && beat < bounds.endBeat - 0.02
         && !melodyCollision(melody, note, beat)
         && !nearAny(beat, foundation.snares, p.snareWindow * 0.72)
         && !protectedSpace(song, beat)
+      ))
+      .filter((candidate, index, all) => (
+        all.findIndex((entry) => Math.abs(entry.beat - candidate.beat) < 1e-9) === index
       ))
       .map((candidate) => {
         const layers = [
@@ -182,14 +205,23 @@ export function refineMelodyRhythmPocket(sourceSong) {
           nearAny(candidate.beat, foundation.snares, p.congestionWindow),
           nearAny(candidate.beat, foundation.bass, p.congestionWindow),
         ].filter(Boolean).length;
-        return { ...candidate, layers };
+        return {
+          ...candidate,
+          layers,
+          leadDistance: nearestDistance(candidate.beat, leadPulses),
+        };
       })
-      .sort((left, right) => left.layers - right.layers || Math.abs(left.delta) - Math.abs(right.delta));
+      .sort((left, right) => (
+        left.layers - right.layers
+        || left.leadDistance - right.leadDistance
+        || Number(right.grooveAligned) - Number(left.grooveAligned)
+        || Math.abs(left.delta) - Math.abs(right.delta)
+      ));
 
     const best = candidates[0];
     if (!best) continue;
     setStart(note, best.beat);
-    note.melodyPocketRole = "rhythm-space-repair";
+    note.melodyPocketRole = best.grooveAligned ? "rhythm-space-groove-repair" : "rhythm-space-repair";
     note.melodyPocketShiftBeats = round(best.delta);
     note.melodyPocketSectionId = String(section?.id ?? "");
     changedNotes += 1;
