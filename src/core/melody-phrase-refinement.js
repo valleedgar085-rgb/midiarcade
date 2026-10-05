@@ -590,10 +590,10 @@ export function createMelodyPhraseCandidates(song, {
   const placementWeak = finite(placementSection?.metrics?.phrasePlacement, 1) < 0.76;
   const sectionId = conversationWeak
     ? conversationSection?.sectionId
-    : arcWeak
-      ? arcSection?.sectionId
-      : placementWeak
-        ? placementSection?.sectionId
+    : placementWeak
+      ? placementSection?.sectionId
+      : arcWeak
+        ? arcSection?.sectionId
         : before?.weakestSection?.sectionId;
   if (!sectionId) return [];
 
