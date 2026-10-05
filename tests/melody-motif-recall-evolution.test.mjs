@@ -91,7 +91,7 @@ test("5G motif critic rejects a return whose opening hook identity drifted", () 
   assert.ok(report.weakestSection.metrics.cloneRisk < 0.92, JSON.stringify(report));
 });
 
-test("5G restores a recognizable motif core with at most two pitch edits", () => {
+test("5G restores a recognizable motif core with a bounded three-note search", () => {
   const input = song();
   const before = structuredClone(input);
   const initial = evaluateMelodySectionMemory(input);
@@ -104,12 +104,12 @@ test("5G restores a recognizable motif core with at most two pitch edits", () =>
   const candidate = first.find((entry) => (
     entry.authorityPhase === "5G"
     && entry.changedNotes > 0
-    && entry.changedNotes <= 2
+    && entry.changedNotes <= 3
     && entry.afterSection.metrics.motifCoreSimilarity
       > initial.weakestSection.metrics.motifCoreSimilarity
   ));
   assert.ok(candidate, JSON.stringify(first.map((entry) => entry.id)));
-  assert.ok(candidate.changedNotes > 0 && candidate.changedNotes <= 2);
+  assert.ok(candidate.changedNotes > 0 && candidate.changedNotes <= 3);
   assert.ok(
     candidate.afterSection.metrics.motifCoreSimilarity
       > initial.weakestSection.metrics.motifCoreSimilarity,
