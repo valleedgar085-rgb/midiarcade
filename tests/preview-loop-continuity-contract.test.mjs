@@ -8,10 +8,10 @@ test("PreviewPlayer pre-schedules the next loop head without tearing down audio"
   const schedule = appSource.match(/schedule\(\)\s*\{[\s\S]*?\n\s*voicePriority\(event\)/)?.[0] ?? "";
   const boundary = appSource.match(/commitLoopBoundary\([\s\S]*?\n\s*startScheduler\(\)/)?.[0] ?? "";
 
-  assert.match(schedule, /loopHeadHorizonSeconds/);
-  assert.match(schedule, /duration \+ event\.time/);
+  assert.match(schedule, /loopHeadHorizonBeats/);
+  assert.match(schedule, /totalBeats \+ previewEventBeat\(event, bpm\)/);
   assert.match(schedule, /__loopPreview: true/);
-  assert.match(boundary, /wrappedLoopPosition/);
+  assert.match(boundary, /wrappedLoopBeat/);
   assert.match(boundary, /promoteLoopPreviewVoices\(\)/);
   assert.doesNotMatch(boundary, /clearScheduledAudio\(\)/);
   assert.doesNotMatch(boundary, /clearTimers\(\)/);

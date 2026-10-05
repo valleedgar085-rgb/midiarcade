@@ -33,6 +33,10 @@ test("Android release gate keeps playback lifecycle recovery wired", () => {
   assert.doesNotMatch(player, /setInterval\(\(\) => this\.schedule\(\)/);
   assert.match(player, /cancelLoopPreviewVoices\(\)/);
   assert.match(player, /commitLoopBoundary\(/);
+  assert.match(player, /currentSongBeat\(\)/);
+  assert.match(player, /previewBeatAtAudioTime/);
+  assert.match(player, /previewAudioTimeForBeat/);
+  assert.doesNotMatch(player.match(/schedule\(\)\s*\{[\s\S]*?\n\s*voicePriority\(event\)/)?.[0] ?? "", /event\.time <= horizon/);
 });
 
 test("pause, seek, restart, and disposal preserve explicit playback ownership", () => {

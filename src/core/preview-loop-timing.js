@@ -22,3 +22,20 @@ export function loopHeadHorizonSeconds({
   if (now >= duration || horizon < duration) return null;
   return Math.min(duration, Math.max(0, horizon - duration));
 }
+
+
+export function wrappedLoopBeat(beatPosition, totalBeats) {
+  return wrappedLoopPosition(beatPosition, totalBeats);
+}
+
+export function loopHeadHorizonBeats({
+  beatNow = 0,
+  horizonBeat = 0,
+  totalBeats = 0,
+} = {}) {
+  return loopHeadHorizonSeconds({
+    timelineNowSeconds: beatNow,
+    horizonSeconds: horizonBeat,
+    durationSeconds: totalBeats,
+  });
+}
