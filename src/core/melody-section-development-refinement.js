@@ -182,14 +182,227 @@ function motifCoreRecallCandidate(song, report) {
   return changed ? { id: "restore-motif-core", song: candidate, changedNotes: changed } : null;
 }
 
-function sectionStoryPayoffCandidate(song, report) {
-  if (report?.metrics?.sectionStoryEligible !== true) return null;
-  if (finite(report?.metrics?.sectionStoryPayoff, 1) >= 0.6) return null;
+
+
+function wrappedInterval(delta) {
+  const wrapped = ((Math.round(finite(delta)) % 12) + 12) % 12;
+  return wrapped > 6 ? wrapped - 12 : wrapped;
+}
+
+function motifCorePitchFit(sourceNotes, targetNotes) {
+  if (sourceNotes.length < 3 || targetNotes.length < 3) return 0;
+  const sourceIntervals = [
+    wrappedInterval(finite(sourceNotes[1]?.pitch) - finite(sourceNotes[0]?.pitch)),
+    wrappedInterval(finite(sourceNotes[2]?.pitch) - finite(sourceNotes[1]?.pitch)),
+  ];
+  const targetIntervals = [
+    wrappedInterval(finite(targetNotes[1]?.pitch) - finite(targetNotes[0]?.pitch)),
+    wrappedInterval(finite(targetNotes[2]?.pitch) - finite(targetNotes[1]?.pitch)),
+  ];
+  return sourceIntervals.reduce((sum, value, index) => {
+    const other = targetIntervals[index] ?? 0;
+    const distance = Math.min(6, Math.abs(value - other));
+    const exactness = 1 - distance / 6;
+    const directionMatch = Math.sign(value) === Math.sign(other) ? 1 : 0;
+    return sum + exactness * 0.72 + directionMatch * 0.28;
+  }, 0) / 2;
+}
+
+function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
+  const relationship = String(report?.relationship ?? "");
+  if (!["recall", "return"].includes(relationship)) return [];
+  const threshold = relationship === "return" ? 0.56 : 0.42;
+  if (finite(report?.metrics?.motifCoreSimilarity, 1) >= threshold) return [];
+
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 3 || targetEntries.length < 3) return [];
+
+  const source = sourceEntries.slice(0, 3).map((entry) => entry.note);
+  const target = targetEntries.slice(0, 3);
+  const baseWindow = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const localPitches = target.map(({ note }) => Math.round(finite(note?.pitch, 60)));
+  // Preserve the register the generator actually authored. A return can be
+  // legitimately above the generic role window; forcing it back into 57-79 was
+  // the cause of the hip-hop register-health regression.
+  const minPitch = Math.max(48, Math.min(baseWindow.min, ...localPitches));
+  const maxPitch = Math.min(88, Math.max(baseWindow.max, ...localPitches));
+  const scale = scalePitchClasses(song);
+
+  const allowedFor = ({ note }, position) => {
+    const current = Math.round(finite(note?.pitch, 60));
+    if (isProtectedAnchor(note)) return [current];
+    const options = [];
+    for (
+      let pitch = Math.max(minPitch, current - 7);
+      pitch <= Math.min(maxPitch, current + 7);
+      pitch += 1
+    ) {
+      if (scale?.size && !scale.has(mod12(pitch))) continue;
+      options.push(pitch);
+    }
+    if (!options.includes(current)) options.push(current);
+    return [...new Set(options)].sort((a, b) => a - b);
+  };
+
+  const allowed = target.map(allowedFor);
+  const currentFit = motifCorePitchFit(source, target.map(({ note }) => note));
+  const nextOutside = targetEntries[3]?.note ?? null;
+  const scored = [];
+
+  for (const pitch0 of allowed[0]) {
+    for (const pitch1 of allowed[1]) {
+      if (Math.abs(pitch1 - pitch0) > 10) continue;
+      for (const pitch2 of allowed[2]) {
+        if (Math.abs(pitch2 - pitch1) > 10) continue;
+        if (nextOutside && Math.abs(finite(nextOutside.pitch, pitch2) - pitch2) > 10) continue;
+        const pitches = [pitch0, pitch1, pitch2];
+        if (pitches.every((pitch, index) => pitch === localPitches[index])) continue;
+        const fit = motifCorePitchFit(
+          source,
+          pitches.map((pitch, index) => ({ ...target[index].note, pitch })),
+        );
+        if (fit <= currentFit + 1e-6) continue;
+        const movement = pitches.reduce(
+          (sum, pitch, index) => sum + Math.abs(pitch - localPitches[index]),
+          0,
+        );
+        const maxMove = Math.max(
+          ...pitches.map((pitch, index) => Math.abs(pitch - localPitches[index])),
+        );
+        scored.push({ pitches, fit, movement, maxMove });
+      }
+    }
+  }
+
+  const observedMotif = finite(report?.metrics?.motifCoreSimilarity, 0);
+  const estimatedRhythmFit = clamp(
+    (observedMotif - currentFit * 0.82) / 0.18,
+    0,
+    1,
+  );
+  const requiredPitchFit = clamp(
+    ((threshold + 0.012) - estimatedRhythmFit * 0.18) / 0.82,
+    0,
+    1,
+  );
+
+  const sufficient = scored
+    .filter((entry) => entry.fit >= requiredPitchFit - 1e-9)
+    .sort((left, right) => (
+      left.movement - right.movement
+      || left.maxMove - right.maxMove
+      || right.fit - left.fit
+      || left.pitches[0] - right.pitches[0]
+      || left.pitches[1] - right.pitches[1]
+      || left.pitches[2] - right.pitches[2]
+    ));
+  const strongest = [...scored].sort((left, right) => (
+    right.fit - left.fit
+    || left.movement - right.movement
+    || left.maxMove - right.maxMove
+    || left.pitches[0] - right.pitches[0]
+    || left.pitches[1] - right.pitches[1]
+    || left.pitches[2] - right.pitches[2]
+  ));
+  const ordered = [...sufficient, ...strongest];
+
+  const result = [];
+  const seen = new Set();
+  for (const option of ordered) {
+    const signature = option.pitches.join(",");
+    if (seen.has(signature)) continue;
+    seen.add(signature);
+
+    const candidate = cloneValue(song);
+    const track = melodyTrack(candidate);
+    let changed = 0;
+    for (let position = 0; position < 3; position += 1) {
+      if (option.pitches[position] === localPitches[position]) continue;
+      const entry = target[position];
+      const note = track?.notes?.[entry.index];
+      if (!note || isProtectedAnchor(note)) continue;
+      note.pitch = option.pitches[position];
+      tag(note, report.sourceSectionId, "motif-core-search");
+      changed += 1;
+    }
+    if (!changed) continue;
+    result.push({
+      id: `restore-motif-core-search-${result.length + 1}`,
+      song: candidate,
+      changedNotes: changed,
+      motifPitchFit: round(option.fit),
+      pitchMovement: option.movement,
+    });
+    if (result.length >= Math.max(1, Math.min(3, Math.floor(maxCandidates)))) break;
+  }
+  return result;
+}
+
+function motifCoreDirectionCandidates(song, report) {
+  const relationship = String(report?.relationship ?? "");
+  if (!["recall", "return"].includes(relationship)) return [];
+  const threshold = relationship === "return" ? 0.56 : 0.42;
+  if (finite(report?.metrics?.motifCoreSimilarity, 1) >= threshold) return [];
+
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 3 || targetEntries.length < 3) return [];
+
+  const source = sourceEntries.slice(0, 3).map((entry) => entry.note);
+  const target = targetEntries.slice(0, 3);
+  const candidates = [];
+
+  for (const position of [1, 2]) {
+    const targetEntry = target[position];
+    if (!targetEntry?.note || isProtectedAnchor(targetEntry.note)) continue;
+
+    const sourcePrev = source[position - 1];
+    const sourceNow = source[position];
+    const targetPrev = target[position - 1]?.note;
+    if (!sourcePrev || !sourceNow || !targetPrev) continue;
+
+    const sourceDelta = Math.round(finite(sourceNow.pitch) - finite(sourcePrev.pitch));
+    const wrapped = ((sourceDelta % 12) + 12) % 12;
+    const sourceDirection = Math.sign(wrapped > 6 ? wrapped - 12 : wrapped);
+    if (!sourceDirection) continue;
+
+    const currentPitch = Math.round(finite(targetEntry.note.pitch, 60));
+    const nextPitch = nearestScaleNeighbor(song, currentPitch, sourceDirection);
+    if (nextPitch === currentPitch) continue;
+
+    const previousPitch = Math.round(finite(targetPrev.pitch, currentPitch));
+    const followingPitch = position < 2
+      ? Math.round(finite(target[position + 1]?.note?.pitch, nextPitch))
+      : Math.round(finite(targetEntries[3]?.note?.pitch, nextPitch));
+    if (
+      Math.abs(nextPitch - previousPitch) > 10
+      || Math.abs(followingPitch - nextPitch) > 10
+    ) continue;
+
+    const candidate = cloneValue(song);
+    const note = melodyTrack(candidate)?.notes?.[targetEntry.index];
+    if (!note) continue;
+    note.pitch = nextPitch;
+    tag(note, report.sourceSectionId, "motif-core-direction");
+    candidates.push({
+      id: `restore-motif-core-direction-${position}`,
+      song: candidate,
+      changedNotes: 1,
+    });
+  }
+
+  return candidates;
+}
+
+function sectionStoryPayoffCandidates(song, report) {
+  if (report?.metrics?.sectionStoryEligible !== true) return [];
+  if (finite(report?.metrics?.sectionStoryPayoff, 1) >= 0.6) return [];
 
   const sourceEntries = indexedNotes(song, report.sourceSectionId);
   const targetEntries = indexedNotes(song, report.sectionId);
   const targetRange = sectionBounds(song, report.sectionId);
-  if (sourceEntries.length < 3 || targetEntries.length < 4 || !targetRange) return null;
+  if (sourceEntries.length < 3 || targetEntries.length < 4 || !targetRange) return [];
 
   const ordered = structure(song);
   const targetSectionIndex = ordered.findIndex((entry) => String(entry?.id) === String(report.sectionId));
@@ -204,58 +417,161 @@ function sectionStoryPayoffCandidate(song, report) {
   const previousPeak = Math.max(...previousEntries.map((entry) => finite(entry.note?.pitch, 60)));
   const referencePeak = Math.max(sourcePeak, previousPeak);
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
-  if (referencePeak >= window.max - 1) return null;
-
+  const dynamicMax = Math.min(88, Math.max(window.max, Math.ceil(referencePeak + 2)));
   const scale = scalePitchClasses(song);
   const phaseFor = (entry) => (
     (finite(entry.note?.start) - targetRange.start)
     / Math.max(0.25, targetRange.end - targetRange.start)
   );
-  const options = targetEntries
+  const allowedPitches = [];
+  for (let pitch = window.min; pitch <= dynamicMax; pitch += 1) {
+    if (!scale?.size || scale.has(mod12(pitch))) allowedPitches.push(pitch);
+  }
+  if (!allowedPitches.length) return [];
+
+  // At the register ceiling, equality with the setup peak is still a meaningful
+  // payoff. The previous implementation required referencePeak + 1 and therefore
+  // had no legal move when the source/setup already touched the melody ceiling.
+  const desiredPeak = Math.min(
+    dynamicMax,
+    referencePeak < dynamicMax - 1 ? Math.ceil(referencePeak + 2) : Math.ceil(referencePeak),
+  );
+  const payoffPitch = [...allowedPitches]
+    .filter((pitch) => pitch >= Math.min(desiredPeak, dynamicMax))
+    .sort((a, b) => Math.abs(a - desiredPeak) - Math.abs(b - desiredPeak) || b - a)[0]
+    ?? [...allowedPitches].sort((a, b) => b - a)[0];
+
+  const eligible = targetEntries
     .map((entry, position) => ({ entry, position, phase: phaseFor(entry) }))
-    // Keep the recalled opening motif cell intact; 5H owns the payoff, not 5G identity.
     .filter(({ position }) => position >= 3)
     .filter(({ entry }) => !isProtectedAnchor(entry.note))
     .filter(({ phase }) => phase >= 0.42 && phase <= 0.84)
-    .map((option) => {
-      const currentPitch = Math.round(finite(option.entry.note?.pitch, 60));
-      const minimum = Math.max(currentPitch + 1, Math.ceil(referencePeak + 1));
-      const maximum = Math.min(window.max, currentPitch + 6);
-      const candidates = [];
-      for (let pitch = minimum; pitch <= maximum; pitch += 1) {
-        if (scale?.size && !scale.has(mod12(pitch))) continue;
-        candidates.push(pitch);
-      }
-      const nextPitch = candidates[0] ?? null;
-      return { ...option, currentPitch, nextPitch };
-    })
-    .filter((option) => option.nextPitch != null)
-    .filter((option) => {
-      const previous = targetEntries[option.position - 1]?.note;
-      const following = targetEntries[option.position + 1]?.note;
-      const leftLeap = previous ? Math.abs(option.nextPitch - finite(previous.pitch, option.nextPitch)) : 0;
-      const rightLeap = following ? Math.abs(finite(following.pitch, option.nextPitch) - option.nextPitch) : 0;
-      return leftLeap <= 10 && rightLeap <= 10;
-    })
     .sort((left, right) => (
       Math.abs(left.phase - 0.68) - Math.abs(right.phase - 0.68)
-      || right.currentPitch - left.currentPitch
       || left.position - right.position
     ));
-  const selected = options[0];
-  if (!selected) return null;
+  if (!eligible.length) return [];
 
-  const candidate = cloneValue(song);
-  const track = melodyTrack(candidate);
-  const note = track?.notes?.[selected.entry.index];
-  if (!note) return null;
-  note.pitch = selected.nextPitch;
-  tag(note, report.sourceSectionId, "section-story-payoff");
-  return {
-    id: "lift-chorus-payoff",
-    song: candidate,
-    changedNotes: 1,
-  };
+  const result = [];
+  // A deliberate chorus/drop payoff may use an octave-sized leap. Keep this
+  // slightly wider than ordinary contour repair, but still bounded and subject
+  // to the full release/critic gates before it can commit.
+  const maxPayoffLeap = 12;
+  const originalPitches = targetEntries.map(({ note }) => Math.round(finite(note?.pitch, 60)));
+
+  const nearestAllowedInRange = (desired, minPitch, maxPitch) => (
+    [...allowedPitches]
+      .filter((pitch) => pitch >= minPitch && pitch <= maxPitch)
+      .sort((left, right) => (
+        Math.abs(left - desired) - Math.abs(right - desired)
+        || left - right
+      ))[0] ?? null
+  );
+
+  // Build the smallest scale-safe path needed to reach a late payoff peak.
+  // Unlike the old one-note repair, this can walk backward/forward through
+  // several editable notes until the new peak reconnects to authored material.
+  for (const option of eligible) {
+    const peakPosition = option.position;
+    const peakCurrent = originalPitches[peakPosition];
+    if (payoffPitch <= peakCurrent) continue;
+
+    const pitches = [...originalPitches];
+    const changedPositions = new Set([peakPosition]);
+    pitches[peakPosition] = payoffPitch;
+    let safe = true;
+
+    for (let position = peakPosition - 1; position >= 0; position -= 1) {
+      if (Math.abs(pitches[position] - pitches[position + 1]) <= maxPayoffLeap) break;
+      const entry = targetEntries[position];
+      if (!entry?.note || isProtectedAnchor(entry.note)) {
+        safe = false;
+        break;
+      }
+      const nextPitch = pitches[position + 1];
+      const repaired = nearestAllowedInRange(
+        originalPitches[position],
+        Math.max(window.min, nextPitch - maxPayoffLeap),
+        Math.min(dynamicMax, nextPitch + maxPayoffLeap),
+      );
+      if (repaired == null) {
+        safe = false;
+        break;
+      }
+      pitches[position] = repaired;
+      changedPositions.add(position);
+      if (changedPositions.size > 6) {
+        safe = false;
+        break;
+      }
+    }
+    if (!safe) continue;
+
+    for (let position = peakPosition + 1; position < targetEntries.length; position += 1) {
+      if (Math.abs(pitches[position] - pitches[position - 1]) <= maxPayoffLeap) break;
+      const entry = targetEntries[position];
+      if (!entry?.note || isProtectedAnchor(entry.note)) {
+        safe = false;
+        break;
+      }
+      const previousPitch = pitches[position - 1];
+      const repaired = nearestAllowedInRange(
+        originalPitches[position],
+        Math.max(window.min, previousPitch - maxPayoffLeap),
+        Math.min(dynamicMax, previousPitch + maxPayoffLeap),
+      );
+      if (repaired == null) {
+        safe = false;
+        break;
+      }
+      pitches[position] = repaired;
+      changedPositions.add(position);
+      if (changedPositions.size > 6) {
+        safe = false;
+        break;
+      }
+    }
+    if (!safe) continue;
+
+    // Only enforce leap safety on pairs touched by this repair. Existing
+    // authored leaps elsewhere in the section are outside 5H's authority.
+    const touchedPairsSafe = [...changedPositions].every((position) => {
+      const leftSafe = position <= 0 || Math.abs(pitches[position] - pitches[position - 1]) <= maxPayoffLeap;
+      const rightSafe = position >= pitches.length - 1 || Math.abs(pitches[position + 1] - pitches[position]) <= maxPayoffLeap;
+      return leftSafe && rightSafe;
+    });
+    if (!touchedPairsSafe) continue;
+
+    const candidate = cloneValue(song);
+    const track = melodyTrack(candidate);
+    let changed = 0;
+    for (const position of [...changedPositions].sort((a, b) => a - b)) {
+      const entry = targetEntries[position];
+      const note = track?.notes?.[entry?.index];
+      if (!note) continue;
+      const nextPitch = pitches[position];
+      if (nextPitch === originalPitches[position]) continue;
+      note.pitch = nextPitch;
+      tag(
+        note,
+        report.sourceSectionId,
+        position === peakPosition ? "section-story-payoff" : "section-story-path",
+      );
+      changed += 1;
+    }
+    if (!changed) continue;
+
+    result.push({
+      id: changed === 1 ? "lift-chorus-payoff" : "lift-chorus-payoff-path",
+      song: candidate,
+      changedNotes: changed,
+      payoffPhase: round(option.phase),
+      payoffPitch,
+    });
+    if (result.length >= 3) break;
+  }
+
+  return result;
 }
 
 function contourRecallCandidate(song, report, {
@@ -438,17 +754,27 @@ export function createMelodySectionDevelopmentCandidates(song, {
     sourceSectionId: weakest.sourceSectionId ?? contract?.sourceSectionId ?? null,
   };
   if (!report.sourceSectionId) return [];
-  const raw = [
+  const motifSearch = motifCoreSearchCandidates(song, report, { maxCandidates: 2 });
+  const motifDirection = motifCoreDirectionCandidates(song, report);
+  const motifExact = motifCoreRecallCandidate(song, report);
+  const story = sectionStoryPayoffCandidates(song, report);
+  const general = [
     cloneBreakCandidate(song, report),
-    motifCoreRecallCandidate(song, report),
-    sectionStoryPayoffCandidate(song, report),
-    // Ending identity is critical recall evidence and used to be starved out by
-    // the three-candidate budget when contour candidates were all available.
     endingRecallCandidate(song, report),
     directionalContourCandidate(song, report),
     contourRecallCandidate(song, report, { maxNotes: 2, id: "restore-contour" }),
     contourRecallCandidate(song, report, { maxNotes: 3, id: "restore-contour-strong" }),
   ].filter(Boolean);
+  // 5G owns motif identity before 5H owns payoff. When the read-only audit
+  // identifies one of those defects, reserve the tiny candidate budget for its
+  // actual owner instead of letting unrelated contour/ending moves crowd it out.
+  const raw = before.reason === "motif-core-weak"
+    ? [...motifSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
+    : before.reason === "section-story-payoff-weak"
+      // 5H owns this defect. If it can author a payoff candidate, do not let a
+      // larger generic 5G delta starve the actual failing authority.
+      ? (story.length ? [...story] : [...general]).filter(Boolean)
+      : [motifExact, ...story, ...general].filter(Boolean);
   const seen = new Set();
   const limit = Math.max(
     0,
