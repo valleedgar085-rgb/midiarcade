@@ -14528,7 +14528,7 @@ function applySpecializedRepairMaterial(song, strategy, config, window) {
   return song;
 }
 
-function spliceNotesInSurgicalWindow(sourceNotes = [], repairedNotes = [], window = {}) {
+export function spliceNotesInSurgicalWindow(sourceNotes = [], repairedNotes = [], window = {}) {
   const startBeat = finite(window.startBeat, 0);
   const endBeat = Math.max(startBeat, finite(window.endBeat, startBeat));
   const outside = sourceNotes.filter((note) => note.start < startBeat - 1e-6 || note.start >= endBeat - 1e-6);
