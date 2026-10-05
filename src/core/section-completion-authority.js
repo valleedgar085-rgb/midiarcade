@@ -315,7 +315,7 @@ export function applySectionCompletionAuthority(
         trackId === "bass" ? 1.25 : 1,
         {
           seamOffset: contract.requiresSeamClear ? 0.04 : 0.025,
-          allowExtend: !protectedLanding,
+          allowExtend: !protectedLanding || (contract.isFinal && trackId === "bass"),
         },
       )) {
         durationsShaped += 1;
