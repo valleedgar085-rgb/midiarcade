@@ -6543,7 +6543,10 @@ function generateLead(
         if (
           strong
           && chord
-          && (!memoryCore || eventIndex === 0 || eventIndex === activeMotif.events.length - 1)
+          // The opening three-note memory cell owns its contour. Only the
+          // final note of a recalled motif may be revoiced to the live chord;
+          // snapping the first note changes both core intervals at once.
+          && (!memoryCore || eventIndex === activeMotif.events.length - 1)
         ) {
           pitch = nearestChordTone(pitch, chord, degree === 0 ? 0 : Math.sign(degree));
         }
