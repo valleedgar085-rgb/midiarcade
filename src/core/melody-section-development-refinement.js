@@ -1,6 +1,9 @@
 import { cloneValue } from "./clone-value.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
-import { rolePreferredRegisterWindow } from "./role-register-policy.js";
+import {
+  rolePreferredRegisterWindow,
+  roleRegisterWindow,
+} from "./role-register-policy.js";
 
 export const MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES = 3;
 
@@ -205,8 +208,9 @@ function sectionStoryPayoffCandidate(song, report) {
   const sourcePeak = Math.max(...sourceEntries.map((entry) => finite(entry.note?.pitch, 60)));
   const previousPeak = Math.max(...previousEntries.map((entry) => finite(entry.note?.pitch, 60)));
   const referencePeak = Math.max(sourcePeak, previousPeak);
-  const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
-  if (referencePeak >= window.max - 1) return null;
+  const preferredWindow = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const hardWindow = roleRegisterWindow("melody") ?? { min: 48, max: 84 };
+  const window = { min: preferredWindow.min, max: hardWindow.max };
 
   const scale = scalePitchClasses(song);
   const phaseFor = (entry) => (
@@ -221,8 +225,9 @@ function sectionStoryPayoffCandidate(song, report) {
     .filter(({ phase }) => phase >= 0.42 && phase <= 0.84)
     .map((option) => {
       const currentPitch = Math.round(finite(option.entry.note?.pitch, 60));
-      const minimum = Math.max(currentPitch + 1, Math.ceil(referencePeak + 1));
-      const maximum = Math.min(window.max, currentPitch + 6);
+      const desiredPeak = Math.min(window.max, Math.ceil(referencePeak + 1));
+      const minimum = Math.max(currentPitch + 1, desiredPeak);
+      const maximum = Math.min(window.max, currentPitch + 12);
       const candidates = [];
       for (let pitch = minimum; pitch <= maximum; pitch += 1) {
         if (scale?.size && !scale.has(mod12(pitch))) continue;
