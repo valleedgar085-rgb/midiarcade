@@ -609,26 +609,26 @@ export function createMelodyPhraseCandidates(song, {
   const raw = conversation
     ? [
       conversation,
-      placement ?? sectionLandingCandidate(song, sectionId),
-      contourOutlierCandidate(song, sectionId) ?? arc ?? expressiveArcCandidate(song, sectionId),
+      placement ?? arc ?? sectionLandingCandidate(song, sectionId),
+      contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
     ].filter(Boolean)
-    : arc
-      ? [
-        arc,
-        placement ?? sectionLandingCandidate(song, sectionId),
-        contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
-      ].filter(Boolean)
     : placement
       ? [
         placement,
-        sectionLandingCandidate(song, sectionId),
+        arc ?? sectionLandingCandidate(song, sectionId),
         contourOutlierCandidate(song, sectionId),
       ].filter(Boolean)
-      : [
-        sectionLandingCandidate(song, sectionId),
-        contourOutlierCandidate(song, sectionId),
-        expressiveArcCandidate(song, sectionId),
-      ].filter(Boolean);
+      : arc
+        ? [
+          arc,
+          sectionLandingCandidate(song, sectionId),
+          contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
+        ].filter(Boolean)
+        : [
+          sectionLandingCandidate(song, sectionId),
+          contourOutlierCandidate(song, sectionId),
+          expressiveArcCandidate(song, sectionId),
+        ].filter(Boolean);
   const seen = new Set();
   return raw.slice(0, Math.max(0, Math.min(MAX_MELODY_PHRASE_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_PHRASE_CANDIDATES)))))
     .map((candidate, candidateIndex) => {
