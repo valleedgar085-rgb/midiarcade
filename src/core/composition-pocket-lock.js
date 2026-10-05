@@ -259,14 +259,26 @@ export function refineCompositionPocketLock(sourceSong) {
   const after = evaluateCompositionPocketLock(candidate);
   const changedNotes = bassRepair.changedNotes + (melodyRepair.accepted ? melodyRepair.changedNotes : 0);
 
+  const scoreSafe = after.score >= before.score;
   const protectedSafe = after.metrics.phraseAnchorAlignment + 1e-9 >= before.metrics.phraseAnchorAlignment;
-  const bassSafe = after.metrics.bassGrooveAlignment + 1e-9 >= before.metrics.bassGrooveAlignment;
+  const bassSafe = after.metrics.bassGrooveAlignment + 1e-9 >= before.metrics.bassGrooveAlignment
+    && after.metrics.bassGroovePrecision + 1e-9 >= before.metrics.bassGroovePrecision;
+  const foundationSafe = after.metrics.kickBassConnection + 1e-9 >= before.metrics.kickBassConnection;
+  const melodyGrooveSafe = after.metrics.melodyGrooveAlignment + 1e-9 >= before.metrics.melodyGrooveAlignment
+    && after.metrics.melodyGroovePrecision + 1e-9 >= before.metrics.melodyGroovePrecision;
   const melodySafe = after.metrics.melodySpaceScore + 1e-9 >= before.metrics.melodySpaceScore;
   const improved = after.score > before.score
-    || after.metrics.bassGrooveAlignment > before.metrics.bassGrooveAlignment + 1e-9
-    || after.metrics.melodyGrooveAlignment > before.metrics.melodyGrooveAlignment + 1e-9
+    || after.metrics.bassGroovePrecision > before.metrics.bassGroovePrecision + 1e-9
+    || after.metrics.melodyGroovePrecision > before.metrics.melodyGroovePrecision + 1e-9
     || after.metrics.melodySpaceScore > before.metrics.melodySpaceScore + 1e-9;
-  const accepted = changedNotes > 0 && improved && protectedSafe && bassSafe && melodySafe;
+  const accepted = changedNotes > 0
+    && improved
+    && scoreSafe
+    && protectedSafe
+    && bassSafe
+    && foundationSafe
+    && melodyGrooveSafe
+    && melodySafe;
 
   if (!accepted) {
     return Object.freeze({
@@ -279,6 +291,14 @@ export function refineCompositionPocketLock(sourceSong) {
         bassChangedNotes: 0,
         melodyChangedNotes: 0,
         reason: "no-safe-pocket-improvement",
+        safeguards: Object.freeze({
+          scoreSafe,
+          protectedSafe,
+          bassSafe,
+          foundationSafe,
+          melodyGrooveSafe,
+          melodySafe,
+        }),
       }),
     });
   }
