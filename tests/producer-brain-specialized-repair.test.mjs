@@ -119,8 +119,13 @@ test("checkpoint 6 precision arrangement arc improves tension without collateral
     energy: 0.12,
     complexity: 0.18,
   });
-  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
-    ?.find((attempt) => attempt.repairStrategyId === "arrangement-energy-arc");
+  const history = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory ?? [];
+  const entry = history.find((attempt) => attempt.repairStrategyId === "arrangement-energy-arc");
+  console.log("QFIX_ARC_DEBUG", JSON.stringify({
+    subscores: song.meta?.scoreDetails?.subscores ?? null,
+    criticRepair: song.meta?.scoreDetails?.criticRepair ?? null,
+    history,
+  }));
 
   assert.ok(entry, "verified seed should expose arrangement-energy-arc repair");
   assert.equal(entry.dimension, "tensionFollow");
