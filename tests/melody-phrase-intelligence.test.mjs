@@ -152,3 +152,49 @@ test("phrase placement diagnostic detects a whole phrase shifted off authored le
     JSON.stringify(shiftedReport),
   );
 });
+
+
+test("phrase conversation critic rewards a related answer and detects an unrelated answer", () => {
+  const statement = [
+    { start: 0.5, pitch: 60, duration: 0.25, velocity: 84 },
+    { start: 1.0, pitch: 64, duration: 0.25, velocity: 88 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
+  ];
+  const related = fixture([
+    ...statement,
+    { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
+    { start: 4.5, pitch: 71, duration: 0.25, velocity: 90 },
+    { start: 5.0, pitch: 60, duration: 0.5, velocity: 94 },
+  ]);
+  const unrelated = fixture([
+    ...statement,
+    { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
+    { start: 4.5, pitch: 65, duration: 0.25, velocity: 90 },
+    { start: 5.0, pitch: 60, duration: 0.5, velocity: 94 },
+  ]);
+
+  const relatedReport = evaluateMelodyPhraseIntelligence(related);
+  const unrelatedReport = evaluateMelodyPhraseIntelligence(unrelated);
+  const relatedConversation = relatedReport.weakestConversationSection.metrics.phraseConversation;
+  const unrelatedConversation = unrelatedReport.weakestConversationSection.metrics.phraseConversation;
+
+  assert.equal(relatedReport.weakestConversationSection.metrics.phraseConversationPairs, 1);
+  assert.ok(relatedConversation >= 0.72, JSON.stringify(relatedReport));
+  assert.ok(unrelatedConversation < 0.72, JSON.stringify(unrelatedReport));
+  assert.ok(relatedConversation > unrelatedConversation, JSON.stringify({
+    relatedConversation,
+    unrelatedConversation,
+  }));
+});
+
+test("sections without a real statement-answer pair stay neutral for phrase conversation", () => {
+  const report = evaluateMelodyPhraseIntelligence(fixture([
+    { start: 0.5, pitch: 60, duration: 0.25, velocity: 84 },
+    { start: 1.0, pitch: 64, duration: 0.25, velocity: 88 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
+    { start: 2.0, pitch: 65, duration: 0.25, velocity: 90 },
+  ]));
+  assert.equal(report.weakestConversationSection, null);
+  assert.equal(report.weakestSection.metrics.phraseConversationPairs, 0);
+  assert.equal(report.weakestSection.metrics.phraseConversation, 0.76);
+});
