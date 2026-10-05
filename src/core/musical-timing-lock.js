@@ -123,7 +123,10 @@ export function evaluateMusicalTimingLock(
       const start = finite(performed.start, -1);
       const duration = Math.max(0, finite(performed.duration, 0));
       const end = start + duration;
-      const authoredStart = finite(note?.start, start);
+      const authoredStart = finite(
+        note?.finalEnsembleRepairRole ? note?.start : note?.canonicalStartBeat,
+        finite(note?.start, start),
+      );
       checkedNotes += 1;
       report.checkedNotes += 1;
 
