@@ -237,13 +237,21 @@ function previousMelodySection(song, sectionId) {
 
 function sectionStoryPayoff(song, {
   sectionId,
+  relationship,
   sourceNotes,
   targetNotes,
   targetRange,
   motifCore,
 }) {
   const targetSection = targetRange?.section ?? null;
-  if (!isPayoffSection(targetSection) || targetNotes.length < 3 || sourceNotes.length < 3) {
+  // A contrast section is allowed to deliberately break recall grammar. 5H
+  // judges payoff only when the phrase-memory contract promises recall/return.
+  if (
+    !["recall", "return"].includes(String(relationship))
+    || !isPayoffSection(targetSection)
+    || targetNotes.length < 3
+    || sourceNotes.length < 3
+  ) {
     return {
       eligible: false,
       score: 1,
@@ -484,6 +492,7 @@ export function evaluateMelodySectionMemory(song) {
     const motifCore = motifCoreSimilarity(sourceNotes, targetNotes);
     const story = sectionStoryPayoff(song, {
       sectionId: memory.sectionId,
+      relationship: memory.relationship,
       sourceNotes,
       targetNotes,
       targetRange,
