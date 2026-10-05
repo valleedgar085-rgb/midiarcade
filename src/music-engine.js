@@ -4765,10 +4765,20 @@ function generateBass(
     const nextChord = harmony[eventIndex + 1];
     const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
     const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
+    const isFinalHarmonyWindow = chord.start + chord.duration >= totalBeats - 0.05;
+    const isOutroResolutionWindow = section?.name === "outro" && isFinalHarmonyWindow;
     for (let index = 0; index < offsets.length; index += 1) {
       // Keep a dependable statement/reply bass line without restoring the
       // unbounded all-pulse behavior that can overload mobile playback.
-      if (index >= guaranteedPulseCount && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
+      // The one exception is the final authored outro pulse: once Bass Phrase
+      // DNA writes a resolution attack, the renderer must realize it so the
+      // song actually lands instead of probabilistically dropping the ending.
+      const finalAuthoredResolution = isOutroResolutionWindow && index === offsets.length - 1;
+      if (
+        index >= guaranteedPulseCount
+        && !finalAuthoredResolution
+        && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))
+      ) continue;
       const absoluteStart = chord.start + offsets[index];
       const barOffset = round(mod(absoluteStart, barBeats), 4);
       const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
@@ -4847,6 +4857,7 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          ...(finalAuthoredResolution ? { bassPhraseDnaResolution: true } : {}),
           ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
         },
       );
