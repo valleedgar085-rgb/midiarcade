@@ -26,6 +26,17 @@ test("Android release gate keeps playback lifecycle recovery wired", () => {
   assert.match(player, /async recoverAudioContext[\s\S]*?requestGeneration !== this\.playRequestGeneration/);
   assert.match(player, /document\.removeEventListener\("visibilitychange", this\.visibilityHandler\)/);
   assert.match(player, /removeEventListener\?\.\("devicechange", this\.deviceChangeHandler\)/);
+  assert.match(player, /createPreviewWakeScheduler/);
+  assert.match(player, /workerUrl: new URL\("\.\/preview-scheduler-worker\.js", import\.meta\.url\)/);
+  assert.match(player, /startScheduler\(\)/);
+  assert.match(player, /stopScheduler\(\)/);
+  assert.doesNotMatch(player, /setInterval\(\(\) => this\.schedule\(\)/);
+  assert.match(player, /cancelLoopPreviewVoices\(\)/);
+  assert.match(player, /commitLoopBoundary\(/);
+  assert.match(player, /currentSongBeat\(\)/);
+  assert.match(player, /previewBeatAtAudioTime/);
+  assert.match(player, /previewAudioTimeForBeat/);
+  assert.doesNotMatch(player.match(/schedule\(\)\s*\{[\s\S]*?\n\s*voicePriority\(event\)/)?.[0] ?? "", /event\.time <= horizon/);
 });
 
 test("pause, seek, restart, and disposal preserve explicit playback ownership", () => {
@@ -33,12 +44,15 @@ test("pause, seek, restart, and disposal preserve explicit playback ownership", 
   const pause = player.match(/pause\(\)\s*\{[\s\S]*?\n\s*stop\(\)/)?.[0] ?? "";
   const seek = player.match(/seek\(position\)\s*\{[\s\S]*?\n\s*restart\(\)/)?.[0] ?? "";
   const dispose = player.match(/dispose\(\)\s*\{[\s\S]*?\n\s*\}/)?.[0] ?? "";
-  assert.match(pause, /this\.position = this\.offset \+ \(this\.context\.currentTime - this\.startedAt\)/);
+  assert.match(pause, /this\.position = this\.currentSongTime\(\)/);
   assert.match(pause, /this\.cancelPendingPlay\(\)/);
-  assert.match(seek, /const wasPlaying = this\.playing/);
-  assert.match(seek, /this\.pause\(\)/);
-  assert.match(seek, /this\.position = clamp\(position, 0, totalSeconds\(playbackSong\)\)/);
-  assert.match(seek, /if \(wasPlaying\) this\.play\(\)/);
+  assert.match(seek, /this\.stopScheduler\(\)/);
+  assert.match(seek, /this\.clearScheduledAudio\(\)/);
+  assert.match(seek, /this\.offset = target/);
+  assert.match(seek, /this\.startedAt = this\.context\.currentTime/);
+  assert.match(seek, /this\.schedule\(\)[\s\S]*?this\.startScheduler\(\)/);
+  assert.doesNotMatch(seek, /this\.pause\(\)/);
+  assert.doesNotMatch(seek, /this\.play\(\)/);
   assert.match(dispose, /this\.cancelPendingPlay\(\)/);
   assert.match(dispose, /this\.stopAllLiveNotes\(\)/);
 });

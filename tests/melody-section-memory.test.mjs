@@ -121,6 +121,18 @@ test("developed return keeps recognizable identity without cloning the source", 
   assert.ok(report.sections[0].metrics.cloneRisk < 0.92, JSON.stringify(report));
 });
 
+test("register-lifted developed return still counts as recognizable memory", () => {
+  const lifted = TRANSFORMED_RECALL.map((entry) => ({ ...entry, pitch: entry.pitch + 12 }));
+  const report = evaluateMelodySectionMemory(songWith(lifted, {
+    relationship: "return",
+    recallStrength: 0.72,
+  }));
+  assert.equal(report.status, "evaluated");
+  assert.equal(report.passed, true, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.relationshipFit >= 0.48, JSON.stringify(report));
+  assert.ok(report.sections[0].metrics.cloneRisk < 0.92, JSON.stringify(report));
+});
+
 test("unrelated return is rejected even when metadata points at the right source", () => {
   const unrelated = [
     note(8.25, 72, 0.25),

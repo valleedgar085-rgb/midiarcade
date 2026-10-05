@@ -73,11 +73,51 @@ function sectionForBeat(song, beat) {
   return sectionsOf(song).find((section) => beat >= sectionStart(section) - 1e-6 && beat < sectionEnd(section) - 1e-6) ?? null;
 }
 
+const POCKET_RELATIONSHIPS = Object.freeze({
+  hipHop: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25, 0.5]), maxReplyShare: 0.48 }),
+  trap: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25]), maxReplyShare: 0.42 }),
+  drill: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25]), maxReplyShare: 0.42 }),
+  pop: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.5]), maxReplyShare: 0.34 }),
+  house: Object.freeze({ lock: Object.freeze([]), reply: Object.freeze([0.5]), maxReplyShare: 1 }),
+  techno: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.5]), maxReplyShare: 0.55 }),
+  neoSoul: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25, 0.5]), maxReplyShare: 0.58 }),
+  rnbSoul: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25, 0.5]), maxReplyShare: 0.58 }),
+  reggaeton: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.5]), maxReplyShare: 0.48 }),
+  afrobeats: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25, 0.5]), maxReplyShare: 0.56 }),
+  rock: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([]), maxReplyShare: 0 }),
+  drumBass: Object.freeze({ lock: Object.freeze([0]), reply: Object.freeze([0.25, 0.5]), maxReplyShare: 0.48 }),
+});
+function grooveRelationship(genre) {
+  return POCKET_RELATIONSHIPS[String(genre ?? "")] ?? Object.freeze({
+    lock: Object.freeze([0]),
+    reply: Object.freeze([0.25, 0.5]),
+    maxReplyShare: 0.5,
+  });
+}
 function grooveOffsets(genre) {
-  if (genre === "house") return [0.5];
-  if (["trap", "drill"].includes(genre)) return [0, 0.25];
-  if (genre === "techno") return [0, 0.5];
-  return [0, 0.25, 0.5, 0.75];
+  const relationship = grooveRelationship(genre);
+  return [...new Set([...relationship.lock, ...relationship.reply])].sort((left, right) => left - right);
+}
+function classifyPocketTarget(beat, kicks, relationship, tolerance = 0.075) {
+  const lock = kicks.some((kick) => relationship.lock.some(
+    (offset) => Math.abs(beat - (noteStart(kick) + offset)) <= tolerance,
+  ));
+  if (lock) return "lock";
+  const reply = kicks.some((kick) => relationship.reply.some(
+    (offset) => Math.abs(beat - (noteStart(kick) + offset)) <= tolerance,
+  ));
+  return reply ? "reply" : "independent";
+}
+function pocketRelationshipStats(notes, kicks, relationship) {
+  const counts = { lock: 0, reply: 0, independent: 0 };
+  for (const note of notes) counts[classifyPocketTarget(noteStart(note), kicks, relationship)] += 1;
+  const total = Math.max(1, notes.length);
+  return Object.freeze({
+    ...counts,
+    lockRatio: round(counts.lock / total),
+    replyRatio: round(counts.reply / total),
+    independentRatio: round(counts.independent / total),
+  });
 }
 
 function kickNotes(song) {
@@ -113,10 +153,13 @@ function createPocketCandidate(sourceSong, profile) {
   const kicks = kickNotes(song);
   if (!bass.length || !kicks.length) return null;
 
-  const offsets = grooveOffsets(String(song?.genre ?? song?.meta?.genre ?? "pop"));
+  const genre = String(song?.genre ?? song?.meta?.genre ?? "pop");
+  const relationship = grooveRelationship(genre);
+  const offsets = grooveOffsets(genre);
   const targets = candidateTargets(song, kicks, offsets);
   if (!targets.length) return null;
   const beforeLock = onsetMatchRatio(bass, targets);
+  const beforeRelationship = pocketRelationshipStats(bass, kicks, relationship);
   const bars = Math.max(1, Math.ceil(finite(song?.bars, finite(song?.meta?.bars, finite(song?.meta?.totalBeats, 4) / Math.max(1, finite(song?.meta?.beatsPerBar, 4))))));
   const maxChanges = Math.min(32, Math.max(1, Math.ceil(bars * profile.changesPerBar)));
 
@@ -149,7 +192,10 @@ function createPocketCandidate(sourceSong, profile) {
 
   bass.sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right));
   const afterLock = onsetMatchRatio(bass, targets);
+  const afterRelationship = pocketRelationshipStats(bass, kicks, relationship);
   if (afterLock <= beforeLock + 1e-9) return null;
+  const replyCeiling = relationship.maxReplyShare + 0.08;
+  if (afterRelationship.replyRatio > replyCeiling + 1e-9) return null;
 
   song.outputQualityEvolution = {
     ...(song.outputQualityEvolution ?? {}),
@@ -160,6 +206,11 @@ function createPocketCandidate(sourceSong, profile) {
       beforeLock: round(beforeLock),
       afterLock: round(afterLock),
       lockDelta: round(afterLock - beforeLock),
+      relationship: {
+        before: beforeRelationship,
+        after: afterRelationship,
+        maxReplyShare: relationship.maxReplyShare,
+      },
     },
   };
 
@@ -171,6 +222,9 @@ function createPocketCandidate(sourceSong, profile) {
     beforeLock,
     afterLock,
     lockDelta: afterLock - beforeLock,
+    relationshipBefore: beforeRelationship,
+    relationshipAfter: afterRelationship,
+    maxReplyShare: relationship.maxReplyShare,
   });
 }
 

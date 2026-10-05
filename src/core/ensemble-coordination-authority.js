@@ -124,6 +124,27 @@ function setDistance(left, right) {
   return clamp(1 - shared / union.size);
 }
 
+function roleTransitionMetrics(currentRoles, previousRoles = null) {
+  if (!previousRoles) {
+    return { entranceExit: 1, transitionContinuity: 1 };
+  }
+  const union = new Set([...previousRoles, ...currentRoles]);
+  if (!union.size) {
+    return { entranceExit: 1, transitionContinuity: 1 };
+  }
+  const shared = [...union].filter(
+    (role) => previousRoles.includes(role) && currentRoles.includes(role),
+  ).length;
+  const entrants = currentRoles.filter((role) => !previousRoles.includes(role)).length;
+  const exits = previousRoles.filter((role) => !currentRoles.includes(role)).length;
+  const roleChanges = entrants + exits;
+
+  return {
+    entranceExit: clamp(1 - Math.max(0, roleChanges - 3) / Math.max(1, union.size - 3)),
+    transitionContinuity: clamp(shared / union.size),
+  };
+}
+
 function uniqueOnsets(notes) {
   const values = [];
   for (const note of notes) {
@@ -231,6 +252,8 @@ export function evaluateEnsembleCoordinationAuthority(song) {
         harmonicSupport: 0.55,
         roleHierarchy: 0.55,
         cadenceTeam: 0.55,
+        entranceExit: 0.55,
+        transitionContinuity: 0.55,
         collisionControl: 0.55,
       },
       sections: [],
@@ -411,6 +434,14 @@ export function evaluateEnsembleCoordinationAuthority(song) {
       changeFromPrevious: index ? round(setDistance(activeRoles, previousRoles)) : 0,
     };
   });
+  for (let index = 0; index < sectionReports.length; index += 1) {
+    const currentRoles = roleEvolution[index]?.activeRoles ?? [];
+    const previousRoles = index > 0 ? roleEvolution[index - 1]?.activeRoles ?? [] : null;
+    const transition = roleTransitionMetrics(currentRoles, previousRoles);
+    sectionReports[index].entranceExit = round(transition.entranceExit);
+    sectionReports[index].transitionContinuity = round(transition.transitionContinuity);
+  }
+
   const roleChangeValues = roleEvolution.slice(1).map((entry) => entry.changeFromPrevious);
   const sectionRoleEvolution = roleChangeValues.length
     ? clamp(average(roleChangeValues) / 0.28)
@@ -427,6 +458,8 @@ export function evaluateEnsembleCoordinationAuthority(song) {
     harmonicSupport: round(average(sectionReports.map((entry) => entry.harmonicSupport), 0.55)),
     roleHierarchy: round(average(sectionReports.map((entry) => entry.roleHierarchy), 0.55)),
     cadenceTeam: round(average(sectionReports.map((entry) => entry.cadenceTeam), 0.55)),
+    entranceExit: round(average(sectionReports.map((entry) => entry.entranceExit), 0.55)),
+    transitionContinuity: round(average(sectionReports.map((entry) => entry.transitionContinuity), 0.55)),
     collisionControl: round(average(sectionReports.map((entry) => entry.collisionControl), 0.55)),
     leadPhraseOverlap: round(average(sectionReports.map((entry) => entry.leadPhraseOverlap), 0)),
     phraseSeparation: round(average(sectionReports.map((entry) => entry.phraseSeparation), 0.8)),

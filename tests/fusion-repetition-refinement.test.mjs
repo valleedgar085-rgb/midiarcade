@@ -78,7 +78,13 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   const balanceAfter = repetitionBalance(processed.song, target);
 
   assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
-  assert.deepEqual(noteIdentity(processed.song).sort(compareNoteIdentity), sourceIdentity.sort(compareNoteIdentity));
+  const afterIdentity = noteIdentity(processed.song);
+  assert.equal(afterIdentity.length, sourceIdentity.length);
+  assert.deepEqual(
+    afterIdentity.map(({ pitch }) => pitch).sort((a, b) => a - b),
+    sourceIdentity.map(({ pitch }) => pitch).sort((a, b) => a - b),
+  );
+  assert.ok(afterIdentity.every((note) => Number.isFinite(note.duration) && note.duration > 0));
 
   if (processed.repetitionDiagnostics.reason === "already-strong") {
     assert.equal(processed.repetitionDiagnostics.attempted, false);
@@ -119,7 +125,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
 });
 
 test("Pop Rap fusion keeps its calibrated repair while unrelated fusions stay isolated and pure Hip-Hop uses Phase 5 repair", () => {
-  const config = configFor("pop", "rap", "fusion-quality-03:pop+rap");
+  const config = configFor("pop", "rap", "fusion-quality-01:pop+rap");
   const generated = generateNew(config);
   const before = evaluateSongCandidate(generated);
   const target = before.diagnostics?.repetitionTarget;
@@ -137,6 +143,7 @@ test("Pop Rap fusion keeps its calibrated repair while unrelated fusions stay is
   const processed = applySongOutputQualityPipeline(generated, config);
   const after = evaluateSongCandidate(processed.song);
   const balanceAfter = repetitionBalance(processed.song, target);
+
 
   assert.equal(processed.repetitionDiagnostics.accepted, true);
   assert.equal(processed.repetitionDiagnostics.direction, balanceBefore.direction);

@@ -4,13 +4,21 @@ import test from "node:test";
 
 const appSource = await readFile(new URL("../src/app.js", import.meta.url), "utf8");
 
-test("PreviewPlayer loop restart preserves the master path instead of re-entering full play", () => {
-  assert.match(appSource, /rampAudioParamValue/);
-  assert.match(appSource, /restartLoopPlayback\(\)\s*\{[\s\S]*?clearScheduledAudio\(\)[\s\S]*?resetDynamicBuses\(\)[\s\S]*?this\.offset\s*=\s*0[\s\S]*?this\.schedule\(\)/);
+test("PreviewPlayer pre-schedules the next loop head without tearing down audio", () => {
+  const schedule = appSource.match(/schedule\(\)\s*\{[\s\S]*?\n\s*voicePriority\(event\)/)?.[0] ?? "";
+  const boundary = appSource.match(/commitLoopBoundary\([\s\S]*?\n\s*startScheduler\(\)/)?.[0] ?? "";
+
+  assert.match(schedule, /loopHeadHorizonBeats/);
+  assert.match(schedule, /totalBeats \+ previewEventBeat\(event, bpm\)/);
+  assert.match(schedule, /__loopPreview: true/);
+  assert.match(boundary, /wrappedLoopBeat/);
+  assert.match(boundary, /promoteLoopPreviewVoices\(\)/);
+  assert.doesNotMatch(boundary, /clearScheduledAudio\(\)/);
+  assert.doesNotMatch(boundary, /clearTimers\(\)/);
 
   const updateFrame = appSource.match(/updateFrame\(\)\s*\{[\s\S]*?\n\s*clearTimers\(\)/)?.[0] ?? "";
-  assert.match(updateFrame, /if\s*\(state\.loop\)\s*\{[\s\S]*?this\.restartLoopPlayback\(\)/);
-  assert.doesNotMatch(updateFrame, /if\s*\(state\.loop\)\s*\{[\s\S]*?this\.play\(\)/);
+  assert.match(updateFrame, /if\s*\(state\.loop\)[\s\S]*?this\.commitLoopBoundary\(/);
+  assert.doesNotMatch(updateFrame, /restartLoopPlayback/);
 });
 
 test("PreviewPlayer master transitions use held ramps for play and pause", () => {

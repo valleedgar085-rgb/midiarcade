@@ -44,10 +44,14 @@ const READ_ONLY_QUALITY_STAGES = Object.freeze(new Set([
 
 const STRICT_MUTATION_QUALITY_STAGES = Object.freeze(new Set([
   "melodySectionDevelopmentRefinement",
+  "finalEnsembleRefinement",
+  "musicalTimingRepair",
 ]));
 
 const QUALITY_STAGE_MUTATIONS = Object.freeze({
   melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony"]),
+  finalEnsembleRefinement: Object.freeze(["topology", "timing", "duration"]),
+  musicalTimingRepair: Object.freeze(["timing"]),
 });
 
 const QUALITY_STAGE_OWNERS = Object.freeze({
@@ -65,6 +69,8 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   melodySectionMemoryAudit: [],
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
+  finalEnsembleRefinement: ["ensemble"],
+  musicalTimingRepair: ["groove", "ensemble"],
   genreIdentityRefinement: ["groove", "ensemble"],
   transitionFxRefinement: [],
 });
@@ -76,6 +82,125 @@ const OWNER_MUTATIONS = Object.freeze({
   phrase: ["topology", "timing", "duration", "harmony"],
   ensemble: ["topology", "timing"],
 });
+
+const ENSEMBLE_RELATIONSHIP_MUTATIONS = Object.freeze({
+  "kick-bass": Object.freeze(["timing", "duration"]),
+  "bass-harmony": Object.freeze(["timing", "topology"]),
+  "chord-melody": Object.freeze(["timing", "topology"]),
+  "melody-counterline": Object.freeze(["timing", "topology"]),
+  "density-balance": Object.freeze(["topology"]),
+  "entrance-exit": Object.freeze(["topology", "timing"]),
+  "transition-continuity": Object.freeze(["topology", "timing"]),
+  "payoff-lift": Object.freeze(["topology", "timing"]),
+});
+
+const ENSEMBLE_REPAIR_ACTIONS = Object.freeze({
+  "kick-bass": "relock-foundation-without-cloning",
+  "bass-harmony": "make-support-yield-to-foundation",
+  "chord-melody": "clear-foreground-register-and-onsets",
+  "melody-counterline": "restore-call-response-turn-taking",
+  "density-balance": "subtract-support-before-adding-notes",
+  "entrance-exit": "stagger-role-entrances-and-exits",
+  "transition-continuity": "preserve-one-or-more-carrying-roles",
+  "payoff-lift": "increase-contrast-before-note-count",
+});
+
+function createEnsembleRepairDirective(sectionId, relationship, extra = {}) {
+  const normalized = String(relationship ?? "");
+  return Object.freeze({
+    sectionId: sectionId ?? null,
+    relationship: normalized || null,
+    allowedMutations: Object.freeze([
+      ...(ENSEMBLE_RELATIONSHIP_MUTATIONS[normalized] ?? OWNER_MUTATIONS.ensemble),
+    ]),
+    preferredAction: ENSEMBLE_REPAIR_ACTIONS[normalized] ?? "target-smallest-ensemble-conflict",
+    policy: "bounded-subtractive-first",
+    ...extra,
+  });
+}
+
+/**
+ * Build a bounded repair plan from the committed final ensemble audit.
+ *
+ * This function does not mutate notes and never authorizes a full-song
+ * regeneration. It returns at most two targeted directives by default.
+ */
+export function resolveFinalEnsembleRepairPlan(report = null, { maxDirectives = 2 } = {}) {
+  const limit = Math.max(1, Math.min(4, Number(maxDirectives) || 2));
+  const candidates = [];
+
+  for (const failure of report?.sectionFailures ?? []) {
+    for (const relationship of failure?.failures ?? []) {
+      candidates.push(createEnsembleRepairDirective(failure?.sectionId, relationship, {
+        source: "micro-ensemble-pass",
+      }));
+    }
+  }
+
+  for (const pair of report?.macroDiagnostics?.payoffPairs ?? []) {
+    if (pair?.healthy === false) {
+      candidates.push(createEnsembleRepairDirective(pair?.toSectionId, "payoff-lift", {
+        source: "macro-song-pass",
+        fromSectionId: pair?.fromSectionId ?? null,
+      }));
+    }
+  }
+
+  for (const transition of report?.macroDiagnostics?.transitions ?? []) {
+    if (transition?.hardReset === true) {
+      candidates.push(createEnsembleRepairDirective(transition?.toSectionId, "transition-continuity", {
+        source: "macro-song-pass",
+        fromSectionId: transition?.fromSectionId ?? null,
+      }));
+    } else if (transition?.staged === false) {
+      candidates.push(createEnsembleRepairDirective(transition?.toSectionId, "entrance-exit", {
+        source: "macro-song-pass",
+        fromSectionId: transition?.fromSectionId ?? null,
+      }));
+    }
+  }
+
+  const seen = new Set();
+  const directives = [];
+  for (const candidate of candidates) {
+    const key = [candidate.sectionId, candidate.relationship, candidate.fromSectionId ?? ""].join(":");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    directives.push(candidate);
+    if (directives.length >= limit) break;
+  }
+
+  return Object.freeze({
+    version: 2,
+    authority: "final-ensemble-repair-plan-v2",
+    available: directives.length > 0,
+    owner: directives.length ? "ensemble" : null,
+    specialist: directives.length ? SPECIALISTS.ensemble : null,
+    directives: Object.freeze(directives),
+    allowsFullRegeneration: false,
+    allowsSurgicalPostprocess: directives.length > 0,
+    policy: "bounded-subtractive-first",
+    reason: directives.length
+      ? "committed-final-ensemble-needs-targeted-repair"
+      : "committed-final-ensemble-coherent",
+  });
+}
+
+export function resolveEnsembleCoherenceRepairHint(report = null) {
+  const plan = resolveFinalEnsembleRepairPlan(report, { maxDirectives: 1 });
+  const first = plan.directives[0] ?? null;
+  return Object.freeze({
+    version: 2,
+    available: Boolean(first),
+    owner: first ? "ensemble" : null,
+    specialist: first ? SPECIALISTS.ensemble : null,
+    sectionId: first?.sectionId ?? null,
+    relationship: first?.relationship ?? null,
+    allowedMutations: first?.allowedMutations ?? Object.freeze([]),
+    preferredAction: first?.preferredAction ?? null,
+    reason: first ? plan.reason : "no-section-coherence-failure",
+  });
+}
 
 export function resolveWeaknessAuthority(diagnosis = {}) {
   const dimension = String(diagnosis?.weakestDimension ?? diagnosis?.focusDimension ?? "");

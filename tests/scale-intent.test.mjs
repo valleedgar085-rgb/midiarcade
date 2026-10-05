@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { resolveAutoScale } from "../src/core/scale-intent.js";
+import {
+  AUTO_SCALE_CONTEXT_BLEND,
+  resolveAutoScale,
+} from "../src/core/scale-intent.js";
 import { normalizeConfig } from "../src/music-engine.js";
 
 test("Auto scale is deterministic and responds to musical intent", () => {
@@ -20,7 +23,6 @@ test("Auto scale is deterministic and responds to musical intent", () => {
     energy: 0.86, complexity: 0.18, surprise: 0.08, mood: "intense",
   }), bright);
 });
-
 
 test("Auto scale rotates fairly across equally valid genre scales without Mixolydian dominance", () => {
   const pools = [
@@ -68,6 +70,64 @@ test("Auto scale probability is independent of preferred-scale list order", () =
       resolveAutoScale({ ...input, candidates: [...candidates].reverse() }),
     );
   }
+});
+
+test("Harmony context receives slight majority authority over intent", () => {
+  assert.equal(
+    Number((AUTO_SCALE_CONTEXT_BLEND.intent + AUTO_SCALE_CONTEXT_BLEND.harmony).toFixed(10)),
+    1,
+  );
+  assert.ok(AUTO_SCALE_CONTEXT_BLEND.harmony > AUTO_SCALE_CONTEXT_BLEND.intent);
+});
+
+test("Harmony context can override a conflicting intent-only winner", () => {
+  const base = {
+    candidates: ["major", "dorian"],
+    seed: "scale-intent-harmony-override",
+    genre: "jazz",
+    chordPath: "jazz",
+    energy: 0.55,
+    complexity: 0.5,
+    surprise: 0.3,
+    mood: "neutral",
+  };
+
+  assert.equal(resolveAutoScale(base), "dorian");
+
+  const contextual = resolveAutoScale({
+    ...base,
+    harmonyContext: {
+      keyPc: 0,
+      chord: { rootPc: 0, tones: [0, 4, 7, 11] },
+    },
+  });
+  assert.equal(contextual, "major");
+});
+
+test("Harmony-aware Auto remains deterministic and candidate-order independent", () => {
+  const candidates = ["major", "dorian", "mixolydian", "minor"];
+  const input = {
+    seed: "scale-intent-context-order",
+    genre: "rock",
+    chordPath: "rock",
+    energy: 0.7,
+    complexity: 0.58,
+    surprise: 0.28,
+    mood: "neutral",
+    harmonyContext: {
+      keyPc: 0,
+      previousChord: { rootPc: 5, tones: [5, 9, 0] },
+      chord: { rootPc: 0, tones: [0, 4, 7, 10] },
+      nextChord: { rootPc: 5, tones: [5, 9, 0, 3] },
+      melodyPitchClasses: [0, 4, 7, 10],
+    },
+  };
+
+  const first = resolveAutoScale({ ...input, candidates });
+  const second = resolveAutoScale({ ...input, candidates: [...candidates].reverse() });
+  const third = resolveAutoScale({ ...input, candidates });
+  assert.equal(first, second);
+  assert.equal(first, third);
 });
 
 test("Explicit scale remains authoritative while Auto uses the intent resolver", () => {

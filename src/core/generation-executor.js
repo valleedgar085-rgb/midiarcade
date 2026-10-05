@@ -1,11 +1,18 @@
 import { createGenerationFlightRecorder } from "./generation-flight-recorder.js";
-import { evaluateSongReleaseGate, refreshCommittedGenerationDiagnostics } from "../music-engine.js";
+import {
+  evaluateSongCandidate,
+  evaluateSongReleaseGate,
+  refreshCommittedGenerationDiagnostics,
+} from "../music-engine.js";
 import { applyResultOutputQualityPipeline } from "./output-quality-pipeline-register.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
+import { evaluateCrossAuthorityCoherence } from "./cross-authority-coherence.js";
+import { auditStageMutationAuthority } from "./mutation-authority.js";
 import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
   decideGenerationRepairAuthority,
+  resolveFinalEnsembleRepairPlan,
 } from "./generation-repair-router.js";
 import {
   createSelfCorrectionPayload,
@@ -46,6 +53,60 @@ export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
   };
 }
 
+export function withCommittedFinalEnsembleDiagnostics(result, report, repairPlan) {
+  // Like the melody audit, this observes the exact committed song. It never
+  // changes notes and preserves legacy results that do not publish diagnostics.
+  if (
+    !result
+    || typeof result !== "object"
+    || !report
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      finalEnsembleAudit: report,
+      finalEnsembleRepairPlan: repairPlan ?? null,
+    },
+  };
+}
+
+export function withFinalEnsembleRefinementDiagnostics(result, diagnostics) {
+  if (
+    !result
+    || typeof result !== "object"
+    || !diagnostics
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      finalEnsembleRefinement: diagnostics,
+    },
+  };
+}
+
+export function withMusicalTimingRepairDiagnostics(result, diagnostics) {
+  if (
+    !result
+    || typeof result !== "object"
+    || !diagnostics
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      musicalTimingRepair: diagnostics,
+    },
+  };
+}
+
 function committedAuthorityRegression(beforeSong, afterSong) {
   if (!beforeSong || !afterSong) return Object.freeze({ passed: false, reasons: Object.freeze(["missing-song"]) });
   const reasons = [];
@@ -61,6 +122,13 @@ function committedAuthorityRegression(beforeSong, afterSong) {
   }
   if (Number(afterGroove.protectedSpaceViolations ?? 0) > Number(beforeGroove.protectedSpaceViolations ?? 0)) {
     reasons.push("groove-negative-space-regression");
+  }
+  const beforeTiming = beforeSong.committedMusicalTimingLock ?? {};
+  const afterTiming = afterSong.committedMusicalTimingLock ?? {};
+  for (const metric of ["outOfBounds", "grooveTimingViolations", "performedSectionCrossings", "severePerformanceDrift"]) {
+    if (Number(afterTiming?.metrics?.[metric] ?? 0) > Number(beforeTiming?.metrics?.[metric] ?? 0)) {
+      reasons.push(`musical-timing-regression:${metric}`);
+    }
   }
   if (beforeSong.producerIntentReport?.status === "complete" && afterSong.producerIntentReport?.status !== "complete") {
     reasons.push("producer-intent-regression");
@@ -445,6 +513,151 @@ export function createGenerationExecutor({
         }));
       }
 
+      let finalEnsembleRefinement = null;
+      if (selectedResult?.song) {
+        const beforeFinalEnsembleSong = selectedResult.song;
+        const beforeFinalEnsembleAudit = evaluateCrossAuthorityCoherence(beforeFinalEnsembleSong);
+        const beforeFinalEnsemblePlan = resolveFinalEnsembleRepairPlan(
+          beforeFinalEnsembleAudit,
+          { maxDirectives: 2 },
+        );
+        const { applyFinalEnsembleRefinement } = await import("./final-ensemble-refinement.js");
+        const attemptedFinalEnsemble = applyFinalEnsembleRefinement(
+          beforeFinalEnsembleSong,
+          {
+            evaluateCandidate: evaluateSongCandidate,
+            evaluateReleaseGate: evaluateSongReleaseGate,
+            report: beforeFinalEnsembleAudit,
+            plan: beforeFinalEnsemblePlan,
+          },
+        );
+        finalEnsembleRefinement = attemptedFinalEnsemble.diagnostics;
+
+        if (
+          attemptedFinalEnsemble.song
+          && attemptedFinalEnsemble.song !== beforeFinalEnsembleSong
+          && attemptedFinalEnsemble.diagnostics?.accepted === true
+        ) {
+          if (supportsCommittedAuthorityRefresh(beforeFinalEnsembleSong)) {
+            const refreshedBefore = refreshCommittedGenerationDiagnostics(
+              beforeFinalEnsembleSong,
+              qualityConfig,
+            );
+            const refreshedCandidate = refreshCommittedGenerationDiagnostics(
+              attemptedFinalEnsemble.song,
+              qualityConfig,
+            );
+            const authorityRegression = committedAuthorityRegression(
+              refreshedBefore,
+              refreshedCandidate,
+            );
+            const committedRelease = evaluateSongReleaseGate(refreshedCandidate);
+            const committedAccepted = authorityRegression.passed && committedRelease.passed;
+            finalEnsembleRefinement = Object.freeze({
+              ...attemptedFinalEnsemble.diagnostics,
+              accepted: committedAccepted,
+              changed: committedAccepted,
+              committed: committedAccepted,
+              reason: committedAccepted
+                ? "committed-final-ensemble-win"
+                : !authorityRegression.passed
+                  ? "committed-authority-regression"
+                  : "committed-release-gate-failed",
+              authorityRegression,
+              releasePassed: committedRelease.passed,
+              releaseFailures: Object.freeze([...(committedRelease.failures ?? [])]),
+            });
+            if (committedAccepted) {
+              selectedResult = {
+                ...selectedResult,
+                song: refreshedCandidate,
+              };
+            }
+          } else {
+            selectedResult = {
+              ...selectedResult,
+              song: attemptedFinalEnsemble.song,
+            };
+          }
+        }
+        selectedResult = withFinalEnsembleRefinementDiagnostics(
+          selectedResult,
+          finalEnsembleRefinement,
+        );
+      }
+
+      let musicalTimingRepair = null;
+      if (selectedResult?.song) {
+        const beforeTimingRepairSong = selectedResult.song;
+        const { applyMusicalTimingRepair } = await import("./musical-timing-repair.js");
+        const attemptedTimingRepair = applyMusicalTimingRepair(beforeTimingRepairSong);
+        musicalTimingRepair = attemptedTimingRepair.diagnostics;
+
+        if (
+          attemptedTimingRepair.song
+          && attemptedTimingRepair.song !== beforeTimingRepairSong
+          && attemptedTimingRepair.diagnostics?.accepted === true
+        ) {
+          const mutationAuthority = auditStageMutationAuthority(
+            beforeTimingRepairSong,
+            attemptedTimingRepair.song,
+            "musicalTimingRepair",
+          );
+          if (supportsCommittedAuthorityRefresh(beforeTimingRepairSong)) {
+            const refreshedBefore = refreshCommittedGenerationDiagnostics(
+              beforeTimingRepairSong,
+              qualityConfig,
+            );
+            const refreshedCandidate = refreshCommittedGenerationDiagnostics(
+              attemptedTimingRepair.song,
+              qualityConfig,
+            );
+            const authorityRegression = committedAuthorityRegression(
+              refreshedBefore,
+              refreshedCandidate,
+            );
+            const committedRelease = evaluateSongReleaseGate(refreshedCandidate);
+            const committedAccepted = Boolean(
+              mutationAuthority.passed
+              && authorityRegression.passed
+              && committedRelease.passed
+            );
+            musicalTimingRepair = Object.freeze({
+              ...attemptedTimingRepair.diagnostics,
+              accepted: committedAccepted,
+              changed: committedAccepted,
+              committed: committedAccepted,
+              reason: committedAccepted
+                ? "committed-musical-timing-win"
+                : !mutationAuthority.passed
+                  ? "mutation-authority-violation"
+                  : !authorityRegression.passed
+                    ? "committed-authority-regression"
+                    : "committed-release-gate-failed",
+              mutationAuthority,
+              authorityRegression,
+              releasePassed: committedRelease.passed,
+              releaseFailures: Object.freeze([...(committedRelease.failures ?? [])]),
+            });
+            if (committedAccepted) {
+              selectedResult = {
+                ...selectedResult,
+                song: refreshedCandidate,
+              };
+            }
+          } else if (mutationAuthority.passed) {
+            selectedResult = {
+              ...selectedResult,
+              song: attemptedTimingRepair.song,
+            };
+          }
+        }
+        selectedResult = withMusicalTimingRepairDiagnostics(
+          selectedResult,
+          musicalTimingRepair,
+        );
+      }
+
       const committedMelodySectionMemory = selectedResult?.song
         ? evaluateMelodySectionMemory(selectedResult.song)
         : null;
@@ -452,12 +665,28 @@ export function createGenerationExecutor({
         selectedResult,
         committedMelodySectionMemory,
       );
+
+      const committedFinalEnsembleAudit = selectedResult?.song
+        ? evaluateCrossAuthorityCoherence(selectedResult.song)
+        : null;
+      const finalEnsembleRepairPlan = resolveFinalEnsembleRepairPlan(
+        committedFinalEnsembleAudit,
+        { maxDirectives: 2 },
+      );
+      selectedResult = withCommittedFinalEnsembleDiagnostics(
+        selectedResult,
+        committedFinalEnsembleAudit,
+        finalEnsembleRepairPlan,
+      );
+
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
       mark("finalize", {
         repairAuthority,
         committedQuality,
         resolvedGenerationIntent: config?.resolvedGenerationIntent ?? null,
         performancePromotion,
+        finalEnsembleRefinement,
+        musicalTimingRepair,
         arrangementEvolution: stageDiagnostics.arrangement ?? acceptedDiagnostics.arrangement ?? null,
         returnDevelopment: stageDiagnostics.returnDevelopment ?? acceptedDiagnostics.returnDevelopment ?? null,
         densityRefinement: stageDiagnostics.densityRefinement ?? acceptedDiagnostics.densityRefinement ?? null,
@@ -469,6 +698,8 @@ export function createGenerationExecutor({
         melodySectionMemoryAudit: committedMelodySectionMemory ?? stageDiagnostics.melodySectionMemoryAudit ?? null,
         bassContinuityRefinement: stageDiagnostics.bassContinuityRefinement ?? acceptedDiagnostics.bassContinuityRefinement ?? null,
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
+        finalEnsembleAudit: committedFinalEnsembleAudit ?? acceptedDiagnostics.finalEnsembleAudit ?? null,
+        finalEnsembleRepairPlan,
       });
 
       const shouldPersist = typeof persistGeneration === "function"
