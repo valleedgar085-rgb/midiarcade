@@ -585,8 +585,9 @@ export function evaluateMelodySectionMemory(song) {
           + contrastEvidence * 0.18
           + (1 - cloneRisk) * 0.16
           + metadataAccuracy * 0.08
-        : relationshipFit * 0.58
-          + familiarityFit * 0.22
+        : relationshipFit * 0.48
+          + familiarityFit * 0.16
+          + hookSignature * 0.16
           + (1 - cloneRisk) * 0.12
           + metadataAccuracy * 0.08
     ));
