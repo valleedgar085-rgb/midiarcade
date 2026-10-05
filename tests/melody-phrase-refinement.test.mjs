@@ -329,3 +329,37 @@ test("high overall melody quality does not skip a weak statement-answer relation
   assert.equal(result.diagnostics.id, "phrase-conversation-development");
   assert.ok(result.diagnostics.conversationDelta >= 0.08, JSON.stringify(result.diagnostics));
 });
+
+
+test("melodic arc payoff repair raises only a bounded existing payoff note", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes = [
+    { start: 0.5, pitch: 72, duration: 0.5, velocity: 98 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 90 },
+    { start: 2.5, pitch: 65, duration: 0.25, velocity: 86 },
+    { start: 3.5, pitch: 64, duration: 0.25, velocity: 84 },
+    { start: 4.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 5.5, pitch: 65, duration: 0.25, velocity: 84 },
+    { start: 6.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 7.5, pitch: 62, duration: 0.75, velocity: 80, resolutionRole: "section-answer" },
+  ];
+  const before = structuredClone(song);
+  const candidates = createMelodyPhraseCandidates(song);
+  const arc = candidates.find((candidate) => candidate.id === "melodic-arc-payoff");
+  assert.ok(arc, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id, arcDelta: candidate.arcDelta, phraseScoreDelta: candidate.phraseScoreDelta,
+  }))));
+  assert.ok(arc.arcDelta >= 0.04, JSON.stringify(arc));
+  assert.ok(arc.changedNotes <= 2);
+  const beforeNotes = before.tracks.find((track) => track.id === "melody").notes;
+  const afterNotes = arc.song.tracks.find((track) => track.id === "melody").notes;
+  assert.equal(afterNotes.length, beforeNotes.length);
+  assert.deepEqual(afterNotes.map((note) => note.start), beforeNotes.map((note) => note.start));
+  assert.deepEqual(afterNotes.map((note) => note.duration), beforeNotes.map((note) => note.duration));
+  assert.deepEqual(afterNotes.map((note) => note.velocity), beforeNotes.map((note) => note.velocity));
+  assert.equal(afterNotes.at(-1).pitch, beforeNotes.at(-1).pitch);
+  assert.ok(afterNotes.some((note, index) => note.pitch !== beforeNotes[index].pitch));
+  assert.deepEqual(arc.song.tracks.find((track) => track.id === "drums"), before.tracks.find((track) => track.id === "drums"));
+  assert.deepEqual(arc.song.tracks.find((track) => track.id === "bass"), before.tracks.find((track) => track.id === "bass"));
+});
