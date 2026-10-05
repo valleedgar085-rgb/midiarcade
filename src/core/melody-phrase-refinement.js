@@ -181,10 +181,11 @@ function phrasePlacementCandidate(song, sectionId) {
       ) continue;
 
       const shiftedStarts = group.map(({ note }) => finite(note?.start) + shift);
+      const originalEnds = group.map(({ note }) => noteEnd(note));
       const shiftedEnds = group.map(({ note }, index) => shiftedStarts[index] + Math.max(0.05, finite(note?.duration, 0.25)));
       if (
         shiftedStarts.some((beat) => beat < range.start - 1e-6 || beat >= range.end - 0.02)
-        || shiftedEnds.some((beat) => beat > range.end + 1e-6)
+        || shiftedEnds.some((beat, index) => beat > Math.max(range.end, originalEnds[index]) + 1e-6)
       ) continue;
 
       const groupIndices = new Set(group.map(({ index }) => index));
@@ -347,7 +348,10 @@ export function createMelodyPhraseCandidates(song, {
   maxCandidates = MAX_MELODY_PHRASE_CANDIDATES,
 } = {}) {
   const before = evaluateMelodyPhraseIntelligence(song);
-  const sectionId = before?.weakestSection?.sectionId;
+  const placementSection = before?.weakestPlacementSection;
+  const sectionId = finite(placementSection?.metrics?.phrasePlacement, 1) < 0.76
+    ? placementSection?.sectionId
+    : before?.weakestSection?.sectionId;
   if (!sectionId) return [];
   const placement = phrasePlacementCandidate(song, sectionId);
   const raw = placement
