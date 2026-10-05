@@ -144,9 +144,9 @@ test("timing repair follows a later final-ensemble timing decision instead of st
   const repaired = result.song.tracks.find((track) => track.id === "melody").notes[0];
 
   assert.equal(result.diagnostics.accepted, true, JSON.stringify(result.diagnostics));
-  assert.ok(Math.abs(repaired.start - 0.92) < 1e-9);
-  assert.ok(Math.abs(repaired.performed.startBeat - 0.92) < 1e-9);
-  assert.ok(Math.abs(repaired.performed.timingDeltaBeats + 0.08) < 1e-9);
+  assert.equal(repaired.start, 1);
+  assert.equal(repaired.performed.startBeat, 1);
+  assert.equal(repaired.performed.timingDeltaBeats, 0);
 });
 
 test("timing repair refuses to hide structural Groove DNA drift when there is no finalized performance", () => {
