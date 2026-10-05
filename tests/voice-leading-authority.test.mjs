@@ -82,3 +82,15 @@ test("without a previous voicing, register center selects the starting position"
   const chosen = selectVoiceLeadingCandidate(candidates, [], { targetCenter: 64 });
   assert.deepEqual(chosen, [60, 64, 67]);
 });
+
+
+test("null previous voicing is treated as the start of a sequence", () => {
+  const candidates = [
+    [48, 52, 55],
+    [60, 64, 67],
+  ];
+  assert.deepEqual(
+    selectVoiceLeadingCandidate(candidates, null, { targetCenter: 64 }),
+    [60, 64, 67],
+  );
+});
