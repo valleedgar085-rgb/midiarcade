@@ -222,6 +222,11 @@ export function evaluateMelodyPhraseIntelligence(song) {
   const active = reports.filter((entry) => entry.notes >= 2);
   const score = Math.round(active.reduce((sum, entry) => sum + entry.score, 0) / Math.max(1, active.length));
   const weakestSection = [...active].sort((a, b) => a.score - b.score)[0] ?? null;
+  const weakestPlacementSection = [...active].sort((a, b) => (
+    finite(a?.metrics?.phrasePlacement, 1) - finite(b?.metrics?.phrasePlacement, 1)
+    || a.score - b.score
+    || String(a.sectionId).localeCompare(String(b.sectionId))
+  ))[0] ?? null;
   return Object.freeze({
     version: 1,
     authority: "melody-phrase-intelligence-v1",
@@ -230,6 +235,7 @@ export function evaluateMelodyPhraseIntelligence(song) {
     score,
     reason: active.length ? (score >= 68 ? "melody-phrase-coherent" : "melody-phrase-weak") : "melody-inactive",
     weakestSection,
+    weakestPlacementSection,
     sections: Object.freeze(reports),
   });
 }
