@@ -48,6 +48,10 @@ import {
   runQualityStageSequence,
 } from "./output-quality-stage-runner.js";
 import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
+import {
+  MELODY_DIRECTOR_AUTHORITY_ORDER,
+  MELODY_DIRECTOR_AUTHORITY_VERSION,
+} from "./melody-director-authority.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
@@ -1240,6 +1244,122 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
   return { song: selected.song, diagnostics };
 }
 
+function applyMelodyDirectorPhraseRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  const passLimit = 3;
+  let currentSong = song;
+  const passes = [];
+  const candidateIds = [];
+  let changedNotes = 0;
+  let lastAccepted = null;
+
+  for (let passIndex = 0; passIndex < passLimit; passIndex += 1) {
+    const result = applyMelodyPhraseRefinement(
+      currentSong,
+      config,
+      evaluateCandidate,
+      evaluateReleaseGate,
+    );
+    const diagnostics = result.diagnostics ?? {};
+    candidateIds.push(...(diagnostics.candidateIds ?? []));
+    passes.push(Object.freeze({
+      pass: passIndex + 1,
+      authorityId: diagnostics.authorityId ?? null,
+      authorityPhase: diagnostics.authorityPhase ?? null,
+      attempted: diagnostics.attempted === true,
+      accepted: diagnostics.accepted === true,
+      changed: diagnostics.changed === true,
+      reason: diagnostics.reason ?? null,
+      id: diagnostics.id ?? null,
+      changedNotes: finite(diagnostics.changedNotes),
+      phraseScoreDelta: finite(diagnostics.phraseScoreDelta),
+      placementDelta: finite(diagnostics.placementDelta),
+      conversationDelta: finite(diagnostics.conversationDelta),
+      arcDelta: finite(diagnostics.arcDelta),
+      scoreDelta: finite(diagnostics.scoreDelta),
+    }));
+
+    if (
+      diagnostics.accepted !== true
+      || !result.song
+      || result.song === currentSong
+    ) {
+      break;
+    }
+
+    lastAccepted = diagnostics;
+    changedNotes += Math.max(0, Math.round(finite(diagnostics.changedNotes)));
+    currentSong = result.song;
+  }
+
+  const acceptedPasses = passes.filter((entry) => entry.accepted);
+  if (!acceptedPasses.length) {
+    const first = passes[0] ?? {};
+    return {
+      song,
+      diagnostics: Object.freeze({
+        ...first,
+        directorVersion: MELODY_DIRECTOR_AUTHORITY_VERSION,
+        directorAuthorityOrder: MELODY_DIRECTOR_AUTHORITY_ORDER.map((entry) => entry.id),
+        passes: Object.freeze(passes),
+        passesAttempted: passes.length,
+        passesAccepted: 0,
+        passLimit,
+        candidatesEvaluated: candidateIds.length,
+        candidateIds: Object.freeze(candidateIds),
+      }),
+    };
+  }
+
+  const finalReport = evaluateMelodyPhraseIntelligence(currentSong);
+  const weakestPlacement = finite(
+    finalReport?.weakestPlacementSection?.metrics?.phrasePlacement,
+    1,
+  );
+  const weakestConversation = finite(
+    finalReport?.weakestConversationSection?.metrics?.phraseConversation,
+    1,
+  );
+  const weakestArc = finite(
+    finalReport?.weakestArcSection?.metrics?.melodicArcPayoff,
+    1,
+  );
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted: true,
+    changed: changedNotes > 0,
+    reason: "melody-director-phrase-chain",
+    id: lastAccepted?.id ?? acceptedPasses.at(-1)?.id ?? null,
+    authorityId: lastAccepted?.authorityId ?? acceptedPasses.at(-1)?.authorityId ?? null,
+    authorityPhase: lastAccepted?.authorityPhase ?? acceptedPasses.at(-1)?.authorityPhase ?? null,
+    directorVersion: MELODY_DIRECTOR_AUTHORITY_VERSION,
+    directorAuthorityOrder: MELODY_DIRECTOR_AUTHORITY_ORDER.map((entry) => entry.id),
+    changedNotes,
+    passesAttempted: passes.length,
+    passesAccepted: acceptedPasses.length,
+    passLimit,
+    candidatesEvaluated: candidateIds.length,
+    candidateIds: Object.freeze(candidateIds),
+    beforePhraseScore: finite(passes[0]?.beforePhraseScore, finite(lastAccepted?.beforePhraseScore)),
+    afterPhraseScore: finite(finalReport?.score),
+    phraseScoreDelta: finite(finalReport?.score) - finite(lastAccepted?.beforePhraseScore, finite(finalReport?.score)),
+    afterPlacementScore: round(weakestPlacement, 3),
+    afterConversationScore: round(weakestConversation, 3),
+    afterArcScore: round(weakestArc, 3),
+    passes: Object.freeze(passes),
+  });
+  currentSong.outputQualityEvolution = {
+    ...(currentSong.outputQualityEvolution ?? {}),
+    melodyDirectorConsolidation: {
+      version: MELODY_DIRECTOR_AUTHORITY_VERSION,
+      accepted: true,
+      changedNotes,
+      passesAccepted: acceptedPasses.length,
+      authorityOrder: diagnostics.directorAuthorityOrder,
+    },
+  };
+  return { song: currentSong, diagnostics };
+}
+
 function compareMelodySectionDevelopmentAssessments(left, right) {
   const passedDelta = Number(right.afterReport?.passed === true) - Number(left.afterReport?.passed === true);
   if (passedDelta) return passedDelta;
@@ -1474,7 +1594,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, registerConfig, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
-    { id: "melodyPhraseRefinement", run: (current) => applyMelodyPhraseRefinement(current, config, evaluate, release) },
+    { id: "melodyPhraseRefinement", run: (current) => applyMelodyDirectorPhraseRefinement(current, config, evaluate, release) },
     { id: "melodySectionDevelopmentRefinement", run: (current) => applyMelodySectionDevelopmentRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
