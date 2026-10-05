@@ -22,7 +22,7 @@ function fixture() {
           anchors: [0, 2],
           snarePulses: [1, 3],
           bassPulses: [0, 1.5, 2.5],
-          leadPulses: [0.5, 1.5, 2.5, 3.5],
+          leadPulses: [0.5, 1.25, 2.5, 3.5],
           spaces: [3.75],
         },
         {
@@ -31,7 +31,7 @@ function fixture() {
           anchors: [0, 2],
           snarePulses: [1, 3],
           bassPulses: [0, 1.5, 2.5],
-          leadPulses: [0.5, 1.5, 2.5, 3.5],
+          leadPulses: [0.5, 1.25, 2.5, 3.5],
           spaces: [3.75],
         },
       ],
@@ -108,7 +108,7 @@ test("composition pocket prefers a legal Groove DNA lead pulse for melody spacin
   const repaired = melody.find((note) => note.id === "m1");
 
   assert.equal(result.accepted, true, JSON.stringify(result));
-  assert.equal(repaired.start, 1.5);
+  assert.equal(repaired.start, 1.25);
   assert.equal(repaired.melodyPocketRole, "rhythm-space-groove-repair");
   assert.equal(repaired.pitch, 64);
   assert.equal(repaired.duration, 0.35);
