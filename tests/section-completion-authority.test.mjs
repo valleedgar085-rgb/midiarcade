@@ -65,6 +65,38 @@ test("generated songs finish section seams after tonal and final assembly passes
   const repeated = generateNew(input);
   assert.deepEqual(repeated, song, "section completion must preserve deterministic generation");
 
+  const debugFinalSection = song.structure.at(-1);
+  const debugBoundary = debugFinalSection?.endBeat ?? song.meta.totalBeats;
+  const debugLanding = (trackId) => (song.tracks.find((track) => track.id === trackId)?.notes ?? [])
+    .filter((note) => note.start >= (debugFinalSection?.startBeat ?? 0) - 1e-6 && note.start < debugBoundary - 1e-6)
+    .sort((left, right) => left.start - right.start || left.pitch - right.pitch)
+    .at(-1);
+  const debugBass = debugLanding("bass");
+  const debugMelody = debugLanding("melody");
+  console.log("SECTION_COMPLETION_DEBUG", JSON.stringify({
+    section: debugFinalSection,
+    boundary: debugBoundary,
+    bass: debugBass ? {
+      start: debugBass.start,
+      duration: debugBass.duration,
+      end: debugBass.start + debugBass.duration,
+      pitch: debugBass.pitch,
+      bassPhraseDnaResolution: debugBass.bassPhraseDnaResolution ?? false,
+      bassGrooveRole: debugBass.bassGrooveRole ?? null,
+      phraseRole: debugBass.phraseRole ?? null,
+      sectionCompletionRole: debugBass.sectionCompletionRole ?? null,
+    } : null,
+    melody: debugMelody ? {
+      start: debugMelody.start,
+      duration: debugMelody.duration,
+      end: debugMelody.start + debugMelody.duration,
+      pitch: debugMelody.pitch,
+      phraseRole: debugMelody.phraseRole ?? null,
+      sectionCompletionRole: debugMelody.sectionCompletionRole ?? null,
+    } : null,
+    completion: song.sectionCompletion.finalBoundary,
+  }));
+
   assert.equal(song.sectionCompletion.phase, 77);
   assert.equal(song.sectionCompletion.authority, "section-completion-v1.1");
   assert.equal(song.sectionCompletion.boundaryCount, song.structure.length);
