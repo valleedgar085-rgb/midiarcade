@@ -118,6 +118,70 @@ function cloneBreakCandidate(song, report) {
   });
   return changed ? { id: "develop-clone", song: candidate, changedNotes: changed } : null;
 }
+function motifCoreRecallCandidate(song, report) {
+  const relationship = String(report?.relationship ?? "");
+  if (!["recall", "return"].includes(relationship)) return null;
+  const threshold = relationship === "return" ? 0.56 : 0.42;
+  if (finite(report?.metrics?.motifCoreSimilarity, 1) >= threshold) return null;
+
+  const sourceEntries = indexedNotes(song, report.sourceSectionId);
+  const targetEntries = indexedNotes(song, report.sectionId);
+  if (sourceEntries.length < 3 || targetEntries.length < 3) return null;
+
+  // Use the opening three-note cell as the melodic identity anchor. Preserve
+  // its placement/rhythm in the return and restore only the internal contour.
+  const source = sourceEntries.slice(0, 3).map((entry) => entry.note);
+  const target = targetEntries.slice(0, 3);
+  if (target.some((entry, index) => index > 0 && isProtectedAnchor(entry.note))) return null;
+
+  const candidate = cloneValue(song);
+  const track = melodyTrack(candidate);
+  const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const scale = scalePitchClasses(candidate);
+  const anchorPitch = Math.round(finite(target[0]?.note?.pitch, 60));
+  const sourceIntervals = [
+    Math.round(finite(source[1]?.pitch) - finite(source[0]?.pitch)),
+    Math.round(finite(source[2]?.pitch) - finite(source[1]?.pitch)),
+  ];
+
+  const nearestAllowed = (desired) => {
+    const choices = [];
+    for (let pitch = window.min; pitch <= window.max; pitch += 1) {
+      if (scale?.size && !scale.has(mod12(pitch))) continue;
+      choices.push(pitch);
+    }
+    return choices.sort((left, right) => (
+      Math.abs(left - desired) - Math.abs(right - desired) || left - right
+    ))[0] ?? Math.round(clamp(desired, window.min, window.max));
+  };
+
+  const desired = [
+    anchorPitch,
+    nearestAllowed(anchorPitch + sourceIntervals[0]),
+    null,
+  ];
+  desired[2] = nearestAllowed(desired[1] + sourceIntervals[1]);
+
+  let changed = 0;
+  for (let position = 1; position <= 2; position += 1) {
+    const original = target[position];
+    const note = track?.notes?.[original?.index];
+    if (!note || isProtectedAnchor(note)) continue;
+    const nextPitch = desired[position];
+    const previousPitch = position === 1 ? anchorPitch : desired[position - 1];
+    const followingPitch = position === 1
+      ? desired[2]
+      : Math.round(finite(targetEntries[3]?.note?.pitch, nextPitch));
+    if (Math.abs(nextPitch - previousPitch) > 10 || Math.abs(followingPitch - nextPitch) > 10) continue;
+    if (nextPitch === Math.round(finite(note.pitch))) continue;
+    note.pitch = nextPitch;
+    tag(note, report.sourceSectionId, position === 1 ? "motif-core-answer" : "motif-core-payoff");
+    changed += 1;
+  }
+
+  return changed ? { id: "restore-motif-core", song: candidate, changedNotes: changed } : null;
+}
+
 function contourRecallCandidate(song, report, {
   maxNotes = 2,
   id = "restore-contour",
@@ -300,6 +364,7 @@ export function createMelodySectionDevelopmentCandidates(song, {
   if (!report.sourceSectionId) return [];
   const raw = [
     cloneBreakCandidate(song, report),
+    motifCoreRecallCandidate(song, report),
     // Ending identity is critical recall evidence and used to be starved out by
     // the three-candidate budget when contour candidates were all available.
     endingRecallCandidate(song, report),
