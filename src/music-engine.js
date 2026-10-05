@@ -13912,7 +13912,7 @@ function repairRepetitionMetrics(song) {
   return { actual: round(actual), target: round(target), delta: round(actual - target) };
 }
 
-function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, config) {
+export function createSpecializedRepairStrategy(sourceCandidate, diagnosis, window, config) {
   const dimension = String(diagnosis?.weakestDimension ?? "");
   const routedAuthority = resolveWeaknessAuthority(diagnosis);
   let trackIds = targetedRepairTrackIds(sourceCandidate, diagnosis);
