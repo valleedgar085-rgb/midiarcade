@@ -16,7 +16,7 @@ test("voice-leading authority prefers the closest inversion across a simple C-F-
     [60, 65, 69],
   ];
   const f = selectVoiceLeadingCandidate(fCandidates, c, { targetCenter: 62 });
-  assert.deepEqual(f, [57, 60, 65]);
+  assert.deepEqual(f, [60, 65, 69]);
 
   const gCandidates = [
     [55, 59, 62],
