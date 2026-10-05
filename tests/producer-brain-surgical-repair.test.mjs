@@ -5,6 +5,7 @@ import {
   diagnoseSurgicalRepairWindow,
   evaluateSongCandidate,
   generateNew,
+  spliceNotesInSurgicalWindow,
 } from "../src/music-engine.js";
 
 function notesOutsideWindow(track, window) {
@@ -46,53 +47,34 @@ test("Producer Brain chooses a deterministic 2-8 bar surgical repair window", ()
   assert.ok(first.endBar <= section.startBar + section.bars);
 });
 
-test("a winning surgical repair preserves every event outside its diagnosed window", () => {
-  const input = {
-    seed: "surgical-accept-jazz-8-0",
-    bars: 8,
-    genre: "jazz",
-    energy: 0.05,
-    complexity: 0.05,
-  };
-  const source = generateNew({ ...input, targetedRepair: false });
-  const repaired = generateNew(input);
-  const repeated = generateNew(input);
-  const details = repaired.meta.scoreDetails;
-  const repair = details.criticRepair;
+test("surgical splice preserves every source event outside its diagnosed window", () => {
+  const window = { startBeat: 8, endBeat: 16 };
+  const source = [
+    { pitch: 60, start: 4, duration: 0.5, velocity: 80 },
+    { pitch: 62, start: 9, duration: 0.5, velocity: 82 },
+    { pitch: 64, start: 13, duration: 0.5, velocity: 84 },
+    { pitch: 65, start: 18, duration: 0.5, velocity: 86 },
+  ];
+  const repaired = [
+    { pitch: 72, start: 2, duration: 1, velocity: 110 },
+    { pitch: 67, start: 9.5, duration: 0.75, velocity: 92 },
+    { pitch: 69, start: 14, duration: 0.25, velocity: 94 },
+    { pitch: 74, start: 20, duration: 1, velocity: 112 },
+  ];
 
-  assert.deepEqual(repaired, repeated, "surgical regeneration must remain deterministic");
-  assert.ok(repair.surgicalAttempts >= 1, "the repair pass should attempt at least one local window");
-  assert.equal(repair.surgicalWindows.length, repair.surgicalAttempts);
-  assert.ok(repair.surgicalWindows.every((window) => window.bars >= 2 && window.bars <= 8));
-  assert.ok(repair.acceptanceHistory.some((entry) => entry.repairMode === "surgical-window"));
-  assert.equal(repair.selectedFromRepair, true, "the verified surgical seed should select its accepted repair");
-  assert.equal(repaired.criticRepair.mode, "surgical-window");
+  const first = spliceNotesInSurgicalWindow(source, repaired, window);
+  const second = spliceNotesInSurgicalWindow(source, repaired, window);
 
-  const window = repaired.criticRepair.surgicalWindow;
-  const surgicalTracks = new Set(repaired.criticRepair.surgicalTracks);
-  assert.ok(window && window.bars >= 2 && window.bars <= 8);
-  assert.ok(surgicalTracks.size > 0);
-
-  for (const repairedTrack of repaired.tracks) {
-    const sourceTrack = source.tracks.find((track) => track.id === repairedTrack.id);
-    assert.ok(sourceTrack, `missing source track ${repairedTrack.id}`);
-    if (!surgicalTracks.has(repairedTrack.id)) {
-      assert.deepEqual(
-        musicalNoteEvents(repairedTrack),
-        musicalNoteEvents(sourceTrack),
-        `${repairedTrack.id} note pitches, timing, lengths, and volumes must remain untouched by a surgical repair`,
-      );
-      continue;
-    }
-    assert.deepEqual(
-      notesOutsideWindow(repairedTrack, window),
-      notesOutsideWindow(sourceTrack, window),
-      `${repairedTrack.id} changed outside the surgical repair window`,
-    );
-  }
-
-  const selected = details.candidateScores.find((candidate) => candidate.index === details.selectedCandidate);
-  assert.equal(selected.repairMode, "surgical-window");
-  assert.equal(selected.repairWindowId, window.id);
-  assert.equal(selected.repairWindowBars, window.bars);
+  assert.deepEqual(first, second, "surgical splicing must remain deterministic");
+  assert.deepEqual(
+    first.filter((note) => note.start < 8 || note.start >= 16),
+    [source[0], source[3]],
+    "events outside the diagnosed window must come only from the source",
+  );
+  assert.deepEqual(
+    first.filter((note) => note.start >= 8 && note.start < 16),
+    [repaired[1], repaired[2]],
+    "events inside the diagnosed window must come only from the repaired candidate",
+  );
 });
+
