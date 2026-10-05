@@ -37,6 +37,7 @@ function intentionalRegisterLift(trackId, note, section) {
     finite(note?.plannedTension, 0) >= 0.76
     || String(section?.intent?.role ?? "") === "peak"
     || finite(section?.intent?.registerLift, 0) > 0
+    || note?.motifMemoryCore
     || note?.ensembleCadenceRole
     || note?.resolutionRole
     || note?.transitionHandoffRole
