@@ -180,12 +180,12 @@ export function refineMelodyRhythmPocket(sourceSong) {
       beatsPerBar,
     );
     const candidates = [
-      ...p.candidates.map((delta) => ({ delta, beat: round(original + delta), grooveAligned: false })),
       ...leadPulses.map((beat) => ({
         delta: round(beat - original),
         beat: round(beat),
         grooveAligned: true,
       })),
+      ...p.candidates.map((delta) => ({ delta, beat: round(original + delta), grooveAligned: false })),
     ]
       .filter(({ delta, beat }) => (
         Math.abs(delta) <= p.maxShift + 1e-9
