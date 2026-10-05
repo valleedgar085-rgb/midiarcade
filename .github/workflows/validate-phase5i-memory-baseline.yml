@@ -1,0 +1,20 @@
+name: Validate Phase 5I Memory Baseline
+on:
+  push:
+    branches: [validate/phase-5i-memory-baseline]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  memory-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run current integration memory gauntlet
+        run: node --test tests/melody-section-memory-gauntlet.test.mjs
