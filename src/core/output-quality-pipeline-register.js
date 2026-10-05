@@ -1271,6 +1271,8 @@ function applyMelodyDirectorPhraseRefinement(song, config, evaluateCandidate, ev
       reason: diagnostics.reason ?? null,
       id: diagnostics.id ?? null,
       changedNotes: finite(diagnostics.changedNotes),
+      beforePhraseScore: finite(diagnostics.beforePhraseScore),
+      afterPhraseScore: finite(diagnostics.afterPhraseScore),
       phraseScoreDelta: finite(diagnostics.phraseScoreDelta),
       placementDelta: finite(diagnostics.placementDelta),
       conversationDelta: finite(diagnostics.conversationDelta),
@@ -1341,7 +1343,8 @@ function applyMelodyDirectorPhraseRefinement(song, config, evaluateCandidate, ev
     candidateIds: Object.freeze(candidateIds),
     beforePhraseScore: finite(passes[0]?.beforePhraseScore, finite(lastAccepted?.beforePhraseScore)),
     afterPhraseScore: finite(finalReport?.score),
-    phraseScoreDelta: finite(finalReport?.score) - finite(lastAccepted?.beforePhraseScore, finite(finalReport?.score)),
+    phraseScoreDelta: finite(finalReport?.score)
+      - finite(passes[0]?.beforePhraseScore, finite(finalReport?.score)),
     afterPlacementScore: round(weakestPlacement, 3),
     afterConversationScore: round(weakestConversation, 3),
     afterArcScore: round(weakestArc, 3),
