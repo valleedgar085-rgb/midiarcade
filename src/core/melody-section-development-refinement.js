@@ -395,7 +395,7 @@ function motifCoreDirectionCandidates(song, report) {
   return candidates;
 }
 
-function sectionStoryPayoffCandidates(song, report) {
+export function sectionStoryPayoffCandidates(song, report) {
   if (report?.metrics?.sectionStoryEligible !== true) return [];
   if (finite(report?.metrics?.sectionStoryPayoff, 1) >= 0.6) return [];
 
