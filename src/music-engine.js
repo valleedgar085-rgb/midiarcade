@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
+import { planBassHarmonyTarget } from "./core/bass-harmony-planner.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -4793,6 +4794,19 @@ function generateBass(
         pitch = midiForDegree(config, chord.degree + movement, bassOctave);
       }
       const last = index === offsets.length - 1;
+      const bassHarmonyPlan = planBassHarmonyTarget({
+        genre: config.genre,
+        chord,
+        nextChord,
+        bassGrooveRole,
+        currentPitch: pitch,
+        index,
+        eventCount: offsets.length,
+        seed: `${config.seed ?? "midi-arcade"}:bass-harmony:${chord.start}:${index}`,
+        variation: settings.variation,
+        complexity: config.complexity,
+      });
+      pitch = bassHarmonyPlan.pitch;
       if (last && rng.bool(settings.variation * config.complexity * 0.5)) {
         // Keep the seeded articulation stream stable, including the final event.
         const approach = rng.pick([-2, -1, 1, 2]);
@@ -4847,6 +4861,10 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          bassHarmonyRole: bassHarmonyPlan.role,
+          bassHarmonyStrategy: bassHarmonyPlan.strategy,
+          bassHarmonyTargetPc: bassHarmonyPlan.targetPitchClass,
+          bassHarmonyPlanId: bassHarmonyPlan.id,
           ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
         },
       );
