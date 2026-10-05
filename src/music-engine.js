@@ -11091,6 +11091,25 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
   return tracks;
 }
 
+function reconcileFinalResolutionMetadata(sourceTracks, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  let reclassified = 0;
+  for (const track of tracks) {
+    if (!["melody", "counterpoint"].includes(track.id)) continue;
+    for (const note of track.notes ?? []) {
+      if (note.resolutionRole !== "tonic-landing") continue;
+      if (mod(note.pitch, 12) === mod(config.keyPc, 12)) continue;
+      note.resolutionRole = "chord-landing";
+      note.resolutionRoleReconciled = true;
+      reclassified += 1;
+    }
+  }
+  return { tracks, reclassified };
+}
+
 function notesInWindow(track, startBeat, endBeat) {
   return (track?.notes ?? []).filter((note) => (
     note.start >= startBeat - 1e-6 && note.start < endBeat - 1e-6
@@ -11873,8 +11892,10 @@ function compose(config, options = {}) {
     structure,
     config,
   );
-  const tracks = finalPreDrop.tracks;
+  const resolutionMetadata = reconcileFinalResolutionMetadata(finalPreDrop.tracks, config);
+  const tracks = resolutionMetadata.tracks;
   finalAssemblyRepair.repairs.finalPreDropPunctuationAdded = finalPreDrop.added;
+  finalAssemblyRepair.repairs.resolutionRolesReconciled = resolutionMetadata.reclassified;
   finalAssemblyRepair.repairs.finalPreDropPunctuationReused = finalPreDrop.reused;
   finalAssemblyRepair.repairs.motifMemoryProvenanceRestored = memoryProvenance.restored;
   finalAssemblyRepair.repairs.licensedHarmonyColorVoicesRestored = licensedColorVoice.restored;
@@ -14731,7 +14752,12 @@ function finishRepairedSong(song, config, diagnosis, sourceCandidate, attempt, r
     song.songBlueprint,
     config,
   );
-  song.tracks = finalAssemblyRepair.tracks;
+  const repairedResolutionMetadata = reconcileFinalResolutionMetadata(
+    finalAssemblyRepair.tracks,
+    config,
+  );
+  song.tracks = repairedResolutionMetadata.tracks;
+  finalAssemblyRepair.repairs.resolutionRolesReconciled = repairedResolutionMetadata.reclassified;
   const finalTonalIntegrity = analyzeTonalIntegrity(
     song.tracks,
     song.harmony,
