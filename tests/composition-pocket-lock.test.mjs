@@ -98,7 +98,8 @@ test("composition pocket relocks nearby bass notes to Groove DNA without changin
     assert.equal(note.duration, source.duration);
     assert.equal(note.velocity, source.velocity);
   }
-  assert.ok(result.after.metrics.bassGrooveAlignment > result.before.metrics.bassGrooveAlignment);
+  assert.ok(result.after.metrics.bassGroovePrecision > result.before.metrics.bassGroovePrecision);
+  assert.ok(result.after.metrics.bassMeanPulseDistance < result.before.metrics.bassMeanPulseDistance);
 });
 
 test("composition pocket prefers a legal Groove DNA lead pulse for melody spacing repair", () => {
