@@ -309,18 +309,28 @@ function allowedPitchClassesForConversation(song, note) {
   return chord.length ? chord : Array.from({ length: 12 }, (_, index) => index);
 }
 
-function bestConversationPitch(song, note, desiredPitch) {
+function bestConversationPitch(song, note, desiredPitch, previousNote = null, nextNote = null) {
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
   const allowed = allowedPitchClassesForConversation(song, note);
   const source = Math.round(finite(note?.pitch, 60));
+  const previousPitch = previousNote ? Math.round(finite(previousNote?.pitch, source)) : source;
+  const nextPitch = nextNote ? Math.round(finite(nextNote?.pitch, source)) : source;
   const candidates = [];
   for (let pitch = window.min; pitch <= window.max; pitch += 1) {
     if (!allowed.includes(mod12(pitch))) continue;
     const sourceMove = Math.abs(pitch - source);
     if (sourceMove > 7) continue;
+    const leftLeap = Math.abs(pitch - previousPitch);
+    const rightLeap = Math.abs(nextPitch - pitch);
+    const maxLeap = Math.max(leftLeap, rightLeap);
+    if (maxLeap > 10) continue;
+    const excessLeap = Math.max(0, maxLeap - 7);
     candidates.push({
       pitch,
-      score: Math.abs(pitch - desiredPitch) * 1.8 + sourceMove * 0.22,
+      score: Math.abs(pitch - desiredPitch) * 1.8
+        + sourceMove * 0.22
+        + maxLeap * 0.18
+        + excessLeap * 1.7,
     });
   }
   candidates.sort((left, right) => left.score - right.score || left.pitch - right.pitch);
@@ -350,12 +360,13 @@ function phraseConversationCandidate(song, sectionId) {
   let changed = 0;
 
   const editable = answer
+    .map((entry, answerOrdinal) => ({ ...entry, answerOrdinal }))
     .slice(1, -1)
     .filter(({ note }) => !conversationProtected(note))
     .slice(0, MAX_PHRASE_CONVERSATION_PITCH_EDITS);
 
   for (let ordinal = 0; ordinal < editable.length; ordinal += 1) {
-    const { index } = editable[ordinal];
+    const { index, answerOrdinal } = editable[ordinal];
     const note = track.notes?.[index];
     if (!note) continue;
     const sourcePatternIndex = Math.min(ordinal, Math.max(0, statementPattern.length - 1));
@@ -364,7 +375,9 @@ function phraseConversationCandidate(song, sectionId) {
       relative -= Math.sign(relative);
     }
     const desired = answerBase + relative;
-    const nextPitch = bestConversationPitch(candidate, note, desired);
+    const previousNote = track.notes?.[answer[Math.max(0, answerOrdinal - 1)]?.index] ?? null;
+    const nextNote = track.notes?.[answer[Math.min(answer.length - 1, answerOrdinal + 1)]?.index] ?? null;
+    const nextPitch = bestConversationPitch(candidate, note, desired, previousNote, nextNote);
     if (nextPitch === Math.round(finite(note.pitch, 60))) continue;
     note.pitch = nextPitch;
     note.phraseIntentRole = note.phraseIntentRole ?? "phrase-answer-development";
