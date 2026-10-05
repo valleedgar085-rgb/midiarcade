@@ -60,6 +60,7 @@ function nearestPitchWithClass(reference, pitchClass, { min = 48, max = 84 } = {
 }
 function nearestScaleNeighbor(song, pitch, direction) {
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const dynamicMax = Math.min(88, Math.max(window.max, Math.ceil(referencePeak + 2)));
   const scale = scalePitchClasses(song);
   const source = Math.round(finite(pitch, 60));
   if (!scale?.size) {
@@ -146,7 +147,7 @@ function motifCoreRecallCandidate(song, report) {
 
   const nearestAllowed = (desired) => {
     const choices = [];
-    for (let pitch = window.min; pitch <= window.max; pitch += 1) {
+    for (let pitch = window.min; pitch <= dynamicMax; pitch += 1) {
       if (scale?.size && !scale.has(mod12(pitch))) continue;
       choices.push(pitch);
     }
@@ -409,11 +410,11 @@ function sectionStoryPayoffCandidates(song, report) {
   // payoff. The previous implementation required referencePeak + 1 and therefore
   // had no legal move when the source/setup already touched the melody ceiling.
   const desiredPeak = Math.min(
-    window.max,
-    referencePeak < window.max - 1 ? Math.ceil(referencePeak + 2) : Math.ceil(referencePeak),
+    dynamicMax,
+    referencePeak < dynamicMax - 1 ? Math.ceil(referencePeak + 2) : Math.ceil(referencePeak),
   );
   const payoffPitch = [...allowedPitches]
-    .filter((pitch) => pitch >= Math.min(desiredPeak, window.max))
+    .filter((pitch) => pitch >= Math.min(desiredPeak, dynamicMax))
     .sort((a, b) => Math.abs(a - desiredPeak) - Math.abs(b - desiredPeak) || b - a)[0]
     ?? [...allowedPitches].sort((a, b) => b - a)[0];
 
@@ -482,33 +483,91 @@ function sectionStoryPayoffCandidates(song, report) {
     if (result.length >= 2) break;
   }
 
-  // Strategy B: if the whole return sits far below its setup, raise a small
-  // contiguous late cell together. This preserves its internal shape better
-  // than forcing one isolated giant leap.
-  const lateCell = eligible.slice(0, 3);
-  if (lateCell.length >= 2) {
-    const currentPeak = Math.max(...lateCell.map(({ entry }) => finite(entry.note?.pitch, 60)));
-    const lift = Math.max(1, Math.min(12, desiredPeak - currentPeak));
+  // Strategy B: build a short late-section arc when the return lives far below
+  // the setup register. Interpolate toward the payoff and back toward the next
+  // authored note so the result is a phrase, not one isolated giant leap.
+  const chronologicalEligible = [...eligible].sort((left, right) => left.position - right.position);
+  const runs = [];
+  for (const option of chronologicalEligible) {
+    const currentRun = runs.at(-1);
+    if (!currentRun || option.position !== currentRun.at(-1).position + 1) {
+      runs.push([option]);
+    } else {
+      currentRun.push(option);
+    }
+  }
+
+  const usableRuns = runs.filter((run) => run.length >= 3);
+  usableRuns.sort((left, right) => {
+    const leftDistance = Math.min(...left.map((entry) => Math.abs(entry.phase - 0.64)));
+    const rightDistance = Math.min(...right.map((entry) => Math.abs(entry.phase - 0.64)));
+    return leftDistance - rightDistance || right.length - left.length;
+  });
+
+  const run = usableRuns[0] ?? null;
+  if (run) {
+    const centerIndex = run.reduce((bestIndex, entry, index) => (
+      Math.abs(entry.phase - 0.64) < Math.abs(run[bestIndex].phase - 0.64)
+        ? index
+        : bestIndex
+    ), 0);
+    const startIndex = Math.max(0, Math.min(
+      run.length - Math.min(6, run.length),
+      centerIndex - 2,
+    ));
+    const arc = run.slice(startIndex, startIndex + Math.min(6, run.length));
+    const peakIndex = arc.reduce((bestIndex, entry, index) => (
+      Math.abs(entry.phase - 0.64) < Math.abs(arc[bestIndex].phase - 0.64)
+        ? index
+        : bestIndex
+    ), 0);
+
+    const first = arc[0];
+    const last = arc.at(-1);
+    const beforeArc = targetEntries[first.position - 1]?.note ?? first.entry.note;
+    const afterArc = targetEntries[last.position + 1]?.note ?? last.entry.note;
+    const startPitch = Math.round(finite(beforeArc?.pitch, first.entry.note?.pitch));
+    const endPitch = Math.round(finite(afterArc?.pitch, last.entry.note?.pitch));
     const candidate = cloneValue(song);
     const track = melodyTrack(candidate);
     let changed = 0;
+    const assigned = [];
 
-    for (const { entry } of lateCell) {
+    const nearestAllowed = (desired) => [...allowedPitches].sort((a, b) => (
+      Math.abs(a - desired) - Math.abs(b - desired) || a - b
+    ))[0] ?? Math.round(desired);
+
+    for (let index = 0; index < arc.length; index += 1) {
+      const { entry } = arc[index];
       const note = track?.notes?.[entry.index];
       if (!note) continue;
-      const sourcePitch = Math.round(finite(note.pitch, 60));
-      const desired = Math.min(window.max, sourcePitch + lift);
-      const nextPitch = [...allowedPitches]
-        .sort((a, b) => Math.abs(a - desired) - Math.abs(b - desired) || a - b)[0];
-      if (nextPitch == null || nextPitch <= sourcePitch) continue;
+      let desired;
+      if (index <= peakIndex) {
+        const fraction = (index + 1) / Math.max(1, peakIndex + 1);
+        desired = startPitch + (payoffPitch - startPitch) * fraction;
+      } else {
+        const fraction = (index - peakIndex) / Math.max(1, arc.length - 1 - peakIndex);
+        desired = payoffPitch + (endPitch - payoffPitch) * fraction;
+      }
+      const nextPitch = nearestAllowed(desired);
+      assigned.push(nextPitch);
+      if (nextPitch === Math.round(finite(note.pitch, 60))) continue;
       note.pitch = nextPitch;
-      tag(note, report.sourceSectionId, "section-story-late-cell");
+      tag(
+        note,
+        report.sourceSectionId,
+        index === peakIndex ? "section-story-payoff" : "section-story-arc",
+      );
       changed += 1;
     }
 
-    if (changed >= 2) {
+    const sequence = [startPitch, ...assigned, endPitch];
+    const leapSafe = sequence.slice(1).every(
+      (pitch, index) => Math.abs(pitch - sequence[index]) <= 10,
+    );
+    if (changed >= 2 && leapSafe) {
       result.push({
-        id: "lift-chorus-payoff-cell",
+        id: "lift-chorus-payoff-arc",
         song: candidate,
         changedNotes: changed,
       });
