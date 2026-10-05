@@ -466,9 +466,14 @@ export function createMelodySectionDevelopmentCandidates(song, {
       ]) ?? []);
       if (seen.has(signature)) return null;
       seen.add(signature);
+      const authorityPhase = candidate.id === "lift-chorus-payoff" ? "5H" : "5G";
       return {
         ...candidate,
         candidateIndex,
+        authorityId: authorityPhase === "5H"
+          ? "5h-section-story-payoff"
+          : "5g-motif-recall",
+        authorityPhase,
         sectionId: report.sectionId,
         sourceSectionId: report.sourceSectionId,
         relationship: report.relationship,

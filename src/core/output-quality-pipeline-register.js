@@ -25,6 +25,7 @@ import {
   MAX_MELODY_PHRASE_CANDIDATES,
   MIN_PHRASE_CONVERSATION_SCORE,
   MIN_MELODIC_ARC_PAYOFF_SCORE,
+  MIN_PHRASE_PLACEMENT_SCORE,
 } from "./melody-phrase-refinement.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
@@ -47,6 +48,10 @@ import {
   runQualityStageSequence,
 } from "./output-quality-stage-runner.js";
 import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
+import {
+  MELODY_DIRECTOR_AUTHORITY_ORDER,
+  MELODY_DIRECTOR_AUTHORITY_VERSION,
+} from "./melody-director-authority.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
@@ -1033,6 +1038,14 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
 }
 
 function compareMelodyPhraseAssessments(left, right) {
+  const placementNeeded = Math.min(
+    finite(left?.beforePlacementScore, 1),
+    finite(right?.beforePlacementScore, 1),
+  ) < MIN_PHRASE_PLACEMENT_SCORE;
+  if (placementNeeded) {
+    const placementDelta = finite(right?.placementDelta) - finite(left?.placementDelta);
+    if (Math.abs(placementDelta) > 1e-9) return placementDelta;
+  }
   const conversationNeeded = Math.min(
     finite(left?.beforeConversationScore, 1),
     finite(right?.beforeConversationScore, 1),
@@ -1065,9 +1078,14 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const placementGain = finite(candidate?.placementDelta, 0);
   const conversationGain = finite(candidate?.conversationDelta, 0);
   const arcGain = finite(candidate?.arcDelta, 0);
   const intentGain = candidate.phraseScoreDelta >= 3
+    || (
+      placementGain >= 0.08
+      && candidate.phraseScoreDelta >= -1
+    )
     || (
       conversationGain >= 0.08
       && candidate.phraseScoreDelta >= -1
@@ -1125,7 +1143,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     phraseBefore.passed
     && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
     && leapDiscipline >= 0.72
-    && phrasePlacement >= 0.76
+    && phrasePlacement >= MIN_PHRASE_PLACEMENT_SCORE
     && phraseConversation >= MIN_PHRASE_CONVERSATION_SCORE
     && melodicArcPayoff >= MIN_MELODIC_ARC_PAYOFF_SCORE
   ) {
@@ -1177,9 +1195,14 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_MELODY_PHRASE_CANDIDATES,
     candidateIds,
+    authorityId: selected?.authorityId ?? null,
+    authorityPhase: selected?.authorityPhase ?? null,
     beforePhraseScore: finite(selected?.beforePhraseScore),
     afterPhraseScore: finite(selected?.afterPhraseScore),
     phraseScoreDelta: finite(selected?.phraseScoreDelta),
+    beforePlacementScore: round(selected?.beforePlacementScore, 3),
+    afterPlacementScore: round(selected?.afterPlacementScore, 3),
+    placementDelta: round(selected?.placementDelta, 3),
     beforeConversationScore: round(selected?.beforeConversationScore, 3),
     afterConversationScore: round(selected?.afterConversationScore, 3),
     conversationDelta: round(selected?.conversationDelta, 3),
@@ -1201,7 +1224,10 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     melodyPhraseRefinement: {
       accepted: true,
       changedNotes: diagnostics.changedNotes,
+      authorityId: diagnostics.authorityId,
+      authorityPhase: diagnostics.authorityPhase,
       phraseScoreDelta: diagnostics.phraseScoreDelta,
+      placementDelta: diagnostics.placementDelta,
       conversationDelta: diagnostics.conversationDelta,
       arcDelta: diagnostics.arcDelta,
       scoreDelta: diagnostics.scoreDelta,
@@ -1216,6 +1242,125 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     diagnostics,
   );
   return { song: selected.song, diagnostics };
+}
+
+function applyMelodyDirectorPhraseRefinement(song, config, evaluateCandidate, evaluateReleaseGate) {
+  const passLimit = 3;
+  let currentSong = song;
+  const passes = [];
+  const candidateIds = [];
+  let changedNotes = 0;
+  let lastAccepted = null;
+
+  for (let passIndex = 0; passIndex < passLimit; passIndex += 1) {
+    const result = applyMelodyPhraseRefinement(
+      currentSong,
+      config,
+      evaluateCandidate,
+      evaluateReleaseGate,
+    );
+    const diagnostics = result.diagnostics ?? {};
+    candidateIds.push(...(diagnostics.candidateIds ?? []));
+    passes.push(Object.freeze({
+      pass: passIndex + 1,
+      authorityId: diagnostics.authorityId ?? null,
+      authorityPhase: diagnostics.authorityPhase ?? null,
+      attempted: diagnostics.attempted === true,
+      accepted: diagnostics.accepted === true,
+      changed: diagnostics.changed === true,
+      reason: diagnostics.reason ?? null,
+      id: diagnostics.id ?? null,
+      changedNotes: finite(diagnostics.changedNotes),
+      beforePhraseScore: finite(diagnostics.beforePhraseScore),
+      afterPhraseScore: finite(diagnostics.afterPhraseScore),
+      phraseScoreDelta: finite(diagnostics.phraseScoreDelta),
+      placementDelta: finite(diagnostics.placementDelta),
+      conversationDelta: finite(diagnostics.conversationDelta),
+      arcDelta: finite(diagnostics.arcDelta),
+      scoreDelta: finite(diagnostics.scoreDelta),
+    }));
+
+    if (
+      diagnostics.accepted !== true
+      || !result.song
+      || result.song === currentSong
+    ) {
+      break;
+    }
+
+    lastAccepted = diagnostics;
+    changedNotes += Math.max(0, Math.round(finite(diagnostics.changedNotes)));
+    currentSong = result.song;
+  }
+
+  const acceptedPasses = passes.filter((entry) => entry.accepted);
+  if (!acceptedPasses.length) {
+    const first = passes[0] ?? {};
+    return {
+      song,
+      diagnostics: Object.freeze({
+        ...first,
+        directorVersion: MELODY_DIRECTOR_AUTHORITY_VERSION,
+        directorAuthorityOrder: MELODY_DIRECTOR_AUTHORITY_ORDER.map((entry) => entry.id),
+        passes: Object.freeze(passes),
+        passesAttempted: passes.length,
+        passesAccepted: 0,
+        passLimit,
+        candidatesEvaluated: candidateIds.length,
+        candidateIds: Object.freeze(candidateIds),
+      }),
+    };
+  }
+
+  const finalReport = evaluateMelodyPhraseIntelligence(currentSong);
+  const weakestPlacement = finite(
+    finalReport?.weakestPlacementSection?.metrics?.phrasePlacement,
+    1,
+  );
+  const weakestConversation = finite(
+    finalReport?.weakestConversationSection?.metrics?.phraseConversation,
+    1,
+  );
+  const weakestArc = finite(
+    finalReport?.weakestArcSection?.metrics?.melodicArcPayoff,
+    1,
+  );
+  const diagnostics = Object.freeze({
+    attempted: true,
+    accepted: true,
+    changed: changedNotes > 0,
+    reason: "melody-director-phrase-chain",
+    id: lastAccepted?.id ?? acceptedPasses.at(-1)?.id ?? null,
+    authorityId: lastAccepted?.authorityId ?? acceptedPasses.at(-1)?.authorityId ?? null,
+    authorityPhase: lastAccepted?.authorityPhase ?? acceptedPasses.at(-1)?.authorityPhase ?? null,
+    directorVersion: MELODY_DIRECTOR_AUTHORITY_VERSION,
+    directorAuthorityOrder: MELODY_DIRECTOR_AUTHORITY_ORDER.map((entry) => entry.id),
+    changedNotes,
+    passesAttempted: passes.length,
+    passesAccepted: acceptedPasses.length,
+    passLimit,
+    candidatesEvaluated: candidateIds.length,
+    candidateIds: Object.freeze(candidateIds),
+    beforePhraseScore: finite(passes[0]?.beforePhraseScore, finite(lastAccepted?.beforePhraseScore)),
+    afterPhraseScore: finite(finalReport?.score),
+    phraseScoreDelta: finite(finalReport?.score)
+      - finite(passes[0]?.beforePhraseScore, finite(finalReport?.score)),
+    afterPlacementScore: round(weakestPlacement, 3),
+    afterConversationScore: round(weakestConversation, 3),
+    afterArcScore: round(weakestArc, 3),
+    passes: Object.freeze(passes),
+  });
+  currentSong.outputQualityEvolution = {
+    ...(currentSong.outputQualityEvolution ?? {}),
+    melodyDirectorConsolidation: {
+      version: MELODY_DIRECTOR_AUTHORITY_VERSION,
+      accepted: true,
+      changedNotes,
+      passesAccepted: acceptedPasses.length,
+      authorityOrder: diagnostics.directorAuthorityOrder,
+    },
+  };
+  return { song: currentSong, diagnostics };
 }
 
 function compareMelodySectionDevelopmentAssessments(left, right) {
@@ -1335,6 +1480,8 @@ export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCa
       accepted: Boolean(selected?.accepted),
       reason: selected?.reason ?? "critic-regression",
       id: selected?.id ?? null,
+      authorityId: selected?.authorityId ?? null,
+      authorityPhase: selected?.authorityPhase ?? null,
       sectionId: selected?.sectionId ?? null,
       sourceSectionId: selected?.sourceSectionId ?? null,
       relationship: selected?.relationship ?? null,
@@ -1381,6 +1528,11 @@ export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCa
     passesAttempted: passes.length,
     passesAccepted: acceptedPasses.length,
     passLimit: maxPasses,
+    directorVersion: MELODY_DIRECTOR_AUTHORITY_VERSION,
+    directorAuthorityOrder: MELODY_DIRECTOR_AUTHORITY_ORDER.map((entry) => entry.id),
+    authoritiesAccepted: Object.freeze([
+      ...new Set(acceptedPasses.map((entry) => entry.authorityId).filter(Boolean)),
+    ]),
     candidatesEvaluated: candidateIds.length,
     candidateLimit: MAX_MELODY_SECTION_DEVELOPMENT_CANDIDATES,
     candidateIds: Object.freeze(candidateIds),
@@ -1405,6 +1557,8 @@ export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCa
       passesAccepted: diagnostics.passesAccepted,
       memoryScoreDelta: diagnostics.memoryScoreDelta,
       finalMemoryPassed: diagnostics.finalMemoryPassed,
+      directorVersion: diagnostics.directorVersion,
+      authoritiesAccepted: diagnostics.authoritiesAccepted,
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
   };
@@ -1452,7 +1606,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "registerHealthRefinement", run: (current) => applyRegisterHealthRefinement(current, registerConfig, evaluate, release) },
     { id: "fusionPerformanceRefinement", run: (current) => applyFusionPerformanceRefinement(current, config, evaluate, release) },
     { id: "melodyContinuityRefinement", run: (current) => applyMelodyContinuityRefinement(current, config, evaluate, release) },
-    { id: "melodyPhraseRefinement", run: (current) => applyMelodyPhraseRefinement(current, config, evaluate, release) },
+    { id: "melodyPhraseRefinement", run: (current) => applyMelodyDirectorPhraseRefinement(current, config, evaluate, release) },
     { id: "melodySectionDevelopmentRefinement", run: (current) => applyMelodySectionDevelopmentRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },

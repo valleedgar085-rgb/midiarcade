@@ -2,14 +2,24 @@ import { cloneValue } from "./clone-value.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { rolePreferredRegisterWindow } from "./role-register-policy.js";
 import { trackGroovePulses } from "./groove-contract.js";
+import {
+  melodyDirectorSectionOwnership,
+  resolveMelodyDirectorPhraseNeed,
+  MIN_MELODIC_ARC_PAYOFF_SCORE,
+  MIN_PHRASE_CONVERSATION_SCORE,
+  MIN_PHRASE_PLACEMENT_SCORE,
+} from "./melody-director-authority.js";
 
 export const MAX_MELODY_PHRASE_CANDIDATES = 3;
 export const MAX_PHRASE_PLACEMENT_MOVED_NOTES = 8;
 export const MAX_PHRASE_PLACEMENT_SHIFT_BEATS = 0.5;
-export const MIN_PHRASE_CONVERSATION_SCORE = 0.72;
 export const MAX_PHRASE_CONVERSATION_PITCH_EDITS = 3;
-export const MIN_MELODIC_ARC_PAYOFF_SCORE = 0.7;
 export const MAX_MELODIC_ARC_PITCH_EDITS = 2;
+export {
+  MIN_MELODIC_ARC_PAYOFF_SCORE,
+  MIN_PHRASE_CONVERSATION_SCORE,
+  MIN_PHRASE_PLACEMENT_SCORE,
+} from "./melody-director-authority.js";
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -399,6 +409,8 @@ function phraseConversationCandidate(song, sectionId) {
 }
 
 function melodicArcPayoffCandidate(song, sectionId) {
+  const ownership = melodyDirectorSectionOwnership(song, sectionId);
+  if (ownership.sectionStoryOwnsPayoff) return null;
   const range = sectionBounds(song, sectionId);
   const entries = notesInSection(song, sectionId);
   if (!range || entries.length < 5) return null;
@@ -579,59 +591,80 @@ export function createMelodyPhraseCandidates(song, {
   maxCandidates = MAX_MELODY_PHRASE_CANDIDATES,
 } = {}) {
   const before = evaluateMelodyPhraseIntelligence(song);
-  const conversationSection = before?.weakestConversationSection;
-  const arcSection = before?.weakestArcSection;
-  const placementSection = before?.weakestPlacementSection;
+  const placementSection = before?.weakestPlacementSection ?? null;
+  const conversationSection = before?.weakestConversationSection ?? null;
+  const arcSection = before?.weakestArcSection ?? null;
+
+  const placementWeak = finite(
+    placementSection?.metrics?.phrasePlacement,
+    1,
+  ) < MIN_PHRASE_PLACEMENT_SCORE;
   const conversationWeak = finite(
     conversationSection?.metrics?.phraseConversation,
     1,
   ) < MIN_PHRASE_CONVERSATION_SCORE;
-  const arcWeak = finite(arcSection?.metrics?.melodicArcPayoff, 1) < MIN_MELODIC_ARC_PAYOFF_SCORE;
-  const placementWeak = finite(placementSection?.metrics?.phrasePlacement, 1) < 0.76;
-  const sectionId = conversationWeak
-    ? conversationSection?.sectionId
-    : placementWeak
-      ? placementSection?.sectionId
-      : arcWeak
-        ? arcSection?.sectionId
-        : before?.weakestSection?.sectionId;
-  if (!sectionId) return [];
+  const arcWeak = finite(
+    arcSection?.metrics?.melodicArcPayoff,
+    1,
+  ) < MIN_MELODIC_ARC_PAYOFF_SCORE;
 
-  const conversation = conversationWeak
-    ? phraseConversationCandidate(song, sectionId)
-    : null;
-  const arc = arcWeak && String(arcSection?.sectionId) === String(sectionId)
-    ? melodicArcPayoffCandidate(song, sectionId)
-    : null;
-  const placement = placementWeak && String(placementSection?.sectionId) === String(sectionId)
-    ? phrasePlacementCandidate(song, sectionId)
-    : null;
-  const raw = conversation
-    ? [
-      conversation,
-      placement ?? arc ?? sectionLandingCandidate(song, sectionId),
-      contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
-    ].filter(Boolean)
-    : placement
-      ? [
-        placement,
-        arc ?? sectionLandingCandidate(song, sectionId),
-        contourOutlierCandidate(song, sectionId),
-      ].filter(Boolean)
-      : arc
-        ? [
-          arc,
-          sectionLandingCandidate(song, sectionId),
-          contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
-        ].filter(Boolean)
-        : [
-          sectionLandingCandidate(song, sectionId),
-          contourOutlierCandidate(song, sectionId),
-          expressiveArcCandidate(song, sectionId),
-        ].filter(Boolean);
+  const raw = [];
+  if (placementWeak && placementSection?.sectionId != null) {
+    const candidate = phrasePlacementCandidate(song, placementSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5d-phrase-placement",
+      authorityPhase: "5D",
+      targetSectionId: String(placementSection.sectionId),
+    });
+  }
+  if (conversationWeak && conversationSection?.sectionId != null) {
+    const candidate = phraseConversationCandidate(song, conversationSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5e-phrase-conversation",
+      authorityPhase: "5E",
+      targetSectionId: String(conversationSection.sectionId),
+    });
+  }
+  if (arcWeak && arcSection?.sectionId != null) {
+    const candidate = melodicArcPayoffCandidate(song, arcSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5f-local-melodic-arc",
+      authorityPhase: "5F",
+      targetSectionId: String(arcSection.sectionId),
+    });
+  }
+
+  if (!raw.length) {
+    const sectionId = before?.weakestSection?.sectionId ?? null;
+    if (!sectionId) return [];
+    for (const candidate of [
+      sectionLandingCandidate(song, sectionId),
+      contourOutlierCandidate(song, sectionId),
+      expressiveArcCandidate(song, sectionId),
+    ].filter(Boolean)) {
+      raw.push({
+        ...candidate,
+        authorityId: "phrase-polish",
+        authorityPhase: "legacy-polish",
+        targetSectionId: String(sectionId),
+      });
+    }
+  }
+
   const seen = new Set();
-  return raw.slice(0, Math.max(0, Math.min(MAX_MELODY_PHRASE_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_PHRASE_CANDIDATES)))))
+  return raw
+    .slice(0, Math.max(
+      0,
+      Math.min(
+        MAX_MELODY_PHRASE_CANDIDATES,
+        Math.floor(finite(maxCandidates, MAX_MELODY_PHRASE_CANDIDATES)),
+      ),
+    ))
     .map((candidate, candidateIndex) => {
+      const sectionId = candidate.targetSectionId;
       const after = evaluateMelodyPhraseIntelligence(candidate.song);
       const signature = JSON.stringify(melodyTrack(candidate.song)?.notes?.map((note) => [
         round(note.start), Math.round(finite(note.pitch)), round(note.duration), Math.round(finite(note.velocity, 84)),
@@ -644,6 +677,8 @@ export function createMelodyPhraseCandidates(song, {
       const afterSection = (after.sections ?? []).find(
         (entry) => String(entry.sectionId) === String(sectionId),
       ) ?? null;
+      const beforePlacementScore = finite(beforeSection?.metrics?.phrasePlacement, 1);
+      const afterPlacementScore = finite(afterSection?.metrics?.phrasePlacement, 1);
       const beforeConversationScore = finite(beforeSection?.metrics?.phraseConversation, 1);
       const afterConversationScore = finite(afterSection?.metrics?.phraseConversation, 1);
       const beforeArcScore = finite(beforeSection?.metrics?.melodicArcPayoff, 1);
@@ -655,6 +690,9 @@ export function createMelodyPhraseCandidates(song, {
         beforePhraseScore: before.score,
         afterPhraseScore: after.score,
         phraseScoreDelta: after.score - before.score,
+        beforePlacementScore,
+        afterPlacementScore,
+        placementDelta: afterPlacementScore - beforePlacementScore,
         beforeConversationScore,
         afterConversationScore,
         conversationDelta: afterConversationScore - beforeConversationScore,
@@ -668,6 +706,7 @@ export function createMelodyPhraseCandidates(song, {
     .filter(Boolean)
     .filter((candidate) => (
       candidate.phraseScoreDelta > 0
+      || candidate.placementDelta > 0.02
       || candidate.conversationDelta > 0.02
       || candidate.arcDelta > 0.04
     ));
