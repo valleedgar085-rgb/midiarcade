@@ -51,9 +51,9 @@ function fixture() {
       {
         id: "bass",
         notes: [
-          { id: "b1", pitch: 36, start: 0.11, duration: 0.6, velocity: 92 },
+          { id: "b1", pitch: 36, start: 0.15, duration: 0.6, velocity: 92 },
           { id: "b2", pitch: 38, start: 1.5, duration: 0.5, velocity: 88 },
-          { id: "b3", pitch: 41, start: 4.12, duration: 0.6, velocity: 90 },
+          { id: "b3", pitch: 41, start: 4.15, duration: 0.6, velocity: 90 },
         ],
       },
       {
