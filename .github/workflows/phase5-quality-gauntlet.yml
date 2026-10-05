@@ -40,6 +40,8 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Run Groove DNA v2 pattern evolution regression tests
+        run: node --test tests/groove-pattern-evolution-v2.test.mjs tests/groove-dna-intelligence.test.mjs
       - name: Run canonical song-authority regression tests
         run: node --test tests/blueprint-composer.test.mjs
       - name: Run ensemble coordination authority regression tests
