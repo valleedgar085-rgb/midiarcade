@@ -112,6 +112,59 @@ function expressiveShape(notes) {
   return clamp(spread * 0.55 + Math.min(1, durationKinds / 3) * 0.45);
 }
 
+function nearestDistance(value, candidates = []) {
+  if (!candidates.length) return Infinity;
+  return Math.min(...candidates.map((candidate) => Math.abs(value - candidate)));
+}
+
+function phraseGroups(notes, beatsPerBar = 4) {
+  const ordered = [...notes].sort((left, right) => finite(left.start) - finite(right.start));
+  if (!ordered.length) return [];
+  const breakGap = Math.max(0.5, Math.min(1, beatsPerBar * 0.25));
+  const groups = [[ordered[0]]];
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const previousEnd = finite(previous.start) + Math.max(0.05, finite(previous.duration, 0.25));
+    const gap = finite(ordered[index].start) - previousEnd;
+    if (gap >= breakGap - 1e-9) groups.push([]);
+    groups.at(-1).push(ordered[index]);
+  }
+  return groups;
+}
+
+function phrasePlacement(song, notes, range) {
+  if (!notes.length || !range) return 0;
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const groups = phraseGroups(notes, beatsPerBar);
+  if (!groups.length) return 0;
+  const pulses = trackGroovePulses(
+    song?.grooveConductor,
+    "melody",
+    range.start,
+    range.end,
+    beatsPerBar,
+  );
+  const pulseFit = groups.map((group) => {
+    const phraseStart = finite(group[0]?.start);
+    if (!pulses.length) return 0.78;
+    const distance = nearestDistance(phraseStart, pulses);
+    return clamp(1 - distance / 0.35);
+  });
+  const firstStart = finite(groups[0]?.[0]?.start, range.start);
+  const entryDelay = Math.max(0, firstStart - range.start);
+  const entryFit = entryDelay <= 1.5
+    ? 1
+    : entryDelay <= 2
+      ? 0.82
+      : entryDelay <= beatsPerBar
+        ? 0.58
+        : 0.3;
+  return clamp(
+    (pulseFit.reduce((sum, value) => sum + value, 0) / pulseFit.length) * 0.78
+    + entryFit * 0.22,
+  );
+}
+
 function phraseBreathing(notes, range, beatsPerBar = 4) {
   if (notes.length < 3 || !range) return 0.55;
   const ordered = [...notes].sort((left, right) => finite(left.start) - finite(right.start));
@@ -153,6 +206,7 @@ export function evaluateMelodyPhraseIntelligence(song) {
       harmonicLandings: round(harmonicLandings(song, notes)),
       expressiveShape: round(expressiveShape(notes)),
       phraseBreathing: round(phraseBreathing(notes, range, Math.max(1, finite(song?.meta?.beatsPerBar, 4)))),
+      phrasePlacement: round(phrasePlacement(song, notes, range)),
     };
     const score = Math.round(100 * (
       metrics.motifIdentity * 0.2
