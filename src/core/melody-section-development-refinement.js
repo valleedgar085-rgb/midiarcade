@@ -343,7 +343,7 @@ function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
 function hookSignatureRecallCandidate(song, report) {
   const relationship = String(report?.relationship ?? "");
   if (!["recall", "return"].includes(relationship)) return null;
-  const threshold = relationship === "return" ? 0.78 : 0.62;
+  const threshold = relationship === "return" ? 0.74 : 0.60;
   if (finite(report?.metrics?.hookSignatureSimilarity, 1) >= threshold) return null;
 
   const sourceEntries = indexedNotes(song, report.sourceSectionId);
@@ -844,7 +844,7 @@ export function createMelodySectionDevelopmentCandidates(song, {
   // identifies one of those defects, reserve the tiny candidate budget for its
   // actual owner instead of letting unrelated contour/ending moves crowd it out.
   const raw = before.reason === "motif-core-weak"
-    ? [motifExact, ...motifSearch, ...motifDirection, ...general].filter(Boolean)
+    ? [...motifSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
     : before.reason === "hook-signature-weak"
       ? [hookSignature, motifExact, ...general].filter(Boolean)
       : before.reason === "section-story-payoff-weak"
