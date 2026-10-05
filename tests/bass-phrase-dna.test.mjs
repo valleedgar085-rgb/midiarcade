@@ -107,6 +107,26 @@ test("opening-boundary Bass Phrase DNA cannot wrap late replies into a fake pre-
   assert.ok(result.steps.every((step) => Math.abs(step) < 1e-6 || step >= 8 - 1e-6));
 });
 
+test("outro Bass Phrase DNA authors a late resolution attack near the final boundary", () => {
+  const result = createBassPhrasePlan({
+    genre: "pop",
+    relationship: { mode: "pulse-reinforcement" },
+    sourceSteps: [0, 8, 10],
+    beatsPerStep: 0.25,
+    gridSteps: 16,
+    seed: "bass-outro-resolution",
+    sectionRole: "outro",
+    density: 0.58,
+    variation: 0.48,
+    wrap: false,
+  });
+
+  assert.ok(
+    result.steps.some((step) => step >= 15 - 1e-6),
+    `outro bass should include a late authored resolution attack: ${result.steps.join(",")}`,
+  );
+});
+
 test("Groove DNA publishes Bass Phrase DNA provenance into the shared conductor", () => {
   const structure = [
     { id: "verse-1", name: "verse", startBar: 0, bars: 2 },
