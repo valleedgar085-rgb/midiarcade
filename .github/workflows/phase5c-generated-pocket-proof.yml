@@ -1,0 +1,75 @@
+name: Phase 5C Generated Pocket Proof
+
+on:
+  push:
+    branches: [validate-composition-pocket-lock-5c-proof]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generated-pocket-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify generated-song pocket invariants
+        run: |
+          node --input-type=module <<'NODE'
+          import { generateNew } from "./src/music-engine.js";
+
+          const cases = [
+            ["hipHop", "phase5c-proof-hiphop"],
+            ["trap", "phase5c-proof-trap"],
+            ["pop", "phase5c-proof-pop"],
+          ];
+
+          for (const [genre, seed] of cases) {
+            const song = generateNew({
+              genre,
+              seed,
+              bars: 12,
+              candidateCount: 1,
+              adaptiveCandidates: false,
+              weaknessAwareSearch: false,
+              targetedRepair: false,
+            });
+            const pocket = song?.compositionPocketLock;
+            if (!pocket?.final || !pocket?.before || !pocket?.after) {
+              throw new Error(`${genre}: missing composition pocket diagnostics`);
+            }
+            if (pocket.accepted) {
+              if (Number(pocket.after.score) < Number(pocket.before.score)) {
+                throw new Error(`${genre}: accepted repair lowered pocket score`);
+              }
+              if (
+                Number(pocket.after.metrics?.phraseAnchorAlignment ?? 1)
+                + 1e-9
+                < Number(pocket.before.metrics?.phraseAnchorAlignment ?? 1)
+              ) {
+                throw new Error(`${genre}: protected phrase-anchor alignment regressed`);
+              }
+            }
+            console.log(JSON.stringify({
+              genre,
+              accepted: pocket.accepted,
+              changedNotes: pocket.changedNotes,
+              beforeScore: pocket.before.score,
+              afterScore: pocket.after.score,
+              finalScore: pocket.final.score,
+              bassBefore: pocket.before.metrics?.bassGroovePrecision,
+              bassAfter: pocket.after.metrics?.bassGroovePrecision,
+              melodyBefore: pocket.before.metrics?.melodyGroovePrecision,
+              melodyAfter: pocket.after.metrics?.melodyGroovePrecision,
+              phraseAnchorBefore: pocket.before.metrics?.phraseAnchorAlignment,
+              phraseAnchorAfter: pocket.after.metrics?.phraseAnchorAlignment,
+              finalRhythmLock: song?.finalRhythmLock?.status ?? null,
+            }));
+          }
+          NODE
