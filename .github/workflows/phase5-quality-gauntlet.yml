@@ -18,6 +18,8 @@ on:
       - "tests/musical-payoff-director.test.mjs"
       - "tests/reference-profile-engine.test.mjs"
       - "tests/melody-intent-authority.test.mjs"
+      - "tests/voice-leading-authority.test.mjs"
+      - "tests/voice-leading-authority-integration.test.mjs"
       - "tests/performance-shadow.test.mjs"
       - "tests/performance-candidate.test.mjs"
       - ".github/workflows/phase5-quality-gauntlet.yml"
@@ -42,6 +44,8 @@ jobs:
         run: npm ci
       - name: Run Groove DNA v2 pattern evolution regression tests
         run: node --test tests/groove-pattern-evolution-v2.test.mjs tests/groove-dna-intelligence.test.mjs
+      - name: Run Tonal-inspired voice leading regression tests
+        run: node --test tests/voice-leading-authority.test.mjs tests/voice-leading-authority-integration.test.mjs
       - name: Run canonical song-authority regression tests
         run: node --test tests/blueprint-composer.test.mjs
       - name: Run ensemble coordination authority regression tests
