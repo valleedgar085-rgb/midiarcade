@@ -1,0 +1,37 @@
+name: Phase 5D Phrase Placement Fast Gate
+
+on:
+  push:
+    branches: [validate-phrase-placement-lock-5d-fast]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  phrase-placement-fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify phrase placement authority
+        run: >
+          node --test
+          tests/melody-phrase-intelligence.test.mjs
+          tests/melody-phrase-refinement.test.mjs
+          tests/phrase-resolution-refinement.test.mjs
+          tests/composition-pocket-lock.test.mjs
+          tests/groove-authority-lock.test.mjs
+          tests/musical-timing-lock.test.mjs
+          tests/musical-timing-repair.test.mjs
+          tests/android-release-contract.test.mjs
+      - name: Verify production web build
+        run: npm run build
