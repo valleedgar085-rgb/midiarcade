@@ -591,26 +591,67 @@ export function createMelodyPhraseCandidates(song, {
   maxCandidates = MAX_MELODY_PHRASE_CANDIDATES,
 } = {}) {
   const before = evaluateMelodyPhraseIntelligence(song);
-  const need = resolveMelodyDirectorPhraseNeed(before);
-  const sectionId = need.sectionId;
-  if (!sectionId) return [];
+  const placementSection = before?.weakestPlacementSection ?? null;
+  const conversationSection = before?.weakestConversationSection ?? null;
+  const arcSection = before?.weakestArcSection ?? null;
 
-  // 5I gives each phrase-level concern exactly one primary owner. Specific
-  // 5D/5E/5F needs do not compete with generic legacy polish candidates.
-  let raw = [];
-  if (need.authorityId === "5d-phrase-placement") {
-    raw = [phrasePlacementCandidate(song, sectionId)].filter(Boolean);
-  } else if (need.authorityId === "5e-phrase-conversation") {
-    raw = [phraseConversationCandidate(song, sectionId)].filter(Boolean);
-  } else if (need.authorityId === "5f-local-melodic-arc") {
-    // 5H owns chorus/hook/drop recall payoff. 5F stays local-only.
-    raw = [melodicArcPayoffCandidate(song, sectionId)].filter(Boolean);
-  } else {
-    raw = [
+  const placementWeak = finite(
+    placementSection?.metrics?.phrasePlacement,
+    1,
+  ) < MIN_PHRASE_PLACEMENT_SCORE;
+  const conversationWeak = finite(
+    conversationSection?.metrics?.phraseConversation,
+    1,
+  ) < MIN_PHRASE_CONVERSATION_SCORE;
+  const arcWeak = finite(
+    arcSection?.metrics?.melodicArcPayoff,
+    1,
+  ) < MIN_MELODIC_ARC_PAYOFF_SCORE;
+
+  const raw = [];
+  if (placementWeak && placementSection?.sectionId != null) {
+    const candidate = phrasePlacementCandidate(song, placementSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5d-phrase-placement",
+      authorityPhase: "5D",
+      targetSectionId: String(placementSection.sectionId),
+    });
+  }
+  if (conversationWeak && conversationSection?.sectionId != null) {
+    const candidate = phraseConversationCandidate(song, conversationSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5e-phrase-conversation",
+      authorityPhase: "5E",
+      targetSectionId: String(conversationSection.sectionId),
+    });
+  }
+  if (arcWeak && arcSection?.sectionId != null) {
+    const candidate = melodicArcPayoffCandidate(song, arcSection.sectionId);
+    if (candidate) raw.push({
+      ...candidate,
+      authorityId: "5f-local-melodic-arc",
+      authorityPhase: "5F",
+      targetSectionId: String(arcSection.sectionId),
+    });
+  }
+
+  if (!raw.length) {
+    const sectionId = before?.weakestSection?.sectionId ?? null;
+    if (!sectionId) return [];
+    for (const candidate of [
       sectionLandingCandidate(song, sectionId),
       contourOutlierCandidate(song, sectionId),
       expressiveArcCandidate(song, sectionId),
-    ].filter(Boolean);
+    ].filter(Boolean)) {
+      raw.push({
+        ...candidate,
+        authorityId: "phrase-polish",
+        authorityPhase: "legacy-polish",
+        targetSectionId: String(sectionId),
+      });
+    }
   }
 
   const seen = new Set();
@@ -623,6 +664,7 @@ export function createMelodyPhraseCandidates(song, {
       ),
     ))
     .map((candidate, candidateIndex) => {
+      const sectionId = candidate.targetSectionId;
       const after = evaluateMelodyPhraseIntelligence(candidate.song);
       const signature = JSON.stringify(melodyTrack(candidate.song)?.notes?.map((note) => [
         round(note.start), Math.round(finite(note.pitch)), round(note.duration), Math.round(finite(note.velocity, 84)),
@@ -644,8 +686,6 @@ export function createMelodyPhraseCandidates(song, {
       return {
         ...candidate,
         candidateIndex,
-        authorityId: need.authorityId,
-        authorityPhase: need.phase,
         weakestSectionId: sectionId,
         beforePhraseScore: before.score,
         afterPhraseScore: after.score,
