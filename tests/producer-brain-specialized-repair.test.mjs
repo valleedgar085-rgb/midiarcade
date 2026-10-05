@@ -125,7 +125,15 @@ test("checkpoint 6 precision arrangement arc improves tension without collateral
       complexity: 0.18,
     });
     const candidateEntry = candidate.meta?.scoreDetails?.criticRepair?.acceptanceHistory
-      ?.find((attempt) => attempt.repairStrategyId === "arrangement-energy-arc");
+      ?.find((attempt) => (
+        attempt.repairStrategyId === "arrangement-energy-arc"
+        && attempt.dimension === "tensionFollow"
+        && attempt.accepted === true
+        && attempt.surgicalAttempted === false
+        && attempt.weaknessGain >= 1
+        && attempt.totalDelta >= 0
+        && attempt.maxCriticalRegression === 0
+      ));
     if (candidateEntry) {
       song = candidate;
       entry = candidateEntry;
