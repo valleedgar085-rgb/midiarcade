@@ -6,6 +6,8 @@ import { trackGroovePulses } from "./groove-contract.js";
 export const MAX_MELODY_PHRASE_CANDIDATES = 3;
 export const MAX_PHRASE_PLACEMENT_MOVED_NOTES = 8;
 export const MAX_PHRASE_PLACEMENT_SHIFT_BEATS = 0.5;
+export const MIN_PHRASE_CONVERSATION_SCORE = 0.72;
+export const MAX_PHRASE_CONVERSATION_PITCH_EDITS = 3;
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -240,6 +242,147 @@ function phrasePlacementCandidate(song, sectionId) {
     placementTargetBeat: round(selected.pulse),
   };
 }
+function conversationProtected(note) {
+  return Boolean(
+    protectedPhraseAnchor(note)
+    || note?.sectionCompletionRole
+    || note?.preservePitch
+    || note?.preserveHarmony
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+  );
+}
+
+function directionPattern(group) {
+  return group.slice(1).map((entry, index) => Math.sign(
+    finite(entry?.note?.pitch) - finite(group[index]?.note?.pitch),
+  ));
+}
+
+function relativePitchPattern(group) {
+  if (group.length < 2) return [];
+  const base = finite(group[0]?.note?.pitch);
+  return group.slice(1).map((entry) => {
+    const interval = finite(entry?.note?.pitch) - base;
+    return Math.sign(interval) * Math.min(7, Math.abs(Math.round(interval)));
+  });
+}
+
+function answerRelationshipNeed(statement, answer) {
+  const statementDirections = directionPattern(statement);
+  const answerDirections = directionPattern(answer);
+  const statementIntervals = relativePitchPattern(statement);
+  const answerIntervals = relativePitchPattern(answer);
+  const length = Math.min(
+    statementDirections.length,
+    answerDirections.length,
+    statementIntervals.length,
+    answerIntervals.length,
+  );
+  if (!length) return 0;
+  let directionMatches = 0;
+  let intervalFit = 0;
+  for (let index = 0; index < length; index += 1) {
+    if (statementDirections[index] === answerDirections[index]) directionMatches += 1;
+    intervalFit += clamp(1 - Math.abs(statementIntervals[index] - answerIntervals[index]) / 7, 0, 1);
+  }
+  const similarity = clamp(
+    (directionMatches / length) * 0.58
+    + (intervalFit / length) * 0.42,
+    0,
+    1,
+  );
+  if (similarity >= 0.46 && similarity <= 0.86) return 0;
+  return similarity < 0.46 ? 0.46 - similarity : similarity - 0.86;
+}
+
+function allowedPitchClassesForConversation(song, note) {
+  const scale = scalePitchClasses(song);
+  const chord = chordPitchClasses(harmonyAt(song, finite(note?.start)));
+  const strongBeat = Math.abs(finite(note?.start) - Math.round(finite(note?.start))) <= 0.08
+    || finite(note?.duration, 0.25) >= 0.7;
+  if (strongBeat && chord.length) {
+    const chordInScale = scale?.size ? chord.filter((pitchClass) => scale.has(pitchClass)) : chord;
+    if (chordInScale.length) return chordInScale;
+  }
+  if (scale?.size) return [...scale];
+  return chord.length ? chord : Array.from({ length: 12 }, (_, index) => index);
+}
+
+function bestConversationPitch(song, note, desiredPitch) {
+  const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const allowed = allowedPitchClassesForConversation(song, note);
+  const source = Math.round(finite(note?.pitch, 60));
+  const candidates = [];
+  for (let pitch = window.min; pitch <= window.max; pitch += 1) {
+    if (!allowed.includes(mod12(pitch))) continue;
+    const sourceMove = Math.abs(pitch - source);
+    if (sourceMove > 7) continue;
+    candidates.push({
+      pitch,
+      score: Math.abs(pitch - desiredPitch) * 1.8 + sourceMove * 0.22,
+    });
+  }
+  candidates.sort((left, right) => left.score - right.score || left.pitch - right.pitch);
+  return candidates[0]?.pitch ?? source;
+}
+
+function phraseConversationCandidate(song, sectionId) {
+  const range = sectionBounds(song, sectionId);
+  const entries = notesInSection(song, sectionId);
+  if (!range || entries.length < 5) return null;
+  const groups = phraseGroups(entries, range.beatsPerBar).filter((group) => group.length >= 2);
+  if (groups.length < 2) return null;
+
+  const statement = groups[0];
+  const answer = groups[1];
+  if (statement.length < 3 || answer.length < 3) return null;
+  const need = answerRelationshipNeed(statement, answer);
+  if (need <= 1e-6) return null;
+
+  const candidate = cloneValue(song);
+  const track = melodyTrack(candidate);
+  if (!track) return null;
+
+  const statementBase = Math.round(finite(statement[0]?.note?.pitch, 60));
+  const answerBase = Math.round(finite(answer[0]?.note?.pitch, statementBase));
+  const statementPattern = relativePitchPattern(statement);
+  let changed = 0;
+
+  const editable = answer
+    .slice(1, -1)
+    .filter(({ note }) => !conversationProtected(note))
+    .slice(0, MAX_PHRASE_CONVERSATION_PITCH_EDITS);
+
+  for (let ordinal = 0; ordinal < editable.length; ordinal += 1) {
+    const { index } = editable[ordinal];
+    const note = track.notes?.[index];
+    if (!note) continue;
+    const sourcePatternIndex = Math.min(ordinal, Math.max(0, statementPattern.length - 1));
+    let relative = finite(statementPattern[sourcePatternIndex], 0);
+    if (ordinal === editable.length - 1 && Math.abs(relative) >= 2) {
+      relative -= Math.sign(relative);
+    }
+    const desired = answerBase + relative;
+    const nextPitch = bestConversationPitch(candidate, note, desired);
+    if (nextPitch === Math.round(finite(note.pitch, 60))) continue;
+    note.pitch = nextPitch;
+    note.phraseIntentRole = note.phraseIntentRole ?? "phrase-answer-development";
+    note.phraseConversationRole = "answer-variation";
+    note.phraseConversationSourceBeat = round(finite(statement[Math.min(ordinal + 1, statement.length - 1)]?.note?.start));
+    changed += 1;
+  }
+
+  if (!changed) return null;
+  return {
+    id: "phrase-conversation-development",
+    song: candidate,
+    changedNotes: changed,
+    conversationPitchEdits: changed,
+    conversationNeed: round(need),
+  };
+}
+
 function contourOutlierCandidate(song, sectionId) {
   const entries = notesInSection(song, sectionId);
   if (entries.length < 3) return null;
@@ -341,30 +484,51 @@ function expressiveArcCandidate(song, sectionId) {
 
 /**
  * Builds a tiny deterministic candidate set for the weakest melody section.
- * It never changes rhythm-section tracks or note topology. The phrase-placement
- * candidate may shift one intact melody phrase as a unit onto authored Groove DNA.
+ * It never changes rhythm-section tracks or note topology. Phrase placement may
+ * move one intact phrase as a unit; phrase conversation may repitch only a few
+ * unprotected notes inside an existing answer phrase.
  */
 export function createMelodyPhraseCandidates(song, {
   maxCandidates = MAX_MELODY_PHRASE_CANDIDATES,
 } = {}) {
   const before = evaluateMelodyPhraseIntelligence(song);
+  const conversationSection = before?.weakestConversationSection;
   const placementSection = before?.weakestPlacementSection;
-  const sectionId = finite(placementSection?.metrics?.phrasePlacement, 1) < 0.76
-    ? placementSection?.sectionId
-    : before?.weakestSection?.sectionId;
+  const conversationWeak = finite(
+    conversationSection?.metrics?.phraseConversation,
+    1,
+  ) < MIN_PHRASE_CONVERSATION_SCORE;
+  const placementWeak = finite(placementSection?.metrics?.phrasePlacement, 1) < 0.76;
+  const sectionId = conversationWeak
+    ? conversationSection?.sectionId
+    : placementWeak
+      ? placementSection?.sectionId
+      : before?.weakestSection?.sectionId;
   if (!sectionId) return [];
-  const placement = phrasePlacementCandidate(song, sectionId);
-  const raw = placement
+
+  const conversation = conversationWeak
+    ? phraseConversationCandidate(song, sectionId)
+    : null;
+  const placement = placementWeak && String(placementSection?.sectionId) === String(sectionId)
+    ? phrasePlacementCandidate(song, sectionId)
+    : null;
+  const raw = conversation
     ? [
-      placement,
-      sectionLandingCandidate(song, sectionId),
-      contourOutlierCandidate(song, sectionId),
+      conversation,
+      placement ?? sectionLandingCandidate(song, sectionId),
+      contourOutlierCandidate(song, sectionId) ?? expressiveArcCandidate(song, sectionId),
     ].filter(Boolean)
-    : [
-      sectionLandingCandidate(song, sectionId),
-      contourOutlierCandidate(song, sectionId),
-      expressiveArcCandidate(song, sectionId),
-    ].filter(Boolean);
+    : placement
+      ? [
+        placement,
+        sectionLandingCandidate(song, sectionId),
+        contourOutlierCandidate(song, sectionId),
+      ].filter(Boolean)
+      : [
+        sectionLandingCandidate(song, sectionId),
+        contourOutlierCandidate(song, sectionId),
+        expressiveArcCandidate(song, sectionId),
+      ].filter(Boolean);
   const seen = new Set();
   return raw.slice(0, Math.max(0, Math.min(MAX_MELODY_PHRASE_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_PHRASE_CANDIDATES)))))
     .map((candidate, candidateIndex) => {
@@ -374,6 +538,14 @@ export function createMelodyPhraseCandidates(song, {
       ]) ?? []);
       if (seen.has(signature)) return null;
       seen.add(signature);
+      const beforeSection = (before.sections ?? []).find(
+        (entry) => String(entry.sectionId) === String(sectionId),
+      ) ?? null;
+      const afterSection = (after.sections ?? []).find(
+        (entry) => String(entry.sectionId) === String(sectionId),
+      ) ?? null;
+      const beforeConversationScore = finite(beforeSection?.metrics?.phraseConversation, 1);
+      const afterConversationScore = finite(afterSection?.metrics?.phraseConversation, 1);
       return {
         ...candidate,
         candidateIndex,
@@ -381,10 +553,16 @@ export function createMelodyPhraseCandidates(song, {
         beforePhraseScore: before.score,
         afterPhraseScore: after.score,
         phraseScoreDelta: after.score - before.score,
+        beforeConversationScore,
+        afterConversationScore,
+        conversationDelta: afterConversationScore - beforeConversationScore,
         beforeReport: before,
         afterReport: after,
       };
     })
     .filter(Boolean)
-    .filter((candidate) => candidate.phraseScoreDelta > 0);
+    .filter((candidate) => (
+      candidate.phraseScoreDelta > 0
+      || candidate.conversationDelta > 0.02
+    ));
 }
