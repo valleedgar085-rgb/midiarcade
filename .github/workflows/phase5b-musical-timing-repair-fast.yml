@@ -1,0 +1,37 @@
+name: Phase 5B Musical Timing Repair Fast Gate
+
+on:
+  push:
+    branches: [validate-musical-timing-repair-5b-fast]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  musical-timing-repair-fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify timing repair authority
+        run: >
+          node --test
+          tests/musical-timing-lock.test.mjs
+          tests/musical-timing-repair.test.mjs
+          tests/musical-timing-repair-executor.test.mjs
+          tests/performed-note-contract.test.mjs
+          tests/groove-authority-lock.test.mjs
+          tests/ensemble-coordination-authority.test.mjs
+          tests/cross-authority-coherence.test.mjs
+          tests/android-release-contract.test.mjs
+      - name: Verify production web build
+        run: npm run build
