@@ -1,3 +1,5 @@
+import { createBassPhrasePlan } from "./bass-phrase-dna.js";
+
 const BASE_GRID_STEPS = 16;
 
 function finite(value, fallback = 0) {
@@ -903,16 +905,39 @@ export function createGrooveDNA(input = {}, {
 
     const relationships = {};
     for (const [role, relationship] of Object.entries(grammar.relationships)) {
-      const steps = relationshipSteps(
+      const relationshipSeed = `${seed}:${genre}:${bar}:${role}`;
+      const sourceSteps = sourcePulseLane(lanePlans, relationship.source);
+      const bassPlan = role === "bass"
+        ? createBassPhrasePlan({
+            genre,
+            relationship,
+            sourceSteps,
+            beatsPerStep,
+            gridSteps,
+            seed: relationshipSeed,
+            sectionRole: sectionRole(section),
+            openingBoundary,
+            density: densityControl,
+            variation,
+            wrap: !openingBoundary,
+          })
+        : null;
+      const steps = (bassPlan?.steps ?? relationshipSteps(
         lanePlans,
         relationship,
         beatsPerStep,
         gridSteps,
-        `${seed}:${genre}:${bar}:${role}`,
+        relationshipSeed,
         { wrap: !openingBoundary },
-      ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
+      )).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
         ...relationship,
+        ...(bassPlan ? {
+          phraseDnaId: bassPlan.id,
+          phraseCellId: bassPlan.cellId,
+          phraseCharacter: bassPlan.character,
+          phraseTargets: bassPlan.targets,
+        } : {}),
         steps: Object.freeze(steps),
         pulses: Object.freeze(steps.map((step) => round(step * beatsPerStep))),
       });
