@@ -1080,16 +1080,22 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
 
   const phraseBefore = evaluateMelodyPhraseIntelligence(song);
   const leapDiscipline = finite(phraseBefore?.weakestSection?.metrics?.leapDiscipline, 1);
+  const phrasePlacement = finite(
+    phraseBefore?.weakestPlacementSection?.metrics?.phrasePlacement,
+    1,
+  );
   if (
     phraseBefore.passed
     && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
     && leapDiscipline >= 0.72
+    && phrasePlacement >= 0.76
   ) {
     return {
       song,
       diagnostics: disabledDiagnostics(MAX_MELODY_PHRASE_CANDIDATES, "already-strong", {
         beforePhraseScore: phraseBefore.score,
         leapDiscipline: round(leapDiscipline, 3),
+        phrasePlacement: round(phrasePlacement, 3),
       }),
     };
   }
