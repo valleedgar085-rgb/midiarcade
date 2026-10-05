@@ -155,47 +155,40 @@ function rhythmSimilarity(source, target, sourceRange, targetRange) {
 function motifCoreSimilarity(source, target) {
   if (source.length < 3 || target.length < 3) return 0;
 
-  const windows = (notes) => {
-    const result = [];
-    for (let index = 0; index <= notes.length - 3; index += 1) {
-      const slice = notes.slice(index, index + 3);
-      const intervals = intervalSequence(slice).map(wrappedInterval);
-      const gaps = [
-        Math.max(0.0625, finite(slice[1]?.start) - finite(slice[0]?.start)),
-        Math.max(0.0625, finite(slice[2]?.start) - finite(slice[1]?.start)),
-      ];
-      const totalGap = Math.max(0.125, gaps[0] + gaps[1]);
-      result.push({
-        index,
-        intervals,
-        directions: intervals.map((value) => Math.sign(value)),
-        rhythmShape: gaps.map((value) => value / totalGap),
-      });
-    }
-    return result;
+  // Phrase memory treats the opening three-note cell as the hook identity
+  // anchor. Compare the corresponding cells directly so an unrelated phrase
+  // cannot pass merely because a similar three-note shape appears somewhere
+  // else later in the section by accident.
+  const left = source.slice(0, 3);
+  const right = target.slice(0, 3);
+  const sourceIntervals = intervalSequence(left).map(wrappedInterval);
+  const targetIntervals = intervalSequence(right).map(wrappedInterval);
+  const sourceDirections = sourceIntervals.map((value) => Math.sign(value));
+  const targetDirections = targetIntervals.map((value) => Math.sign(value));
+
+  const intervalFit = sourceIntervals.reduce((sum, value, index) => {
+    const other = targetIntervals[index] ?? 0;
+    const distance = Math.min(6, Math.abs(value - other));
+    const exactness = 1 - distance / 6;
+    const directionMatch = sourceDirections[index] === targetDirections[index] ? 1 : 0;
+    return sum + exactness * 0.72 + directionMatch * 0.28;
+  }, 0) / 2;
+
+  const normalizedGaps = (notes) => {
+    const gaps = [
+      Math.max(0.0625, finite(notes[1]?.start) - finite(notes[0]?.start)),
+      Math.max(0.0625, finite(notes[2]?.start) - finite(notes[1]?.start)),
+    ];
+    const total = Math.max(0.125, gaps[0] + gaps[1]);
+    return gaps.map((value) => value / total);
   };
+  const sourceRhythm = normalizedGaps(left);
+  const targetRhythm = normalizedGaps(right);
+  const rhythmFit = sourceRhythm.reduce((sum, value, index) => (
+    sum + (1 - Math.min(1, Math.abs(value - (targetRhythm[index] ?? 0)) * 2.5))
+  ), 0) / 2;
 
-  const left = windows(source);
-  const right = windows(target);
-  let best = 0;
-
-  for (const sourceWindow of left) {
-    for (const targetWindow of right) {
-      const intervalFit = sourceWindow.intervals.reduce((sum, value, index) => {
-        const other = targetWindow.intervals[index] ?? 0;
-        const distance = Math.min(6, Math.abs(value - other));
-        const exactness = 1 - distance / 6;
-        const directionMatch = sourceWindow.directions[index] === targetWindow.directions[index] ? 1 : 0;
-        return sum + exactness * 0.72 + directionMatch * 0.28;
-      }, 0) / 2;
-      const rhythmFit = sourceWindow.rhythmShape.reduce((sum, value, index) => (
-        sum + (1 - Math.min(1, Math.abs(value - (targetWindow.rhythmShape[index] ?? 0)) * 2.5))
-      ), 0) / 2;
-      best = Math.max(best, intervalFit * 0.82 + rhythmFit * 0.18);
-    }
-  }
-
-  return clamp(best);
+  return clamp(intervalFit * 0.82 + rhythmFit * 0.18);
 }
 
 function endingSimilarity(source, target) {
