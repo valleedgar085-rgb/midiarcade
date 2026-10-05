@@ -264,14 +264,16 @@ function sectionStoryPayoffCandidate(song, report) {
     };
   }
 
-  // If the setup sits an octave or more above the returning section, a single
-  // note cannot create the payoff without a harsh leap. Build a bounded
-  // three-note staircase *after* the protected 5G motif core instead.
+  // If the setup sits far above the returning section, a single safe note
+  // cannot create the payoff without a harsh leap. Build a bounded ascending
+  // arc after the protected 5G motif core instead. Timing and note count stay
+  // untouched; only up to four existing pitches move.
   const stagedEntries = targetEntries
     .map((entry, position) => ({ entry, position, phase: phaseFor(entry) }))
     .filter(({ position }) => position >= 3)
     .filter(({ entry }) => !isProtectedAnchor(entry.note))
-    .filter(({ phase }) => phase >= 0.38 && phase <= 0.84);
+    .filter(({ phase }) => phase >= 0.3 && phase <= 0.86);
+  if (stagedEntries.length < 2) return null;
 
   const scalePitches = (minimum, maximum) => {
     const pitches = [];
@@ -282,48 +284,76 @@ function sectionStoryPayoffCandidate(song, report) {
     return pitches;
   };
   const highestSafe = (minimum, maximum) => scalePitches(minimum, maximum).at(-1) ?? null;
+  const nearestSafe = (target, minimum, maximum) => {
+    const pitches = scalePitches(minimum, maximum);
+    return pitches.sort((left, right) => (
+      Math.abs(left - target) - Math.abs(right - target)
+      || left - right
+    ))[0] ?? null;
+  };
+
+  // Reach the highest scale-safe note available when the prior section already
+  // used the melody ceiling. A zero-semitone peak lift is still a valid payoff
+  // if the return raises its mean register and places that peak in the body.
   const desiredPeak = highestSafe(
-    Math.max(window.min, Math.min(referencePeak, window.max - 2)),
+    Math.max(window.min, Math.min(referencePeak, window.max)),
     window.max,
-  );
+  ) ?? highestSafe(window.min, window.max);
   if (desiredPeak == null) return null;
 
-  let staged = null;
-  for (let index = 0; index <= stagedEntries.length - 3 && !staged; index += 1) {
-    const trio = stagedEntries.slice(index, index + 3);
-    if (
-      trio[1].position !== trio[0].position + 1
-      || trio[2].position !== trio[1].position + 1
-    ) continue;
-
-    const peakPitch = desiredPeak;
-    const middlePitch = highestSafe(Math.max(window.min, peakPitch - 8), peakPitch - 4);
-    const leadPitch = middlePitch == null
-      ? null
-      : highestSafe(Math.max(window.min, middlePitch - 8), middlePitch - 4);
-    if (leadPitch == null || middlePitch == null) continue;
-
-    const before = targetEntries[trio[0].position - 1]?.note;
-    const after = targetEntries[trio[2].position + 1]?.note;
-    if (before && Math.abs(leadPitch - finite(before.pitch, leadPitch)) > 10) continue;
-    if (after && Math.abs(finite(after.pitch, peakPitch) - peakPitch) > 12) continue;
-
-    staged = [
-      { option: trio[0], pitch: leadPitch },
-      { option: trio[1], pitch: middlePitch },
-      { option: trio[2], pitch: peakPitch },
-    ];
+  const desiredCount = Math.min(4, stagedEntries.length);
+  const selectedEntries = [];
+  if (stagedEntries.length <= desiredCount) {
+    selectedEntries.push(...stagedEntries);
+  } else {
+    for (let index = 0; index < desiredCount; index += 1) {
+      const sourceIndex = Math.round(index * (stagedEntries.length - 1) / (desiredCount - 1));
+      const option = stagedEntries[sourceIndex];
+      if (option && !selectedEntries.includes(option)) selectedEntries.push(option);
+    }
   }
-  if (!staged) return null;
+  if (selectedEntries.length < 2) return null;
+
+  const before = targetEntries[selectedEntries[0].position - 1]?.note;
+  const beforePitch = Math.round(finite(before?.pitch, window.min));
+  const stepCount = selectedEntries.length;
+  const floorPitch = Math.max(
+    window.min,
+    desiredPeak - Math.max(6, (stepCount - 1) * 6),
+    beforePitch - 2,
+  );
+
+  const staged = [];
+  let previousPitch = beforePitch;
+  for (let index = 0; index < selectedEntries.length; index += 1) {
+    const option = selectedEntries[index];
+    const progress = selectedEntries.length === 1 ? 1 : index / (selectedEntries.length - 1);
+    const ideal = floorPitch + (desiredPeak - floorPitch) * progress;
+    const minimum = index === 0
+      ? Math.max(window.min, previousPitch - 2)
+      : Math.max(window.min, previousPitch + 2);
+    const maximum = index === selectedEntries.length - 1
+      ? desiredPeak
+      : Math.min(desiredPeak - 1, previousPitch + 8);
+    const pitch = index === selectedEntries.length - 1
+      ? desiredPeak
+      : nearestSafe(ideal, minimum, maximum);
+    if (pitch == null) continue;
+    if (index > 0 && pitch <= previousPitch) continue;
+    staged.push({ option, pitch });
+    previousPitch = pitch;
+  }
+  if (staged.length < 2 || staged.at(-1)?.pitch !== desiredPeak) return null;
 
   const candidate = cloneValue(song);
   const track = melodyTrack(candidate);
   let changedNotes = 0;
   for (const step of staged) {
     const note = track?.notes?.[step.option.entry.index];
-    if (!note || note.pitch === step.pitch) continue;
+    if (!note || Math.round(finite(note.pitch)) === step.pitch) continue;
     note.pitch = step.pitch;
-    tag(note, report.sourceSectionId, "section-story-payoff");
+    note.phraseMemorySourceSectionId = report.sourceSectionId;
+    note.sectionDevelopmentRole = "section-story-payoff";
     changedNotes += 1;
   }
   if (!changedNotes) return null;
