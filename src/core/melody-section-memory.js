@@ -369,7 +369,15 @@ export function evaluateMelodySectionMemory(song) {
     const rhythm = rhythmSimilarity(sourceNotes, targetNotes, sourceRange, targetRange);
     const ending = endingSimilarity(sourceNotes, targetNotes);
     const motifCore = motifCoreSimilarity(sourceNotes, targetNotes);
-    const familiarity = clamp(contour * 0.46 + rhythm * 0.34 + ending * 0.2);
+    // 5G makes the audible hook core part of memory quality itself rather than
+    // a side diagnostic. Broad contour/rhythm still matter, but a return that
+    // loses its recognizable opening cell cannot score as strong memory.
+    const familiarity = clamp(
+      contour * 0.34
+        + motifCore * 0.24
+        + rhythm * 0.26
+        + ending * 0.16,
+    );
     const cloneRisk = exactCloneRisk(sourceNotes, targetNotes, sourceRange, targetRange);
     const metadata = metadataCoverage(targetNotes, memory.sourceSectionId);
     const metadataAccuracy = metadata.tagged ? metadata.accuracy : 0.72;
