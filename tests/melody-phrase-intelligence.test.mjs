@@ -123,3 +123,32 @@ test("phrase critic rewards deliberate breathing between melodic statements", ()
     JSON.stringify({ breathingReport, continuousReport }),
   );
 });
+
+
+test("phrase placement diagnostic detects a whole phrase shifted off authored lead pulses", () => {
+  const aligned = fixture([
+    { start: 0.5, pitch: 64, duration: 0.5, velocity: 82 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 91 },
+    { start: 2.5, pitch: 69, duration: 0.5, velocity: 86 },
+    { start: 3.5, pitch: 67, duration: 0.75, velocity: 96 },
+    { start: 4.5, pitch: 69, duration: 0.5, velocity: 84 },
+    { start: 5.5, pitch: 72, duration: 0.25, velocity: 93 },
+    { start: 6.5, pitch: 74, duration: 0.5, velocity: 88 },
+    { start: 7.5, pitch: 72, duration: 0.75, velocity: 99 },
+  ]);
+  const shifted = structuredClone(aligned);
+  shifted.tracks[0].notes.forEach((note) => { note.start += 0.25; });
+
+  const alignedReport = evaluateMelodyPhraseIntelligence(aligned);
+  const shiftedReport = evaluateMelodyPhraseIntelligence(shifted);
+
+  assert.ok(
+    alignedReport.weakestPlacementSection.metrics.phrasePlacement
+      > shiftedReport.weakestPlacementSection.metrics.phrasePlacement,
+    JSON.stringify({ alignedReport, shiftedReport }),
+  );
+  assert.ok(
+    shiftedReport.weakestPlacementSection.metrics.phrasePlacement < 0.76,
+    JSON.stringify(shiftedReport),
+  );
+});
