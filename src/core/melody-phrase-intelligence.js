@@ -165,6 +165,116 @@ function phrasePlacement(song, notes, range) {
   );
 }
 
+function directionSimilarity(left, right) {
+  const leftDirections = contour(left);
+  const rightDirections = contour(right);
+  const length = Math.min(leftDirections.length, rightDirections.length);
+  if (!length) return 0.55;
+  let matches = 0;
+  let compatible = 0;
+  for (let index = 0; index < length; index += 1) {
+    const a = leftDirections[index];
+    const b = rightDirections[index];
+    if (a === b) matches += 1;
+    if (a === b || a === 0 || b === 0) compatible += 1;
+  }
+  return clamp((matches / length) * 0.72 + (compatible / length) * 0.28);
+}
+
+function relativeIntervalShape(notes) {
+  if (notes.length < 2) return [];
+  const base = finite(notes[0]?.pitch);
+  return notes.slice(1).map((note) => {
+    const interval = finite(note?.pitch) - base;
+    return Math.sign(interval) * Math.min(7, Math.abs(Math.round(interval)));
+  });
+}
+
+function intervalShapeSimilarity(left, right) {
+  const a = relativeIntervalShape(left);
+  const b = relativeIntervalShape(right);
+  const length = Math.min(a.length, b.length);
+  if (!length) return 0.55;
+  let score = 0;
+  for (let index = 0; index < length; index += 1) {
+    const distance = Math.abs(a[index] - b[index]);
+    score += clamp(1 - distance / 7);
+  }
+  return clamp(score / length);
+}
+
+function normalizedRhythmShape(notes) {
+  if (notes.length < 2) return [];
+  const start = finite(notes[0]?.start);
+  const span = Math.max(0.25, finite(notes.at(-1)?.start) - start);
+  return notes.slice(1).map((note) => round((finite(note?.start) - start) / span, 3));
+}
+
+function rhythmShapeSimilarity(left, right) {
+  const a = normalizedRhythmShape(left);
+  const b = normalizedRhythmShape(right);
+  const length = Math.min(a.length, b.length);
+  if (!length) return 0.6;
+  let score = 0;
+  for (let index = 0; index < length; index += 1) {
+    score += clamp(1 - Math.abs(a[index] - b[index]) / 0.42);
+  }
+  return clamp(score / length);
+}
+
+function responseGapFit(statement, answer, beatsPerBar = 4) {
+  const statementEnd = finite(statement.at(-1)?.start)
+    + Math.max(0.05, finite(statement.at(-1)?.duration, 0.25));
+  const gap = Math.max(0, finite(answer[0]?.start) - statementEnd);
+  const ideal = Math.min(0.75, beatsPerBar * 0.1875);
+  if (gap < 0.12) return 0.35;
+  if (gap <= ideal) return clamp(0.72 + (gap / Math.max(0.01, ideal)) * 0.28);
+  if (gap <= beatsPerBar * 0.5) {
+    return clamp(1 - (gap - ideal) / Math.max(0.25, beatsPerBar * 0.5 - ideal) * 0.28);
+  }
+  return clamp(0.72 - (gap - beatsPerBar * 0.5) / Math.max(0.5, beatsPerBar) * 0.52);
+}
+
+function familyBandFit(value) {
+  const familiarity = clamp(value);
+  if (familiarity < 0.42) return clamp(familiarity / 0.42);
+  if (familiarity <= 0.86) return 1;
+  return clamp(1 - (familiarity - 0.86) / 0.14 * 0.72);
+}
+
+function phrasePairConversation(statement, answer, beatsPerBar = 4) {
+  const contourFit = directionSimilarity(statement, answer);
+  const intervalFit = intervalShapeSimilarity(statement, answer);
+  const rhythmFit = rhythmShapeSimilarity(statement, answer);
+  const familiarity = clamp(contourFit * 0.5 + intervalFit * 0.3 + rhythmFit * 0.2);
+  const familyFit = familyBandFit(familiarity);
+  const variationFit = clamp(1 - Math.max(0, familiarity - 0.9) / 0.1);
+  const responseFit = responseGapFit(statement, answer, beatsPerBar);
+  const lengthRatio = Math.min(statement.length, answer.length) / Math.max(statement.length, answer.length);
+  const balanceFit = clamp(0.55 + lengthRatio * 0.45);
+  return clamp(
+    familyFit * 0.42
+    + responseFit * 0.28
+    + variationFit * 0.18
+    + balanceFit * 0.12,
+  );
+}
+
+function phraseConversation(notes, beatsPerBar = 4) {
+  const groups = phraseGroups(notes, beatsPerBar).filter((group) => group.length >= 2);
+  if (groups.length < 2) return { score: 0.76, pairs: 0 };
+  const pairScores = [];
+  for (let index = 0; index < groups.length - 1; index += 1) {
+    pairScores.push(phrasePairConversation(groups[index], groups[index + 1], beatsPerBar));
+  }
+  const average = pairScores.reduce((sum, value) => sum + value, 0) / pairScores.length;
+  const weakest = Math.min(...pairScores);
+  return {
+    score: clamp(average * 0.62 + weakest * 0.38),
+    pairs: pairScores.length,
+  };
+}
+
 function phraseBreathing(notes, range, beatsPerBar = 4) {
   if (notes.length < 3 || !range) return 0.55;
   const ordered = [...notes].sort((left, right) => finite(left.start) - finite(right.start));
@@ -207,6 +317,8 @@ export function evaluateMelodyPhraseIntelligence(song) {
       expressiveShape: round(expressiveShape(notes)),
       phraseBreathing: round(phraseBreathing(notes, range, Math.max(1, finite(song?.meta?.beatsPerBar, 4)))),
       phrasePlacement: round(phrasePlacement(song, notes, range)),
+      phraseConversation: round(phraseConversation(notes, range.beatsPerBar).score),
+      phraseConversationPairs: phraseConversation(notes, range.beatsPerBar).pairs,
     };
     const score = Math.round(100 * (
       metrics.motifIdentity * 0.2
@@ -227,6 +339,12 @@ export function evaluateMelodyPhraseIntelligence(song) {
     || a.score - b.score
     || String(a.sectionId).localeCompare(String(b.sectionId))
   ))[0] ?? null;
+  const conversationSections = active.filter((entry) => finite(entry?.metrics?.phraseConversationPairs, 0) > 0);
+  const weakestConversationSection = [...conversationSections].sort((a, b) => (
+    finite(a?.metrics?.phraseConversation, 1) - finite(b?.metrics?.phraseConversation, 1)
+    || a.score - b.score
+    || String(a.sectionId).localeCompare(String(b.sectionId))
+  ))[0] ?? null;
   return Object.freeze({
     version: 1,
     authority: "melody-phrase-intelligence-v1",
@@ -236,6 +354,7 @@ export function evaluateMelodyPhraseIntelligence(song) {
     reason: active.length ? (score >= 68 ? "melody-phrase-coherent" : "melody-phrase-weak") : "melody-inactive",
     weakestSection,
     weakestPlacementSection,
+    weakestConversationSection,
     sections: Object.freeze(reports),
   });
 }
