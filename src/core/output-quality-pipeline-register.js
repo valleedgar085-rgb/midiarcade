@@ -25,6 +25,7 @@ import {
   MAX_MELODY_PHRASE_CANDIDATES,
   MIN_PHRASE_CONVERSATION_SCORE,
   MIN_MELODIC_ARC_PAYOFF_SCORE,
+  MIN_PHRASE_PLACEMENT_SCORE,
 } from "./melody-phrase-refinement.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
@@ -1033,6 +1034,14 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
 }
 
 function compareMelodyPhraseAssessments(left, right) {
+  const placementNeeded = Math.min(
+    finite(left?.beforePlacementScore, 1),
+    finite(right?.beforePlacementScore, 1),
+  ) < MIN_PHRASE_PLACEMENT_SCORE;
+  if (placementNeeded) {
+    const placementDelta = finite(right?.placementDelta) - finite(left?.placementDelta);
+    if (Math.abs(placementDelta) > 1e-9) return placementDelta;
+  }
   const conversationNeeded = Math.min(
     finite(left?.beforeConversationScore, 1),
     finite(right?.beforeConversationScore, 1),
@@ -1065,9 +1074,14 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const placementGain = finite(candidate?.placementDelta, 0);
   const conversationGain = finite(candidate?.conversationDelta, 0);
   const arcGain = finite(candidate?.arcDelta, 0);
   const intentGain = candidate.phraseScoreDelta >= 3
+    || (
+      placementGain >= 0.08
+      && candidate.phraseScoreDelta >= -1
+    )
     || (
       conversationGain >= 0.08
       && candidate.phraseScoreDelta >= -1
@@ -1125,7 +1139,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     phraseBefore.passed
     && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
     && leapDiscipline >= 0.72
-    && phrasePlacement >= 0.76
+    && phrasePlacement >= MIN_PHRASE_PLACEMENT_SCORE
     && phraseConversation >= MIN_PHRASE_CONVERSATION_SCORE
     && melodicArcPayoff >= MIN_MELODIC_ARC_PAYOFF_SCORE
   ) {
@@ -1177,9 +1191,14 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_MELODY_PHRASE_CANDIDATES,
     candidateIds,
+    authorityId: selected?.authorityId ?? null,
+    authorityPhase: selected?.authorityPhase ?? null,
     beforePhraseScore: finite(selected?.beforePhraseScore),
     afterPhraseScore: finite(selected?.afterPhraseScore),
     phraseScoreDelta: finite(selected?.phraseScoreDelta),
+    beforePlacementScore: round(selected?.beforePlacementScore, 3),
+    afterPlacementScore: round(selected?.afterPlacementScore, 3),
+    placementDelta: round(selected?.placementDelta, 3),
     beforeConversationScore: round(selected?.beforeConversationScore, 3),
     afterConversationScore: round(selected?.afterConversationScore, 3),
     conversationDelta: round(selected?.conversationDelta, 3),
@@ -1201,7 +1220,10 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     melodyPhraseRefinement: {
       accepted: true,
       changedNotes: diagnostics.changedNotes,
+      authorityId: diagnostics.authorityId,
+      authorityPhase: diagnostics.authorityPhase,
       phraseScoreDelta: diagnostics.phraseScoreDelta,
+      placementDelta: diagnostics.placementDelta,
       conversationDelta: diagnostics.conversationDelta,
       arcDelta: diagnostics.arcDelta,
       scoreDelta: diagnostics.scoreDelta,
