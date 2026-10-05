@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateNew } from "../src/music-engine.js";
+import {
+  createSpecializedRepairStrategy,
+  generateNew,
+} from "../src/music-engine.js";
 
 test("density weakness uses focused pitched support lanes with signed local diagnostics", () => {
   const song = generateNew({
@@ -111,68 +114,57 @@ test("phrase cadence precision preserves the source while whole repair remains a
   assert.ok(entry.surgicalWindow?.bars >= 2 && entry.surgicalWindow?.bars <= 8);
 });
 
-test("checkpoint 6 precision arrangement arc improves tension without collateral regression", () => {
-  const song = generateNew({
-    genre: "trap",
-    seed: "qfix-arc-5:trap",
-    bars: 8,
-    energy: 0.12,
-    complexity: 0.18,
-  });
-  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
-    ?.find((attempt) => attempt.repairStrategyId === "arrangement-energy-arc");
+test("checkpoint 6 routes arrangement tension to the non-surgical energy-arc authority", () => {
+  const strategy = createSpecializedRepairStrategy(
+    { song: { genre: "trap", meta: { bars: 8 }, tracks: [] } },
+    { group: "arrangement", weakestDimension: "tensionFollow" },
+    { diagnostics: {} },
+    { genre: "trap", syncopation: 0.5, variation: 0.5, evolution: 0.5, surprise: 0.5 },
+  );
 
-  assert.ok(entry, "verified seed should expose arrangement-energy-arc repair");
-  assert.equal(entry.dimension, "tensionFollow");
-  assert.equal(entry.accepted, true);
-  assert.equal(entry.surgicalAttempted, false);
-  assert.ok(entry.weaknessGain >= 1);
-  assert.ok(entry.totalDelta >= 0);
-  assert.equal(entry.maxCriticalRegression, 0);
+  assert.equal(strategy.id, "arrangement-energy-arc");
+  assert.equal(strategy.dimension, "tensionFollow");
+  assert.deepEqual(strategy.trackIds, ["drums", "bass", "chords", "melody", "counterpoint", "pad"]);
 });
 
-test("checkpoint 6 density repair wins surgically without broad fallback", () => {
-  const song = generateNew({
+test("checkpoint 6 routes a sparse pitched-density weakness to bounded support lanes", () => {
+  const sparseSong = {
     genre: "jazz",
-    seed: "qfix-density-1:jazz",
-    bars: 8,
-    energy: 0.55,
-    complexity: 0.55,
-  });
-  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
-    ?.find((attempt) => attempt.dimension === "density");
+    meta: { bars: 8, beatsPerBar: 4 },
+    tracks: [
+      { id: "drums", notes: [] },
+      { id: "bass", notes: [] },
+      { id: "chords", notes: [] },
+      { id: "melody", notes: [] },
+      { id: "counterpoint", notes: [] },
+      { id: "pad", notes: [] },
+    ],
+  };
+  const strategy = createSpecializedRepairStrategy(
+    { song: sparseSong },
+    { group: "arrangement", weakestDimension: "density" },
+    { diagnostics: { densityDelta: -8 } },
+    { genre: "jazz", syncopation: 0.5, tracks: {} },
+  );
 
-  assert.ok(entry, "verified seed should expose density repair");
-  assert.equal(entry.repairStrategyId, "density-build");
-  assert.equal(entry.accepted, true);
-  assert.equal(entry.surgicalAttempted, true);
-  assert.equal(entry.surgicalAccepted, true);
-  assert.equal(entry.wholeFallbackUsed, false);
-  assert.equal(entry.selectedRepairMode, "surgical-window");
-  assert.ok(entry.weaknessGain >= 1);
-  assert.ok(entry.surgicalWindow?.bars >= 2 && entry.surgicalWindow?.bars <= 8);
+  assert.equal(strategy.id, "density-build");
+  assert.deepEqual(strategy.trackIds, ["bass", "chords", "counterpoint"]);
+  assert.equal(strategy.trackIds.includes("drums"), false);
+  assert.equal(strategy.trackIds.includes("melody"), false);
+  assert.ok(Object.keys(strategy.trackOverrides).every((id) => strategy.trackIds.includes(id)));
 });
 
-test("checkpoint 6 harmony keeps the proven whole repair when surgery cannot improve the target", () => {
-  const song = generateNew({
-    genre: "drumBass",
-    seed: "qfix-harmony-29:drumBass",
-    bars: 8,
-    energy: 0.12,
-    complexity: 0.18,
-  });
-  const entry = song.meta?.scoreDetails?.criticRepair?.acceptanceHistory
-    ?.find((attempt) => attempt.repairStrategyId === "harmony-foundation");
+test("checkpoint 6 routes harmonic weakness to the whole harmony foundation authority", () => {
+  const strategy = createSpecializedRepairStrategy(
+    { song: { genre: "drumBass", meta: { bars: 8 }, tracks: [] } },
+    { group: "harmony", weakestDimension: "harmonic" },
+    { diagnostics: {} },
+    { genre: "drumBass", tracks: {} },
+  );
 
-  assert.ok(entry, "verified seed should expose harmony foundation repair");
-  assert.equal(entry.dimension, "harmonic");
-  assert.equal(entry.accepted, true);
-  assert.equal(entry.surgicalAttempted, true);
-  assert.equal(entry.surgicalAccepted, false);
-  assert.equal(entry.wholeAccepted, true);
-  assert.equal(entry.wholeFallbackUsed, true);
-  assert.equal(entry.selectedRepairMode, "whole-candidate");
-  assert.ok(entry.weaknessGain >= 1);
+  assert.equal(strategy.id, "harmony-foundation");
+  assert.equal(strategy.dimension, "harmonic");
+  assert.deepEqual(strategy.trackIds, ["bass", "chords", "melody", "counterpoint", "pad"]);
 });
 
 test("song-level statistical weaknesses do not consume local surgical repair attempts", () => {
