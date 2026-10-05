@@ -266,7 +266,7 @@ test("phrase conversation development turns a disconnected answer into a related
     { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
     { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
     { start: 4.5, pitch: 65, duration: 0.25, velocity: 90 },
-    { start: 5.0, pitch: 60, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
+    { start: 5.0, pitch: 64, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
   ];
   const before = structuredClone(song);
   const beforeReport = evaluateMelodyPhraseIntelligence(song);
@@ -314,7 +314,7 @@ test("high overall melody quality does not skip a weak statement-answer relation
     { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
     { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
     { start: 4.5, pitch: 65, duration: 0.25, velocity: 90 },
-    { start: 5.0, pitch: 60, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
+    { start: 5.0, pitch: 64, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
   ];
 
   const result = applyMelodyPhraseRefinement(
