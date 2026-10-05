@@ -9,7 +9,8 @@ function average(values = [], fallback = 0) {
 }
 
 function sortedPitches(voicing = []) {
-  return [...voicing]
+  const source = Array.isArray(voicing) ? voicing : [];
+  return [...source]
     .map((pitch) => Math.round(finite(pitch)))
     .filter((pitch) => pitch >= 0 && pitch <= 127)
     .sort((a, b) => a - b);
