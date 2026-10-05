@@ -8231,6 +8231,9 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalValidation: finalTonalIntegrity,
   });
   const noteCount = song.tracks.reduce((sum, track) => sum + (track.notes?.length ?? 0), 0);
+  const committedNotes = song.tracks.flatMap((track) => track.notes ?? []);
+  const committedTripletEvents = committedNotes.filter((note) => String(note.rhythmicFeature ?? "").startsWith("triplet-")).length;
+  const committedSnareRollEvents = committedNotes.filter((note) => note.rhythmicFeature === "snare-roll").length;
   const finalMaster = song.finalMaster
     ? {
       ...song.finalMaster,
@@ -8291,6 +8294,11 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalAssembly,
     finalMaster,
     producerPass,
+    idea: song.idea ? {
+      ...song.idea,
+      tripletEvents: committedTripletEvents,
+      snareRollEvents: committedSnareRollEvents,
+    } : song.idea,
     wholeSongCompletion,
     committedEnsembleCoordination,
     committedAuthorityValidation: Object.freeze({
