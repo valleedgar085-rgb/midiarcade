@@ -1,8 +1,11 @@
 import { cloneValue } from "./clone-value.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { rolePreferredRegisterWindow } from "./role-register-policy.js";
+import { trackGroovePulses } from "./groove-contract.js";
 
 export const MAX_MELODY_PHRASE_CANDIDATES = 3;
+export const MAX_PHRASE_PLACEMENT_MOVED_NOTES = 8;
+export const MAX_PHRASE_PLACEMENT_SHIFT_BEATS = 0.5;
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -107,6 +110,135 @@ function protectedPhraseAnchor(note) {
     || note?.finalAssemblyRole
   );
 }
+
+function phrasePlacementProtected(note) {
+  const rhythmicFeature = String(note?.rhythmicFeature ?? "");
+  return Boolean(
+    protectedPhraseAnchor(note)
+    || note?.memoryRole
+    || note?.motifMemoryRole
+    || note?.preserveSubdivision
+    || note?.preserveTiming
+    || note?.sectionCompletionRole
+    || /(?:triplet|roll|ratchet|stutter|burst)/i.test(rhythmicFeature)
+  );
+}
+
+function noteEnd(note) {
+  return finite(note?.start) + Math.max(0.05, finite(note?.duration, 0.25));
+}
+
+function phraseGroups(entries, beatsPerBar = 4) {
+  if (!entries.length) return [];
+  const breakGap = Math.max(0.5, Math.min(1, beatsPerBar * 0.25));
+  const groups = [[entries[0]]];
+  for (let index = 1; index < entries.length; index += 1) {
+    const previous = entries[index - 1].note;
+    const gap = finite(entries[index].note?.start) - noteEnd(previous);
+    if (gap >= breakGap - 1e-9) groups.push([]);
+    groups.at(-1).push(entries[index]);
+  }
+  return groups;
+}
+
+function nearestDistance(value, candidates = []) {
+  if (!candidates.length) return Infinity;
+  return Math.min(...candidates.map((candidate) => Math.abs(value - candidate)));
+}
+
+function phrasePlacementCandidate(song, sectionId) {
+  const entries = notesInSection(song, sectionId);
+  const range = sectionBounds(song, sectionId);
+  if (!range || entries.length < 2) return null;
+  const groups = phraseGroups(entries, range.beatsPerBar)
+    .filter((group) => (
+      group.length >= 2
+      && group.length <= MAX_PHRASE_PLACEMENT_MOVED_NOTES
+      && group.every(({ note }) => !phrasePlacementProtected(note))
+    ));
+  if (!groups.length) return null;
+
+  const leadPulses = trackGroovePulses(
+    song?.grooveConductor,
+    "melody",
+    range.start,
+    range.end,
+    range.beatsPerBar,
+  );
+  if (!leadPulses.length) return null;
+
+  const candidates = [];
+  for (const group of groups) {
+    const phraseStart = finite(group[0].note?.start);
+    const currentDistance = nearestDistance(phraseStart, leadPulses);
+    if (currentDistance <= 0.08 + 1e-9) continue;
+
+    for (const pulse of leadPulses) {
+      const shift = round(pulse - phraseStart);
+      if (
+        Math.abs(shift) < 0.04 - 1e-9
+        || Math.abs(shift) > MAX_PHRASE_PLACEMENT_SHIFT_BEATS + 1e-9
+      ) continue;
+
+      const shiftedStarts = group.map(({ note }) => finite(note?.start) + shift);
+      const shiftedEnds = group.map(({ note }, index) => shiftedStarts[index] + Math.max(0.05, finite(note?.duration, 0.25)));
+      if (
+        shiftedStarts.some((beat) => beat < range.start - 1e-6 || beat >= range.end - 0.02)
+        || shiftedEnds.some((beat) => beat > range.end + 1e-6)
+      ) continue;
+
+      const groupIndices = new Set(group.map(({ index }) => index));
+      const collision = entries.some(({ note, index }) => {
+        if (groupIndices.has(index)) return false;
+        const otherStart = finite(note?.start);
+        return shiftedStarts.some((beat) => Math.abs(beat - otherStart) < 0.045);
+      });
+      if (collision) continue;
+
+      const entryDelay = phraseStart - range.start;
+      const shiftedEntryDelay = pulse - range.start;
+      const entryImprovement = group === groups[0]
+        ? Math.max(0, Math.min(1, entryDelay / Math.max(0.5, range.beatsPerBar))
+          - Math.min(1, shiftedEntryDelay / Math.max(0.5, range.beatsPerBar)))
+        : 0;
+      candidates.push({
+        group,
+        pulse,
+        shift,
+        currentDistance,
+        score: currentDistance * 2 + entryImprovement * 0.35 - Math.abs(shift) * 0.05,
+      });
+    }
+  }
+
+  candidates.sort((left, right) => (
+    right.score - left.score
+    || Math.abs(left.shift) - Math.abs(right.shift)
+    || left.pulse - right.pulse
+  ));
+  const selected = candidates[0];
+  if (!selected) return null;
+
+  const candidate = cloneValue(song);
+  const track = melodyTrack(candidate);
+  if (!track) return null;
+  for (const { index } of selected.group) {
+    const note = track.notes?.[index];
+    if (!note) return null;
+    note.start = round(finite(note.start) + selected.shift);
+    note.phraseIntentRole = note.phraseIntentRole ?? "phrase-placement-lock";
+    note.phrasePlacementRole = "groove-dna-entry-lock";
+    note.phrasePlacementShiftBeats = round(selected.shift);
+  }
+  track.notes.sort((left, right) => finite(left?.start) - finite(right?.start) || finite(left?.pitch) - finite(right?.pitch));
+  return {
+    id: "phrase-placement-lock",
+    song: candidate,
+    changedNotes: selected.group.length,
+    placementShiftBeats: round(selected.shift),
+    placementTargetBeat: round(selected.pulse),
+  };
+}
 function contourOutlierCandidate(song, sectionId) {
   const entries = notesInSection(song, sectionId);
   if (entries.length < 3) return null;
@@ -208,7 +340,8 @@ function expressiveArcCandidate(song, sectionId) {
 
 /**
  * Builds a tiny deterministic candidate set for the weakest melody section.
- * It never changes rhythm-section tracks, note topology, or canonical timing.
+ * It never changes rhythm-section tracks or note topology. The phrase-placement
+ * candidate may shift one intact melody phrase as a unit onto authored Groove DNA.
  */
 export function createMelodyPhraseCandidates(song, {
   maxCandidates = MAX_MELODY_PHRASE_CANDIDATES,
@@ -216,11 +349,18 @@ export function createMelodyPhraseCandidates(song, {
   const before = evaluateMelodyPhraseIntelligence(song);
   const sectionId = before?.weakestSection?.sectionId;
   if (!sectionId) return [];
-  const raw = [
-    sectionLandingCandidate(song, sectionId),
-    contourOutlierCandidate(song, sectionId),
-    expressiveArcCandidate(song, sectionId),
-  ].filter(Boolean);
+  const placement = phrasePlacementCandidate(song, sectionId);
+  const raw = placement
+    ? [
+      placement,
+      sectionLandingCandidate(song, sectionId),
+      contourOutlierCandidate(song, sectionId),
+    ].filter(Boolean)
+    : [
+      sectionLandingCandidate(song, sectionId),
+      contourOutlierCandidate(song, sectionId),
+      expressiveArcCandidate(song, sectionId),
+    ].filter(Boolean);
   const seen = new Set();
   return raw.slice(0, Math.max(0, Math.min(MAX_MELODY_PHRASE_CANDIDATES, Math.floor(finite(maxCandidates, MAX_MELODY_PHRASE_CANDIDATES)))))
     .map((candidate, candidateIndex) => {
