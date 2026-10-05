@@ -77,6 +77,8 @@ function nearestScaleNeighbor(song, pitch, direction) {
 function isProtectedAnchor(note) {
   return Boolean(
     note?.ensembleCadenceRole
+    || note?.resolutionRole
+    || note?.phraseCadenceRole
     || note?.transitionHandoffRole
     || note?.motifHandoffRole
     || note?.finalAssemblyRole
