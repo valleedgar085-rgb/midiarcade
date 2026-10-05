@@ -24,6 +24,7 @@ import {
   createMelodyPhraseCandidates,
   MAX_MELODY_PHRASE_CANDIDATES,
   MIN_PHRASE_CONVERSATION_SCORE,
+  MIN_MELODIC_ARC_PAYOFF_SCORE,
 } from "./melody-phrase-refinement.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
@@ -1040,7 +1041,15 @@ function compareMelodyPhraseAssessments(left, right) {
     const conversationDelta = finite(right?.conversationDelta) - finite(left?.conversationDelta);
     if (Math.abs(conversationDelta) > 1e-9) return conversationDelta;
   }
-  const phraseDelta = right.phraseScoreDelta - left.phraseScoreDelta;
+  const arcNeeded = Math.min(
+    finite(left?.beforeArcScore, 1),
+    finite(right?.beforeArcScore, 1),
+  ) < MIN_MELODIC_ARC_PAYOFF_SCORE;
+  if (arcNeeded) {
+    const arcDelta = finite(right?.arcDelta) - finite(left?.arcDelta);
+    if (Math.abs(arcDelta) > 1e-9) return arcDelta;
+  }
+    const phraseDelta = right.phraseScoreDelta - left.phraseScoreDelta;
   if (Math.abs(phraseDelta) > 1e-9) return phraseDelta;
   const scoreDelta = right.scoreDelta - left.scoreDelta;
   if (Math.abs(scoreDelta) > 1e-9) return scoreDelta;
@@ -1057,9 +1066,14 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
   const conversationGain = finite(candidate?.conversationDelta, 0);
+  const arcGain = finite(candidate?.arcDelta, 0);
   const intentGain = candidate.phraseScoreDelta >= 3
     || (
       conversationGain >= 0.08
+      && candidate.phraseScoreDelta >= -1
+    )
+    || (
+      arcGain >= 0.08
       && candidate.phraseScoreDelta >= -1
     );
   const accepted = Boolean(
@@ -1103,12 +1117,17 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     phraseBefore?.weakestConversationSection?.metrics?.phraseConversation,
     1,
   );
+  const melodicArcPayoff = finite(
+    phraseBefore?.weakestArcSection?.metrics?.melodicArcPayoff,
+    1,
+  );
   if (
     phraseBefore.passed
     && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
     && leapDiscipline >= 0.72
     && phrasePlacement >= 0.76
     && phraseConversation >= MIN_PHRASE_CONVERSATION_SCORE
+    && melodicArcPayoff >= MIN_MELODIC_ARC_PAYOFF_SCORE
   ) {
     return {
       song,
@@ -1117,6 +1136,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
         leapDiscipline: round(leapDiscipline, 3),
         phrasePlacement: round(phrasePlacement, 3),
         phraseConversation: round(phraseConversation, 3),
+        melodicArcPayoff: round(melodicArcPayoff, 3),
       }),
     };
   }
@@ -1163,6 +1183,9 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     beforeConversationScore: round(selected?.beforeConversationScore, 3),
     afterConversationScore: round(selected?.afterConversationScore, 3),
     conversationDelta: round(selected?.conversationDelta, 3),
+    beforeArcScore: round(selected?.beforeArcScore, 3),
+    afterArcScore: round(selected?.afterArcScore, 3),
+    arcDelta: round(selected?.arcDelta, 3),
     beforeScore: round(before?.score),
     afterScore: round(selected?.after?.score),
     scoreDelta: round(selected?.scoreDelta),
@@ -1180,6 +1203,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
       changedNotes: diagnostics.changedNotes,
       phraseScoreDelta: diagnostics.phraseScoreDelta,
       conversationDelta: diagnostics.conversationDelta,
+      arcDelta: diagnostics.arcDelta,
       scoreDelta: diagnostics.scoreDelta,
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
