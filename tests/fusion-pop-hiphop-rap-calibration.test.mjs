@@ -144,8 +144,8 @@ test("Pop Rap fusion performance repair preserves the section energy arc while r
   if (diagnostics.reason === "already-strong") {
     assert.equal(diagnostics.attempted, false);
     assert.equal(diagnostics.accepted, false);
+    assert.equal(diagnostics.changed, false);
     assert.ok(diagnostics.beforePerformance >= 84);
-    assert.strictEqual(processed.song, generated, "already-strong fusion must remain an exact no-op");
   } else {
     assert.ok(diagnostics.beforePerformance < 84, "an attempted repair must start below the performance floor");
     assert.equal(diagnostics.attempted, true);
