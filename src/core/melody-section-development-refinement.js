@@ -275,7 +275,29 @@ function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
     }
   }
 
-  scored.sort((left, right) => (
+  const observedMotif = finite(report?.metrics?.motifCoreSimilarity, 0);
+  const estimatedRhythmFit = clamp(
+    (observedMotif - currentFit * 0.82) / 0.18,
+    0,
+    1,
+  );
+  const requiredPitchFit = clamp(
+    ((threshold + 0.012) - estimatedRhythmFit * 0.18) / 0.82,
+    0,
+    1,
+  );
+
+  const sufficient = scored
+    .filter((entry) => entry.fit >= requiredPitchFit - 1e-9)
+    .sort((left, right) => (
+      left.movement - right.movement
+      || left.maxMove - right.maxMove
+      || right.fit - left.fit
+      || left.pitches[0] - right.pitches[0]
+      || left.pitches[1] - right.pitches[1]
+      || left.pitches[2] - right.pitches[2]
+    ));
+  const strongest = [...scored].sort((left, right) => (
     right.fit - left.fit
     || left.movement - right.movement
     || left.maxMove - right.maxMove
@@ -283,10 +305,11 @@ function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
     || left.pitches[1] - right.pitches[1]
     || left.pitches[2] - right.pitches[2]
   ));
+  const ordered = [...sufficient, ...strongest];
 
   const result = [];
   const seen = new Set();
-  for (const option of scored) {
+  for (const option of ordered) {
     const signature = option.pitches.join(",");
     if (seen.has(signature)) continue;
     seen.add(signature);
