@@ -103,7 +103,7 @@ function repairPerformedNote(song, trackId, note, {
 
   if (!crossedSection && !severeDrift && !grooveDrift) return null;
 
-  let target = crossedSection
+  let target = (crossedSection || note?.finalEnsembleRepairRole)
     ? authoredStart
     : authoredStart + clamp(drift, -maxPocketDriftBeats, maxPocketDriftBeats);
   if (grooveDrift) {
