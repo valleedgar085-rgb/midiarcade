@@ -1386,7 +1386,13 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
-  const localImprovement = candidate.sectionScoreDelta >= 4 || candidate.afterReport?.passed === true;
+  const hookThreshold = candidate.relationship === "return" ? 0.74 : 0.60;
+  const hookSignatureCleared = candidate.authorityPhase === "5J"
+    && finite(candidate.beforeSection?.metrics?.hookSignatureSimilarity, 1) < hookThreshold
+    && finite(candidate.afterSection?.metrics?.hookSignatureSimilarity, 0) >= hookThreshold;
+  const localImprovement = candidate.sectionScoreDelta >= 4
+    || candidate.afterReport?.passed === true
+    || hookSignatureCleared;
   const accepted = Boolean(
     release?.passed
     && scaleSafe
@@ -1438,7 +1444,7 @@ export function applyMelodySectionDevelopmentRefinement(song, config, evaluateCa
     };
   }
 
-  const maxPasses = 3;
+  const maxPasses = 4;
   let currentSong = song;
   let currentMemory = initialMemory;
   let currentEvaluation = evaluateCandidate(song);
