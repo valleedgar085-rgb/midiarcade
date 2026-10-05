@@ -6,6 +6,7 @@ import {
   createPatternEvolutionPlan,
   patternEvolutionSeed,
 } from "../src/core/pattern-evolution-director.js";
+import { createGrooveDNA } from "../src/core/groove-intelligence.js";
 
 test("Pattern Evolution Director creates A/A/A-prime/turnaround then B family", () => {
   const section = { id: "verse-1", startBar: 0, bars: 8 };
@@ -126,4 +127,45 @@ test("pattern evolution is deterministic for a fixed seed and plan", () => {
   };
 
   assert.deepEqual(applyPatternEvolution(input), applyPatternEvolution(input));
+});
+
+
+test("Groove DNA integration repeats A bars before bounded A-prime and turnaround changes", () => {
+  const structure = [{ id: "verse-1", name: "verse", startBar: 0, bars: 8 }];
+  const dna = createGrooveDNA({
+    seed: "pattern-evolution-integration",
+    genre: "hipHop",
+    bars: 8,
+    beatsPerBar: 4,
+    complexity: 0.72,
+    variation: 0.8,
+  }, { structure });
+
+  assert.equal(dna.patternEvolution.id, "pattern-evolution-director-v2");
+  assert.deepEqual(
+    dna.bars.map((bar) => bar.patternEvolution.role),
+    ["A", "A", "A-prime", "A-turnaround", "B", "B", "B-prime", "B-turnaround"],
+  );
+
+  for (const lane of ["kick", "snare", "hat", "percussion"]) {
+    assert.deepEqual(dna.bars[0][lane].steps, dna.bars[1][lane].steps);
+    assert.deepEqual(dna.bars[4][lane].steps, dna.bars[5][lane].steps);
+  }
+
+  for (const bar of dna.bars) {
+    for (const lane of ["kick", "snare", "hat", "percussion"]) {
+      assert.ok(
+        bar[lane].requiredSteps.every((step) => bar[lane].steps.includes(step)),
+        `${lane} lost a required step in ${bar.patternEvolution.role}`,
+      );
+      assert.ok(
+        bar[lane].steps.every((step) => !bar[lane].protectedSteps.includes(step)),
+        `${lane} entered protected space in ${bar.patternEvolution.role}`,
+      );
+      assert.ok(
+        bar[lane].patternEvolution.edits.length <= bar.patternEvolution.maxStepEdits,
+        `${lane} exceeded the mutation budget in ${bar.patternEvolution.role}`,
+      );
+    }
+  }
 });
