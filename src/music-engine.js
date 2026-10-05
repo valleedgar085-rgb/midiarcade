@@ -38,7 +38,10 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, evaluateTonalLicense, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
-import { selectVoiceLeadingCandidate } from "./core/voice-leading-authority.js";
+import {
+  scoreVoiceLeadingCandidate,
+  selectVoiceLeadingCandidate,
+} from "./core/voice-leading-authority.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
@@ -9382,22 +9385,27 @@ function runVoiceLeadingPass(sourceTracks, config) {
       let best = null;
       const visit = (index, voicing) => {
         if (index === choices.length) {
-          let score = 0;
-          for (let voice = 0; voice < voicing.length; voice += 1) {
-            const pitch = voicing[voice];
-            if (previous?.length) {
-              const distance = Math.min(...previous.map((note) => Math.abs(note.pitch - pitch)));
-              score += distance;
-              if (previous.some((note) => note.pitch === pitch)) score -= 7;
-            } else {
-              score += Math.abs(pitch - (id === "pad" ? 72 : 64)) * 0.18;
-            }
-            if (voice > 0) {
-              const spacing = pitch - voicing[voice - 1];
-              if (spacing < 3) score += 30;
-              if (spacing > 16) score += (spacing - 16) * 0.8;
-            }
-            if (id === "pad" && chordPitches.has(pitch)) score += 6;
+          const previousPitches = previous?.map((note) => note.pitch) ?? [];
+          let score = scoreVoiceLeadingCandidate(voicing, previousPitches, {
+            targetCenter: id === "pad" ? 72 : 64,
+            preferredMaxStep: 4,
+            registerWeight: previousPitches.length ? 0.12 : 0.18,
+            motionWeight: 1,
+            topVoiceWeight: 0.75,
+            bottomVoiceWeight: 0.45,
+            excessLeapWeight: 1.35,
+            exactCommonToneReward: 5.5,
+            pitchClassCommonToneReward: 0.25,
+            wideSpanThreshold: id === "pad" ? 28 : 24,
+            wideSpanWeight: 0.16,
+          });
+          for (let voice = 1; voice < voicing.length; voice += 1) {
+            const spacing = voicing[voice] - voicing[voice - 1];
+            if (spacing < 3) score += 30;
+            if (spacing > 16) score += (spacing - 16) * 0.8;
+          }
+          if (id === "pad") {
+            score += voicing.filter((pitch) => chordPitches.has(pitch)).length * 6;
           }
           if (bassCeiling != null && voicing[0] - bassCeiling < 7) {
             score += 80 + (7 - (voicing[0] - bassCeiling)) * 8;
