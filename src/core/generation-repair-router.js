@@ -45,11 +45,13 @@ const READ_ONLY_QUALITY_STAGES = Object.freeze(new Set([
 const STRICT_MUTATION_QUALITY_STAGES = Object.freeze(new Set([
   "melodySectionDevelopmentRefinement",
   "finalEnsembleRefinement",
+  "musicalTimingRepair",
 ]));
 
 const QUALITY_STAGE_MUTATIONS = Object.freeze({
   melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony"]),
   finalEnsembleRefinement: Object.freeze(["topology", "timing", "duration"]),
+  musicalTimingRepair: Object.freeze(["timing"]),
 });
 
 const QUALITY_STAGE_OWNERS = Object.freeze({
@@ -68,6 +70,7 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
   finalEnsembleRefinement: ["ensemble"],
+  musicalTimingRepair: ["groove", "ensemble"],
   genreIdentityRefinement: ["groove", "ensemble"],
   transitionFxRefinement: [],
 });

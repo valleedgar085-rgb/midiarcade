@@ -501,7 +501,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(htmlSource, /data-section-bars/, "Arranger Studio must expose section bar length controls");
   assert.match(htmlSource, /data-section-action="queue-jump"/, "Arranger Studio must expose live section queue jumping");
   assert.match(appSource, /updateSectionBars\(state\.song, section\.id, targetBars\)/, "Arranger Studio must resize sections immutably");
-  assert.match(appSource, /state\.queuedSection && this\.position >=/, "Preview transport must execute queued section jumps seamlessly");
+  assert.match(appSource, /state\.queuedSection && currentBeat >= state\.queuedSection\.triggerBeat/, "Preview transport must execute queued section jumps on the beat-native timeline");
   const pauseSource = appSource.slice(appSource.indexOf("  pause()"), appSource.indexOf("  stop()", appSource.indexOf("  pause()")));
   const playerPlaySource = appSource.slice(appSource.indexOf("  async play()"), appSource.indexOf("  schedule()"));
   assert.match(playerPlaySource, /requestGeneration = \+\+this\.playRequestGeneration[\s\S]*?requestGeneration !== this\.playRequestGeneration/, "overlapping audio starts must be generation-tokened before creating timers");
@@ -805,6 +805,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(await recoveryPlayer.recoverAudioContext(interruptedContext), true);
   assert.equal(interruptedContext.state, "running", "an interrupted context must be resumed and resynchronized");
   recoveryPlayer.playing = false;
+  recoveryPlayer.stopScheduler();
 
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:keys", "native:keys"), false, "an older waiter for a shared same-port connect must not tear down the winner");
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:old", "native:new"), true, "a stale different-port connection should be disposed");

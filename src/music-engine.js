@@ -38,6 +38,10 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, evaluateTonalLicense, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import {
+  scoreVoiceLeadingCandidate,
+  selectVoiceLeadingCandidate,
+} from "./core/voice-leading-authority.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
@@ -57,7 +61,9 @@ import {
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
-import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import { evaluateMusicalTimingLock } from "./core/musical-timing-lock.js";
+import { evaluateMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import { evaluateCompositionPocketLock, refineCompositionPocketLock } from "./core/composition-pocket-lock.js";
 import {
   constrainMelodicDegree,
   hookSignatureAdjustment,
@@ -5892,36 +5898,59 @@ function repairFinalRockPowerChordAttacks(sourceTracks, harmony, config) {
   return { tracks, repairs };
 }
 
+function shapeChordVoicingCandidate(pitches, chord, spread, config = null) {
+  const chosen = [...(pitches ?? [])];
+  if (config?.genre === "neoSoul" && chosen.length >= 4 && mod(chosen[0], 12) === chord.rootPc) chosen.shift();
+  if (["house", "techno"].includes(config?.genre) && chosen.length > 3) chosen.splice(1, chosen.length - 3);
+  if (spread > 0.55 && chosen.length >= 3) chosen[chosen.length - 1] = clamp(chosen[chosen.length - 1] + 12, 0, 127);
+  if (config?.genre === "synthwave" && chosen.length >= 3) chosen[0] = clamp(chosen[0] - 12, 0, 127);
+  return [...new Set(chosen)].sort((a, b) => a - b);
+}
+
 function chordVoicing(chord, octave, previous, spread, rng, config = null) {
   if (config?.genre === "rock") return rockPowerChordVoicing(chord, octave, previous);
   const root = rootMidi(chord, octave);
   const intervals = chord.tones.map((tone) => mod(tone - chord.rootPc, 12));
   const candidates = [];
   for (let inversion = 0; inversion < Math.min(intervals.length, 4); inversion += 1) {
-    let pitches = intervals.map((interval, index) => root + interval + (index < inversion ? 12 : 0)).sort((a, b) => a - b);
+    const pitches = intervals
+      .map((interval, index) => root + interval + (index < inversion ? 12 : 0))
+      .sort((a, b) => a - b);
     for (const shift of [-12, 0, 12]) {
       const shifted = pitches.map((pitch) => pitch + shift);
       if (shifted.every((pitch) => pitch >= 24 && pitch <= 108)) candidates.push(shifted);
     }
   }
+
+  const shapedCandidates = candidates
+    .map((candidate) => shapeChordVoicingCandidate(candidate, chord, spread, config))
+    .filter((candidate) => candidate.length > 0);
   const center = root + 5;
-  const score = (pitches) => {
-    const register = Math.abs(pitches.reduce((sum, pitch) => sum + pitch, 0) / pitches.length - center);
-    if (!previous?.length) return register;
-    const topVoiceLeap = Math.abs((pitches[pitches.length - 1] ?? 0) - (previous[previous.length - 1] ?? 0));
-    const voiceMotion = pitches.reduce((sum, pitch, index) => sum + Math.abs(pitch - previous[Math.min(index, previous.length - 1)]), 0);
-    const leapPenalty = topVoiceLeap > 4 ? topVoiceLeap * 1.5 : 0;
-    return voiceMotion + leapPenalty + register * 0.35;
-  };
-  candidates.sort((a, b) => score(a) - score(b));
-  const shortlist = candidates.slice(0, Math.min(3, candidates.length));
-  const chosen = [...(rng.pick(shortlist) ?? [root, root + 4, root + 7])];
-  if (config?.genre === "neoSoul" && chosen.length >= 4 && mod(chosen[0], 12) === chord.rootPc) chosen.shift();
-  if (["house", "techno"].includes(config?.genre) && chosen.length > 3) chosen.splice(1, chosen.length - 3);
-  if (spread > 0.55 && chosen.length >= 3) chosen[chosen.length - 1] = clamp(chosen[chosen.length - 1] + 12, 0, 127);
-  if (config?.genre === "synthwave" && chosen.length >= 3) chosen[0] = clamp(chosen[0] - 12, 0, 127);
-  chosen.sort((a, b) => a - b);
-  return chosen;
+  const fallback = shapeChordVoicingCandidate(
+    [root, root + 4, root + 7],
+    chord,
+    spread,
+    config,
+  );
+  const chosen = selectVoiceLeadingCandidate(shapedCandidates, previous, {
+    targetCenter: center,
+    preferredMaxStep: 4,
+    registerWeight: 0.35,
+    motionWeight: 1,
+    topVoiceWeight: 0.9,
+    bottomVoiceWeight: 0.5,
+    excessLeapWeight: 1.45,
+    exactCommonToneReward: 1.6,
+    pitchClassCommonToneReward: 0.35,
+    wideSpanThreshold: config?.genre === "synthwave" ? 36 : 24,
+    wideSpanWeight: config?.genre === "synthwave" ? 0.08 : 0.18,
+  });
+
+  // Voice-leading authority owns candidate selection. RNG remains in the
+  // signature because surrounding generation APIs pass it, but it no longer
+  // chooses among musically inferior near-misses.
+  void rng;
+  return chosen.length ? chosen : fallback;
 }
 
 function generateChords(config, structure, harmony, style, settings, rng, grooveConductor = null, songBlueprint = null) {
@@ -9246,6 +9275,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     }
     : song.producerPass;
   const committedEnsembleCoordination = evaluateEnsembleCoordinationAuthority(song);
+  const committedMusicalTimingLock = evaluateMusicalTimingLock(song);
   const wholeSongCompletion = evaluateWholeSongCompletion({
     ...song,
     registerIntegrity: {
@@ -9283,8 +9313,9 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     producerPass,
     wholeSongCompletion,
     committedEnsembleCoordination,
+    committedMusicalTimingLock,
     committedAuthorityValidation: Object.freeze({
-      version: 3,
+      version: 4,
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
@@ -9292,6 +9323,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       assembly: finalAssembly.status,
       wholeSongCompletion: wholeSongCompletion.status,
       ensembleCoordination: committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
+      musicalTiming: committedMusicalTimingLock.passed ? "locked" : "needs-attention",
     }),
   };
 }
@@ -9353,22 +9385,27 @@ function runVoiceLeadingPass(sourceTracks, config) {
       let best = null;
       const visit = (index, voicing) => {
         if (index === choices.length) {
-          let score = 0;
-          for (let voice = 0; voice < voicing.length; voice += 1) {
-            const pitch = voicing[voice];
-            if (previous?.length) {
-              const distance = Math.min(...previous.map((note) => Math.abs(note.pitch - pitch)));
-              score += distance;
-              if (previous.some((note) => note.pitch === pitch)) score -= 7;
-            } else {
-              score += Math.abs(pitch - (id === "pad" ? 72 : 64)) * 0.18;
-            }
-            if (voice > 0) {
-              const spacing = pitch - voicing[voice - 1];
-              if (spacing < 3) score += 30;
-              if (spacing > 16) score += (spacing - 16) * 0.8;
-            }
-            if (id === "pad" && chordPitches.has(pitch)) score += 6;
+          const previousPitches = previous?.map((note) => note.pitch) ?? [];
+          let score = scoreVoiceLeadingCandidate(voicing, previousPitches, {
+            targetCenter: id === "pad" ? 72 : 64,
+            preferredMaxStep: 4,
+            registerWeight: previousPitches.length ? 0.12 : 0.18,
+            motionWeight: 1,
+            topVoiceWeight: 0.75,
+            bottomVoiceWeight: 0.45,
+            excessLeapWeight: 1.35,
+            exactCommonToneReward: 5.5,
+            pitchClassCommonToneReward: 0.25,
+            wideSpanThreshold: id === "pad" ? 28 : 24,
+            wideSpanWeight: 0.16,
+          });
+          for (let voice = 1; voice < voicing.length; voice += 1) {
+            const spacing = voicing[voice] - voicing[voice - 1];
+            if (spacing < 3) score += 30;
+            if (spacing > 16) score += (spacing - 16) * 0.8;
+          }
+          if (id === "pad") {
+            score += voicing.filter((pitch) => chordPitches.has(pitch)).length * 6;
           }
           if (bassCeiling != null && voicing[0] - bassCeiling < 7) {
             score += 80 + (7 - (voicing[0] - bassCeiling)) * 8;
@@ -9554,6 +9591,200 @@ function runNegativeSpacePass(sourceTracks, structure, config) {
       sectionId: breathSection?.id ?? null,
       windows,
       notesRemoved,
+    },
+  };
+}
+
+
+const MELODY_DIRECTOR_AUDIBLE_GENRES = new Set([
+  "hipHop", "rap", "trap", "pop", "popRadio", "neoSoul", "rnbSoul",
+  "house", "reggaeton", "afrobeats", "loFiHipHop", "synthwave",
+]);
+
+function runMelodyDirectorBreathingPass(sourceTracks, structure, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody) {
+    return {
+      tracks,
+      report: { phase: 50, version: 2, status: "complete", windows: [], notesRemoved: 0 },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const windows = [];
+  let notesRemoved = 0;
+  let notesShortened = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.phraseAnchor
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+    || note?.phraseCadenceRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const boundary = Math.min(
+        section.endBeat,
+        section.startBeat + (finite(phrase.startBarOffset) + finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const restBudget = clamp(finite(phrase.restBudget, 0.2), 0.08, 0.42);
+      const windowBeats = round(clamp(restBudget * 2.1, 0.22, 0.9));
+      const window = {
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(Math.max(phraseStart, boundary - windowBeats)),
+        end: round(boundary),
+        restBudget: round(restBudget),
+      };
+      windows.push(window);
+
+      const phraseNotes = melody.notes
+        .filter((note) => note.start >= phraseStart - 1e-6 && note.start < boundary - 1e-6)
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      if (phraseNotes.length < 4) continue;
+
+      if (!MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) continue;
+      const tail = [...phraseNotes]
+        .reverse()
+        .find((note) => !protectedNote(note) && note.start < window.end - 0.04);
+      if (!tail) continue;
+
+      const desiredEnd = Math.max(
+        tail.start + 0.08,
+        window.end - clamp(restBudget * 0.65, 0.12, 0.32),
+      );
+      const originalEnd = tail.start + Math.max(0.04, finite(tail.duration, 0.25));
+      if (originalEnd > desiredEnd + 0.03) {
+        tail.duration = round(Math.max(0.08, desiredEnd - tail.start));
+        tail.melodyDirectorBreathTail = true;
+        notesShortened += 1;
+      }
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      windows,
+      notesRemoved,
+      notesShortened,
+      policy: "protected-phrase-ending-breaths",
+    },
+  };
+}
+
+
+function runMelodyDirectorReentryPass(sourceTracks, structure, harmony, songBlueprint, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const melody = tracks.find((track) => track.id === "melody");
+  if (!melody || !MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)) {
+    return {
+      tracks,
+      report: { phase: 50.5, version: 2, status: "complete", changedNotes: 0, entries: [] },
+    };
+  }
+
+  const barBeats = beatsPerBar(config);
+  const entries = [];
+  let changedNotes = 0;
+  const protectedNote = (note) => Boolean(
+    note?.motifMemoryCore
+    || note?.motifMemoryVariantId
+    || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole
+    || note?.finalAssemblyRole
+    || note?.resolutionRole
+  );
+
+  for (const section of structure) {
+    const memory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
+    const director = memory?.melodyDirector;
+    if (!director?.phrases?.length) continue;
+
+    for (const phrase of director.phrases) {
+      const phraseStart = section.startBeat + finite(phrase.startBarOffset) * barBeats;
+      const phraseEnd = Math.min(
+        section.endBeat,
+        phraseStart + Math.max(1, finite(phrase.bars, director.phraseBars)) * barBeats,
+      );
+      const candidates = melody.notes
+        .filter((note) => (
+          note.start >= phraseStart - 1e-6
+          && note.start < Math.min(phraseEnd, phraseStart + barBeats * 1.25)
+        ))
+        .sort((left, right) => left.start - right.start || left.pitch - right.pitch);
+      const entry = candidates.find((note) => !protectedNote(note));
+      if (!entry) continue;
+
+      const chord = harmonyAt(harmony, entry.start + 0.001);
+      if (!chord?.tones?.length) continue;
+      const direction = ({
+        up: 1,
+        "slight-up": 1,
+        down: -1,
+        "slight-down": -1,
+      })[phrase.registerMotion] ?? 0;
+      const beforePitch = Math.round(finite(entry.pitch, 60));
+      const chordTarget = nearestChordTone(beforePitch, chord, direction);
+      const scaledTarget = nearestScalePitch(chordTarget, config, direction);
+      const maxLeap = phrase.sentenceRole === "question" ? 5 : 7;
+      const targetPitch = Math.abs(scaledTarget - beforePitch) <= maxLeap
+        ? scaledTarget
+        : beforePitch;
+
+      if (targetPitch !== beforePitch) {
+        entry.pitch = targetPitch;
+        changedNotes += 1;
+      }
+      entry.melodyDirectorEntry = true;
+      entry.melodyDirectorEntryRole = phrase.sentenceRole;
+      entry.melodyDirectorEntryTargetKind = phrase.targetKind;
+      entry.melodyDirectorEntryRegisterMotion = phrase.registerMotion;
+      entries.push({
+        sectionId: section.id,
+        phraseIndex: phrase.phraseIndex,
+        start: round(entry.start),
+        beforePitch,
+        afterPitch: Math.round(entry.pitch),
+        changed: targetPitch !== beforePitch,
+        sentenceRole: phrase.sentenceRole,
+        targetKind: phrase.targetKind,
+        registerMotion: phrase.registerMotion,
+      });
+    }
+  }
+
+  return {
+    tracks,
+    report: {
+      phase: 50.5,
+      version: 2,
+      status: "complete",
+      authority: "melody-director-v2",
+      changedNotes,
+      entries,
+      maxLeapSemitones: 7,
+      policy: "bounded-chord-aware-phrase-reentry",
     },
   };
 }
@@ -9940,7 +10171,20 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
   const voiceLeading = runVoiceLeadingPass(sourceTracks, config);
   const pocketCohesion = runPocketCohesionPass(voiceLeading.tracks, structure, grooveConductor, config);
   const negativeSpace = runNegativeSpacePass(pocketCohesion.tracks, structure, config);
-  const vocalSpace = runVocalSpacePass(negativeSpace.tracks, structure, config);
+  const melodyBreathing = runMelodyDirectorBreathingPass(
+    negativeSpace.tracks,
+    structure,
+    songBlueprint,
+    config,
+  );
+  const melodyReentry = runMelodyDirectorReentryPass(
+    melodyBreathing.tracks,
+    structure,
+    harmony,
+    songBlueprint,
+    config,
+  );
+  const vocalSpace = runVocalSpacePass(melodyReentry.tracks, structure, config);
   const ensembleCadence = runEnsembleCadencePass(
     vocalSpace.tracks,
     structure,
@@ -9958,6 +10202,8 @@ function runCreativePolishPasses(sourceTracks, structure, harmony, songBlueprint
     voiceLeading: voiceLeading.report,
     pocketCohesion: pocketCohesion.report,
     negativeSpace: negativeSpace.report,
+    melodyBreathing: melodyBreathing.report,
+    melodyReentry: melodyReentry.report,
     vocalSpace: vocalSpace.report,
     ensembleCadence: ensembleCadence.report,
     transitionHandoff: transitionHandoff.report,
@@ -10567,6 +10813,19 @@ function applyGenerationInterlocks(
           phraseMemorySourceSectionId: contract.phraseMemory.sourceSectionId,
           phraseRegisterStrategy: contract.phraseMemory.registerStrategy,
           phraseRecallStrength: contract.phraseMemory.recallStrength,
+          ...(trackId === "melody" && contract.phraseMemory.melodyDirector ? {
+            melodyDirectorVersion: contract.phraseMemory.melodyDirector.version,
+            melodyDirectorSentenceRole: contract.phraseMemory.melodyDirector.phrases?.[0]?.sentenceRole
+              ?? contract.phraseMemory.sentenceRole,
+            melodyDirectorLandingIntent: contract.phraseMemory.melodyDirector.phrases?.[0]?.landingIntent
+              ?? contract.phraseMemory.landingRole,
+            melodyDirectorRegisterMotion: contract.phraseMemory.melodyDirector.phrases?.[0]?.registerMotion
+              ?? "center",
+            melodyDirectorTargetKind: contract.phraseMemory.melodyDirector.phrases?.[0]?.targetKind
+              ?? "guide-tone",
+            melodyDirectorRestBudget: contract.phraseMemory.melodyDirector.phrases?.[0]?.restBudget
+              ?? 0.2,
+          } : {}),
         } : {}),
         ...(phraseMemoryDelta ? { phrasePerformanceDelta: phraseMemoryDelta } : {}),
         ...(Math.abs(phraseMemoryDurationScale - 1) > 1e-6 ? {
@@ -10628,11 +10887,16 @@ function applyPhraseResolutions(
   for (const section of structure) {
     const plan = blueprintPlanForSection(songBlueprint, section);
     const sectionPhraseMemory = phraseMemoryForSection(songBlueprint?.phraseMemory, section.id);
-    const phraseBars = clamp(
-      Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
-      2,
-      4,
-    );
+    const melodyDirectorPlan = trackId === "melody" && MELODY_DIRECTOR_AUDIBLE_GENRES.has(config.genre)
+      ? sectionPhraseMemory?.melodyDirector
+      : null;
+    const phraseBars = melodyDirectorPlan
+      ? clamp(Math.round(finite(melodyDirectorPlan.phraseBars, 4)), 2, 8)
+      : clamp(
+        Math.round(finite(plan?.tensionEnvelope?.phraseBars, config.complexity > 0.68 ? 2 : 4)),
+        2,
+        4,
+      );
     const boundaries = [];
     for (
       let boundary = section.startBeat + phraseBars * barBeats;
@@ -10660,15 +10924,35 @@ function applyPhraseResolutions(
       const previous = candidates.at(-2);
       const sectionBoundary = boundary >= section.endBeat - 0.05;
       const cadence = sectionBoundary ? (plan?.cadence ?? "resolve") : "continue";
-      const landingRole = phraseLandingRole({
+      const fallbackLandingRole = phraseLandingRole({
         boundaryIndex,
         boundaryCount: boundaries.length,
         cadence,
         trackId,
       });
+      const directorPhrase = melodyDirectorPlan?.phrases?.[
+        Math.min(boundaryIndex, Math.max(0, (melodyDirectorPlan?.phrases?.length ?? 1) - 1))
+      ] ?? null;
+      const directorLandingRole = {
+        question: "question",
+        answer: "answer",
+        resolve: "resolution",
+        resolution: "resolution",
+        lift: "lift",
+        suspension: "suspension",
+      }[directorPhrase?.landingIntent] ?? null;
+      const landingRole = directorLandingRole ?? fallbackLandingRole;
       const landingProfile = phraseLandingProfile(landingRole);
       const melodicDirection = previous ? Math.sign(landing.pitch - previous.pitch) : 0;
-      const direction = landingProfile.direction || melodicDirection;
+      const directorDirection = trackId === "melody"
+        ? ({
+          up: 1,
+          "slight-up": 1,
+          down: -1,
+          "slight-down": -1,
+        }[directorPhrase?.registerMotion] ?? 0)
+        : 0;
+      const direction = directorDirection || landingProfile.direction || melodicDirection;
       const finalSongLanding = boundary >= config.bars * barBeats - 0.05;
       const forceTonic = finalSongLanding || sectionBoundary && cadence === "resolve";
       const contract = generationInterlock?.sectionContracts?.find((candidate) => candidate.sectionId === section.id);
@@ -10722,6 +11006,17 @@ function applyPhraseResolutions(
         landing.phraseMemorySourceSectionId = sectionPhraseMemory.sourceSectionId;
         landing.phraseRegisterStrategy = sectionPhraseMemory.registerStrategy;
         landing.phraseRecallStrength = sectionPhraseMemory.recallStrength;
+        if (directorPhrase) {
+          landing.melodyDirectorVersion = melodyDirectorPlan.version;
+          landing.melodyDirectorSentenceRole = directorPhrase.sentenceRole;
+          landing.melodyDirectorLandingIntent = directorPhrase.landingIntent;
+          landing.melodyDirectorRegisterMotion = directorPhrase.registerMotion;
+          landing.melodyDirectorTargetKind = directorPhrase.targetKind;
+          landing.melodyDirectorRestBudget = directorPhrase.restBudget;
+          if (directorPhrase.lookAhead?.enabled) {
+            landing.melodyDirectorNextSectionId = directorPhrase.lookAhead.nextSectionId;
+          }
+        }
       }
     }
   }
@@ -11479,9 +11774,23 @@ function compose(config, options = {}) {
     grooveConductor,
     tracks: melodicFlow.tracks,
   };
-  const melodyPocketRepair = refineMelodyRhythmPocket(melodyPocketSource);
-  const melodyPocketTracks = melodyPocketRepair.accepted
-    ? melodyPocketRepair.song.tracks
+  const compositionPocketRepair = refineCompositionPocketLock(melodyPocketSource);
+  const melodyPocketRepair = compositionPocketRepair.accepted
+    ? {
+      accepted: compositionPocketRepair.after.melodyPocket.diagnostics.collisionRatio
+        < compositionPocketRepair.before.melodyPocket.diagnostics.collisionRatio - 1e-9,
+      changedNotes: compositionPocketRepair.diagnostics?.melodyChangedNotes ?? 0,
+      before: compositionPocketRepair.before.melodyPocket,
+      after: compositionPocketRepair.after.melodyPocket,
+    }
+    : {
+      accepted: false,
+      changedNotes: 0,
+      before: compositionPocketRepair.before.melodyPocket,
+      after: compositionPocketRepair.before.melodyPocket,
+    };
+  const melodyPocketTracks = compositionPocketRepair.accepted
+    ? compositionPocketRepair.song.tracks
     : melodicFlow.tracks;
   const rhythmMelodyLookaheadReport = Object.freeze({
     version: 2,
@@ -11667,6 +11976,21 @@ function compose(config, options = {}) {
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
     rhythmMelodyLookahead: rhythmMelodyLookaheadReport,
+    compositionPocketLock: Object.freeze({
+      version: 1,
+      accepted: compositionPocketRepair.accepted,
+      changedNotes: compositionPocketRepair.changedNotes,
+      diagnostics: compositionPocketRepair.diagnostics ?? null,
+      before: compositionPocketRepair.before,
+      after: compositionPocketRepair.after,
+      final: evaluateCompositionPocketLock({
+        genre: config.genre,
+        meta: { genre: config.genre, beatsPerBar: beatsPerBar(config), totalBeats },
+        structure,
+        grooveConductor,
+        tracks,
+      }),
+    }),
     melodyRhythmPocket: Object.freeze({
       version: 1,
       accepted: melodyPocketRepair.accepted,
@@ -11685,6 +12009,8 @@ function compose(config, options = {}) {
     ensembleCoordination: ensembleCoordination.report,
     pocketCohesion: creativePolish.pocketCohesion,
     negativeSpace: creativePolish.negativeSpace,
+    melodyBreathing: creativePolish.melodyBreathing,
+    melodyReentry: creativePolish.melodyReentry,
     vocalSpace: creativePolish.vocalSpace,
     ensembleCadence: creativePolish.ensembleCadence,
     transitionHandoff: creativePolish.transitionHandoff,

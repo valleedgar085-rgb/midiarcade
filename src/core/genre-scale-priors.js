@@ -13,6 +13,8 @@ const GENRE_ALIASES = Object.freeze({
   afrocubanlatinjazz: "afroCubanLatinJazz",
 });
 
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
 function aliasKey(value) {
   return String(value ?? "")
     .trim()
@@ -98,12 +100,21 @@ export const GENRE_SCALE_PRIORS = Object.freeze({
 
 export function normalizeGenreScalePriorId(value) {
   const canonical = normalizeGenreId(value);
-  if (GENRE_SCALE_PRIORS[canonical]) return canonical;
-  return GENRE_ALIASES[aliasKey(value)] ?? canonical;
+  if (hasOwn(GENRE_SCALE_PRIORS, canonical)) return canonical;
+
+  const direct = Object.keys(GENRE_SCALE_PRIORS)
+    .find((id) => id.toLowerCase() === String(canonical ?? "").trim().toLowerCase());
+  if (direct) return direct;
+
+  const key = aliasKey(value);
+  return hasOwn(GENRE_ALIASES, key) ? GENRE_ALIASES[key] : canonical;
 }
 
 export function genreScalePalette(genre) {
-  return GENRE_SCALE_PRIORS[normalizeGenreScalePriorId(genre)] ?? Object.freeze([]);
+  const id = normalizeGenreScalePriorId(genre);
+  return hasOwn(GENRE_SCALE_PRIORS, id)
+    ? GENRE_SCALE_PRIORS[id]
+    : Object.freeze([]);
 }
 
 export function genreScalePriorBonus(genre, scale) {

@@ -193,3 +193,173 @@ test("melody phrase candidates repair an isolated contour spike without changing
     before.tracks.find((track) => track.id === "bass"),
   );
 });
+
+
+test("phrase placement candidate shifts the intact phrase onto Groove DNA without rewriting its content", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes.forEach((note) => { note.start += 0.25; });
+  const before = structuredClone(song);
+
+  const candidates = createMelodyPhraseCandidates(song);
+  const placement = candidates.find((candidate) => candidate.id === "phrase-placement-lock");
+
+  assert.ok(placement, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id,
+    delta: candidate.phraseScoreDelta,
+  }))));
+  assert.equal(placement.changedNotes, 8);
+  assert.equal(placement.placementShiftBeats, -0.25);
+
+  const beforeMelody = before.tracks.find((track) => track.id === "melody").notes;
+  const afterMelody = placement.song.tracks.find((track) => track.id === "melody").notes;
+  assert.deepEqual(
+    afterMelody.map((note) => note.start),
+    beforeMelody.map((note) => note.start - 0.25),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.pitch),
+    beforeMelody.map((note) => note.pitch),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.duration),
+    beforeMelody.map((note) => note.duration),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.velocity),
+    beforeMelody.map((note) => note.velocity),
+  );
+  assert.ok(afterMelody.every((note) => note.phrasePlacementRole === "groove-dna-entry-lock"));
+  assert.deepEqual(
+    placement.song.tracks.find((track) => track.id === "drums"),
+    before.tracks.find((track) => track.id === "drums"),
+  );
+  assert.deepEqual(
+    placement.song.tracks.find((track) => track.id === "bass"),
+    before.tracks.find((track) => track.id === "bass"),
+  );
+});
+
+test("phrase refinement does not skip a high-quality melody when phrase placement is still weak", () => {
+  const song = sourceSong();
+  song.tracks.find((track) => track.id === "melody").notes.forEach((note) => { note.start += 0.25; });
+
+  const result = applyMelodyPhraseRefinement(
+    song,
+    { melodyPhraseRefinement: true },
+    () => evaluation(),
+    () => ({ passed: true }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.accepted, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.diagnostics.id, "phrase-placement-lock");
+});
+
+
+test("phrase conversation development turns a disconnected answer into a related variation without moving notes", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes = [
+    { start: 0.5, pitch: 60, duration: 0.25, velocity: 84 },
+    { start: 1.0, pitch: 64, duration: 0.25, velocity: 88 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
+    { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
+    { start: 4.5, pitch: 65, duration: 0.25, velocity: 90 },
+    { start: 5.0, pitch: 64, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
+  ];
+  const before = structuredClone(song);
+  const beforeReport = evaluateMelodyPhraseIntelligence(song);
+  assert.ok(
+    beforeReport.weakestConversationSection.metrics.phraseConversation < 0.72,
+    JSON.stringify(beforeReport),
+  );
+
+  const candidates = createMelodyPhraseCandidates(song);
+  const conversation = candidates.find((candidate) => candidate.id === "phrase-conversation-development");
+  assert.ok(conversation, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id,
+    phraseScoreDelta: candidate.phraseScoreDelta,
+    conversationDelta: candidate.conversationDelta,
+  }))));
+  assert.ok(conversation.conversationDelta >= 0.08, JSON.stringify(conversation));
+  assert.ok(conversation.changedNotes <= 3);
+
+  const beforeMelody = before.tracks.find((track) => track.id === "melody").notes;
+  const afterMelody = conversation.song.tracks.find((track) => track.id === "melody").notes;
+  assert.deepEqual(afterMelody.map((note) => note.start), beforeMelody.map((note) => note.start));
+  assert.deepEqual(afterMelody.map((note) => note.duration), beforeMelody.map((note) => note.duration));
+  assert.deepEqual(afterMelody.map((note) => note.velocity), beforeMelody.map((note) => note.velocity));
+  assert.deepEqual(afterMelody.slice(0, 3), beforeMelody.slice(0, 3), "statement phrase must remain exact");
+  assert.equal(afterMelody.at(-1).pitch, beforeMelody.at(-1).pitch, "protected answer landing must remain exact");
+  assert.ok(
+    afterMelody.some((note, index) => note.pitch !== beforeMelody[index].pitch),
+    "at least one internal answer pitch should develop",
+  );
+  assert.deepEqual(
+    conversation.song.tracks.find((track) => track.id === "drums"),
+    before.tracks.find((track) => track.id === "drums"),
+  );
+  assert.deepEqual(
+    conversation.song.tracks.find((track) => track.id === "bass"),
+    before.tracks.find((track) => track.id === "bass"),
+  );
+});
+
+test("high overall melody quality does not skip a weak statement-answer relationship", () => {
+  const song = sourceSong();
+  song.tracks.find((track) => track.id === "melody").notes = [
+    { start: 0.5, pitch: 60, duration: 0.25, velocity: 84 },
+    { start: 1.0, pitch: 64, duration: 0.25, velocity: 88 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 92 },
+    { start: 4.0, pitch: 67, duration: 0.25, velocity: 86 },
+    { start: 4.5, pitch: 65, duration: 0.25, velocity: 90 },
+    { start: 5.0, pitch: 64, duration: 0.5, velocity: 94, resolutionRole: "section-answer" },
+  ];
+
+  const result = applyMelodyPhraseRefinement(
+    song,
+    { melodyPhraseRefinement: true },
+    () => evaluation(),
+    () => ({ passed: true }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.accepted, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.diagnostics.id, "phrase-conversation-development");
+  assert.ok(result.diagnostics.conversationDelta >= 0.08, JSON.stringify(result.diagnostics));
+});
+
+
+test("melodic arc payoff repair raises only a bounded existing payoff note", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes = [
+    { start: 0.5, pitch: 72, duration: 0.5, velocity: 98 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 90 },
+    { start: 2.5, pitch: 65, duration: 0.25, velocity: 86 },
+    { start: 3.5, pitch: 64, duration: 0.25, velocity: 84 },
+    { start: 4.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 5.5, pitch: 65, duration: 0.25, velocity: 84 },
+    { start: 6.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 7.5, pitch: 62, duration: 0.75, velocity: 80, resolutionRole: "section-answer" },
+  ];
+  const before = structuredClone(song);
+  const candidates = createMelodyPhraseCandidates(song);
+  const arc = candidates.find((candidate) => candidate.id === "melodic-arc-payoff");
+  assert.ok(arc, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id, arcDelta: candidate.arcDelta, phraseScoreDelta: candidate.phraseScoreDelta,
+  }))));
+  assert.ok(arc.arcDelta >= 0.04, JSON.stringify(arc));
+  assert.ok(arc.changedNotes <= 2);
+  const beforeNotes = before.tracks.find((track) => track.id === "melody").notes;
+  const afterNotes = arc.song.tracks.find((track) => track.id === "melody").notes;
+  assert.equal(afterNotes.length, beforeNotes.length);
+  assert.deepEqual(afterNotes.map((note) => note.start), beforeNotes.map((note) => note.start));
+  assert.deepEqual(afterNotes.map((note) => note.duration), beforeNotes.map((note) => note.duration));
+  assert.deepEqual(afterNotes.map((note) => note.velocity), beforeNotes.map((note) => note.velocity));
+  assert.equal(afterNotes.at(-1).pitch, beforeNotes.at(-1).pitch);
+  assert.ok(afterNotes.some((note, index) => note.pitch !== beforeNotes[index].pitch));
+  assert.deepEqual(arc.song.tracks.find((track) => track.id === "drums"), before.tracks.find((track) => track.id === "drums"));
+  assert.deepEqual(arc.song.tracks.find((track) => track.id === "bass"), before.tracks.find((track) => track.id === "bass"));
+});

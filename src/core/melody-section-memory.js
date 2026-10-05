@@ -152,6 +152,166 @@ function rhythmSimilarity(source, target, sourceRange, targetRange) {
   return clamp(onsetScore * 0.8 + durationScore * 0.2);
 }
 
+function motifCoreSimilarity(source, target) {
+  if (source.length < 3 || target.length < 3) return 0;
+
+  // Phrase memory treats the opening three-note cell as the hook identity
+  // anchor. Compare the corresponding cells directly so an unrelated phrase
+  // cannot pass merely because a similar three-note shape appears somewhere
+  // else later in the section by accident.
+  const left = source.slice(0, 3);
+  const right = target.slice(0, 3);
+  const sourceIntervals = intervalSequence(left).map(wrappedInterval);
+  const targetIntervals = intervalSequence(right).map(wrappedInterval);
+  const sourceDirections = sourceIntervals.map((value) => Math.sign(value));
+  const targetDirections = targetIntervals.map((value) => Math.sign(value));
+
+  const intervalFit = sourceIntervals.reduce((sum, value, index) => {
+    const other = targetIntervals[index] ?? 0;
+    const distance = Math.min(6, Math.abs(value - other));
+    const exactness = 1 - distance / 6;
+    const directionMatch = sourceDirections[index] === targetDirections[index] ? 1 : 0;
+    return sum + exactness * 0.72 + directionMatch * 0.28;
+  }, 0) / 2;
+
+  const normalizedGaps = (notes) => {
+    const gaps = [
+      Math.max(0.0625, finite(notes[1]?.start) - finite(notes[0]?.start)),
+      Math.max(0.0625, finite(notes[2]?.start) - finite(notes[1]?.start)),
+    ];
+    const total = Math.max(0.125, gaps[0] + gaps[1]);
+    return gaps.map((value) => value / total);
+  };
+  const sourceRhythm = normalizedGaps(left);
+  const targetRhythm = normalizedGaps(right);
+  const rhythmFit = sourceRhythm.reduce((sum, value, index) => (
+    sum + (1 - Math.min(1, Math.abs(value - (targetRhythm[index] ?? 0)) * 2.5))
+  ), 0) / 2;
+
+  return clamp(intervalFit * 0.82 + rhythmFit * 0.18);
+}
+
+function normalizedSectionName(section) {
+  return String(section?.name ?? section?.type ?? section?.role ?? "").toLowerCase();
+}
+
+function isPayoffSection(section) {
+  return ["chorus", "hook", "drop", "refrain"].some((name) => normalizedSectionName(section).includes(name));
+}
+
+function peakPitch(notes) {
+  if (!notes.length) return null;
+  return Math.max(...notes.map((note) => finite(note?.pitch)));
+}
+
+function meanPitch(notes) {
+  if (!notes.length) return null;
+  return notes.reduce((sum, note) => sum + finite(note?.pitch), 0) / notes.length;
+}
+
+function peakPhase(notes, range) {
+  if (!notes.length || !range) return null;
+  let peak = notes[0];
+  for (const note of notes.slice(1)) {
+    if (finite(note?.pitch) > finite(peak?.pitch) + 1e-9) peak = note;
+  }
+  return clamp((finite(peak?.start) - range.start) / Math.max(0.25, range.length));
+}
+
+function previousMelodySection(song, sectionId) {
+  const ordered = structure(song);
+  const index = ordered.findIndex((entry) => String(entry?.id) === String(sectionId));
+  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+    const entry = ordered[cursor];
+    const notes = notesForSection(song, entry?.id);
+    if (notes.length >= 2) {
+      return {
+        section: entry,
+        range: sectionBounds(song, entry?.id),
+        notes,
+      };
+    }
+  }
+  return null;
+}
+
+function sectionStoryPayoff(song, {
+  sectionId,
+  relationship,
+  sourceNotes,
+  targetNotes,
+  targetRange,
+  motifCore,
+}) {
+  const targetSection = targetRange?.section ?? null;
+  // A contrast section is allowed to deliberately break recall grammar. 5H
+  // judges payoff only when the phrase-memory contract promises recall/return.
+  if (
+    !["recall", "return"].includes(String(relationship))
+    || !isPayoffSection(targetSection)
+    || targetNotes.length < 3
+    || sourceNotes.length < 3
+  ) {
+    return {
+      eligible: false,
+      score: 1,
+      peakLift: 0,
+      peakLiftFit: 1,
+      meanLift: 0,
+      meanLiftFit: 1,
+      peakPhase: null,
+      peakPlacementFit: 1,
+      previousSectionId: null,
+    };
+  }
+
+  const previous = previousMelodySection(song, sectionId);
+  const previousNotes = previous?.notes?.length ? previous.notes : sourceNotes;
+  const sourcePeak = peakPitch(sourceNotes);
+  const previousPeak = peakPitch(previousNotes);
+  const targetPeak = peakPitch(targetNotes);
+  const referencePeak = Math.max(finite(sourcePeak, targetPeak), finite(previousPeak, targetPeak));
+  const lift = finite(targetPeak) - referencePeak;
+  const peakLiftFit = lift >= 2 ? 1
+    : lift >= 0 ? clamp(0.65 + lift * 0.175)
+      : lift >= -1 ? 0.45
+        : lift >= -2 ? 0.2
+          : 0.05;
+
+  const targetMean = meanPitch(targetNotes);
+  const previousMean = meanPitch(previousNotes);
+  const meanLift = finite(targetMean) - finite(previousMean, targetMean);
+  const meanLiftFit = meanLift >= 1 ? 1
+    : meanLift >= 0 ? 0.72 + meanLift * 0.28
+      : meanLift >= -2 ? clamp(0.72 + meanLift * 0.22)
+        : 0.2;
+
+  const phase = peakPhase(targetNotes, targetRange);
+  const peakPlacementFit = phase == null ? 0.7
+    : phase >= 0.42 && phase <= 0.82 ? 1
+      : phase < 0.42 ? clamp(0.45 + (phase / 0.42) * 0.55)
+        : clamp(1 - ((phase - 0.82) / 0.18) * 0.5);
+
+  const score = clamp(
+    clamp(motifCore) * 0.36
+      + peakLiftFit * 0.4
+      + meanLiftFit * 0.14
+      + peakPlacementFit * 0.1,
+  );
+
+  return {
+    eligible: true,
+    score,
+    peakLift: lift,
+    peakLiftFit,
+    meanLift,
+    meanLiftFit,
+    peakPhase: phase,
+    peakPlacementFit,
+    previousSectionId: previous?.section?.id != null ? String(previous.section.id) : null,
+  };
+}
+
 function endingSimilarity(source, target) {
   const sourceTail = source.slice(-Math.min(3, source.length));
   const targetTail = target.slice(-Math.min(3, target.length));
@@ -329,7 +489,24 @@ export function evaluateMelodySectionMemory(song) {
     const contour = contourSimilarity(sourceNotes, targetNotes);
     const rhythm = rhythmSimilarity(sourceNotes, targetNotes, sourceRange, targetRange);
     const ending = endingSimilarity(sourceNotes, targetNotes);
-    const familiarity = clamp(contour * 0.46 + rhythm * 0.34 + ending * 0.2);
+    const motifCore = motifCoreSimilarity(sourceNotes, targetNotes);
+    const story = sectionStoryPayoff(song, {
+      sectionId: memory.sectionId,
+      relationship: memory.relationship,
+      sourceNotes,
+      targetNotes,
+      targetRange,
+      motifCore,
+    });
+    // 5G makes the audible hook core part of memory quality itself rather than
+    // a side diagnostic. Broad contour/rhythm still matter, but a return that
+    // loses its recognizable opening cell cannot score as strong memory.
+    const familiarity = clamp(
+      contour * 0.34
+        + motifCore * 0.24
+        + rhythm * 0.26
+        + ending * 0.16,
+    );
     const cloneRisk = exactCloneRisk(sourceNotes, targetNotes, sourceRange, targetRange);
     const metadata = metadataCoverage(targetNotes, memory.sourceSectionId);
     const metadataAccuracy = metadata.tagged ? metadata.accuracy : 0.72;
@@ -348,7 +525,7 @@ export function evaluateMelodySectionMemory(song) {
       metadataAccuracy,
       contrastEvidence,
     });
-    const score = Math.round(100 * (
+    const baseScore = Math.round(100 * (
       relationship === "contrast"
         ? relationshipFit * 0.58
           + contrastEvidence * 0.18
@@ -359,6 +536,12 @@ export function evaluateMelodySectionMemory(song) {
           + (1 - cloneRisk) * 0.12
           + metadataAccuracy * 0.08
     ));
+    // 5H gives payoff sections a small story-weighted share of their score.
+    // This keeps memory identity dominant while making a chorus that fails to
+    // lift above its setup measurably weaker than one that completes the arc.
+    const score = story.eligible
+      ? Math.round(baseScore * 0.88 + story.score * 12)
+      : baseScore;
 
     return Object.freeze({
       sectionId: String(memory.sectionId),
@@ -370,6 +553,16 @@ export function evaluateMelodySectionMemory(song) {
       score,
       metrics: Object.freeze({
         contourSimilarity: round(contour),
+        motifCoreSimilarity: round(motifCore),
+        sectionStoryEligible: story.eligible,
+        sectionStoryPayoff: round(story.score),
+        sectionStoryPeakLift: round(story.peakLift),
+        sectionStoryPeakLiftFit: round(story.peakLiftFit),
+        sectionStoryMeanLift: round(story.meanLift),
+        sectionStoryMeanLiftFit: round(story.meanLiftFit),
+        sectionStoryPeakPhase: story.peakPhase == null ? null : round(story.peakPhase),
+        sectionStoryPeakPlacementFit: round(story.peakPlacementFit),
+        sectionStoryPreviousSectionId: story.previousSectionId,
         rhythmSimilarity: round(rhythm),
         endingSimilarity: round(ending),
         familiarity: round(familiarity),
@@ -400,8 +593,32 @@ export function evaluateMelodySectionMemory(song) {
   const score = Math.round(available.reduce((sum, entry) => sum + entry.score, 0) / Math.max(1, available.length));
   const cloneViolations = available.filter((entry) => entry.metrics.cloneRisk >= 0.92);
   const weak = available.filter((entry) => entry.metrics.relationshipFit < 0.48);
-  const passed = available.length === targets.length && score >= 62 && cloneViolations.length === 0 && weak.length === 0;
-  const weakestSection = [...available].sort((left, right) => left.score - right.score)[0] ?? null;
+  const motifViolations = available.filter((entry) => {
+    if (entry.relationship === "contrast") return false;
+    const threshold = entry.relationship === "return" ? 0.56 : 0.42;
+    return finite(entry.metrics.motifCoreSimilarity) < threshold;
+  });
+  const storyViolations = available.filter((entry) => (
+    entry.metrics?.sectionStoryEligible === true
+    && finite(entry.metrics?.sectionStoryPayoff, 1) < 0.6
+  ));
+  const passed = available.length === targets.length
+    && score >= 62
+    && cloneViolations.length === 0
+    && weak.length === 0
+    && motifViolations.length === 0
+    && storyViolations.length === 0;
+  const weakestSection = motifViolations.length
+    ? [...motifViolations].sort((left, right) => (
+      finite(left.metrics?.motifCoreSimilarity) - finite(right.metrics?.motifCoreSimilarity)
+      || left.score - right.score
+    ))[0]
+    : storyViolations.length
+      ? [...storyViolations].sort((left, right) => (
+        finite(left.metrics?.sectionStoryPayoff, 1) - finite(right.metrics?.sectionStoryPayoff, 1)
+        || left.score - right.score
+      ))[0]
+      : [...available].sort((left, right) => left.score - right.score)[0] ?? null;
 
   return Object.freeze({
     version: 1,
@@ -412,9 +629,11 @@ export function evaluateMelodySectionMemory(song) {
     score,
     reason: available.length !== targets.length ? "incomplete-memory-comparison"
       : cloneViolations.length ? "memory-clone-risk"
-        : weak.length ? "memory-relationship-weak"
-          : score < 62 ? "memory-development-weak"
-            : "memory-development-coherent",
+        : motifViolations.length ? "motif-core-weak"
+          : storyViolations.length ? "section-story-payoff-weak"
+            : weak.length ? "memory-relationship-weak"
+              : score < 62 ? "memory-development-weak"
+                : "memory-development-coherent",
     weakestSection,
     sections: Object.freeze(reports),
   });

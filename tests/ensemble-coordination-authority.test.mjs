@@ -11,6 +11,7 @@ import {
   createEnsembleCoordinationContract,
   evaluateEnsembleCoordinationAuthority,
 } from "../src/core/ensemble-coordination-authority.js";
+import { evaluateCrossAuthorityCoherence } from "../src/core/cross-authority-coherence.js";
 
 test("section ensemble contracts publish all required role relationships deterministically", () => {
   const contract = createEnsembleCoordinationContract({
@@ -231,7 +232,12 @@ test("ensemble hardening exposes cloning, register crowding, and support-layer p
     "kickBassCloneRatio", "bassIndependence", "melodyChordCrowding",
     "leadHarmonySeparation", "supportForegroundOverlap", "supportRestraint",
     "leadPhraseOverlap", "phraseSeparation", "callResponseTiming",
+    "entranceExit", "transitionContinuity",
   ]) assert.ok(Number.isFinite(report.metrics[metric]), metric);
+  for (const section of report.sections) {
+    assert.ok(Number.isFinite(section.entranceExit), `entranceExit:${section.sectionId}`);
+    assert.ok(Number.isFinite(section.transitionContinuity), `transitionContinuity:${section.sectionId}`);
+  }
 });
 
 test("kick-bass cloning is penalized without requiring bass to ignore the groove", () => {
@@ -305,4 +311,26 @@ test("lead dialogue rewards turn-taking over synchronized competing phrases", ()
     crowded.metrics.leadDialogue <= healthy.metrics.leadDialogue,
     JSON.stringify({ healthy: healthy.metrics, crowded: crowded.metrics }),
   );
+});
+
+
+test("cross-authority diagnostics preserve independent entrance and transition measurements", () => {
+  const song = generateNew({
+    genre: "pop",
+    seed: "ensemble-independent-transition-diagnostics",
+    bars: 24,
+    candidateCount: 1,
+    targetedRepair: false,
+  });
+  const ensemble = evaluateEnsembleCoordinationAuthority(song);
+  const report = evaluateCrossAuthorityCoherence(song);
+  const bySection = new Map(ensemble.sections.map((entry) => [String(entry.sectionId), entry]));
+
+  assert.ok(report.sectionDiagnostics.length > 0);
+  for (const diagnostic of report.sectionDiagnostics) {
+    const source = bySection.get(String(diagnostic.sectionId));
+    assert.ok(source, diagnostic.sectionId);
+    assert.equal(diagnostic.relationships.entranceExit, source.entranceExit);
+    assert.equal(diagnostic.relationships.transitionContinuity, source.transitionContinuity);
+  }
 });
