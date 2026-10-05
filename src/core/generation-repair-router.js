@@ -77,6 +77,43 @@ const OWNER_MUTATIONS = Object.freeze({
   ensemble: ["topology", "timing"],
 });
 
+export function resolveEnsembleCoherenceRepairHint(report = null) {
+  const failures = Array.isArray(report?.sectionFailures) ? report.sectionFailures : [];
+  const first = failures.find((entry) => Array.isArray(entry?.failures) && entry.failures.length);
+  if (!first) {
+    return Object.freeze({
+      version: 1,
+      available: false,
+      owner: null,
+      specialist: null,
+      sectionId: null,
+      relationship: null,
+      allowedMutations: Object.freeze([]),
+      reason: "no-section-coherence-failure",
+    });
+  }
+  const relationship = String(first.failures[0]);
+  const mutationByRelationship = {
+    "kick-bass": ["timing", "duration"],
+    "bass-harmony": ["timing", "topology"],
+    "chord-melody": ["timing", "topology"],
+    "melody-counterline": ["timing", "topology"],
+    "density-balance": ["topology"],
+    "entrance-exit": ["topology", "timing"],
+    "transition-continuity": ["topology", "timing"],
+  };
+  return Object.freeze({
+    version: 1,
+    available: true,
+    owner: "ensemble",
+    specialist: SPECIALISTS.ensemble,
+    sectionId: first.sectionId ?? null,
+    relationship,
+    allowedMutations: Object.freeze([...(mutationByRelationship[relationship] ?? OWNER_MUTATIONS.ensemble)]),
+    reason: "committed-section-coherence-failure",
+  });
+}
+
 export function resolveWeaknessAuthority(diagnosis = {}) {
   const dimension = String(diagnosis?.weakestDimension ?? diagnosis?.focusDimension ?? "");
   const group = String(diagnosis?.group ?? diagnosis?.focusGroup ?? "");
