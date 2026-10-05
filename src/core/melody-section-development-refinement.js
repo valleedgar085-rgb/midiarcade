@@ -771,7 +771,9 @@ export function createMelodySectionDevelopmentCandidates(song, {
   const raw = before.reason === "motif-core-weak"
     ? [...motifSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
     : before.reason === "section-story-payoff-weak"
-      ? [...story, ...general].filter(Boolean)
+      // 5H owns this defect. If it can author a payoff candidate, do not let a
+      // larger generic 5G delta starve the actual failing authority.
+      ? (story.length ? [...story] : [...general]).filter(Boolean)
       : [motifExact, ...story, ...general].filter(Boolean);
   const seen = new Set();
   const limit = Math.max(
