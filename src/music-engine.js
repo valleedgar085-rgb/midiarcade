@@ -6531,6 +6531,7 @@ function generateLead(
         if ((development?.type === "octaveLift" || development?.type === "climax") && progress >= 0.42) pitch += counterpoint ? -12 : 12;
         if (
           sectionPlan?.registerLift
+          && !memoryCore
           && plannedTension >= (sectionPlan.registerLift > 0 ? 0.66 : 0.42)
           && !["climax", "octaveLift"].includes(development?.type)
           && progress >= 0.36
@@ -6546,7 +6547,13 @@ function generateLead(
           // The opening three-note memory cell owns its contour. Only the
           // final note of a recalled motif may be revoiced to the live chord;
           // snapping the first note changes both core intervals at once.
-          && (!memoryCore || eventIndex === activeMotif.events.length - 1)
+          && (
+            !memoryCore
+            || (
+              eventIndex === activeMotif.events.length - 1
+              && eventIndex >= 3
+            )
+          )
         ) {
           pitch = nearestChordTone(pitch, chord, degree === 0 ? 0 : Math.sign(degree));
         }
