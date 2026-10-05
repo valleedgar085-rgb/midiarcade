@@ -1,0 +1,35 @@
+name: Phase 5I Final Melody Director Fast Gate
+on:
+  push:
+    branches: [refactor/final-melody-director-consolidation-phase-5i]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  melody-director-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify consolidated Melody Director
+        run: >
+          node --test
+          tests/melody-director-consolidation-phase-5i.test.mjs
+          tests/melody-phrase-intelligence.test.mjs
+          tests/melody-phrase-refinement.test.mjs
+          tests/melody-section-development-refinement.test.mjs
+          tests/melody-section-memory.test.mjs
+          tests/melody-section-memory-gauntlet.test.mjs
+          tests/melody-motif-recall-evolution.test.mjs
+          tests/melody-section-story-phase-5h.test.mjs
+          tests/generation-executor-melody-memory.test.mjs
+          tests/musical-timing-lock.test.mjs
+          tests/composition-pocket-lock.test.mjs
+          tests/groove-authority-lock.test.mjs
+          tests/android-release-contract.test.mjs
+      - run: npm run build
