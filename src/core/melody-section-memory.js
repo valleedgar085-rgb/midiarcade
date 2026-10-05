@@ -656,7 +656,7 @@ export function evaluateMelodySectionMemory(song) {
   });
   const hookSignatureViolations = available.filter((entry) => {
     if (entry.relationship === "contrast") return false;
-    const threshold = entry.relationship === "return" ? 0.78 : 0.62;
+    const threshold = entry.relationship === "return" ? 0.74 : 0.60;
     return finite(entry.metrics.hookSignatureSimilarity) < threshold;
   });
   const storyViolations = available.filter((entry) => (
