@@ -97,7 +97,9 @@ test("musical timing lock catches final performed Groove DNA drift", () => {
 
 test("musical timing lock reports kick-bass connection without forcing cloning", () => {
   const source = song();
+  const drums = source.tracks.find((track) => track.id === "drums");
   const bass = source.tracks.find((track) => track.id === "bass");
+  drums.notes.push({ pitch: 36, start: 2, duration: 0.1, grooveSource: "groove.anchors" });
   bass.notes.push({
     pitch: 47,
     start: 1.5,
@@ -108,7 +110,7 @@ test("musical timing lock reports kick-bass connection without forcing cloning",
 
   const report = evaluateMusicalTimingLock(source);
 
-  assert.ok(report.metrics.kickBassConnection < 1);
+  assert.equal(report.metrics.kickBassConnection, 1);
   assert.ok(report.metrics.directKickBassLock < report.metrics.kickBassConnection);
   assert.equal(report.passed, true, "independent bass replies are diagnostic, not a forced kick clone");
 });
