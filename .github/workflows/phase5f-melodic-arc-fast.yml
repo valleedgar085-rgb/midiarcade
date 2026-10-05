@@ -1,0 +1,32 @@
+name: Phase 5F Melodic Arc Fast Gate
+on:
+  push:
+    branches: [validate-melodic-arc-5f-fast]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  melodic-arc-fast-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify melodic arc authority
+        run: >
+          node --test
+          tests/melody-phrase-intelligence.test.mjs
+          tests/melody-phrase-refinement.test.mjs
+          tests/melody-section-memory.test.mjs
+          tests/melody-section-development-refinement.test.mjs
+          tests/phrase-resolution-refinement.test.mjs
+          tests/composition-pocket-lock.test.mjs
+          tests/groove-authority-lock.test.mjs
+          tests/musical-timing-lock.test.mjs
+          tests/musical-timing-repair.test.mjs
+          tests/android-release-contract.test.mjs
+      - run: npm run build
