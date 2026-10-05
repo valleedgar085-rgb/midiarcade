@@ -453,148 +453,118 @@ export function sectionStoryPayoffCandidates(song, report) {
   if (!eligible.length) return [];
 
   const result = [];
+  const originalPitches = targetEntries.map(({ note }) => Math.round(finite(note?.pitch, 60)));
 
-  // Strategy A: establish one clear late peak, optionally lifting its approach
-  // note just enough to keep the melodic leap bounded.
+  const nearestAllowedInRange = (desired, minPitch, maxPitch) => (
+    [...allowedPitches]
+      .filter((pitch) => pitch >= minPitch && pitch <= maxPitch)
+      .sort((left, right) => (
+        Math.abs(left - desired) - Math.abs(right - desired)
+        || left - right
+      ))[0] ?? null
+  );
+
+  // Build the smallest scale-safe path needed to reach a late payoff peak.
+  // Unlike the old one-note repair, this can walk backward/forward through
+  // several editable notes until the new peak reconnects to authored material.
   for (const option of eligible) {
-    const currentPitch = Math.round(finite(option.entry.note?.pitch, 60));
-    if (payoffPitch <= currentPitch) continue;
+    const peakPosition = option.position;
+    const peakCurrent = originalPitches[peakPosition];
+    if (payoffPitch <= peakCurrent) continue;
 
-    const previous = targetEntries[option.position - 1];
-    const following = targetEntries[option.position + 1];
-    const candidate = cloneValue(song);
-    const track = melodyTrack(candidate);
-    const note = track?.notes?.[option.entry.index];
-    if (!note) continue;
+    const pitches = [...originalPitches];
+    const changedPositions = new Set([peakPosition]);
+    pitches[peakPosition] = payoffPitch;
+    let safe = true;
 
-    let changed = 0;
-    let previousPitch = previous ? Math.round(finite(previous.note?.pitch, payoffPitch)) : payoffPitch;
-    const followingPitch = following ? Math.round(finite(following.note?.pitch, payoffPitch)) : payoffPitch;
-
-    if (Math.abs(payoffPitch - previousPitch) > 10 && previous && !isProtectedAnchor(previous.note)) {
-      const desiredApproach = payoffPitch - Math.sign(payoffPitch - previousPitch) * 7;
-      const approachPitch = [...allowedPitches]
-        .sort((a, b) => Math.abs(a - desiredApproach) - Math.abs(b - desiredApproach) || a - b)
-        .find((pitch) => (
-          Math.abs(pitch - previousPitch) <= 10
-          && Math.abs(payoffPitch - pitch) <= 10
-        ));
-      if (approachPitch != null && approachPitch !== previousPitch) {
-        const approachNote = track?.notes?.[previous.index];
-        if (approachNote) {
-          approachNote.pitch = approachPitch;
-          tag(approachNote, report.sourceSectionId, "section-story-approach");
-          previousPitch = approachPitch;
-          changed += 1;
-        }
+    for (let position = peakPosition - 1; position >= 0; position -= 1) {
+      if (Math.abs(pitches[position] - pitches[position + 1]) <= 10) break;
+      const entry = targetEntries[position];
+      if (!entry?.note || isProtectedAnchor(entry.note)) {
+        safe = false;
+        break;
+      }
+      const nextPitch = pitches[position + 1];
+      const repaired = nearestAllowedInRange(
+        originalPitches[position],
+        Math.max(window.min, nextPitch - 10),
+        Math.min(dynamicMax, nextPitch + 10),
+      );
+      if (repaired == null) {
+        safe = false;
+        break;
+      }
+      pitches[position] = repaired;
+      changedPositions.add(position);
+      if (changedPositions.size > 6) {
+        safe = false;
+        break;
       }
     }
+    if (!safe) continue;
 
-    if (
-      Math.abs(payoffPitch - previousPitch) > 10
-      || Math.abs(followingPitch - payoffPitch) > 10
-    ) continue;
+    for (let position = peakPosition + 1; position < targetEntries.length; position += 1) {
+      if (Math.abs(pitches[position] - pitches[position - 1]) <= 10) break;
+      const entry = targetEntries[position];
+      if (!entry?.note || isProtectedAnchor(entry.note)) {
+        safe = false;
+        break;
+      }
+      const previousPitch = pitches[position - 1];
+      const repaired = nearestAllowedInRange(
+        originalPitches[position],
+        Math.max(window.min, previousPitch - 10),
+        Math.min(dynamicMax, previousPitch + 10),
+      );
+      if (repaired == null) {
+        safe = false;
+        break;
+      }
+      pitches[position] = repaired;
+      changedPositions.add(position);
+      if (changedPositions.size > 6) {
+        safe = false;
+        break;
+      }
+    }
+    if (!safe) continue;
 
-    note.pitch = payoffPitch;
-    tag(note, report.sourceSectionId, "section-story-payoff");
-    changed += 1;
-    result.push({
-      id: changed > 1 ? "lift-chorus-payoff-ramp" : "lift-chorus-payoff",
-      song: candidate,
-      changedNotes: changed,
+    // Only enforce leap safety on pairs touched by this repair. Existing
+    // authored leaps elsewhere in the section are outside 5H's authority.
+    const touchedPairsSafe = [...changedPositions].every((position) => {
+      const leftSafe = position <= 0 || Math.abs(pitches[position] - pitches[position - 1]) <= 10;
+      const rightSafe = position >= pitches.length - 1 || Math.abs(pitches[position + 1] - pitches[position]) <= 10;
+      return leftSafe && rightSafe;
     });
-    if (result.length >= 2) break;
-  }
+    if (!touchedPairsSafe) continue;
 
-  // Strategy B: build a short late-section arc when the return lives far below
-  // the setup register. Interpolate toward the payoff and back toward the next
-  // authored note so the result is a phrase, not one isolated giant leap.
-  const chronologicalEligible = [...eligible].sort((left, right) => left.position - right.position);
-  const runs = [];
-  for (const option of chronologicalEligible) {
-    const currentRun = runs.at(-1);
-    if (!currentRun || option.position !== currentRun.at(-1).position + 1) {
-      runs.push([option]);
-    } else {
-      currentRun.push(option);
-    }
-  }
-
-  const usableRuns = runs.filter((run) => run.length >= 3);
-  usableRuns.sort((left, right) => {
-    const leftDistance = Math.min(...left.map((entry) => Math.abs(entry.phase - 0.64)));
-    const rightDistance = Math.min(...right.map((entry) => Math.abs(entry.phase - 0.64)));
-    return leftDistance - rightDistance || right.length - left.length;
-  });
-
-  const run = usableRuns[0] ?? null;
-  if (run) {
-    const centerIndex = run.reduce((bestIndex, entry, index) => (
-      Math.abs(entry.phase - 0.64) < Math.abs(run[bestIndex].phase - 0.64)
-        ? index
-        : bestIndex
-    ), 0);
-    const startIndex = Math.max(0, Math.min(
-      run.length - Math.min(6, run.length),
-      centerIndex - 2,
-    ));
-    const arc = run.slice(startIndex, startIndex + Math.min(6, run.length));
-    const peakIndex = arc.reduce((bestIndex, entry, index) => (
-      Math.abs(entry.phase - 0.64) < Math.abs(arc[bestIndex].phase - 0.64)
-        ? index
-        : bestIndex
-    ), 0);
-
-    const first = arc[0];
-    const last = arc.at(-1);
-    const beforeArc = targetEntries[first.position - 1]?.note ?? first.entry.note;
-    const afterArc = targetEntries[last.position + 1]?.note ?? last.entry.note;
-    const startPitch = Math.round(finite(beforeArc?.pitch, first.entry.note?.pitch));
-    const endPitch = Math.round(finite(afterArc?.pitch, last.entry.note?.pitch));
     const candidate = cloneValue(song);
     const track = melodyTrack(candidate);
     let changed = 0;
-    const assigned = [];
-
-    const nearestAllowed = (desired) => [...allowedPitches].sort((a, b) => (
-      Math.abs(a - desired) - Math.abs(b - desired) || a - b
-    ))[0] ?? Math.round(desired);
-
-    for (let index = 0; index < arc.length; index += 1) {
-      const { entry } = arc[index];
-      const note = track?.notes?.[entry.index];
+    for (const position of [...changedPositions].sort((a, b) => a - b)) {
+      const entry = targetEntries[position];
+      const note = track?.notes?.[entry?.index];
       if (!note) continue;
-      let desired;
-      if (index <= peakIndex) {
-        const fraction = (index + 1) / Math.max(1, peakIndex + 1);
-        desired = startPitch + (payoffPitch - startPitch) * fraction;
-      } else {
-        const fraction = (index - peakIndex) / Math.max(1, arc.length - 1 - peakIndex);
-        desired = payoffPitch + (endPitch - payoffPitch) * fraction;
-      }
-      const nextPitch = nearestAllowed(desired);
-      assigned.push(nextPitch);
-      if (nextPitch === Math.round(finite(note.pitch, 60))) continue;
+      const nextPitch = pitches[position];
+      if (nextPitch === originalPitches[position]) continue;
       note.pitch = nextPitch;
       tag(
         note,
         report.sourceSectionId,
-        index === peakIndex ? "section-story-payoff" : "section-story-arc",
+        position === peakPosition ? "section-story-payoff" : "section-story-path",
       );
       changed += 1;
     }
+    if (!changed) continue;
 
-    const sequence = [startPitch, ...assigned, endPitch];
-    const leapSafe = sequence.slice(1).every(
-      (pitch, index) => Math.abs(pitch - sequence[index]) <= 10,
-    );
-    if (changed >= 2 && leapSafe) {
-      result.push({
-        id: "lift-chorus-payoff-arc",
-        song: candidate,
-        changedNotes: changed,
-      });
-    }
+    result.push({
+      id: changed === 1 ? "lift-chorus-payoff" : "lift-chorus-payoff-path",
+      song: candidate,
+      changedNotes: changed,
+      payoffPhase: round(option.phase),
+      payoffPitch,
+    });
+    if (result.length >= 3) break;
   }
 
   return result;
