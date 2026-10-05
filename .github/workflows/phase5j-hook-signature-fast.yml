@@ -1,0 +1,35 @@
+name: Phase 5J Hook Signature Fast Gate
+
+on:
+  push:
+    branches:
+      - feature/melody-hook-signature-phase-5j
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hook-signature:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run 5J recognizability tests
+        run: >
+          node --test
+          tests/melody-hook-signature-phase-5j.test.mjs
+          tests/melody-motif-recall-evolution.test.mjs
+          tests/melody-section-memory.test.mjs
+          tests/melody-section-development-refinement.test.mjs
+          tests/melody-section-story-phase-5h.test.mjs
+          tests/melody-director-consolidation-phase-5i.test.mjs
+      - name: Run full-song memory gauntlet
+        run: node --test tests/melody-section-memory-gauntlet.test.mjs
+      - name: Build web assets
+        run: npm run build
