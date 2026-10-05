@@ -1,0 +1,32 @@
+name: Phase 5G Motif Recall Fast Gate B
+on:
+  push:
+    branches: [validate-motif-recall-5g-fast-b]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  motif-recall-fast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify motif recall and melody memory
+        run: >
+          node --test
+          tests/melody-motif-recall-evolution.test.mjs
+          tests/melody-section-memory.test.mjs
+          tests/melody-section-development-refinement.test.mjs
+          tests/melody-phrase-intelligence.test.mjs
+          tests/melody-phrase-refinement.test.mjs
+          tests/phrase-resolution-refinement.test.mjs
+          tests/composition-pocket-lock.test.mjs
+          tests/groove-authority-lock.test.mjs
+          tests/musical-timing-lock.test.mjs
+          tests/android-release-contract.test.mjs
+      - run: npm run build
