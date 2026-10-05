@@ -4870,6 +4870,53 @@ function generateBass(
       );
     }
   }
+
+  // If the arrangement ends with an outro, guarantee one real bass resolution
+  // close to the final boundary. Groove DNA/harmony windows may legitimately
+  // stop earlier, but the audible song ending still needs a committed low-end
+  // landing. This only fills the final slot when no bass note already occupies
+  // it, so normal phrase density remains unchanged.
+  const finalSection = structure.at(-1);
+  if (finalSection?.name === "outro") {
+    const finalBoundary = Math.min(totalBeats, finite(finalSection.endBeat, totalBeats));
+    const resolutionStart = Math.max(
+      finite(finalSection.startBeat, Math.max(0, finalBoundary - barBeats)),
+      round(finalBoundary - 0.25, 4),
+    );
+    const existingResolution = notes.some((note) => Math.abs(note.start - resolutionStart) <= 0.06);
+    if (!existingResolution) {
+      const finalChord = harmonyAt(harmony, Math.max(0, finalBoundary - 0.05)) ?? harmony.at(-1);
+      if (finalChord) {
+        const finalIntensity = clamp(
+          finite(finalSection.intensity, 0.72) * (0.72 + config.energy * 0.36),
+          0.4,
+          1.08,
+        );
+        addNote(
+          notes,
+          rootMidi(finalChord, bassOctave),
+          resolutionStart,
+          Math.max(0.08, Math.min(0.21, finalBoundary - resolutionStart - 0.03)),
+          eventVelocity(
+            config,
+            settings,
+            finalIntensity,
+            rng.fork("bass-final-resolution"),
+            0.86,
+          ),
+          totalBeats,
+          {
+            bassRegisterRole: "sub-anchor",
+            phraseRole: "turnaround",
+            bassGrooveRole: "final-resolution",
+            bassPhraseDnaResolution: true,
+            sectionCompletionIntent: "final-bass-resolution",
+          },
+        );
+      }
+    }
+  }
+
   return notes;
 }
 
