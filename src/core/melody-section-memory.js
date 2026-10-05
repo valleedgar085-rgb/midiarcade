@@ -191,6 +191,58 @@ function motifCoreSimilarity(source, target) {
   return clamp(intervalFit * 0.82 + rhythmFit * 0.18);
 }
 
+function hookSignatureSimilarity(source, target) {
+  if (source.length < 4 || target.length < 4) {
+    return motifCoreSimilarity(source, target);
+  }
+
+  const left = source.slice(0, 4);
+  const right = target.slice(0, 4);
+  const sourceIntervals = intervalSequence(left).map(wrappedInterval);
+  const targetIntervals = intervalSequence(right).map(wrappedInterval);
+
+  const pitchFit = sourceIntervals.reduce((sum, value, index) => {
+    const other = targetIntervals[index] ?? 0;
+    const distance = Math.min(6, Math.abs(value - other));
+    const exactness = 1 - distance / 6;
+    const directionMatch = Math.sign(value) === Math.sign(other) ? 1 : 0;
+    return sum + exactness * 0.72 + directionMatch * 0.28;
+  }, 0) / 3;
+
+  const normalizedGaps = (notes) => {
+    const gaps = notes.slice(1).map((note, index) => (
+      Math.max(0.0625, finite(note?.start) - finite(notes[index]?.start))
+    ));
+    const total = Math.max(0.1875, gaps.reduce((sum, value) => sum + value, 0));
+    return gaps.map((value) => value / total);
+  };
+  const sourceGaps = normalizedGaps(left);
+  const targetGaps = normalizedGaps(right);
+  const rhythmFit = sourceGaps.reduce((sum, value, index) => (
+    sum + (1 - Math.min(1, Math.abs(value - (targetGaps[index] ?? 0)) * 3))
+  ), 0) / 3;
+
+  const durationProfile = (notes) => {
+    const values = notes.map((note) => Math.max(0.05, finite(note?.duration, 0.25)));
+    const total = Math.max(0.2, values.reduce((sum, value) => sum + value, 0));
+    return values.map((value) => value / total);
+  };
+  const sourceDurations = durationProfile(left);
+  const targetDurations = durationProfile(right);
+  const articulationFit = sourceDurations.reduce((sum, value, index) => (
+    sum + (1 - Math.min(1, Math.abs(value - (targetDurations[index] ?? 0)) * 3))
+  ), 0) / 4;
+
+  // Listener recognition is dominated by the first four-note pitch shape.
+  // Rhythm and articulation reinforce identity, but a register-lifted hook
+  // should still count as the same hook.
+  return clamp(
+    pitchFit * 0.80
+      + rhythmFit * 0.15
+      + articulationFit * 0.05,
+  );
+}
+
 function normalizedSectionName(section) {
   return String(section?.name ?? section?.type ?? section?.role ?? "").toLowerCase();
 }
@@ -490,6 +542,7 @@ export function evaluateMelodySectionMemory(song) {
     const rhythm = rhythmSimilarity(sourceNotes, targetNotes, sourceRange, targetRange);
     const ending = endingSimilarity(sourceNotes, targetNotes);
     const motifCore = motifCoreSimilarity(sourceNotes, targetNotes);
+    const hookSignature = hookSignatureSimilarity(sourceNotes, targetNotes);
     const story = sectionStoryPayoff(song, {
       sectionId: memory.sectionId,
       relationship: memory.relationship,
@@ -502,10 +555,11 @@ export function evaluateMelodySectionMemory(song) {
     // a side diagnostic. Broad contour/rhythm still matter, but a return that
     // loses its recognizable opening cell cannot score as strong memory.
     const familiarity = clamp(
-      contour * 0.34
-        + motifCore * 0.24
-        + rhythm * 0.26
-        + ending * 0.16,
+      contour * 0.27
+        + motifCore * 0.16
+        + hookSignature * 0.29
+        + rhythm * 0.16
+        + ending * 0.12,
     );
     const cloneRisk = exactCloneRisk(sourceNotes, targetNotes, sourceRange, targetRange);
     const metadata = metadataCoverage(targetNotes, memory.sourceSectionId);
@@ -554,6 +608,7 @@ export function evaluateMelodySectionMemory(song) {
       metrics: Object.freeze({
         contourSimilarity: round(contour),
         motifCoreSimilarity: round(motifCore),
+        hookSignatureSimilarity: round(hookSignature),
         sectionStoryEligible: story.eligible,
         sectionStoryPayoff: round(story.score),
         sectionStoryPeakLift: round(story.peakLift),
@@ -598,6 +653,11 @@ export function evaluateMelodySectionMemory(song) {
     const threshold = entry.relationship === "return" ? 0.56 : 0.42;
     return finite(entry.metrics.motifCoreSimilarity) < threshold;
   });
+  const hookSignatureViolations = available.filter((entry) => {
+    if (entry.relationship === "contrast") return false;
+    const threshold = entry.relationship === "return" ? 0.78 : 0.62;
+    return finite(entry.metrics.hookSignatureSimilarity) < threshold;
+  });
   const storyViolations = available.filter((entry) => (
     entry.metrics?.sectionStoryEligible === true
     && finite(entry.metrics?.sectionStoryPayoff, 1) < 0.6
@@ -607,13 +667,19 @@ export function evaluateMelodySectionMemory(song) {
     && cloneViolations.length === 0
     && weak.length === 0
     && motifViolations.length === 0
+    && hookSignatureViolations.length === 0
     && storyViolations.length === 0;
   const weakestSection = motifViolations.length
     ? [...motifViolations].sort((left, right) => (
       finite(left.metrics?.motifCoreSimilarity) - finite(right.metrics?.motifCoreSimilarity)
       || left.score - right.score
     ))[0]
-    : storyViolations.length
+    : hookSignatureViolations.length
+      ? [...hookSignatureViolations].sort((left, right) => (
+        finite(left.metrics?.hookSignatureSimilarity) - finite(right.metrics?.hookSignatureSimilarity)
+        || left.score - right.score
+      ))[0]
+      : storyViolations.length
       ? [...storyViolations].sort((left, right) => (
         finite(left.metrics?.sectionStoryPayoff, 1) - finite(right.metrics?.sectionStoryPayoff, 1)
         || left.score - right.score
@@ -630,7 +696,8 @@ export function evaluateMelodySectionMemory(song) {
     reason: available.length !== targets.length ? "incomplete-memory-comparison"
       : cloneViolations.length ? "memory-clone-risk"
         : motifViolations.length ? "motif-core-weak"
-          : storyViolations.length ? "section-story-payoff-weak"
+          : hookSignatureViolations.length ? "hook-signature-weak"
+            : storyViolations.length ? "section-story-payoff-weak"
             : weak.length ? "memory-relationship-weak"
               : score < 62 ? "memory-development-weak"
                 : "memory-development-coherent",
