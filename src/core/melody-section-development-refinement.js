@@ -250,18 +250,87 @@ function sectionStoryPayoffCandidate(song, report) {
       || left.position - right.position
     ));
   const selected = options[0];
-  if (!selected) return null;
+  if (selected) {
+    const candidate = cloneValue(song);
+    const track = melodyTrack(candidate);
+    const note = track?.notes?.[selected.entry.index];
+    if (!note) return null;
+    note.pitch = selected.nextPitch;
+    tag(note, report.sourceSectionId, "section-story-payoff");
+    return {
+      id: "lift-chorus-payoff",
+      song: candidate,
+      changedNotes: 1,
+    };
+  }
+
+  // If the setup sits an octave or more above the returning section, a single
+  // note cannot create the payoff without a harsh leap. Build a bounded
+  // three-note staircase *after* the protected 5G motif core instead.
+  const stagedEntries = targetEntries
+    .map((entry, position) => ({ entry, position, phase: phaseFor(entry) }))
+    .filter(({ position }) => position >= 3)
+    .filter(({ entry }) => !isProtectedAnchor(entry.note))
+    .filter(({ phase }) => phase >= 0.38 && phase <= 0.84);
+
+  const scalePitches = (minimum, maximum) => {
+    const pitches = [];
+    for (let pitch = Math.ceil(minimum); pitch <= Math.floor(maximum); pitch += 1) {
+      if (scale?.size && !scale.has(mod12(pitch))) continue;
+      pitches.push(pitch);
+    }
+    return pitches;
+  };
+  const highestSafe = (minimum, maximum) => scalePitches(minimum, maximum).at(-1) ?? null;
+  const desiredPeak = highestSafe(
+    Math.max(window.min, Math.min(referencePeak, window.max - 2)),
+    window.max,
+  );
+  if (desiredPeak == null) return null;
+
+  let staged = null;
+  for (let index = 0; index <= stagedEntries.length - 3 && !staged; index += 1) {
+    const trio = stagedEntries.slice(index, index + 3);
+    if (
+      trio[1].position !== trio[0].position + 1
+      || trio[2].position !== trio[1].position + 1
+    ) continue;
+
+    const peakPitch = desiredPeak;
+    const middlePitch = highestSafe(Math.max(window.min, peakPitch - 8), peakPitch - 4);
+    const leadPitch = middlePitch == null
+      ? null
+      : highestSafe(Math.max(window.min, middlePitch - 8), middlePitch - 4);
+    if (leadPitch == null || middlePitch == null) continue;
+
+    const before = targetEntries[trio[0].position - 1]?.note;
+    const after = targetEntries[trio[2].position + 1]?.note;
+    if (before && Math.abs(leadPitch - finite(before.pitch, leadPitch)) > 10) continue;
+    if (after && Math.abs(finite(after.pitch, peakPitch) - peakPitch) > 12) continue;
+
+    staged = [
+      { option: trio[0], pitch: leadPitch },
+      { option: trio[1], pitch: middlePitch },
+      { option: trio[2], pitch: peakPitch },
+    ];
+  }
+  if (!staged) return null;
 
   const candidate = cloneValue(song);
   const track = melodyTrack(candidate);
-  const note = track?.notes?.[selected.entry.index];
-  if (!note) return null;
-  note.pitch = selected.nextPitch;
-  tag(note, report.sourceSectionId, "section-story-payoff");
+  let changedNotes = 0;
+  for (const step of staged) {
+    const note = track?.notes?.[step.option.entry.index];
+    if (!note || note.pitch === step.pitch) continue;
+    note.pitch = step.pitch;
+    tag(note, report.sourceSectionId, "section-story-payoff");
+    changedNotes += 1;
+  }
+  if (!changedNotes) return null;
   return {
     id: "lift-chorus-payoff",
     song: candidate,
-    changedNotes: 1,
+    changedNotes,
   };
 }
 
