@@ -38,6 +38,7 @@ import {
 } from "./core/genre-arrangement-profile.js";
 import { analyzeTonalIntegrity, evaluateTonalLicense, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
+import { selectVoiceLeadingCandidate } from "./core/voice-leading-authority.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
@@ -5894,36 +5895,59 @@ function repairFinalRockPowerChordAttacks(sourceTracks, harmony, config) {
   return { tracks, repairs };
 }
 
+function shapeChordVoicingCandidate(pitches, chord, spread, config = null) {
+  const chosen = [...(pitches ?? [])];
+  if (config?.genre === "neoSoul" && chosen.length >= 4 && mod(chosen[0], 12) === chord.rootPc) chosen.shift();
+  if (["house", "techno"].includes(config?.genre) && chosen.length > 3) chosen.splice(1, chosen.length - 3);
+  if (spread > 0.55 && chosen.length >= 3) chosen[chosen.length - 1] = clamp(chosen[chosen.length - 1] + 12, 0, 127);
+  if (config?.genre === "synthwave" && chosen.length >= 3) chosen[0] = clamp(chosen[0] - 12, 0, 127);
+  return [...new Set(chosen)].sort((a, b) => a - b);
+}
+
 function chordVoicing(chord, octave, previous, spread, rng, config = null) {
   if (config?.genre === "rock") return rockPowerChordVoicing(chord, octave, previous);
   const root = rootMidi(chord, octave);
   const intervals = chord.tones.map((tone) => mod(tone - chord.rootPc, 12));
   const candidates = [];
   for (let inversion = 0; inversion < Math.min(intervals.length, 4); inversion += 1) {
-    let pitches = intervals.map((interval, index) => root + interval + (index < inversion ? 12 : 0)).sort((a, b) => a - b);
+    const pitches = intervals
+      .map((interval, index) => root + interval + (index < inversion ? 12 : 0))
+      .sort((a, b) => a - b);
     for (const shift of [-12, 0, 12]) {
       const shifted = pitches.map((pitch) => pitch + shift);
       if (shifted.every((pitch) => pitch >= 24 && pitch <= 108)) candidates.push(shifted);
     }
   }
+
+  const shapedCandidates = candidates
+    .map((candidate) => shapeChordVoicingCandidate(candidate, chord, spread, config))
+    .filter((candidate) => candidate.length > 0);
   const center = root + 5;
-  const score = (pitches) => {
-    const register = Math.abs(pitches.reduce((sum, pitch) => sum + pitch, 0) / pitches.length - center);
-    if (!previous?.length) return register;
-    const topVoiceLeap = Math.abs((pitches[pitches.length - 1] ?? 0) - (previous[previous.length - 1] ?? 0));
-    const voiceMotion = pitches.reduce((sum, pitch, index) => sum + Math.abs(pitch - previous[Math.min(index, previous.length - 1)]), 0);
-    const leapPenalty = topVoiceLeap > 4 ? topVoiceLeap * 1.5 : 0;
-    return voiceMotion + leapPenalty + register * 0.35;
-  };
-  candidates.sort((a, b) => score(a) - score(b));
-  const shortlist = candidates.slice(0, Math.min(3, candidates.length));
-  const chosen = [...(rng.pick(shortlist) ?? [root, root + 4, root + 7])];
-  if (config?.genre === "neoSoul" && chosen.length >= 4 && mod(chosen[0], 12) === chord.rootPc) chosen.shift();
-  if (["house", "techno"].includes(config?.genre) && chosen.length > 3) chosen.splice(1, chosen.length - 3);
-  if (spread > 0.55 && chosen.length >= 3) chosen[chosen.length - 1] = clamp(chosen[chosen.length - 1] + 12, 0, 127);
-  if (config?.genre === "synthwave" && chosen.length >= 3) chosen[0] = clamp(chosen[0] - 12, 0, 127);
-  chosen.sort((a, b) => a - b);
-  return chosen;
+  const fallback = shapeChordVoicingCandidate(
+    [root, root + 4, root + 7],
+    chord,
+    spread,
+    config,
+  );
+  const chosen = selectVoiceLeadingCandidate(shapedCandidates, previous, {
+    targetCenter: center,
+    preferredMaxStep: 4,
+    registerWeight: 0.35,
+    motionWeight: 1,
+    topVoiceWeight: 0.9,
+    bottomVoiceWeight: 0.5,
+    excessLeapWeight: 1.45,
+    exactCommonToneReward: 1.6,
+    pitchClassCommonToneReward: 0.35,
+    wideSpanThreshold: config?.genre === "synthwave" ? 36 : 24,
+    wideSpanWeight: config?.genre === "synthwave" ? 0.08 : 0.18,
+  });
+
+  // Voice-leading authority owns candidate selection. RNG remains in the
+  // signature because surrounding generation APIs pass it, but it no longer
+  // chooses among musically inferior near-misses.
+  void rng;
+  return chosen.length ? chosen : fallback;
 }
 
 function generateChords(config, structure, harmony, style, settings, rng, grooveConductor = null, songBlueprint = null) {
