@@ -57,6 +57,7 @@ import {
   grooveDNAConductorLanes,
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
+import { evaluateMusicalTimingLock } from "./core/musical-timing-lock.js";
 import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
 import {
   constrainMelodicDegree,
@@ -9246,6 +9247,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     }
     : song.producerPass;
   const committedEnsembleCoordination = evaluateEnsembleCoordinationAuthority(song);
+  const committedMusicalTimingLock = evaluateMusicalTimingLock(song);
   const wholeSongCompletion = evaluateWholeSongCompletion({
     ...song,
     registerIntegrity: {
@@ -9283,8 +9285,9 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     producerPass,
     wholeSongCompletion,
     committedEnsembleCoordination,
+    committedMusicalTimingLock,
     committedAuthorityValidation: Object.freeze({
-      version: 3,
+      version: 4,
       producerIntent: producerIntentReport.status,
       groove: finalRhythmLock.status,
       tonal: tonalIntegrity.status,
@@ -9292,6 +9295,7 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
       assembly: finalAssembly.status,
       wholeSongCompletion: wholeSongCompletion.status,
       ensembleCoordination: committedEnsembleCoordination.passed ? "coordinated" : "needs-attention",
+      musicalTiming: committedMusicalTimingLock.passed ? "locked" : "needs-attention",
     }),
   };
 }
