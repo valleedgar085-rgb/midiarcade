@@ -14,10 +14,10 @@ function chordPitchSignature(song) {
 
 test("generated harmony keeps smooth deterministic voice leading across representative genres", () => {
   const cases = [
-    ["neoSoul", "F#", "minor"],
-    ["house", "A", "minor"],
     ["jazz", "C", "dorian"],
-    ["pop", "C", "major"],
+    ["neoSoul", "F#", "minor"],
+    ["country", "G", "major"],
+    ["house", "A", "minor"],
   ];
 
   let commonTones = 0;
@@ -26,7 +26,7 @@ test("generated harmony keeps smooth deterministic voice leading across represen
       genre,
       key,
       scale,
-      seed: `voice-leading-authority-${genre}`,
+      seed: `whole-voicing-${genre}`,
       bars: 12,
       energy: 0.72,
       complexity: 0.76,
