@@ -21,6 +21,8 @@ jobs:
           java-version: 21
           cache: gradle
       - run: npm ci
+      - name: Build web assets
+        run: npm run build
       - name: Sync Android assets
         run: npx cap sync android
       - name: Build Phase 5H Preview APK
