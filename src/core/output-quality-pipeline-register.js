@@ -23,6 +23,7 @@ import {
 import {
   createMelodyPhraseCandidates,
   MAX_MELODY_PHRASE_CANDIDATES,
+  MIN_PHRASE_CONVERSATION_SCORE,
 } from "./melody-phrase-refinement.js";
 import { evaluateMelodyPhraseIntelligence } from "./melody-phrase-intelligence.js";
 import { evaluateMelodySectionMemory } from "./melody-section-memory.js";
@@ -1031,6 +1032,14 @@ export function applyMelodyContinuityRefinement(song, config, evaluateCandidate,
 }
 
 function compareMelodyPhraseAssessments(left, right) {
+  const conversationNeeded = Math.min(
+    finite(left?.beforeConversationScore, 1),
+    finite(right?.beforeConversationScore, 1),
+  ) < MIN_PHRASE_CONVERSATION_SCORE;
+  if (conversationNeeded) {
+    const conversationDelta = finite(right?.conversationDelta) - finite(left?.conversationDelta);
+    if (Math.abs(conversationDelta) > 1e-9) return conversationDelta;
+  }
   const phraseDelta = right.phraseScoreDelta - left.phraseScoreDelta;
   if (Math.abs(phraseDelta) > 1e-9) return phraseDelta;
   const scoreDelta = right.scoreDelta - left.scoreDelta;
@@ -1047,10 +1056,16 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const conversationGain = finite(candidate?.conversationDelta, 0);
+  const intentGain = candidate.phraseScoreDelta >= 3
+    || (
+      conversationGain >= 0.08
+      && candidate.phraseScoreDelta >= -1
+    );
   const accepted = Boolean(
     release?.passed
     && scaleSafe
-    && candidate.phraseScoreDelta >= 3
+    && intentGain
     && scoreDelta >= -0.5
     && floorDelta >= -0.5
     && protectedSafe
@@ -1066,7 +1081,7 @@ function assessMelodyPhraseCandidate(candidate, before, beforeFloor, evaluateCan
     accepted,
     reason: !release?.passed ? "release-gate"
       : !scaleSafe ? "scale-safety"
-        : candidate.phraseScoreDelta < 3 ? "phrase-gain-too-small"
+        : !intentGain ? "phrase-gain-too-small"
           : !protectedSafe ? "protected-dimension-regression"
             : scoreDelta < -0.5 || floorDelta < -0.5 ? "full-song-regression"
               : accepted ? "melody-phrase-win" : "critic-regression",
@@ -1084,11 +1099,16 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     phraseBefore?.weakestPlacementSection?.metrics?.phrasePlacement,
     1,
   );
+  const phraseConversation = finite(
+    phraseBefore?.weakestConversationSection?.metrics?.phraseConversation,
+    1,
+  );
   if (
     phraseBefore.passed
     && phraseBefore.score >= MELODY_PHRASE_ATTEMPT_CEILING
     && leapDiscipline >= 0.72
     && phrasePlacement >= 0.76
+    && phraseConversation >= MIN_PHRASE_CONVERSATION_SCORE
   ) {
     return {
       song,
@@ -1096,6 +1116,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
         beforePhraseScore: phraseBefore.score,
         leapDiscipline: round(leapDiscipline, 3),
         phrasePlacement: round(phrasePlacement, 3),
+        phraseConversation: round(phraseConversation, 3),
       }),
     };
   }
@@ -1139,6 +1160,9 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
     beforePhraseScore: finite(selected?.beforePhraseScore),
     afterPhraseScore: finite(selected?.afterPhraseScore),
     phraseScoreDelta: finite(selected?.phraseScoreDelta),
+    beforeConversationScore: round(selected?.beforeConversationScore, 3),
+    afterConversationScore: round(selected?.afterConversationScore, 3),
+    conversationDelta: round(selected?.conversationDelta, 3),
     beforeScore: round(before?.score),
     afterScore: round(selected?.after?.score),
     scoreDelta: round(selected?.scoreDelta),
@@ -1155,6 +1179,7 @@ export function applyMelodyPhraseRefinement(song, config, evaluateCandidate, eva
       accepted: true,
       changedNotes: diagnostics.changedNotes,
       phraseScoreDelta: diagnostics.phraseScoreDelta,
+      conversationDelta: diagnostics.conversationDelta,
       scoreDelta: diagnostics.scoreDelta,
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
