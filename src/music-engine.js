@@ -58,7 +58,8 @@ import {
 } from "./core/groove-intelligence.js";
 import { evaluateGrooveAuthorityLock } from "./core/groove-authority-lock.js";
 import { evaluateMusicalTimingLock } from "./core/musical-timing-lock.js";
-import { evaluateMelodyRhythmPocket, refineMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import { evaluateMelodyRhythmPocket } from "./core/melody-rhythm-pocket.js";
+import { evaluateCompositionPocketLock, refineCompositionPocketLock } from "./core/composition-pocket-lock.js";
 import {
   constrainMelodicDegree,
   hookSignatureAdjustment,
@@ -11741,9 +11742,23 @@ function compose(config, options = {}) {
     grooveConductor,
     tracks: melodicFlow.tracks,
   };
-  const melodyPocketRepair = refineMelodyRhythmPocket(melodyPocketSource);
-  const melodyPocketTracks = melodyPocketRepair.accepted
-    ? melodyPocketRepair.song.tracks
+  const compositionPocketRepair = refineCompositionPocketLock(melodyPocketSource);
+  const melodyPocketRepair = compositionPocketRepair.accepted
+    ? {
+      accepted: compositionPocketRepair.after.melodyPocket.diagnostics.collisionRatio
+        < compositionPocketRepair.before.melodyPocket.diagnostics.collisionRatio - 1e-9,
+      changedNotes: compositionPocketRepair.diagnostics?.melodyChangedNotes ?? 0,
+      before: compositionPocketRepair.before.melodyPocket,
+      after: compositionPocketRepair.after.melodyPocket,
+    }
+    : {
+      accepted: false,
+      changedNotes: 0,
+      before: compositionPocketRepair.before.melodyPocket,
+      after: compositionPocketRepair.before.melodyPocket,
+    };
+  const melodyPocketTracks = compositionPocketRepair.accepted
+    ? compositionPocketRepair.song.tracks
     : melodicFlow.tracks;
   const rhythmMelodyLookaheadReport = Object.freeze({
     version: 2,
@@ -11929,6 +11944,21 @@ function compose(config, options = {}) {
     voiceLeading: creativePolish.voiceLeading,
     melodicFlow: melodicFlow.report,
     rhythmMelodyLookahead: rhythmMelodyLookaheadReport,
+    compositionPocketLock: Object.freeze({
+      version: 1,
+      accepted: compositionPocketRepair.accepted,
+      changedNotes: compositionPocketRepair.changedNotes,
+      diagnostics: compositionPocketRepair.diagnostics ?? null,
+      before: compositionPocketRepair.before,
+      after: compositionPocketRepair.after,
+      final: evaluateCompositionPocketLock({
+        genre: config.genre,
+        meta: { genre: config.genre, beatsPerBar: beatsPerBar(config), totalBeats },
+        structure,
+        grooveConductor,
+        tracks,
+      }),
+    }),
     melodyRhythmPocket: Object.freeze({
       version: 1,
       accepted: melodyPocketRepair.accepted,
