@@ -60,7 +60,6 @@ function nearestPitchWithClass(reference, pitchClass, { min = 48, max = 84 } = {
 }
 function nearestScaleNeighbor(song, pitch, direction) {
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
-  const dynamicMax = Math.min(88, Math.max(window.max, Math.ceil(referencePeak + 2)));
   const scale = scalePitchClasses(song);
   const source = Math.round(finite(pitch, 60));
   if (!scale?.size) {
@@ -147,7 +146,7 @@ function motifCoreRecallCandidate(song, report) {
 
   const nearestAllowed = (desired) => {
     const choices = [];
-    for (let pitch = window.min; pitch <= dynamicMax; pitch += 1) {
+    for (let pitch = window.min; pitch <= window.max; pitch += 1) {
       if (scale?.size && !scale.has(mod12(pitch))) continue;
       choices.push(pitch);
     }
@@ -395,13 +394,14 @@ function sectionStoryPayoffCandidates(song, report) {
   const previousPeak = Math.max(...previousEntries.map((entry) => finite(entry.note?.pitch, 60)));
   const referencePeak = Math.max(sourcePeak, previousPeak);
   const window = rolePreferredRegisterWindow("melody") ?? { min: 57, max: 79 };
+  const dynamicMax = Math.min(88, Math.max(window.max, Math.ceil(referencePeak + 2)));
   const scale = scalePitchClasses(song);
   const phaseFor = (entry) => (
     (finite(entry.note?.start) - targetRange.start)
     / Math.max(0.25, targetRange.end - targetRange.start)
   );
   const allowedPitches = [];
-  for (let pitch = window.min; pitch <= window.max; pitch += 1) {
+  for (let pitch = window.min; pitch <= dynamicMax; pitch += 1) {
     if (!scale?.size || scale.has(mod12(pitch))) allowedPitches.push(pitch);
   }
   if (!allowedPitches.length) return [];
