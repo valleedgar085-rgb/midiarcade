@@ -17,12 +17,13 @@ test("musical timing repair is fail-closed behind mutation, authority, and relea
   const start = executor.indexOf("let musicalTimingRepair = null");
   const end = executor.indexOf("const committedMelodySectionMemory", start);
   const stage = executor.slice(start, end);
-  assert.match(stage, /auditStageMutationAuthority([sS]*?"musicalTimingRepair"/);
-  assert.match(stage, /committedAuthorityRegression/);
-  assert.match(stage, /evaluateSongReleaseGate/);
-  assert.match(stage, /mutationAuthority\.passed/);
-  assert.match(stage, /authorityRegression\.passed/);
-  assert.match(stage, /committedRelease\.passed/);
+  assert.ok(stage.includes("auditStageMutationAuthority"), "stage must audit mutation authority");
+  assert.ok(stage.includes('"musicalTimingRepair"'), "stage must identify the strict timing repair authority");
+  assert.ok(stage.includes("committedAuthorityRegression"), "stage must recheck committed authorities");
+  assert.ok(stage.includes("evaluateSongReleaseGate"), "stage must rerun the release gate");
+  assert.ok(stage.includes("mutationAuthority.passed"), "mutation audit must gate commit");
+  assert.ok(stage.includes("authorityRegression.passed"), "authority regression must gate commit");
+  assert.ok(stage.includes("committedRelease.passed"), "release gate must gate commit");
 });
 
 test("musical timing repair has strict timing-only mutation authority", () => {
