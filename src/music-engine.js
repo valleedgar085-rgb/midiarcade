@@ -4762,30 +4762,13 @@ function generateBass(
       offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
     }
 
-    const isFinalHarmonyWindow = chord.start + chord.duration >= totalBeats - 0.05;
-    const isOutroResolutionWindow = section?.name === "outro" && isFinalHarmonyWindow;
-    if (isOutroResolutionWindow) {
-      const finalResolutionOffset = round(Math.max(0, chord.duration - 0.25), 4);
-      if (!offsets.some((offset) => Math.abs(offset - finalResolutionOffset) <= 0.06)) {
-        offsets = uniqueGrooveOffsets([...offsets, finalResolutionOffset], chord.duration);
-      }
-    }
-
     const nextChord = harmony[eventIndex + 1];
     const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
     const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
     for (let index = 0; index < offsets.length; index += 1) {
       // Keep a dependable statement/reply bass line without restoring the
       // unbounded all-pulse behavior that can overload mobile playback.
-      // The one exception is the final authored outro pulse: once Bass Phrase
-      // DNA writes a resolution attack, the renderer must realize it so the
-      // song actually lands instead of probabilistically dropping the ending.
-      const finalAuthoredResolution = isOutroResolutionWindow && index === offsets.length - 1;
-      if (
-        index >= guaranteedPulseCount
-        && !finalAuthoredResolution
-        && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))
-      ) continue;
+      if (index >= guaranteedPulseCount && !rng.bool(clamp(settings.density * intensity, 0.08, 0.98))) continue;
       const absoluteStart = chord.start + offsets[index];
       const barOffset = round(mod(absoluteStart, barBeats), 4);
       const matchesPulse = (lane) => (barPlan?.[lane] ?? []).some((pulse) => Math.abs(pulse - barOffset) < 0.011);
@@ -4864,56 +4847,9 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
-          ...(finalAuthoredResolution ? { bassPhraseDnaResolution: true } : {}),
           ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
         },
       );
-    }
-  }
-
-  // If the arrangement ends with an outro, guarantee one real bass resolution
-  // close to the final boundary. Groove DNA/harmony windows may legitimately
-  // stop earlier, but the audible song ending still needs a committed low-end
-  // landing. This only fills the final slot when no bass note already occupies
-  // it, so normal phrase density remains unchanged.
-  const finalSection = structure.at(-1);
-  if (finalSection?.name === "outro") {
-    const finalBoundary = Math.min(totalBeats, finite(finalSection.endBeat, totalBeats));
-    const resolutionStart = Math.max(
-      finite(finalSection.startBeat, Math.max(0, finalBoundary - barBeats)),
-      round(finalBoundary - 0.25, 4),
-    );
-    const existingResolution = notes.some((note) => Math.abs(note.start - resolutionStart) <= 0.06);
-    if (!existingResolution) {
-      const finalChord = harmonyAt(harmony, Math.max(0, finalBoundary - 0.05)) ?? harmony.at(-1);
-      if (finalChord) {
-        const finalIntensity = clamp(
-          finite(finalSection.intensity, 0.72) * (0.72 + config.energy * 0.36),
-          0.4,
-          1.08,
-        );
-        addNote(
-          notes,
-          rootMidi(finalChord, bassOctave),
-          resolutionStart,
-          Math.max(0.08, Math.min(0.21, finalBoundary - resolutionStart - 0.03)),
-          eventVelocity(
-            config,
-            settings,
-            finalIntensity,
-            rng.fork("bass-final-resolution"),
-            0.86,
-          ),
-          totalBeats,
-          {
-            bassRegisterRole: "sub-anchor",
-            phraseRole: "turnaround",
-            bassGrooveRole: "final-resolution",
-            bassPhraseDnaResolution: true,
-            sectionCompletionIntent: "final-bass-resolution",
-          },
-        );
-      }
     }
   }
 
