@@ -1,3 +1,9 @@
+import {
+  applyPatternEvolution,
+  createPatternEvolutionPlan,
+  patternEvolutionSeed,
+} from "./pattern-evolution-director.js";
+
 const BASE_GRID_STEPS = 16;
 
 function finite(value, fallback = 0) {
@@ -872,6 +878,13 @@ export function createGrooveDNA(input = {}, {
     const section = sectionForBar(normalizedSections, bar);
     const sectionIndex = normalizedSections.findIndex((candidate) => candidate.id === section.id);
     const nextSection = sectionIndex >= 0 ? normalizedSections[sectionIndex + 1] ?? null : null;
+    const patternEvolution = createPatternEvolutionPlan({ section, bar });
+    const patternBaseSeed = patternEvolutionSeed({
+      seed,
+      genre,
+      sectionId: section.id,
+      plan: patternEvolution,
+    });
     const protectedSpaceSteps = scaleSteps(cellPolicy.protectedSpaces, gridSteps);
     const openingBoundary = bars >= 12
       && bar === 0
@@ -899,14 +912,14 @@ export function createGrooveDNA(input = {}, {
         baseSteps,
         grammar.probability[lane],
         lockedSteps,
-        `${seed}:${genre}:${bar}:${lane}`,
+        `${patternBaseSeed}:${lane}:probability`,
       );
       const transformed = applyTransforms(probabilitySteps, grammar.transforms, {
         lane,
-        bar,
+        bar: patternEvolution.memoryAnchorBar,
         section,
         gridSteps,
-        seed: `${seed}:${genre}:${lane}`,
+        seed: `${patternBaseSeed}:${lane}`,
         tripletAmount,
       });
       const factor = grammar.density[lane]
@@ -934,16 +947,21 @@ export function createGrooveDNA(input = {}, {
         lockedSteps,
         transformAuthorizedSteps,
         protectedSteps,
-        `${seed}:${genre}:${bar}:${lane}:density`,
+        `${patternBaseSeed}:${lane}:density`,
       );
-      const variationAmount = genre === "jazz"
-        ? 0
-        : Math.round(variation * (lane === "hat" ? 2 : 1));
-      const variedCandidate = variationAmount > 0 && randomUnit(`${seed}:${genre}:${bar}:${lane}:variation`) < variation * 0.42
-        ? rotateSteps(densitySteps, randomUnit(`${seed}:${bar}:${lane}:direction`) < 0.5 ? -variationAmount : variationAmount, gridSteps)
-        : densitySteps;
+      const evolvedPattern = applyPatternEvolution({
+        steps: densitySteps,
+        allowedSteps: transformAuthorizedSteps,
+        requiredSteps: lockedSteps,
+        protectedSteps,
+        gridSteps,
+        plan: patternEvolution,
+        variation: genre === "jazz" ? 0 : variation,
+        seed: `${patternBaseSeed}:${patternEvolution.role}:${lane}`,
+        lane,
+      });
       const openingShapedCandidate = shapeOpeningLaneSteps(
-        variedCandidate,
+        evolvedPattern.steps,
         lane,
         gridSteps,
         openingBoundary,
@@ -962,6 +980,10 @@ export function createGrooveDNA(input = {}, {
         probabilitySteps: Object.freeze(probabilitySteps),
         densitySteps: Object.freeze(densitySteps),
         steps: Object.freeze(variedSteps),
+        patternEvolution: Object.freeze({
+          ...patternEvolution,
+          edits: Object.freeze([...(evolvedPattern.edits ?? [])]),
+        }),
         transitionFillSteps: Object.freeze(fillSteps),
         snareAuthority: lane === "snare"
           ? Object.freeze({
@@ -987,7 +1009,7 @@ export function createGrooveDNA(input = {}, {
         evolvedRelationship,
         beatsPerStep,
         gridSteps,
-        `${seed}:${genre}:${bar}:${role}`,
+        `${patternBaseSeed}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
@@ -1007,6 +1029,7 @@ export function createGrooveDNA(input = {}, {
       sectionId: section.id,
       sectionRole: sectionRole(section),
       sectionEvolution: Object.freeze({ ...sectionEvolutionProfile(section) }),
+      patternEvolution,
       openingBoundary,
       transitionBoundary: Boolean(nextSection && bar === section.startBar + section.bars - 1),
       nextSectionRole: nextSection ? sectionRole(nextSection) : null,
@@ -1044,6 +1067,15 @@ export function createGrooveDNA(input = {}, {
     beatsPerBar,
     gridSteps,
     beatsPerStep: round(beatsPerStep),
+    patternEvolution: Object.freeze({
+      version: 2,
+      id: "pattern-evolution-director-v2",
+      cycleBars: 4,
+      phraseFamilies: Object.freeze(["A", "B"]),
+      variationPolicy: "bounded-localized",
+      preservesRequiredSteps: true,
+      preservesProtectedSpaces: true,
+    }),
     pipeline: Object.freeze([
       "base-rhythm",
       "probability",
