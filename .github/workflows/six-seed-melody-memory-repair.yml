@@ -1,0 +1,29 @@
+name: Six-Seed Melody Memory Repair
+on:
+  push:
+    branches: [fix/melody-memory-six-seeds]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  six-seed-memory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run six-seed memory matrix
+        run: node --test tests/melody-section-memory-gauntlet.test.mjs
+      - name: Run focused melody regressions
+        run: >
+          node --test
+          tests/melody-section-development-refinement.test.mjs
+          tests/melody-section-memory.test.mjs
+          tests/melody-section-story-phase-5h.test.mjs
+          tests/melody-motif-recall-evolution.test.mjs
+          tests/melody-director-consolidation-phase-5i.test.mjs
+      - run: npm run build
