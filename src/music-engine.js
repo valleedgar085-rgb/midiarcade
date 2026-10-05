@@ -4762,11 +4762,18 @@ function generateBass(
       offsets = [0, chord.duration / 2].filter((offset, index) => index === 0 || offset >= 0.5);
     }
 
+    const isFinalHarmonyWindow = chord.start + chord.duration >= totalBeats - 0.05;
+    const isOutroResolutionWindow = section?.name === "outro" && isFinalHarmonyWindow;
+    if (isOutroResolutionWindow) {
+      const finalResolutionOffset = round(Math.max(0, chord.duration - 0.25), 4);
+      if (!offsets.some((offset) => Math.abs(offset - finalResolutionOffset) <= 0.06)) {
+        offsets = uniqueGrooveOffsets([...offsets, finalResolutionOffset], chord.duration);
+      }
+    }
+
     const nextChord = harmony[eventIndex + 1];
     const isTightHipHopBass = ["hipHop", "rap"].includes(config.genre) && Boolean(grooveConductor);
     const guaranteedPulseCount = isTightHipHopBass ? Math.min(2, offsets.length) : 1;
-    const isFinalHarmonyWindow = chord.start + chord.duration >= totalBeats - 0.05;
-    const isOutroResolutionWindow = section?.name === "outro" && isFinalHarmonyWindow;
     for (let index = 0; index < offsets.length; index += 1) {
       // Keep a dependable statement/reply bass line without restoring the
       // unbounded all-pulse behavior that can overload mobile playback.
