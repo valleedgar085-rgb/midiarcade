@@ -193,3 +193,65 @@ test("melody phrase candidates repair an isolated contour spike without changing
     before.tracks.find((track) => track.id === "bass"),
   );
 });
+
+
+test("phrase placement candidate shifts the intact phrase onto Groove DNA without rewriting its content", () => {
+  const song = sourceSong();
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes.forEach((note) => { note.start += 0.25; });
+  const before = structuredClone(song);
+
+  const candidates = createMelodyPhraseCandidates(song);
+  const placement = candidates.find((candidate) => candidate.id === "phrase-placement-lock");
+
+  assert.ok(placement, JSON.stringify(candidates.map((candidate) => ({
+    id: candidate.id,
+    delta: candidate.phraseScoreDelta,
+  }))));
+  assert.equal(placement.changedNotes, 8);
+  assert.equal(placement.placementShiftBeats, -0.25);
+
+  const beforeMelody = before.tracks.find((track) => track.id === "melody").notes;
+  const afterMelody = placement.song.tracks.find((track) => track.id === "melody").notes;
+  assert.deepEqual(
+    afterMelody.map((note) => note.start),
+    beforeMelody.map((note) => note.start - 0.25),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.pitch),
+    beforeMelody.map((note) => note.pitch),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.duration),
+    beforeMelody.map((note) => note.duration),
+  );
+  assert.deepEqual(
+    afterMelody.map((note) => note.velocity),
+    beforeMelody.map((note) => note.velocity),
+  );
+  assert.ok(afterMelody.every((note) => note.phrasePlacementRole === "groove-dna-entry-lock"));
+  assert.deepEqual(
+    placement.song.tracks.find((track) => track.id === "drums"),
+    before.tracks.find((track) => track.id === "drums"),
+  );
+  assert.deepEqual(
+    placement.song.tracks.find((track) => track.id === "bass"),
+    before.tracks.find((track) => track.id === "bass"),
+  );
+});
+
+test("phrase refinement does not skip a high-quality melody when phrase placement is still weak", () => {
+  const song = sourceSong();
+  song.tracks.find((track) => track.id === "melody").notes.forEach((note) => { note.start += 0.25; });
+
+  const result = applyMelodyPhraseRefinement(
+    song,
+    { melodyPhraseRefinement: true },
+    () => evaluation(),
+    () => ({ passed: true }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.accepted, true, JSON.stringify(result.diagnostics));
+  assert.equal(result.diagnostics.id, "phrase-placement-lock");
+});
