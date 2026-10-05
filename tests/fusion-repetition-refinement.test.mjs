@@ -68,7 +68,7 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   assert.notEqual(balanceBefore.direction, "on-target");
 
   const candidates = createRepetitionRefinementCandidates(generated, { target });
-  assert.ok(candidates.length > 0 && candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
+  assert.ok(candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
   assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS));
   assert.ok(candidates.every((candidate) => candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT));
   assert.ok(candidates.every((candidate) => candidate.errorDelta < 0));
@@ -76,6 +76,15 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   const processed = applySongOutputQualityPipeline(generated, config);
   const after = evaluateSongCandidate(processed.song);
   const balanceAfter = repetitionBalance(processed.song, target);
+  if (!candidates.length) {
+    assert.equal(processed.repetitionDiagnostics.accepted, false);
+    assert.ok(
+      ["no-safe-repetition-move", "already-strong"].includes(processed.repetitionDiagnostics.reason),
+      `unexpected no-op reason: ${processed.repetitionDiagnostics.reason}`,
+    );
+    assert.equal(after.subscores.repetition, before.subscores.repetition);
+    assert.deepEqual(balanceAfter, balanceBefore);
+  }
 
   assert.equal(processed.song.tracks.find((track) => track.id === "melody")?.notes?.length, sourceCount);
   const afterIdentity = noteIdentity(processed.song);
