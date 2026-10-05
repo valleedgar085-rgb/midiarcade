@@ -844,7 +844,7 @@ export function createMelodySectionDevelopmentCandidates(song, {
   // identifies one of those defects, reserve the tiny candidate budget for its
   // actual owner instead of letting unrelated contour/ending moves crowd it out.
   const raw = before.reason === "motif-core-weak"
-    ? [...motifSearch, ...motifDirection, motifExact, ...general].filter(Boolean)
+    ? [motifExact, ...motifSearch, ...motifDirection, ...general].filter(Boolean)
     : before.reason === "hook-signature-weak"
       ? [hookSignature, motifExact, ...general].filter(Boolean)
       : before.reason === "section-story-payoff-weak"
