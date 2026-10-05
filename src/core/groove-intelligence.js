@@ -1009,7 +1009,7 @@ export function createGrooveDNA(input = {}, {
         evolvedRelationship,
         beatsPerStep,
         gridSteps,
-        `${patternBaseSeed}:${role}`,
+        `${seed}:${genre}:${bar}:${role}`,
         { wrap: !openingBoundary },
       ).filter((step) => !protectedSpaceSteps.some((space) => Math.abs(space - step) < 1e-6));
       relationships[role] = Object.freeze({
