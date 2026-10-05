@@ -198,3 +198,35 @@ test("sections without a real statement-answer pair stay neutral for phrase conv
   assert.equal(report.weakestSection.metrics.phraseConversationPairs, 0);
   assert.equal(report.weakestSection.metrics.phraseConversation, 0.76);
 });
+
+
+test("melodic arc critic rewards a late payoff and resolution over an early flat peak", () => {
+  const intentional = fixture([
+    { start: 0.5, pitch: 60, duration: 0.25, velocity: 78 },
+    { start: 1.5, pitch: 62, duration: 0.25, velocity: 80 },
+    { start: 2.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 3.5, pitch: 65, duration: 0.25, velocity: 84 },
+    { start: 4.5, pitch: 67, duration: 0.25, velocity: 88 },
+    { start: 5.5, pitch: 72, duration: 0.5, velocity: 98 },
+    { start: 6.5, pitch: 69, duration: 0.25, velocity: 90 },
+    { start: 7.5, pitch: 67, duration: 0.75, velocity: 86 },
+  ]);
+  const earlyPeak = fixture([
+    { start: 0.5, pitch: 72, duration: 0.5, velocity: 98 },
+    { start: 1.5, pitch: 67, duration: 0.25, velocity: 90 },
+    { start: 2.5, pitch: 65, duration: 0.25, velocity: 86 },
+    { start: 3.5, pitch: 64, duration: 0.25, velocity: 84 },
+    { start: 4.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 5.5, pitch: 65, duration: 0.25, velocity: 84 },
+    { start: 6.5, pitch: 64, duration: 0.25, velocity: 82 },
+    { start: 7.5, pitch: 62, duration: 0.75, velocity: 80 },
+  ]);
+  const good = evaluateMelodyPhraseIntelligence(intentional);
+  const weak = evaluateMelodyPhraseIntelligence(earlyPeak);
+  assert.ok(good.weakestArcSection.metrics.melodicArcPayoff >= 0.7, JSON.stringify(good));
+  assert.ok(weak.weakestArcSection.metrics.melodicArcPayoff < 0.7, JSON.stringify(weak));
+  assert.ok(
+    good.weakestArcSection.metrics.melodicArcPayoff > weak.weakestArcSection.metrics.melodicArcPayoff,
+    JSON.stringify({ good, weak }),
+  );
+});

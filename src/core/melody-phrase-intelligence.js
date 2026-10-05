@@ -275,6 +275,67 @@ function phraseConversation(notes, beatsPerBar = 4) {
   };
 }
 
+function melodicArcPayoff(notes, range) {
+  if (!range || notes.length < 4) return { score: 0.74, peakPhase: null, peakPitch: null };
+  const ordered = [...notes].sort((a, b) => finite(a.start) - finite(b.start));
+  const pitches = ordered.map((note) => finite(note.pitch));
+  const velocities = ordered.map((note) => finite(note.velocity, 84));
+  const minPitch = Math.min(...pitches);
+  const maxPitch = Math.max(...pitches);
+  const pitchSpan = Math.max(1, maxPitch - minPitch);
+  const minVelocity = Math.min(...velocities);
+  const maxVelocity = Math.max(...velocities);
+  const velocitySpan = Math.max(1, maxVelocity - minVelocity);
+  const sectionLength = Math.max(0.25, finite(range.end) - finite(range.start));
+
+  const emphasis = ordered.map((note) => {
+    const pitchEnergy = (finite(note.pitch) - minPitch) / pitchSpan;
+    const velocityEnergy = (finite(note.velocity, 84) - minVelocity) / velocitySpan;
+    const durationEnergy = clamp(finite(note.duration, 0.25) / 0.9);
+    // Melodic peak is primarily contour/register authority. Performance
+    // emphasis can support a peak, but a loud/held cadence must not falsely
+    // become the section's melodic high point.
+    return pitchEnergy * 0.78 + velocityEnergy * 0.17 + durationEnergy * 0.05;
+  });
+  let peakIndex = 0;
+  for (let index = 1; index < emphasis.length; index += 1) {
+    if (emphasis[index] > emphasis[peakIndex] + 1e-9) peakIndex = index;
+  }
+  const peak = ordered[peakIndex];
+  const peakPhase = clamp((finite(peak.start) - finite(range.start)) / sectionLength);
+  const peakPlacement = peakPhase >= 0.52 && peakPhase <= 0.86
+    ? 1
+    : peakPhase < 0.52
+      ? clamp(1 - (0.52 - peakPhase) / 0.52)
+      : clamp(1 - (peakPhase - 0.86) / 0.14);
+
+  const early = emphasis.slice(0, Math.max(1, Math.floor(emphasis.length * 0.4)));
+  const lateStart = Math.max(1, Math.floor(emphasis.length * 0.55));
+  const late = emphasis.slice(lateStart);
+  const earlyMean = early.reduce((sum, value) => sum + value, 0) / early.length;
+  const lateMean = late.reduce((sum, value) => sum + value, 0) / Math.max(1, late.length);
+  const developmentLift = clamp(0.5 + (lateMean - earlyMean) * 1.15);
+
+  const ending = ordered.at(-1);
+  const resolutionDrop = Math.max(0, finite(peak.pitch) - finite(ending.pitch));
+  const endingAfterPeak = peakIndex < ordered.length - 1;
+  const resolutionFit = endingAfterPeak
+    ? clamp(0.5 + Math.min(7, resolutionDrop) / 14 + (finite(ending.duration, 0.25) >= 0.45 ? 0.12 : 0))
+    : 0.3;
+
+  const spanFit = clamp(pitchSpan / 7);
+  return {
+    score: clamp(
+      peakPlacement * 0.34
+      + developmentLift * 0.28
+      + resolutionFit * 0.26
+      + spanFit * 0.12,
+    ),
+    peakPhase: round(peakPhase),
+    peakPitch: Math.round(finite(peak.pitch)),
+  };
+}
+
 function phraseBreathing(notes, range, beatsPerBar = 4) {
   if (notes.length < 3 || !range) return 0.55;
   const ordered = [...notes].sort((left, right) => finite(left.start) - finite(right.start));
@@ -319,6 +380,9 @@ export function evaluateMelodyPhraseIntelligence(song) {
       phrasePlacement: round(phrasePlacement(song, notes, range)),
       phraseConversation: round(phraseConversation(notes, range.beatsPerBar).score),
       phraseConversationPairs: phraseConversation(notes, range.beatsPerBar).pairs,
+      melodicArcPayoff: round(melodicArcPayoff(notes, range).score),
+      melodicArcPeakPhase: melodicArcPayoff(notes, range).peakPhase,
+      melodicArcPeakPitch: melodicArcPayoff(notes, range).peakPitch,
     };
     const score = Math.round(100 * (
       metrics.motifIdentity * 0.2
@@ -339,7 +403,12 @@ export function evaluateMelodyPhraseIntelligence(song) {
     || a.score - b.score
     || String(a.sectionId).localeCompare(String(b.sectionId))
   ))[0] ?? null;
-  const conversationSections = active.filter((entry) => finite(entry?.metrics?.phraseConversationPairs, 0) > 0);
+  const weakestArcSection = [...active].sort((a, b) => (
+    finite(a?.metrics?.melodicArcPayoff, 1) - finite(b?.metrics?.melodicArcPayoff, 1)
+    || a.score - b.score
+    || String(a.sectionId).localeCompare(String(b.sectionId))
+  ))[0] ?? null;
+    const conversationSections = active.filter((entry) => finite(entry?.metrics?.phraseConversationPairs, 0) > 0);
   const weakestConversationSection = [...conversationSections].sort((a, b) => (
     finite(a?.metrics?.phraseConversation, 1) - finite(b?.metrics?.phraseConversation, 1)
     || a.score - b.score
@@ -355,6 +424,7 @@ export function evaluateMelodyPhraseIntelligence(song) {
     weakestSection,
     weakestPlacementSection,
     weakestConversationSection,
+    weakestArcSection,
     sections: Object.freeze(reports),
   });
 }
