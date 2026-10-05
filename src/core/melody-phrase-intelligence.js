@@ -292,7 +292,10 @@ function melodicArcPayoff(notes, range) {
     const pitchEnergy = (finite(note.pitch) - minPitch) / pitchSpan;
     const velocityEnergy = (finite(note.velocity, 84) - minVelocity) / velocitySpan;
     const durationEnergy = clamp(finite(note.duration, 0.25) / 0.9);
-    return pitchEnergy * 0.58 + velocityEnergy * 0.27 + durationEnergy * 0.15;
+    // Melodic peak is primarily contour/register authority. Performance
+    // emphasis can support a peak, but a loud/held cadence must not falsely
+    // become the section's melodic high point.
+    return pitchEnergy * 0.78 + velocityEnergy * 0.17 + durationEnergy * 0.05;
   });
   let peakIndex = 0;
   for (let index = 1; index < emphasis.length; index += 1) {
