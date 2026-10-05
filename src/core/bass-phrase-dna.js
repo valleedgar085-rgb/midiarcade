@@ -293,6 +293,15 @@ export function createBassPhrasePlan({
 
   steps = applyOpeningBoundary(uniqueSorted(steps), gridSteps, openingBoundary);
 
+  // Full-song outros need a real authored landing near the boundary. Keep this
+  // inside Bass Phrase DNA rather than asking section-completion repair to
+  // stretch a protected phrase note across empty space.
+  if (sectionRole === "outro" && gridSteps >= 4) {
+    const finalResolutionStep = round(gridSteps - Math.max(1, gridSteps / BASE_STEPS));
+    const normalized = normalizeStep(finalResolutionStep, gridSteps, false);
+    if (normalized != null) steps = uniqueSorted([...steps, normalized]);
+  }
+
   // Preserve at least one authoritative source pulse when available. House and
   // machine-interlock sources are hats, so this still preserves offbeat motion
   // without forcing bass onto the kick.
