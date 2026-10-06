@@ -107,6 +107,29 @@ test("opening-boundary Bass Phrase DNA cannot wrap late replies into a fake pre-
   assert.ok(result.steps.every((step) => Math.abs(step) < 1e-6 || step >= 8 - 1e-6));
 });
 
+
+test("opening-boundary fallback never restores a filtered early source pulse", () => {
+  for (let index = 0; index < 64; index += 1) {
+    const result = createBassPhrasePlan({
+      genre: "hipHop",
+      relationship: { mode: "support" },
+      sourceSteps: [2],
+      beatsPerStep: 0.25,
+      gridSteps: 16,
+      seed: `bass-opening-fallback-${index}`,
+      sectionRole: "intro",
+      openingBoundary: true,
+      density: 0,
+      variation: 0,
+      wrap: false,
+    });
+    assert.ok(
+      result.steps.every((step) => Math.abs(step) < 1e-6 || step >= 8 - 1e-6),
+      `opening fallback leaked an early source pulse for seed ${index}: ${result.steps.join(",")}`,
+    );
+  }
+});
+
 test("outro Bass Phrase DNA authors a late resolution attack near the final boundary", () => {
   const result = createBassPhrasePlan({
     genre: "pop",
