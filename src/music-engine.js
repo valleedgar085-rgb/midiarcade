@@ -11053,11 +11053,19 @@ function ensureFinalMelodicSectionLandings(sourceTracks, structure, harmony, con
     if (!chord?.tones?.length) continue;
     const plan = blueprintPlanForSection(songBlueprint, section);
     const shouldLandOnTonic = plan?.cadence === "resolve" || end >= config.bars * barBeats - 0.05;
-    const targetChord = shouldLandOnTonic && chord.tones.includes(config.keyPc)
-      ? { ...chord, tones: [config.keyPc] }
-      : chord;
     const direction = Math.sign(source.pitch - recent.at(-2)?.pitch || 0);
-    const pitch = nearestScalePitch(nearestChordTone(source.pitch, targetChord, direction), config, direction);
+    const tonicPc = mod(config.keyPc, 12);
+    const nearestTonic = shouldLandOnTonic
+      ? Array.from({ length: 11 }, (_, index) => tonicPc + (index + 1) * 12)
+        .filter((candidate) => candidate >= 0 && candidate <= 127)
+        .sort((left, right) => (
+          Math.abs(left - source.pitch) - Math.abs(right - source.pitch)
+          || left - right
+        ))[0]
+      : null;
+    const pitch = shouldLandOnTonic
+      ? nearestTonic
+      : nearestScalePitch(nearestChordTone(source.pitch, chord, direction), config, direction);
     melody.notes.push({
       pitch,
       start,
