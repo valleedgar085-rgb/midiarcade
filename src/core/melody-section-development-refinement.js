@@ -92,6 +92,19 @@ function isHookSignatureProtectedAnchor(note) {
   // gates remain unchanged and authoritative.
   return note?.phraseRole === "turnaround";
 }
+
+function leadSeparationSafe(song, note, pitch) {
+  const counterpoint = (song?.tracks ?? []).find((track) => track?.id === "counterpoint")?.notes ?? [];
+  const start = finite(note?.start);
+  const end = start + Math.max(0.02, finite(note?.duration, 0.25));
+  return counterpoint.every((counter) => {
+    const counterStart = finite(counter?.start);
+    const counterEnd = counterStart + Math.max(0.02, finite(counter?.duration, 0.25));
+    if (!(start < counterEnd - 1e-6 && counterStart < end - 1e-6)) return true;
+    const intervalClass = mod12(Math.abs(Math.round(finite(pitch)) - Math.round(finite(counter?.pitch))));
+    return ![0, 1, 6, 11].includes(intervalClass);
+  });
+}
 function sourceContract(song, sectionId) {
   return (song?.phraseMemory?.sections ?? []).find((entry) => String(entry?.sectionId) === String(sectionId)) ?? null;
 }
@@ -248,6 +261,7 @@ function motifCoreSearchCandidates(song, report, { maxCandidates = 2 } = {}) {
       pitch += 1
     ) {
       if (scale?.size && !scale.has(mod12(pitch))) continue;
+      if (pitch !== current && !leadSeparationSafe(song, note, pitch)) continue;
       options.push(pitch);
     }
     if (!options.includes(current)) options.push(current);
@@ -395,6 +409,7 @@ function hookSignatureSearchCandidates(song, report, { maxCandidates = 2 } = {})
       pitch += 1
     ) {
       if (scale?.size && !scale.has(mod12(pitch))) continue;
+      if (pitch !== current && !leadSeparationSafe(song, note, pitch)) continue;
       options.push(pitch);
     }
     return [...new Set(options)]
@@ -521,10 +536,11 @@ function hookSignatureRecallCandidate(song, report) {
   const maxPitch = Math.min(88, Math.max(baseWindow.max, ...localPitches));
   const scale = scalePitchClasses(song);
 
-  const nearestAllowed = (desired) => {
+  const nearestAllowed = (desired, position) => {
     const choices = [];
     for (let pitch = minPitch; pitch <= maxPitch; pitch += 1) {
       if (scale?.size && !scale.has(mod12(pitch))) continue;
+      if (!leadSeparationSafe(song, target[position]?.note, pitch)) continue;
       choices.push(pitch);
     }
     return choices.sort((left, right) => (
@@ -538,7 +554,7 @@ function hookSignatureRecallCandidate(song, report) {
   // identity path that a listener actually remembers.
   const desired = [localPitches[0]];
   for (let index = 0; index < sourceIntervals.length; index += 1) {
-    desired.push(nearestAllowed(desired[index] + sourceIntervals[index]));
+    desired.push(nearestAllowed(desired[index] + sourceIntervals[index], index + 1));
   }
 
   for (let position = 0; position < 4; position += 1) {
@@ -604,6 +620,7 @@ function motifCoreDirectionCandidates(song, report) {
     const currentPitch = Math.round(finite(targetEntry.note.pitch, 60));
     const nextPitch = nearestScaleNeighbor(song, currentPitch, sourceDirection);
     if (nextPitch === currentPitch) continue;
+    if (!leadSeparationSafe(song, targetEntry.note, nextPitch)) continue;
 
     const previousPitch = Math.round(finite(targetPrev.pitch, currentPitch));
     const followingPitch = position < 2
