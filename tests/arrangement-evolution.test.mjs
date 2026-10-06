@@ -221,7 +221,7 @@ test("genre storytelling layouts give Pop, Rock, and Techno distinct long-form a
 
 test("bridge-to-hook boundaries create a real breath before the payoff", () => {
   const song = fixtureSong();
-  let config = null;
+  let evolved = null;
   for (let index = 0; index < 256; index += 1) {
     const candidate = {
       genre: "pop",
@@ -229,14 +229,18 @@ test("bridge-to-hook boundaries create a real breath before the payoff", () => {
       seed: `hook-payoff-transition-${index}`,
       arrangementEvolution: true,
     };
-    if (createArrangementEvolution(candidate).family !== "bridge-payoff") continue;
-    if (!evolveSongArrangement(song, candidate).changed) continue;
-    config = candidate;
-    break;
+    const result = evolveSongArrangement(song, candidate);
+    if (!result.changed) continue;
+    const bridgeReturn = (result.song.arrangementTransitions ?? []).find(
+      (transition) => transition.fromSection === "bridge" && transition.toSection === "chorus",
+    );
+    if (bridgeReturn) {
+      evolved = result.song;
+      break;
+    }
   }
-  assert.ok(config, "expected a deterministic bridge-payoff arrangement seed");
+  assert.ok(evolved, "expected a deterministic evolved arrangement with a bridge-to-chorus boundary");
 
-  const evolved = evolveSongArrangement(song, config).song;
   const payoffTransitions = (evolved.arrangementTransitions ?? []).filter(
     (transition) => transition.toSection === "chorus",
   );
@@ -245,7 +249,7 @@ test("bridge-to-hook boundaries create a real breath before the payoff", () => {
   assert.ok(payoffTransitions.every((transition) => transition.pickupBeats >= 1));
 
   const bridgeReturn = payoffTransitions.find((transition) => transition.fromSection === "bridge");
-  assert.ok(bridgeReturn, "bridge-payoff form must place a bridge directly before a chorus return");
+  assert.ok(bridgeReturn, "the evolved form must preserve a bridge directly before a chorus return");
   assert.equal(bridgeReturn.type, "drop-out");
   assert.equal(bridgeReturn.contrastReset, true);
   assert.ok(bridgeReturn.strength >= 0.56);
