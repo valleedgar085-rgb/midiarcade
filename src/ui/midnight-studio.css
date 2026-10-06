@@ -4212,3 +4212,397 @@ body #menuDropdown .menu-icon { color: #78d2c5 !important; }
 .instrument-scope label:has([data-section-bars]),.instrument-scope .section-actions-menu{display:none}
 .shape-help{color:#cbd5e1;padding:12px;border:1px solid #58c9bb55;border-radius:12px}.shape-help summary{cursor:pointer;color:#58c9bb}.shape-help p{line-height:1.55}.shape-director-current{border:1px solid #58c9bb88;border-radius:10px;padding:10px;background:#16312e;box-shadow:0 0 14px #58c9bb18}
 
+
+
+/* CREATE V2 · CLEAN STUDIO PASS */
+#tab-create {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+#tab-create .home-command,
+#tab-create #workflowPanel,
+#tab-create .taste-actions,
+#tab-create .showcase-arc-wrap,
+#tab-create .dna-integrated-card {
+  display: none !important;
+}
+
+#tab-create .create-console {
+  gap: 14px !important;
+}
+
+#tab-create #heroPanel.song-showcase {
+  position: relative !important;
+  overflow: hidden !important;
+  padding: 12px 0 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background:
+    radial-gradient(circle at 18% 8%, rgba(88,201,187,.12), transparent 30%),
+    radial-gradient(circle at 86% 24%, rgba(124,169,194,.10), transparent 34%),
+    linear-gradient(180deg, #0c141b 0%, #0b1117 62%, #0b1117 100%) !important;
+  box-shadow: none !important;
+}
+
+#tab-create #heroPanel.song-showcase::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .16;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.022) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 6px);
+  mix-blend-mode: soft-light;
+}
+
+#tab-create .showcase-art {
+  position: relative !important;
+  width: min(100%, 430px) !important;
+  aspect-ratio: 1 / 1 !important;
+  min-height: 0 !important;
+  margin: 4px auto 26px !important;
+  border: 1px solid rgba(184,209,220,.17) !important;
+  border-radius: 22px !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 30% 18%, rgba(143,231,217,.20), transparent 24%),
+    radial-gradient(circle at 74% 72%, rgba(82,119,144,.22), transparent 28%),
+    linear-gradient(145deg, #1d2d35 0%, #101920 48%, #0b1016 100%) !important;
+  box-shadow:
+    0 28px 56px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+#tab-create .showcase-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, transparent 0 34%, rgba(255,255,255,.05) 34.5%, transparent 35.5%),
+    repeating-radial-gradient(circle at 52% 46%, rgba(255,255,255,.028) 0 1px, transparent 1px 7px);
+  opacity: .52;
+}
+
+#tab-create .showcase-art-core,
+#tab-create .showcase-track-meter,
+#tab-create .showcase-cover-shape,
+#tab-create .showcase-orbit {
+  position: relative;
+  z-index: 2;
+}
+
+#tab-create .showcase-kicker {
+  font-size: .65rem !important;
+  font-weight: 800 !important;
+  letter-spacing: .16em !important;
+}
+
+#tab-create #showcaseMonogram {
+  font-size: clamp(3.9rem, 17vw, 7rem) !important;
+  font-weight: 900 !important;
+  letter-spacing: -.075em !important;
+  line-height: .86 !important;
+}
+
+#tab-create .showcase-copy {
+  padding: 0 4px !important;
+}
+
+#tab-create .showcase-copy > .eyebrow {
+  display: none !important;
+}
+
+#tab-create .title-row {
+  align-items: flex-start !important;
+  gap: 12px !important;
+}
+
+#tab-create .title-row h1 {
+  margin: 0 !important;
+  max-width: 12ch !important;
+  font-size: clamp(2.35rem, 10vw, 4.5rem) !important;
+  line-height: .94 !important;
+  font-weight: 880 !important;
+  letter-spacing: -.052em !important;
+}
+
+#tab-create #songSummary {
+  margin-top: 10px !important;
+  max-width: 42ch !important;
+  color: #9eabb5 !important;
+  font-size: .95rem !important;
+  line-height: 1.5 !important;
+}
+
+#tab-create .song-facts {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 18px !important;
+  padding: 0 0 18px !important;
+  border-bottom: 1px solid rgba(184,209,220,.10) !important;
+}
+
+#tab-create .song-facts span {
+  padding: 7px 9px !important;
+  border: 1px solid rgba(184,209,220,.10) !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.025) !important;
+  color: #aebbc4 !important;
+  font-size: .67rem !important;
+  font-weight: 760 !important;
+  letter-spacing: .045em !important;
+}
+
+#tab-create .song-facts .fact-accent {
+  color: #b8efe7 !important;
+  border-color: rgba(88,201,187,.24) !important;
+  background: rgba(88,201,187,.08) !important;
+}
+
+#tab-create .create-live-controls {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap: 10px !important;
+  margin-top: 18px !important;
+}
+
+#tab-create .create-live-control,
+#tab-create .create-live-select {
+  min-width: 0 !important;
+  padding: 12px 0 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(184,209,220,.09) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#tab-create .create-live-control > span,
+#tab-create .create-live-select > span {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  color: #dfe7ec !important;
+  font-size: .68rem !important;
+  font-weight: 830 !important;
+  letter-spacing: .08em !important;
+}
+
+#tab-create .create-live-control output {
+  color: #83d8cc !important;
+  font-size: .76rem !important;
+  font-weight: 800 !important;
+}
+
+#tab-create .create-live-control small,
+#tab-create .create-live-select small {
+  display: block !important;
+  margin-top: 8px !important;
+  color: #85939e !important;
+  font-size: .72rem !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+#tab-create .create-live-select select {
+  width: 100% !important;
+  margin-top: 8px !important;
+  min-height: 46px !important;
+  border-color: rgba(184,209,220,.16) !important;
+  background: #111a21 !important;
+  color: #eef4f6 !important;
+  font-weight: 690 !important;
+}
+
+#tab-create .showcase-actions {
+  margin: 20px 0 10px !important;
+}
+
+#tab-create .showcase-play {
+  min-height: 54px !important;
+  border-radius: 14px !important;
+  font-size: .95rem !important;
+  font-weight: 820 !important;
+}
+
+#tab-create .create-continue-button {
+  min-height: 48px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: #9faaaF !important;
+  box-shadow: none !important;
+  font-size: .82rem !important;
+  font-weight: 720 !important;
+}
+
+#preGenSection.song-creator-panel {
+  margin-top: 12px !important;
+  padding: 22px 0 8px !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(184,209,220,.11) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#preGenSection.song-creator-panel::before {
+  content: none !important;
+}
+
+#preGenSection .creator-heading {
+  align-items: flex-start !important;
+  gap: 12px !important;
+  padding-bottom: 18px !important;
+}
+
+#preGenSection .creator-heading .eyebrow {
+  color: #58c9bb !important;
+  font-size: .65rem !important;
+  font-weight: 840 !important;
+  letter-spacing: .14em !important;
+}
+
+#preGenSection .creator-heading h2 {
+  margin-top: 4px !important;
+  font-size: clamp(1.75rem, 7vw, 2.65rem) !important;
+  line-height: 1 !important;
+  font-weight: 880 !important;
+  letter-spacing: -.038em !important;
+}
+
+#preGenSection .section-description {
+  max-width: 48ch !important;
+  margin-top: 9px !important;
+  color: #8f9ca6 !important;
+  font-size: .86rem !important;
+  line-height: 1.45 !important;
+}
+
+#preGenSection .genre-direction {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#preGenSection .genre-direction > .select-control {
+  padding: 13px 0 !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(184,209,220,.09) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#preGenSection .genre-direction > .select-control > span {
+  font-size: .70rem !important;
+  font-weight: 850 !important;
+  letter-spacing: .075em !important;
+}
+
+#preGenSection .genre-direction > .select-control > span small {
+  display: block !important;
+  margin-top: 4px !important;
+  color: #768690 !important;
+  font-size: .61rem !important;
+  font-weight: 680 !important;
+  letter-spacing: .03em !important;
+}
+
+#preGenSection .genre-pocket {
+  margin-top: 12px !important;
+  padding: 10px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+#preGenSection .genre-guidance {
+  margin: 5px 0 0 !important;
+  padding: 0 !important;
+  color: #9aa8b2 !important;
+  font-size: .78rem !important;
+  line-height: 1.45 !important;
+}
+
+#preGenSection .shape-controls {
+  margin-top: 14px !important;
+  border: 1px solid rgba(184,209,220,.10) !important;
+  border-radius: 13px !important;
+  background: rgba(255,255,255,.018) !important;
+}
+
+#preGenSection .shape-controls > summary {
+  min-height: 48px !important;
+  padding: 0 13px !important;
+  font-weight: 720 !important;
+}
+
+#preGenSection .generation-actions-bar {
+  margin-top: 22px !important;
+}
+
+#preGenSection .generation-new {
+  min-height: 72px !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(128,229,214,.24) !important;
+  background:
+    linear-gradient(135deg, rgba(88,201,187,.94), rgba(42,130,122,.96)) !important;
+  color: #07120f !important;
+  box-shadow:
+    0 18px 42px rgba(27,107,99,.25),
+    inset 0 1px 0 rgba(255,255,255,.22) !important;
+}
+
+#preGenSection .generation-new .action-copy small,
+#preGenSection .generation-new .action-copy em {
+  color: rgba(7,18,15,.68) !important;
+}
+
+#preGenSection .generation-new .action-copy strong {
+  font-size: 1.04rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -.015em !important;
+}
+
+@media (max-width: 760px) {
+  #tab-create {
+    padding-inline: 16px !important;
+  }
+
+  #tab-create .showcase-art {
+    width: 100% !important;
+    border-radius: 18px !important;
+  }
+
+  #tab-create .title-row h1 {
+    max-width: 10ch !important;
+    font-size: clamp(2.5rem, 12vw, 3.55rem) !important;
+  }
+
+  #tab-create .create-live-controls {
+    grid-template-columns: 1fr !important;
+    gap: 0 !important;
+  }
+
+  #tab-create .title-row .tiny-button span,
+  #preGenSection .creator-heading-actions .tiny-button span {
+    display: none !important;
+  }
+
+  #preGenSection .creator-heading-actions {
+    gap: 6px !important;
+  }
+
+  #preGenSection .creator-heading-actions .tiny-button {
+    width: 44px !important;
+    min-width: 44px !important;
+    height: 44px !important;
+    padding: 0 !important;
+  }
+}
