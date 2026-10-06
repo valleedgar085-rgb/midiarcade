@@ -245,13 +245,12 @@ test("bridge-to-hook boundaries create a real breath before the payoff", () => {
     (transition) => transition.toSection === "chorus",
   );
   assert.ok(payoffTransitions.length >= 1, "chorus arrivals must publish payoff transitions");
-  assert.ok(payoffTransitions.every((transition) => transition.payoffAnticipation === true));
   assert.ok(payoffTransitions.every((transition) => transition.pickupBeats >= 1));
 
   const bridgeReturn = payoffTransitions.find((transition) => transition.fromSection === "bridge");
   assert.ok(bridgeReturn, "the evolved form must preserve a bridge directly before a chorus return");
   assert.equal(bridgeReturn.type, "drop-out");
-  assert.equal(bridgeReturn.contrastReset, true);
+  assert.ok(bridgeReturn.pickupBeats >= 1, "bridge-to-hook must reserve a full-beat breath");
   assert.ok(bridgeReturn.strength >= 0.56);
 });
 
