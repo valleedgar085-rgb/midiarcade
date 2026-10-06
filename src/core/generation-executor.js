@@ -12,6 +12,7 @@ import { resolveGenerationRequest } from "./resolved-generation-intent.js";
 import {
   attachGenerationRepairAuthority,
   decideGenerationRepairAuthority,
+  resolveEnsembleCoherenceRepairHint,
   resolveFinalEnsembleRepairPlan,
 } from "./generation-repair-router.js";
 import {
@@ -31,6 +32,24 @@ function supportsCommittedAuthorityRefresh(song) {
     && song?.finalAssembly?.checks
     && song?.songBlueprint?.producerIntent
   );
+}
+
+export function withCommittedCrossAuthorityCoherenceDiagnostics(result, report, repairHint = null) {
+  if (
+    !result
+    || typeof result !== "object"
+    || !report
+    || !result.outputQualityDiagnostics
+    || typeof result.outputQualityDiagnostics !== "object"
+  ) return result;
+  return {
+    ...result,
+    outputQualityDiagnostics: {
+      ...result.outputQualityDiagnostics,
+      crossAuthorityCoherenceAudit: report,
+      ...(repairHint ? { ensembleCoherenceRepairHint: repairHint } : {}),
+    },
+  };
 }
 
 export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
@@ -53,7 +72,7 @@ export function withCommittedMelodySectionMemoryDiagnostics(result, report) {
   };
 }
 
-export function withCommittedFinalEnsembleDiagnostics(result, report, repairPlan) {
+export function withCommittedFinalEnsembleDiagnostics(result, report, repairPlan, repairHint = null) {
   // Like the melody audit, this observes the exact committed song. It never
   // changes notes and preserves legacy results that do not publish diagnostics.
   if (
@@ -69,6 +88,8 @@ export function withCommittedFinalEnsembleDiagnostics(result, report, repairPlan
       ...result.outputQualityDiagnostics,
       finalEnsembleAudit: report,
       finalEnsembleRepairPlan: repairPlan ?? null,
+      crossAuthorityCoherenceAudit: report,
+      ensembleCoherenceRepairHint: repairHint ?? null,
     },
   };
 }
@@ -673,10 +694,14 @@ export function createGenerationExecutor({
         committedFinalEnsembleAudit,
         { maxDirectives: 2 },
       );
+      const ensembleCoherenceRepairHint = resolveEnsembleCoherenceRepairHint(
+        committedFinalEnsembleAudit,
+      );
       selectedResult = withCommittedFinalEnsembleDiagnostics(
         selectedResult,
         committedFinalEnsembleAudit,
         finalEnsembleRepairPlan,
+        ensembleCoherenceRepairHint,
       );
 
       const acceptedDiagnostics = selectedResult?.outputQualityDiagnostics ?? {};
@@ -700,6 +725,8 @@ export function createGenerationExecutor({
         ensembleContinuityRefinement: stageDiagnostics.ensembleContinuityRefinement ?? acceptedDiagnostics.ensembleContinuityRefinement ?? null,
         finalEnsembleAudit: committedFinalEnsembleAudit ?? acceptedDiagnostics.finalEnsembleAudit ?? null,
         finalEnsembleRepairPlan,
+        crossAuthorityCoherenceAudit: committedFinalEnsembleAudit ?? acceptedDiagnostics.crossAuthorityCoherenceAudit ?? null,
+        ensembleCoherenceRepairHint,
       });
 
       const shouldPersist = typeof persistGeneration === "function"
