@@ -298,15 +298,30 @@ function applyRhythmicRecall(song, pairs, options = {}) {
     const sourceStart = sectionStart(origin);
     const targetStart = sectionStart(target);
     const targetEnd = sectionEnd(target);
+    const payoffRecall = !technoGridRecall && PAYOFF_NAMES.has(normalizedName(target));
+    const memory = (song?.phraseMemory?.sections ?? []).find(
+      (entry) => String(entry?.sectionId) === String(target?.id),
+    ) ?? null;
+    const hookRecallIntervalBars = payoffRecall
+      ? clamp(Math.round(finite(memory?.hookRecallIntervalBars, 4)), 4, 8)
+      : null;
+    const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+    const recallSpacing = hookRecallIntervalBars == null
+      ? motifLength
+      : Math.max(motifLength, hookRecallIntervalBars * beatsPerBar);
+    const targetMaxRepeats = payoffRecall ? Math.max(maxRepeats, 4) : maxRepeats;
     const source = notesInSection(melody, origin)
       .filter((note) => noteStart(note) < sourceStart + motifLength - 1e-6)
       .slice(0, 8);
     if (source.length < 2) continue;
 
-    const repeatCount = Math.min(maxRepeats, Math.max(1, Math.floor((targetEnd - targetStart) / motifLength)));
+    const repeatCount = Math.min(
+      targetMaxRepeats,
+      Math.max(1, Math.floor(Math.max(0, targetEnd - targetStart - motifLength) / recallSpacing) + 1),
+    );
     let changedInTarget = 0;
     for (let repeat = 0; repeat < repeatCount && changedInTarget < maxChangedPerTarget; repeat += 1) {
-      const repeatStart = targetStart + repeat * motifLength;
+      const repeatStart = targetStart + repeat * recallSpacing;
       const repeatEnd = Math.min(targetEnd, repeatStart + motifLength);
       const destination = notesInSection(melody, target)
         .filter((note) => noteStart(note) >= repeatStart - 1e-6 && noteStart(note) < repeatEnd - 1e-6);
