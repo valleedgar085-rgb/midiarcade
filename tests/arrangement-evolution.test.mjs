@@ -219,6 +219,38 @@ test("genre storytelling layouts give Pop, Rock, and Techno distinct long-form a
   );
 });
 
+test("bridge-to-hook boundaries create a real breath before the payoff", () => {
+  const song = fixtureSong();
+  let config = null;
+  for (let index = 0; index < 256; index += 1) {
+    const candidate = {
+      genre: "pop",
+      bars: song.meta.bars,
+      seed: `hook-payoff-transition-${index}`,
+      arrangementEvolution: true,
+    };
+    if (createArrangementEvolution(candidate).family !== "bridge-payoff") continue;
+    if (!evolveSongArrangement(song, candidate).changed) continue;
+    config = candidate;
+    break;
+  }
+  assert.ok(config, "expected a deterministic bridge-payoff arrangement seed");
+
+  const evolved = evolveSongArrangement(song, config).song;
+  const payoffTransitions = (evolved.arrangementTransitions ?? []).filter(
+    (transition) => transition.toSection === "chorus",
+  );
+  assert.ok(payoffTransitions.length >= 1, "chorus arrivals must publish payoff transitions");
+  assert.ok(payoffTransitions.every((transition) => transition.payoffAnticipation === true));
+  assert.ok(payoffTransitions.every((transition) => transition.pickupBeats >= 1));
+
+  const bridgeReturn = payoffTransitions.find((transition) => transition.fromSection === "bridge");
+  assert.ok(bridgeReturn, "bridge-payoff form must place a bridge directly before a chorus return");
+  assert.equal(bridgeReturn.type, "drop-out");
+  assert.equal(bridgeReturn.contrastReset, true);
+  assert.ok(bridgeReturn.strength >= 0.56);
+});
+
 test("arrangement evolution moves complete sections atomically without changing song duration or section identity", () => {
   const source = fixtureSong();
   const before = structuredClone(source);
