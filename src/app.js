@@ -5360,7 +5360,11 @@ export class PreviewPlayer {
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
       const event = this.events[this.eventIndex++];
       if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
-        const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
+        const eventDelta = event.time - currentSongTime;
+        const lead = eventDelta <= 0
+          ? Math.max(0, Number(this.previewRuntime.minimumScheduleLeadSeconds) || 0)
+          : 0;
+        const when = this.context.currentTime + Math.max(lead, eventDelta);
         this.scheduleEvent(event, when);
       }
     }
@@ -5828,7 +5832,19 @@ export class PreviewPlayer {
     if (sample) {
       const nodes = new Set();
       const output = this.createDrumOutput(event, character, nodes, 0.06);
-      const source = scheduleDrumSampleVoice(context, sample, character, mixGain, when, output, nodes);
+      const source = scheduleDrumSampleVoice(
+        context,
+        sample,
+        character,
+        mixGain,
+        when,
+        output,
+        nodes,
+        {
+          minimumAttackSeconds: this.previewBudget.drumSampleAttackSeconds,
+          sourceTailSeconds: this.previewBudget.drumSampleTailSeconds,
+        },
+      );
       if ([35, 36].includes(event.pitch)) this.applyKickSidechain(when);
       this.registerScheduledVoice([source], nodes, event, when);
       return;
