@@ -7400,8 +7400,11 @@ function restoreMusicalLookaheadCommitments(sourceTracks, config) {
         || intendedPitch > 127
         || !pitchFitsScale(intendedPitch, config, allowedScale)
       ) return note;
-      const maxDrift = track.id === "bass" ? 2 : 7;
-      if (Math.abs(intendedPitch - finite(note.pitch, intendedPitch)) > maxDrift) return note;
+      const registerPolicy = DAW_REGISTER_POLICIES[track.id];
+      if (
+        registerPolicy
+        && (intendedPitch < registerPolicy.min || intendedPitch > registerPolicy.peakMax)
+      ) return note;
       return Math.round(finite(note.pitch)) === Math.round(intendedPitch)
         ? note
         : { ...note, pitch: Math.round(intendedPitch) };
