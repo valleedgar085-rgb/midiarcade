@@ -1397,7 +1397,10 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
     release?.passed
     && scaleSafe
     && localImprovement
-    && candidate.memoryScoreDelta > 0
+    && (
+      candidate.memoryScoreDelta > 0
+      || (hookSignatureCleared && candidate.memoryScoreDelta >= 0)
+    )
     && scoreDelta >= -1
     && floorDelta >= -1
     && protectedSafe
