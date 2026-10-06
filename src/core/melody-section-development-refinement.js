@@ -108,13 +108,20 @@ function leadSeparationSafe(song, note, pitch) {
 function sourceContract(song, sectionId) {
   return (song?.phraseMemory?.sections ?? []).find((entry) => String(entry?.sectionId) === String(sectionId)) ?? null;
 }
+const MEMORY_CORE_ROLES = new Set([
+  "motif-core-search",
+  "motif-core-direction",
+  "hook-signature-search",
+  "hook-signature-recall",
+  "hook-signature-payoff",
+]);
+
 function tag(note, sourceSectionId, role) {
   note.phraseMemorySourceSectionId = sourceSectionId;
   note.sectionDevelopmentRole = role;
-  // This tag is only applied to notes actually rewritten from the source-memory
-  // relationship, so downstream diagnostics can distinguish authored recall
-  // evidence from incidental contour similarity.
-  note.motifMemoryCore = true;
+  // Only source-memory restoration roles count as authored memory-core evidence.
+  // Other development edits may improve the phrase without proving motif recall.
+  if (MEMORY_CORE_ROLES.has(role)) note.motifMemoryCore = true;
 }
 function cloneBreakCandidate(song, report) {
   if (finite(report?.metrics?.cloneRisk) < 0.88) return null;
