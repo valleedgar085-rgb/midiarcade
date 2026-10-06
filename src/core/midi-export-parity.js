@@ -310,7 +310,7 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
   }
 
   let sourceNoteCount = 0;
-  let exportedNoteCount = 0;
+  let exportedNoteCount = conductorNoteOns.length;
 
   for (let index = 0; index < projection.tracks.length; index += 1) {
     const expectedTrack = projection.tracks[index];
