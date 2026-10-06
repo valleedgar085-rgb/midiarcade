@@ -139,6 +139,8 @@ test("A5 Finish exposes track list, section journey, and explicit default handof
 test("bundled Hip-Hop drum kits map and preload real offline one-shots", async () => {
   assert.equal(bundledDrumSamplePath("basement-knock", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
   assert.equal(bundledDrumSamplePath("basement-knock", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 39), "./assets/audio/drums/cc0-soulful-vintage/clap.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 42), "./assets/audio/drums/cc0-soulful-vintage/hat.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 46), "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav");
