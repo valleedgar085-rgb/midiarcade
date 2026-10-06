@@ -1,0 +1,251 @@
+{
+  "version": 1,
+  "source": "reference.zip",
+  "audioBundled": false,
+  "extraction": "audio-statistics-v1",
+  "trackCount": 28,
+  "genres": {
+    "hipHop": 6,
+    "pop": 6,
+    "rap": 4,
+    "trap": 12
+  },
+  "tracks": [
+    {
+      "file": "(FREE) Chill Smooth Guitar Type Beat Wild - Hip Hop Rap Instrumental.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [
+        "chill"
+      ],
+      "tempoBpm": 117.2
+    },
+    {
+      "file": "FREE DaBaby x Megan Thee Stallion Type Beat -TRENCHES CLUB Type Beat.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [
+        "club"
+      ],
+      "tempoBpm": 81.5
+    },
+    {
+      "file": "FREE MISTERIO Detroit Sample Dark Type Beat Hades 66 x Hanzel la H Instrumental 2026.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [
+        "dark",
+        "detroit"
+      ],
+      "tempoBpm": 85.2
+    },
+    {
+      "file": "FREE Veeze x Lil Yachty Type Beat Groovy.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [
+        "detroit"
+      ],
+      "tempoBpm": 85.2
+    },
+    {
+      "file": "Kevin Gates - Really Really Official Music Video.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [],
+      "tempoBpm": 117.2
+    },
+    {
+      "file": "Tyga ft. 2 Chainz - Do My Dance (Explicit) Official Music Video.mp3",
+      "genre": "hipHop",
+      "confidence": 0.9,
+      "tags": [
+        "club"
+      ],
+      "tempoBpm": 78.1
+    },
+    {
+      "file": "(FREE) Funk Disco Pop Type Beat - FUNK (Prod. BigBadBeats).mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "funk"
+      ],
+      "tempoBpm": 110.3
+    },
+    {
+      "file": "(FREE) Funk Pop Type Beat - SOS FIFTY FIFTY x Sabrina Carpenter Type Beat.mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "funk"
+      ],
+      "tempoBpm": 117.2
+    },
+    {
+      "file": "(FREE) Groovy Pop Funk Type Beat - Sunburn (Prod. BigBadBeats).mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "funk"
+      ],
+      "tempoBpm": 133.9
+    },
+    {
+      "file": "Akon - Right Now Na Na Na (Lyrics).mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "pop",
+        "rnbSoul"
+      ],
+      "tempoBpm": 133.9
+    },
+    {
+      "file": "Doja Cat - Juicy (feat. Tyga).mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "hipHop",
+        "popRap"
+      ],
+      "tempoBpm": 85.2
+    },
+    {
+      "file": "Doja Cat - Woman (Official Visualizer).mp3",
+      "genre": "pop",
+      "confidence": 0.92,
+      "tags": [
+        "afrobeats",
+        "pop"
+      ],
+      "tempoBpm": 110.3
+    },
+    {
+      "file": "(FREE) AARON MAY x ISAIAH RASHAD TYPE BEAT RELAPSE CHILL RAP TYPE BEAT.mp3",
+      "genre": "rap",
+      "confidence": 0.93,
+      "tags": [
+        "chill"
+      ],
+      "tempoBpm": 121
+    },
+    {
+      "file": "(FREE) AARON MAY x ISAIAH RASHAD TYPE BEAT SLICK CHILL RAP TYPE BEAT.mp3",
+      "genre": "rap",
+      "confidence": 0.93,
+      "tags": [
+        "chill"
+      ],
+      "tempoBpm": 125
+    },
+    {
+      "file": "FREE J. Cole x Kendrick Lamar x JID Type Beat Street Lights.mp3",
+      "genre": "rap",
+      "confidence": 0.93,
+      "tags": [],
+      "tempoBpm": 117.2
+    },
+    {
+      "file": "FREE MILLION BUCKS - Funky Rap Beat Soulful Old School Boom Bap Type Beat.mp3",
+      "genre": "rap",
+      "confidence": 0.93,
+      "tags": [
+        "boomBap",
+        "funk"
+      ],
+      "tempoBpm": 89.3
+    },
+    {
+      "file": "(FREE) Kevin Gates Type Beat NEVER KNEW Trap Instrumental 2024.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "(Free) Melodic Type Beat - MIDNIGHT AURA Type Beat Trap Beat Freestyle Type Beat 2026.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [
+        "melodic"
+      ],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "FREE FOR PROFIT HARD BOUNCY TRAP TYPE BEAT DOUBLE.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 93.8
+    },
+    {
+      "file": "FREE FOR PROFIT HARD BOUNCY TRAP TYPE BEAT MILLIONAIRE.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "FREE FOR PROFIT Melodic Type Beat - ADDICTED Dark Type Beat Rap Trap Beat Instrumental.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [
+        "dark",
+        "melodic"
+      ],
+      "tempoBpm": 125
+    },
+    {
+      "file": "FREE Kevin Gates Type Beat 2022 From Nothing (Prod.RellyMade).mp3",
+      "genre": "trap",
+      "confidence": 0.9,
+      "tags": [],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "FREE Kevin Gates x NBA YOUNGBOY Type Beat - NEVER SAME Melodic Type Beat Trap Instrumental.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [
+        "melodic"
+      ],
+      "tempoBpm": 78.1
+    },
+    {
+      "file": "Gunna - DOLLAZ ON MY HEAD (feat. Young Thug) Official Audio.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 144.2
+    },
+    {
+      "file": "Gunna - fukumean Official Visualizer.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 133.9
+    },
+    {
+      "file": "Shoreline Mafia Type Beat - Synthetic Tears 808 Trap Instrumental 2025.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "TRAP TYPE BEAT - GRAND FREESTYLE BEAT HARD TYPE BEAT FREE RAP INSTRUMENTAL 2026.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 98.7
+    },
+    {
+      "file": "TRAP TYPE BEAT - RIVALS FREESTYLE BEAT HARD TYPE BEAT FREE RAP INSTRUMENTAL 2026.mp3",
+      "genre": "trap",
+      "confidence": 0.96,
+      "tags": [],
+      "tempoBpm": 144.2
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { clampFinite as clamp, finite } from "../utils.js";
 import { phraseLandingProfile } from "./phrase-architecture.js";
+import { createMelodyPhrasePlan } from "./melody-phrase-composer.js";
 
 function round(value, digits = 3) {
   const factor = 10 ** digits;
@@ -102,28 +103,45 @@ export function createPhraseMemoryContract({
       landingRole,
     });
     const recalled = ["recall", "return", "contrast"].includes(memory.relationship);
+    const sentenceRole = sentenceRoleFor(memory.relationship, landingRole);
+    const motifMemory = {
+      contourRecall: round(recalled ? 0.48 + recallStrength * 0.42 : 1),
+      rhythmRecall: round(recalled ? 0.55 + recallStrength * 0.38 : 1),
+      endingRecall: round(
+        landingRole === "answer" || landingRole === "resolution"
+          ? 0.7 + recallStrength * 0.25
+          : 0.5 + recallStrength * 0.2,
+      ),
+    };
+    const nextSection = structure[index + 1] ?? null;
+    const melodyDirector = createMelodyPhrasePlan({
+      section: { ...section, role: plan.role ?? section.role ?? section.name },
+      memory: {
+        relationship: memory.relationship ?? "statement",
+        sentenceRole,
+        landingRole,
+        transform,
+        registerStrategy,
+        sourceSectionId: memory.originSectionId ?? section.id,
+        motifMemory,
+      },
+      nextSection,
+    });
 
     return {
       sectionId: section.id,
       sectionName: section.name,
       sourceSectionId: memory.originSectionId ?? section.id,
       relationship: memory.relationship ?? "statement",
-      sentenceRole: sentenceRoleFor(memory.relationship, landingRole),
+      sentenceRole,
       landingRole,
       transform,
       contrastAxis: memory.contrastAxis ?? "none",
       registerStrategy,
       recallStrength: round(recallStrength),
       phraseSeed: Number.isFinite(Number(dna.phraseSeed)) ? Number(dna.phraseSeed) : null,
-      motifMemory: {
-        contourRecall: round(recalled ? 0.48 + recallStrength * 0.42 : 1),
-        rhythmRecall: round(recalled ? 0.55 + recallStrength * 0.38 : 1),
-        endingRecall: round(
-          landingRole === "answer" || landingRole === "resolution"
-            ? 0.7 + recallStrength * 0.25
-            : 0.5 + recallStrength * 0.2,
-        ),
-      },
+      melodyDirector,
+      motifMemory,
       performance: {
         direction: landing.direction,
         avoidRoot: landing.avoidRoot,

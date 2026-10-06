@@ -9,6 +9,7 @@ import {
 } from "../src/core/output-quality-pipeline-register.js";
 import { authorizeQualityStage, qualityStageAuthority } from "../src/core/generation-repair-router.js";
 import { runQualityStageSequence } from "../src/core/output-quality-stage-runner.js";
+import { auditStageMutationAuthority } from "../src/core/mutation-authority.js";
 
 function note(start, pitch, duration = 0.5, velocity = 86) {
   return { start, pitch, duration, velocity };
@@ -114,6 +115,16 @@ test("section-development candidates are deterministic and never touch drums or 
       candidate.song.tracks.find((track) => track.id === "melody").notes.map((entry) => entry.velocity),
       before.tracks.find((track) => track.id === "melody").notes.map((entry) => entry.velocity),
       "section development must not smuggle expression changes through memory repair",
+    );
+    const authority = auditStageMutationAuthority(
+      song,
+      candidate.song,
+      "melodySectionDevelopmentRefinement",
+    );
+    assert.equal(
+      authority.passed,
+      true,
+      `memory candidate ${candidate.id} exceeded mutation authority: ${JSON.stringify(authority)}`,
     );
   }
 });

@@ -804,7 +804,7 @@ test("phase 76 gives every section one producer-led foreground and audible suppo
     assert.equal(contract.version, 1);
     assert.equal(contract.scenes.length, song.structure.length);
     assert.equal(report.phase, 76);
-    assert.equal(report.status, "complete");
+    assert.equal(report.status, "complete", `${genre}: ${JSON.stringify(report)}`);
     assert.equal(report.metrics.sceneCount, song.structure.length);
     assert.ok(report.metrics.foregroundCoverage >= 0.9);
     assert.ok(report.metrics.answerCollisionRate <= 0.28);
@@ -876,6 +876,109 @@ test("Hip-Hop family producer gates stagger opening support and clear resolving 
     null,
     "8-bar calibration and loop forms should preserve their established immediate arrangement behavior",
   );
+});
+
+test("Structure Director v2 stages full-song entrances without overriding calibrated music authorities", () => {
+  const input = {
+    ...CONFIG,
+    genre: "pop",
+    seed: "structure-director-v2-story-arc",
+    bars: 32,
+    candidateCount: 1,
+    energy: 0.72,
+    complexity: 0.68,
+    evolution: 0.78,
+  };
+  const song = engine.generateNew(input);
+  const blueprint = song.songBlueprint;
+  const director = blueprint.structureDirector;
+
+  assert.equal(director?.version, 2);
+  assert.equal(director?.id, "story-arc-v2");
+  assert.equal(director?.stages?.length, song.structure.length);
+
+  const plans = blueprint.sectionPlans;
+  const intro = plans.find((plan) => plan.sectionName === "intro");
+  const firstVerse = plans.find((plan) => plan.sectionName === "verse");
+  const firstPayoff = plans.find((plan) => ["chorus", "drop", "theme"].includes(plan.sectionName));
+  assert.ok(intro);
+  assert.ok(firstVerse);
+  assert.ok(firstPayoff);
+  assert.equal(intro.structureStory?.stage, "establish");
+  assert.equal(firstVerse.structureStory?.stage, "pocket");
+  assert.equal(firstPayoff.structureStory?.stage, "payoff");
+  assert.ok(
+    intro.structureStory?.energyTarget < firstVerse.structureStory?.energyTarget,
+    "Structure Director should keep the intro below the verse energy target",
+  );
+  assert.ok(
+    firstVerse.structureStory?.energyTarget < firstPayoff.structureStory?.energyTarget,
+    "Structure Director should reserve the largest target for the payoff",
+  );
+  assert.ok(intro.structureStory?.energyTarget <= 0.52);
+  assert.ok(firstPayoff.structureStory?.energyTarget >= 0.84);
+
+  const transition = blueprint.transitions.find((entry) => entry.toSectionId === firstPayoff.sectionId);
+  assert.equal(transition?.storyRole, "payoff-arrival");
+  assert.ok(["launch", "build", "turnaround", "resolve"].includes(transition?.type));
+
+  const introSection = song.structure[0];
+  const introScene = song.producerIntent.scenes.find((scene) => scene.sectionId === introSection.id);
+  assert.equal(introScene?.storyStage, "establish");
+  assert.ok(introScene?.entryDelaysBars?.bass > 0);
+  assert.ok(introScene?.entryDelaysBars?.chords > introScene?.entryDelaysBars?.bass);
+  assert.ok(introScene?.entryDelaysBars?.melody > introScene?.entryDelaysBars?.chords);
+
+  const bassGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "bass",
+    introScene.roles.bass,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  const chordGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "chords",
+    introScene.roles.chords,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  const melodyGate = engine.producerRoleGateWindow(
+    introSection,
+    song.structure,
+    introScene,
+    "melody",
+    introScene.roles.melody,
+    { genre: "pop", timeSignature: [4, 4] },
+  );
+  assert.ok(bassGate.entryBeat < chordGate.entryBeat);
+  assert.ok(chordGate.entryBeat < melodyGate.entryBeat);
+
+  assert.equal(song.sectionCompletion?.phase, 77);
+  assert.ok(song.sectionCompletion?.score >= 70, JSON.stringify(song.sectionCompletion));
+  assert.deepEqual(song, engine.generateNew(input));
+  assertValidNotes(song);
+  assertAllGeneratedPitchesInScale(song);
+});
+
+test("Structure Director v2 keeps short loop forms immediate", () => {
+  const song = engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "structure-director-v2-short-loop",
+    bars: 8,
+    candidateCount: 1,
+  });
+  assert.equal(song.songBlueprint?.structureDirector, undefined);
+  assert.deepEqual(song, engine.generateNew({
+    ...CONFIG,
+    genre: "trap",
+    seed: "structure-director-v2-short-loop",
+    bars: 8,
+    candidateCount: 1,
+  }));
 });
 
 test("Trap full-song rendering keeps support out of the opening pocket until its producer gate", () => {
@@ -3033,7 +3136,10 @@ test("phase 72 makes bass answer drum fills with scale-safe section approaches",
       assert.ok(callIds.has(answer.rhythmTurnaroundId));
       const bar = Number(answer.rhythmTurnaroundId.split(":")[1]);
       const boundary = (bar + 1) * song.meta.beatsPerBar;
-      assert.ok(answer.start >= boundary - 1.05 && answer.start < boundary);
+      assert.ok(
+        answer.start >= boundary - 1.05 && answer.start < boundary,
+        `${genre}: bass answer ${answer.start} must stay in [${boundary - 1.05}, ${boundary}) for ${answer.rhythmTurnaroundId}`,
+      );
       assert.equal(answer.rhythmTurnaroundRole, "bass-answer");
     }
     assert.deepEqual(song, engine.generateNew(input));
@@ -3843,4 +3949,42 @@ test("lead repeat development moves selected notes purposefully instead of rando
   );
   assertValidNotes(song);
   assertAllGeneratedPitchesInScale(song);
+});
+
+
+test("explicit Create time pocket persists through normalization and generation", () => {
+  const expectations = {
+    straight: "centered",
+    laidback: "laidBack",
+    shuffled: "elastic",
+    syncopated: "pushed",
+  };
+  for (const [groove, timingPocket] of Object.entries(expectations)) {
+    const normalized = engine.normalizeConfig({
+      genre: "hipHop",
+      seed: `explicit-pocket-${groove}`,
+      bars: 8,
+      groove,
+    });
+    assert.equal(normalized.groove, groove);
+
+    const song = engine.generateNew({
+      genre: "hipHop",
+      seed: `explicit-pocket-${groove}`,
+      bars: 8,
+      candidateCount: 1,
+      groove,
+    });
+    assert.equal(song.settings.groove, groove);
+    assert.equal(song.style.rhythmIdentity.timingPocket, timingPocket);
+    assert.equal(song.style.rhythmIdentity.timingPocketAuthority, "explicit-create-control");
+  }
+});
+
+test("unspecified time pocket keeps seeded genre variation", () => {
+  const normalized = engine.normalizeConfig({ genre: "hipHop", seed: "auto-pocket-normalize", bars: 8 });
+  assert.equal(normalized.groove, "auto");
+  const song = engine.generateNew({ genre: "hipHop", seed: "auto-pocket-generate", bars: 8, candidateCount: 1 });
+  assert.equal(song.settings.groove, "auto");
+  assert.equal(song.style.rhythmIdentity.timingPocketAuthority, "genre-seeded");
 });

@@ -7,6 +7,7 @@ import {
   decideGenerationRepairAuthority,
   qualityStageAuthority,
   resolveEnsembleCoherenceRepairHint,
+  resolveFinalEnsembleRepairPlan,
   resolveWeaknessAuthority,
 } from "../src/core/generation-repair-router.js";
 
@@ -76,11 +77,52 @@ test("quality specialist admission follows the diagnosed mutation owner", () => 
 });
 
 
-test("section coherence failures route to one bounded ensemble specialist without granting regeneration", () => {
+test("final ensemble repair plan returns at most two bounded subtractive-first directives", () => {
+  const report = {
+    sectionFailures: [
+      { sectionId: "verse-1", failures: ["density-balance", "melody-counterline"] },
+    ],
+    macroDiagnostics: {
+      payoffPairs: [
+        { fromSectionId: "pre-1", toSectionId: "chorus-1", healthy: false },
+      ],
+      transitions: [
+        { fromSectionId: "verse-1", toSectionId: "pre-1", hardReset: true, staged: false },
+      ],
+    },
+  };
+
+  const plan = resolveFinalEnsembleRepairPlan(report);
+  assert.equal(plan.version, 2);
+  assert.equal(plan.available, true);
+  assert.equal(plan.owner, "ensemble");
+  assert.equal(plan.specialist, "ensemble-specialist");
+  assert.equal(plan.allowsFullRegeneration, false);
+  assert.equal(plan.policy, "bounded-subtractive-first");
+  assert.equal(plan.directives.length, 2);
+  assert.equal(plan.directives[0].relationship, "density-balance");
+  assert.equal(plan.directives[0].preferredAction, "subtract-support-before-adding-notes");
+  assert.ok(plan.directives.every((directive) => directive.allowedMutations.length > 0));
+});
+
+test("final ensemble repair plan stays inert when the committed ensemble is coherent", () => {
+  const plan = resolveFinalEnsembleRepairPlan({
+    sectionFailures: [],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
+  });
+  assert.equal(plan.available, false);
+  assert.equal(plan.allowsFullRegeneration, false);
+  assert.equal(plan.allowsSurgicalPostprocess, false);
+  assert.deepEqual(plan.directives, []);
+});
+
+
+test("ensemble coherence hint keeps the main bounded-routing contract", () => {
   const hint = resolveEnsembleCoherenceRepairHint({
     sectionFailures: [
       { sectionId: "verse-2", failures: ["melody-counterline", "density-balance"] },
     ],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
   });
 
   assert.equal(hint.available, true);
@@ -92,8 +134,12 @@ test("section coherence failures route to one bounded ensemble specialist withou
   assert.equal("allowsFullRegeneration" in hint, false);
 });
 
-test("section coherence repair hint fails closed when the final audit has no actionable section failure", () => {
-  const hint = resolveEnsembleCoherenceRepairHint({ sectionFailures: [] });
+test("ensemble coherence hint fails closed when no actionable failure remains", () => {
+  const hint = resolveEnsembleCoherenceRepairHint({
+    sectionFailures: [],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
+  });
+
   assert.equal(hint.available, false);
   assert.equal(hint.owner, null);
   assert.deepEqual(hint.allowedMutations, []);

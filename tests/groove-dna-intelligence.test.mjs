@@ -254,3 +254,78 @@ test("specialist Director preserves the source Pop reference character", () => {
     song.grooveConductor.bars[0].bassPulses,
   );
 });
+
+
+test("Groove Conversation v2 evolves bass lock and reply behavior by section", () => {
+  const dna = createGrooveDNA({
+    seed: "groove-conversation-section-evolution",
+    genre: "hipHop",
+    bars: 4,
+    beatsPerBar: 4,
+    complexity: 0.7,
+    variation: 0.5,
+  }, { structure: STRUCTURE });
+
+  const verse = dna.bars[0];
+  const pre = dna.bars[2];
+  const payoff = dna.bars[3];
+
+  assert.equal(verse.sectionRole, "body");
+  assert.equal(pre.sectionRole, "prechorus");
+  assert.equal(payoff.sectionRole, "payoff");
+  assert.ok(pre.relationships.bass.lock > verse.relationships.bass.lock);
+  assert.ok(pre.relationships.bass.syncopation < verse.relationships.bass.syncopation);
+  assert.ok(payoff.relationships.bass.lock >= pre.relationships.bass.lock);
+  assert.ok(payoff.relationships.bass.syncopation > pre.relationships.bass.syncopation);
+  assert.ok(payoff.sectionEvolution.density > verse.sectionEvolution.density);
+});
+
+test("snare authority preserves the backbeat while transition fills stay inside the final bar", () => {
+  const dna = createGrooveDNA({
+    seed: "groove-conversation-snare-fill",
+    genre: "pop",
+    bars: 4,
+    beatsPerBar: 4,
+    complexity: 0.76,
+    variation: 0.7,
+  }, { structure: STRUCTURE });
+
+  for (const bar of dna.bars) {
+    assert.equal(bar.snare.snareAuthority.backbeatPreserved, true, JSON.stringify(bar.snare.snareAuthority));
+    for (const required of bar.snare.requiredSteps) {
+      assert.ok(bar.snare.steps.some((step) => Math.abs(step - required) < 1e-6));
+    }
+    for (const fill of bar.snare.transitionFillSteps) {
+      assert.ok(fill >= dna.gridSteps - 3 && fill < dna.gridSteps);
+      assert.equal(bar.transitionBoundary, true);
+    }
+  }
+
+  const prechorus = dna.bars[2];
+  assert.equal(prechorus.transitionBoundary, true);
+  assert.equal(prechorus.nextSectionRole, "payoff");
+});
+
+test("section groove evolution creates contrast instead of applying one density shape everywhere", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", startBar: 0, bars: 1 },
+    { id: "verse-1", name: "verse", startBar: 1, bars: 1 },
+    { id: "build-1", name: "build", startBar: 2, bars: 1 },
+    { id: "drop-1", name: "drop", startBar: 3, bars: 1 },
+    { id: "outro-1", name: "outro", startBar: 4, bars: 1 },
+  ];
+  const dna = createGrooveDNA({
+    seed: "groove-conversation-energy-shape",
+    genre: "trap",
+    bars: 5,
+    beatsPerBar: 4,
+    complexity: 0.72,
+    variation: 0.58,
+  }, { structure });
+
+  const byRole = Object.fromEntries(dna.bars.map((bar) => [bar.sectionRole, bar]));
+  assert.ok(byRole.intro.sectionEvolution.density < byRole.body.sectionEvolution.density);
+  assert.ok(byRole.build.sectionEvolution.density > byRole.body.sectionEvolution.density);
+  assert.ok(byRole.payoff.sectionEvolution.density > byRole.build.sectionEvolution.density);
+  assert.ok(byRole.outro.sectionEvolution.density < byRole.body.sectionEvolution.density);
+});
