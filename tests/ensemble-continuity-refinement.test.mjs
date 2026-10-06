@@ -495,7 +495,7 @@ test("targeted ensemble repair fails closed when the hint does not authorize top
   assert.deepEqual(candidates, []);
 });
 
-test("targeted ensemble stage keeps a local repair only when the diagnosed relationship improves", () => {
+test("targeted melody-counterline repair is rejected while collision control remains unsafe", () => {
   const source = addEnsembleContractsForTargeting(ensembleDropoutSong());
   const hint = {
     available: true,
@@ -518,9 +518,9 @@ test("targeted ensemble stage keeps a local repair only when the diagnosed relat
   assert.equal(result.diagnostics.targetSectionId, "chorus-1");
   assert.equal(result.diagnostics.targetRelationship, "melody-counterline");
   assert.deepEqual(result.diagnostics.targetTrackIds, ["counterpoint"]);
-  assert.ok(result.diagnostics.targetRelationshipDelta > 0);
-  assert.equal(result.diagnostics.accepted, true);
-  assert.notEqual(result.song, source);
+  assert.equal(result.diagnostics.accepted, false);
+  assert.equal(result.diagnostics.reason, "target-relationship-not-improved");
+  assert.equal(result.song, source);
 });
 
 test("targeted ensemble stage rejects a continuity move when the diagnosed relationship cannot be verified as improved", () => {
