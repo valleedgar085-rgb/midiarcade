@@ -133,6 +133,46 @@ test("tight timing is audited against the authorized prepared export state, not 
   assert.deepEqual(source, before);
 });
 
+test("nested same-pitch notes with the inner note ending first preserve event multiplicity", () => {
+  const source = performedAuthoritySong();
+  source.tracks[0].notes = [
+    {
+      id: "outer",
+      pitch: 72,
+      start: 0,
+      duration: 2,
+      velocity: 96,
+    },
+    {
+      id: "inner",
+      pitch: 72,
+      start: 0.5,
+      duration: 0.5,
+      velocity: 104,
+    },
+  ];
+
+  const projection = createMidiExportProjection(source);
+  assert.deepEqual(
+    projection.tracks[0].notes.map((note) => ({
+      pitch: note.pitch,
+      onTick: note.onTick,
+      offTick: note.offTick,
+      velocity: note.velocity,
+    })),
+    [
+      { pitch: 72, onTick: 0, offTick: 960, velocity: 96 },
+      { pitch: 72, onTick: 240, offTick: 480, velocity: 104 },
+    ],
+  );
+
+  const verified = encodeMidiVerified(source);
+  assert.equal(verified.audit.passed, true, JSON.stringify(verified.audit.mismatches));
+  assert.equal(verified.audit.sourceNoteCount, 2);
+  assert.equal(verified.audit.exportedNoteCount, 2);
+  assert.equal(verified.audit.mismatchCount, 0);
+});
+
 test("parity audit identifies an exact pitch corruption in serialized MIDI", () => {
   const source = performedAuthoritySong();
   const bytes = encodeMidi(source);
