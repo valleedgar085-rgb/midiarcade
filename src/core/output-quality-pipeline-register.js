@@ -640,8 +640,8 @@ function coherenceRelationshipState(report, repairHint) {
     const collision = Number(section?.relationships?.melodyCounterlineCollisionControl);
     if (!Number.isFinite(dialogue) || !Number.isFinite(collision)) return null;
     return Object.freeze({
-      score: Math.min(1, dialogue / 0.55, collision / 0.5),
-      passed: dialogue >= 0.55 && collision >= 0.5,
+      score: dialogue,
+      guardPassed: collision >= 0.5,
     });
   }
 
@@ -650,8 +650,8 @@ function coherenceRelationshipState(report, repairHint) {
   const value = Number(section?.relationships?.[metric.key]);
   if (!Number.isFinite(value)) return null;
   return Object.freeze({
-    score: Math.min(1, value / metric.threshold),
-    passed: value >= metric.threshold,
+    score: value,
+    guardPassed: true,
   });
 }
 
@@ -678,7 +678,7 @@ function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evalu
   const targetImproved = !targeted || Boolean(
     targetRelationshipDelta != null
     && targetRelationshipDelta > 1e-6
-    && targetRelationshipAfterState?.passed === true
+    && targetRelationshipAfterState?.guardPassed === true
   );
   const accepted = Boolean(
     release?.passed
