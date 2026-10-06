@@ -4734,6 +4734,9 @@ function generateBass(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
+  const bassRegisterMinimum = clamp((bassOctave + 1) * 12, 0, 127);
+  const bassRegisterMaximum = Math.min(127, bassRegisterMinimum + 31);
+  const bassPreferredMaximum = Math.min(bassRegisterMaximum, bassRegisterMinimum + 16);
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -4805,6 +4808,12 @@ function generateBass(
         seed: `${config.seed ?? "midi-arcade"}:bass-harmony:${chord.start}:${index}`,
         variation: settings.variation,
         complexity: config.complexity,
+        register: {
+          minimum: bassRegisterMinimum,
+          maximum: bassRegisterMaximum,
+          preferredMin: bassRegisterMinimum,
+          preferredMax: bassPreferredMaximum,
+        },
       });
       pitch = bassHarmonyPlan.pitch;
       if (last && rng.bool(settings.variation * config.complexity * 0.5)) {
