@@ -3,6 +3,7 @@ const FULL_PROFILE = Object.freeze({
   scheduleIntervalMs: 75,
   lookAheadSeconds: 0.85,
   lateEventGraceSeconds: 0.12,
+  minimumScheduleLeadSeconds: 0,
   maxScheduledVoices: 96,
 });
 
@@ -11,6 +12,7 @@ const CONSTRAINED_PROFILE = Object.freeze({
   scheduleIntervalMs: 45,
   lookAheadSeconds: 0.55,
   lateEventGraceSeconds: 0.08,
+  minimumScheduleLeadSeconds: 0.01,
   maxScheduledVoices: 32,
 });
 
@@ -27,6 +29,8 @@ const FULL_GRAPH_BUDGET = Object.freeze({
   filterMotion: true,
   sendFloor: 0,
   masterFadeSeconds: 0.015,
+  drumSampleAttackSeconds: 0.002,
+  drumSampleTailSeconds: 0.005,
 });
 
 const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
@@ -42,6 +46,8 @@ const CONSTRAINED_GRAPH_BUDGET = Object.freeze({
   filterMotion: false,
   sendFloor: 0.07,
   masterFadeSeconds: 0.04,
+  drumSampleAttackSeconds: 0.0045,
+  drumSampleTailSeconds: 0.012,
 });
 
 const CONSTRAINED_LAYER_TRACKS = new Set(["melody"]);
