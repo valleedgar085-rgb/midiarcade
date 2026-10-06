@@ -359,3 +359,153 @@ test("ensemble continuity keeps the safer shallow repair when a deeper repair im
   assert.ok(deep.continuityErrorDelta < 0);
   assert.strictEqual(result.song === source, false);
 });
+
+
+function addEnsembleContractsForTargeting(song) {
+  song.generationInterlock = {
+    sectionContracts: song.structure
+      .filter((section) => ["verse-1", "chorus-1"].includes(section.id))
+      .map((section) => ({
+        sectionId: section.id,
+        featuredTrack: "melody",
+        harmonicGoalPitchClasses: [0, 5, 7, 9],
+        coordination: {
+          featuredTrack: "melody",
+          roles: {
+            drums: "foundation",
+            bass: "foundation",
+            chords: "support",
+            melody: "feature",
+            counterpoint: "answer",
+            pad: "support",
+          },
+          relationships: [
+            { kind: "rhythm-foundation" },
+            { kind: "harmonic-support" },
+            { kind: "lead-dialogue" },
+            { kind: "foreground-hierarchy" },
+            { kind: "cadence-team" },
+          ],
+        },
+      })),
+  };
+  const melody = song.tracks.find((track) => track.id === "melody");
+  melody.notes = [
+    { id: "mv1", pitch: 72, start: 8.75, duration: 0.5, velocity: 88 },
+    { id: "mv2", pitch: 74, start: 12.75, duration: 0.5, velocity: 88 },
+    { id: "mc1", pitch: 72, start: 24.75, duration: 0.5, velocity: 90 },
+    { id: "mc2", pitch: 74, start: 36.75, duration: 0.5, velocity: 90 },
+  ];
+  return song;
+}
+
+test("targeted ensemble repair changes only the authorized relationship track inside the exact section", () => {
+  const source = ensembleDropoutSong();
+  const before = structuredClone(source);
+  const hint = {
+    version: 1,
+    available: true,
+    owner: "ensemble",
+    specialist: "ensemble-specialist",
+    sectionId: "chorus-1",
+    relationship: "melody-counterline",
+    allowedMutations: ["timing", "topology"],
+    reason: "committed-section-coherence-failure",
+  };
+
+  const first = createEnsembleContinuityCandidates(source, { repairHint: hint });
+  const repeated = createEnsembleContinuityCandidates(source, { repairHint: hint });
+
+  assert.deepEqual(source, before);
+  assert.deepEqual(first, repeated);
+  assert.equal(first.length, 1);
+  assert.equal(first[0].targeted, true);
+  assert.equal(first[0].targetSectionId, "chorus-1");
+  assert.equal(first[0].targetRelationship, "melody-counterline");
+  assert.deepEqual(first[0].targetTrackIds, ["counterpoint"]);
+  assert.ok(first[0].authorizedMutations.includes("topology"));
+
+  const candidate = first[0].song;
+  for (const trackId of ["drums", "chords", "pad", "bass", "melody"]) {
+    assert.deepEqual(
+      candidate.tracks.find((track) => track.id === trackId),
+      source.tracks.find((track) => track.id === trackId),
+    );
+  }
+
+  const sourceCounterpoint = source.tracks.find((track) => track.id === "counterpoint").notes;
+  const candidateCounterpoint = candidate.tracks.find((track) => track.id === "counterpoint").notes;
+  const sourceVerse = sourceCounterpoint.filter((note) => note.start >= 8 && note.start < 24);
+  const candidateVerse = candidateCounterpoint.filter((note) => note.start >= 8 && note.start < 24);
+  assert.deepEqual(candidateVerse, sourceVerse);
+
+  const additions = candidateCounterpoint.filter((note) => (
+    String(note.continuityRole ?? "") === "counterpoint-continuity-link"
+  ));
+  assert.equal(additions.length, 1);
+  assert.ok(additions[0].start >= 24 && additions[0].start < 40);
+});
+
+test("targeted ensemble repair fails closed when the hint does not authorize topology", () => {
+  const source = ensembleDropoutSong();
+  const candidates = createEnsembleContinuityCandidates(source, {
+    repairHint: {
+      available: true,
+      sectionId: "chorus-1",
+      relationship: "kick-bass",
+      allowedMutations: ["timing", "duration"],
+    },
+  });
+  assert.deepEqual(candidates, []);
+});
+
+test("targeted ensemble stage keeps a local repair only when the diagnosed relationship improves", () => {
+  const source = addEnsembleContractsForTargeting(ensembleDropoutSong());
+  const hint = {
+    available: true,
+    owner: "ensemble",
+    specialist: "ensemble-specialist",
+    sectionId: "chorus-1",
+    relationship: "melody-counterline",
+    allowedMutations: ["timing", "topology"],
+  };
+
+  const result = applyEnsembleContinuityRefinement(
+    source,
+    { ensembleContinuityRefinement: true, ensembleCoherenceRepairHint: hint },
+    (candidateSong) => evaluationFor(candidateSong),
+    () => ({ passed: true, totalScore: 92 }),
+  );
+
+  assert.equal(result.diagnostics.attempted, true);
+  assert.equal(result.diagnostics.targeted, true);
+  assert.equal(result.diagnostics.targetSectionId, "chorus-1");
+  assert.equal(result.diagnostics.targetRelationship, "melody-counterline");
+  assert.deepEqual(result.diagnostics.targetTrackIds, ["counterpoint"]);
+  assert.ok(result.diagnostics.targetRelationshipDelta > 0);
+  assert.equal(result.diagnostics.accepted, true);
+  assert.notEqual(result.song, source);
+});
+
+test("targeted ensemble stage rejects a continuity move when the diagnosed relationship cannot be verified as improved", () => {
+  const source = ensembleDropoutSong();
+  const hint = {
+    available: true,
+    owner: "ensemble",
+    specialist: "ensemble-specialist",
+    sectionId: "chorus-1",
+    relationship: "melody-counterline",
+    allowedMutations: ["timing", "topology"],
+  };
+
+  const result = applyEnsembleContinuityRefinement(
+    source,
+    { ensembleContinuityRefinement: true, ensembleCoherenceRepairHint: hint },
+    (candidateSong) => evaluationFor(candidateSong),
+    () => ({ passed: true, totalScore: 92 }),
+  );
+
+  assert.equal(result.diagnostics.accepted, false);
+  assert.equal(result.diagnostics.reason, "target-relationship-not-improved");
+  assert.equal(result.song, source);
+});
