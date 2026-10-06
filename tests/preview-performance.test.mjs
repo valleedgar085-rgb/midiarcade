@@ -18,6 +18,7 @@ test("Android preview uses a bounded scheduling graph with next-beat cushion", (
   assert.equal(profile.scheduleIntervalMs, 45);
   assert.equal(profile.lookAheadSeconds, 0.55);
   assert.ok(profile.lookAheadSeconds >= 0.5, "constrained scheduling must still pre-queue the next half-second beat");
+  assert.ok(profile.minimumScheduleLeadSeconds >= 0.008, "late Android events must not start directly on the current audio quantum");
   assert.equal(profile.maxScheduledVoices, 32);
   assert.ok(profile.maxScheduledVoices <= 32, "Android must keep the preview graph inside the hardened voice budget");
 });
@@ -37,6 +38,8 @@ test("constrained Android DSP budget removes expensive graph layers without muti
   assert.equal(budget.filterMotion, false);
   assert.ok(budget.sendFloor >= 0.07);
   assert.ok(budget.masterFadeSeconds >= 0.025);
+  assert.ok(budget.drumSampleAttackSeconds >= 0.004, "real drum samples need a multi-millisecond Android-safe attack");
+  assert.ok(budget.drumSampleTailSeconds >= 0.01, "sample sources must outlive their gain release on Android");
 });
 
 test("desktop preview keeps the full synthesis and DSP profile", () => {
