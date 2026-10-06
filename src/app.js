@@ -4956,6 +4956,7 @@ export class PreviewPlayer {
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
+    this.schedulerWorker = null;
     this.frame = null;
     this.idleTimer = null;
     this.events = [];
@@ -5173,6 +5174,7 @@ export class PreviewPlayer {
       if (this.eventIndex < 0) this.eventIndex = this.events.length;
       this.lastScheduleAt = this.context.currentTime;
       this.schedule();
+      this.startSchedulerPulse();
       return true;
     })();
     this.recoveryPromise = recovery;
@@ -5340,7 +5342,7 @@ export class PreviewPlayer {
     }
     $("#playhead").classList.add("visible");
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startSchedulerPulse();
     this.updateFrame();
     setWorkflowStep(3);
     return true;
@@ -5963,7 +5965,7 @@ export class PreviewPlayer {
     this.eventIndex = 0;
     this.lastScheduleAt = this.context.currentTime;
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startSchedulerPulse();
     this.updateFrame();
   }
 
@@ -6003,10 +6005,49 @@ export class PreviewPlayer {
     this.frame = setTimeout(() => this.updateFrame(), PREVIEW_AUDIO_LIMITS.visualIntervalMs);
   }
 
-  clearTimers() {
+  startSchedulerPulse() {
+    this.stopSchedulerPulse();
+    const tick = () => this.schedule();
+    if (typeof Worker === "function") {
+      try {
+        const worker = new Worker(new URL("./preview-scheduler-worker.js", import.meta.url), { type: "module" });
+        worker.onmessage = (event) => {
+          if (worker !== this.schedulerWorker || event?.data?.type !== "tick") return;
+          tick();
+        };
+        worker.onerror = () => {
+          if (worker !== this.schedulerWorker) return;
+          try { worker.terminate(); } catch { /* worker already stopped */ }
+          this.schedulerWorker = null;
+          if (this.playing && !this.timer) {
+            this.timer = setInterval(tick, this.previewRuntime.scheduleIntervalMs);
+          }
+        };
+        this.schedulerWorker = worker;
+        worker.postMessage({ type: "start", intervalMs: this.previewRuntime.scheduleIntervalMs });
+        return "worker";
+      } catch {
+        this.schedulerWorker = null;
+      }
+    }
+    this.timer = setInterval(tick, this.previewRuntime.scheduleIntervalMs);
+    return "timer";
+  }
+
+  stopSchedulerPulse() {
+    if (this.schedulerWorker) {
+      const worker = this.schedulerWorker;
+      this.schedulerWorker = null;
+      try { worker.postMessage({ type: "stop" }); } catch { /* worker unavailable */ }
+      try { worker.terminate(); } catch { /* worker already stopped */ }
+    }
     clearInterval(this.timer);
-    clearTimeout(this.frame);
     this.timer = null;
+  }
+
+  clearTimers() {
+    this.stopSchedulerPulse();
+    clearTimeout(this.frame);
     this.frame = null;
   }
 
