@@ -155,10 +155,6 @@ function assessRegisterCandidate(candidate, before, beforeFloor, evaluateCandida
     floorDelta,
     protectedDeltas: dimensionDeltas,
     protectedSafe,
-    targetRelationshipBefore,
-    targetRelationshipAfter,
-    targetRelationshipDelta,
-    targetImproved,
     accepted,
     reason: !release?.passed ? "release-gate"
       : !scaleSafe ? "scale-safety"
@@ -679,6 +675,10 @@ function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evalu
     floorDelta,
     protectedDeltas: dimensionDeltas,
     protectedSafe,
+    targetRelationshipBefore,
+    targetRelationshipAfter,
+    targetRelationshipDelta,
+    targetImproved,
     accepted,
     reason: !release?.passed ? "release-gate"
       : !scaleSafe ? "scale-safety"
