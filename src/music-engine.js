@@ -8993,6 +8993,60 @@ function runFinalAssemblyPass(sourceTracks, fallbackTracks, structure, songBluep
   return runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, songBlueprint, config);
 }
 
+function reconcileFinalTonicLandingContracts(sourceTracks, config) {
+  const tracks = sourceTracks.map((track) => ({
+    ...track,
+    notes: (track.notes ?? []).map((note) => ({ ...note })),
+  }));
+  const tonic = mod(config?.keyPc, 12);
+  let restored = 0;
+  let relabeled = 0;
+
+  for (const track of tracks) {
+    if (track.id === "drums") continue;
+    const policy = DAW_REGISTER_POLICIES[track.id] ?? { min: 0, max: 127 };
+    for (const note of track.notes ?? []) {
+      if (note?.resolutionRole !== "tonic-landing") continue;
+      if (mod(note.pitch, 12) === tonic) continue;
+
+      const candidates = [];
+      for (
+        let pitch = Math.max(0, Math.round(finite(policy.min, 0)));
+        pitch <= Math.min(127, Math.round(finite(policy.max, 127)));
+        pitch += 1
+      ) {
+        if (mod(pitch, 12) !== tonic) continue;
+        const overlapsSamePitch = (track.notes ?? []).some((other) => (
+          other !== note
+          && Math.round(finite(other?.pitch, -1)) === pitch
+          && finite(note.start) < finite(other?.start) + Math.max(0.02, finite(other?.duration, 0.25)) - 1e-6
+          && finite(other?.start) < finite(note.start) + Math.max(0.02, finite(note.duration, 0.25)) - 1e-6
+        ));
+        if (!overlapsSamePitch) candidates.push(pitch);
+      }
+      candidates.sort((left, right) => (
+        Math.abs(left - finite(note.pitch, left)) - Math.abs(right - finite(note.pitch, right))
+        || left - right
+      ));
+      const pitch = candidates[0];
+      if (Number.isFinite(pitch)) {
+        note.pitch = pitch;
+        note.finalAssemblyRole = note.finalAssemblyRole ?? "tonic-landing-contract";
+        delete note.tonalLicense;
+        delete note.tonalIntegrityLicense;
+        delete note.harmonicColorSource;
+        delete note.harmonicColorChord;
+        restored += 1;
+      } else {
+        note.resolutionRole = "chord-landing";
+        relabeled += 1;
+      }
+    }
+  }
+
+  return { tracks, restored, relabeled };
+}
+
 function reconcileFinalMotifMemoryProvenance(
   sourceTracks,
   structure,
@@ -15577,13 +15631,19 @@ function commitCandidate(candidates, search = {}) {
     selected.song.songBlueprint ?? null,
     committedConfig,
   );
-  const committedMemoryProvenance = reconcileFinalMotifMemoryProvenance(
+  const committedTonicLandings = reconcileFinalTonicLandingContracts(
     committedFinalAssembly.tracks,
+    committedConfig,
+  );
+  const committedMemoryProvenance = reconcileFinalMotifMemoryProvenance(
+    committedTonicLandings.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
     selected.song.motifs ?? {},
   );
   selected.song.tracks = committedMemoryProvenance.tracks;
   committedFinalAssembly.repairs.licensedHarmonyColorVoicesRestored = committedLicensedColor.restored;
+  committedFinalAssembly.repairs.tonicLandingPitchesRestored = committedTonicLandings.restored;
+  committedFinalAssembly.repairs.tonicLandingRolesRelabeled = committedTonicLandings.relabeled;
   committedFinalAssembly.repairs.motifMemoryProvenanceRestored = committedMemoryProvenance.restored;
   selected.song.finalAssembly = createFinalAssemblyReport(
     selected.song.tracks,
