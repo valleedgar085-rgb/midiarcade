@@ -519,7 +519,7 @@
             <div class="thread-heading">
               <p class="eyebrow">CURRENT FOCUS</p>
               <h2 id="creativeThreadTitle">Shape the song</h2>
-              <p id="threadRelationship">Choose a section, choose an instrument, then change only what matters.</p>
+              <p id="threadRelationship">Pick a part. Shape the feel. Open the piano roll only when you need precision.</p>
             </div>
             <div class="thread-path" aria-label="Current focus">
               <button class="thread-node song-node" id="threadSongButton" type="button">
@@ -545,7 +545,7 @@
               <div>
                 <p class="eyebrow">SHAPE</p>
                 <h2 id="arrangementTitle">Shape your song</h2>
-                <p class="section-description">Tap a section and instrument below. Try a change, listen, then save it.</p>
+                <p class="section-description">Choose a part, make one musical change, and compare it before you keep it.</p>
               </div>
               <div class="arrangement-tools">
                 <button class="small-button" id="reorderButton" type="button">
@@ -565,7 +565,7 @@
                   <span><i></i><strong>1. Choose a part</strong><small id="shapeMapSummary">Select a section to begin</small></span>
                   <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
-                <details class="shape-map-detail" open><summary>Show instrument clips</summary><p>Tap a colored clip — for example, Bass under Intro. Swipe sideways for later sections.</p></details>
+                <details class="shape-map-detail"><summary>Show full song map</summary><p>Open this when you need every instrument lane. The section strip stays visible for quick navigation.</p></details>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
@@ -592,7 +592,7 @@
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
                   <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PIANO ROLL</small><strong>Edit notes</strong></span>
+                    <span><small>NOTE EDITOR</small><strong>Open piano roll</strong></span>
                     <b aria-hidden="true">→</b>
                   </button>
                   <details class="shape-extra-feel"><summary>More feel controls <small>These edits apply immediately. Undo restores the previous version.</small></summary>
@@ -675,8 +675,8 @@
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
                   <p class="eyebrow">EDITING ONLY THIS PART</p>
-                  <h3 id="sectionEditorTitle">Edit notes precisely</h3>
-                  <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
+                  <h3 id="sectionEditorTitle">Piano roll</h3>
+                  <p id="sectionEditorSubtitle">Shape pitch, timing, length and velocity for this one musical part.</p>
                 </div>
                 <div class="editor-header-actions">
                   <button class="editor-play-button" id="editorPlayButton" type="button">Listen from here</button>
@@ -687,8 +687,8 @@
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
               <div id="editorShapeTools"></div>
               <details class="shape-note-detail" id="shapeNoteDetail">
-                <summary><strong>3. Edit notes</strong><small>Optional · change note length, timing, pitch, or strength</small></summary>
-                <p class="shape-note-help">Tap notes to select them, or use Select all for this part. Selected notes light up. Note edits apply immediately; Undo restores the previous version.</p>
+                <summary><strong>Notes</strong><small>Pitch · timing · length · velocity</small></summary>
+                <p class="shape-note-help">Tap notes to select them. Use the essential tools below for clean, controlled edits; Undo restores the previous version.</p>
               <div class="piano-roll-shell" id="pianoRollShell">
                 <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
                 <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
