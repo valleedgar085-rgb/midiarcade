@@ -111,8 +111,23 @@ test("selection normalization supports whole song, instrument, section, and sect
   });
 });
 
-test("Director directive publishes the exact section blueprint, orchestration, and interlock", () => {
-  const directive = createDirectorDirective(sourceSong(), {
+test("Director directive publishes the exact section blueprint, orchestration, interlock, and story intent", () => {
+  const source = sourceSong();
+  source.songBlueprint.structureDirector = {
+    version: 2,
+    id: "story-arc-v2",
+    stages: [
+      { sectionId: "verse-1", stage: "pocket", energyTarget: 0.62 },
+      { sectionId: "chorus-1", stage: "payoff", energyTarget: 0.92 },
+    ],
+  };
+  source.producerIntent = {
+    scenes: [
+      { sectionId: "verse-1", storyStage: "pocket", silenceBudget: 0.13, densityCeiling: 0.78 },
+      { sectionId: "chorus-1", storyStage: "payoff", silenceBudget: 0.07, densityCeiling: 0.94 },
+    ],
+  };
+  const directive = createDirectorDirective(source, {
     target: "track",
     sectionId: "chorus-1",
     trackId: "bass",
@@ -125,6 +140,14 @@ test("Director directive publishes the exact section blueprint, orchestration, a
   assert.equal(directive.ensembleContext.sectionId, "chorus-1");
   assert.equal(directive.ensembleContext.intent.cadence, "resolve");
   assert.equal(directive.ensembleContext.intent.featuredTrack, "bass");
+  assert.equal(directive.storyIntent.phase, "payoff");
+  assert.equal(directive.storyIntent.role, "deliver");
+  assert.equal(directive.storyIntent.sourceAuthority, "structure-director-v2");
+  assert.equal(directive.storyIntent.targetEnergy, 0.92);
+  assert.equal(directive.ensembleContext.intent.storyPhase, "payoff");
+  assert.equal(directive.ensembleContext.intent.storySourceAuthority, "structure-director-v2");
+  assert.equal(directive.ensembleContext.intent.targetSpace, 0.07);
+  assert.equal(directive.ensembleContext.intent.mustLiftFromPrevious, true);
   assert.deepEqual(directive.ensembleContext.coordination.rhythmSection, ["drums", "bass"]);
   assert.deepEqual(directive.ensembleContext.coordination.leadConversation, ["melody", "counterpoint"]);
 });

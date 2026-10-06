@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { analyzeTonalIntegrity, refineTonalIntegrity } from "../src/core/tonal-integrity.js";
+import {
+  analyzeTonalIntegrity,
+  evaluateTonalLicense,
+  refineTonalIntegrity,
+} from "../src/core/tonal-integrity.js";
 import { generateNew } from "../src/music-engine.js";
 
 function baseTrack(id, notes) {
@@ -138,4 +142,90 @@ test("tonal repair never creates overlapping unisons inside a pitched track", ()
     if (previous) assert.ok(previous.start + previous.duration <= note.start + 1e-6);
     byPitch.set(note.pitch, note);
   }
+});
+
+
+test("borrowed chord tones stay licensed only when the active chord proves them", () => {
+  const tracks = [baseTrack("melody", [
+    { pitch: 68, start: 0, duration: 1, tonalLicense: "borrowedChordTone" },
+  ])];
+  const harmony = [{
+    start: 0,
+    duration: 4,
+    rootPc: 5,
+    tones: [5, 8, 0],
+    borrowed: true,
+  }];
+  const meta = { keyPc: 0, scaleIntervals: [0, 2, 4, 5, 7, 9, 11], beatsPerBar: 4 };
+
+  const result = refineTonalIntegrity(tracks, harmony, meta, []);
+  const melody = result.tracks[0].notes[0];
+
+  assert.equal(melody.pitch, 68);
+  assert.equal(melody.tonalIntegrityLicense, "borrowedChordTone");
+  assert.equal(result.report.licensedPreserved, 1);
+  assert.equal(result.report.after.literalScaleFit, 0);
+  assert.equal(result.report.after.scaleFit, 1);
+  assert.equal(result.report.after.licensedColorNotes, 1);
+  assert.equal(result.report.after.unsafeScaleNotes, 0);
+});
+
+test("secondary-dominant evidence can license a non-diatonic chord tone", () => {
+  const note = { pitch: 61, start: 0, duration: 0.5, tonalLicense: "secondaryDominantTone" };
+  const chord = {
+    rootPc: 9,
+    tones: [9, 1, 4, 7],
+    secondaryDominant: true,
+  };
+  const meta = { keyPc: 0, scaleIntervals: [0, 2, 4, 5, 7, 9, 11] };
+
+  const license = evaluateTonalLicense(note, null, chord, meta);
+  assert.equal(license.valid, true);
+  assert.equal(license.reason, "secondary-dominant-evidence");
+
+  const result = refineTonalIntegrity(
+    [baseTrack("melody", [note])],
+    [{ start: 0, duration: 4, ...chord }],
+    meta,
+    [],
+  );
+  assert.equal(result.tracks[0].notes[0].pitch, 61);
+  assert.equal(result.report.licensedPreserved, 1);
+});
+
+test("short chromatic approaches are preserved only when they resolve by semitone", () => {
+  const meta = { keyPc: 0, scaleIntervals: [0, 2, 4, 5, 7, 9, 11], beatsPerBar: 4 };
+  const harmony = [{ start: 0, duration: 4, rootPc: 0, tones: [0, 4, 7] }];
+  const validTracks = [baseTrack("melody", [
+    { pitch: 61, start: 0.5, duration: 0.25, tonalLicense: "chromaticApproach" },
+    { pitch: 62, start: 0.75, duration: 0.5 },
+  ])];
+
+  const valid = refineTonalIntegrity(validTracks, harmony, meta, []);
+  assert.equal(valid.tracks[0].notes[0].pitch, 61);
+  assert.equal(valid.tracks[0].notes[0].tonalIntegrityLicense, "chromaticApproach");
+  assert.equal(valid.report.licensedPreserved, 1);
+
+  const invalidTracks = [baseTrack("melody", [
+    { pitch: 61, start: 0.5, duration: 0.25, tonalLicense: "chromaticApproach" },
+    { pitch: 64, start: 0.75, duration: 0.5 },
+  ])];
+  const invalid = refineTonalIntegrity(invalidTracks, harmony, meta, []);
+  assert.notEqual(invalid.tracks[0].notes[0].pitch, 61);
+  assert.equal(invalid.report.licensedPreserved, 0);
+  assert.ok(invalid.report.scaleCorrections >= 1);
+});
+
+test("a fake borrowed-tone label cannot bypass tonal safety", () => {
+  const tracks = [baseTrack("melody", [
+    { pitch: 61, start: 0, duration: 0.4, tonalLicense: "borrowedChordTone" },
+  ])];
+  const harmony = [{ start: 0, duration: 4, rootPc: 0, tones: [0, 4, 7] }];
+  const meta = { keyPc: 0, scaleIntervals: [0, 2, 4, 5, 7, 9, 11], beatsPerBar: 4 };
+
+  const result = refineTonalIntegrity(tracks, harmony, meta, []);
+  assert.notEqual(result.tracks[0].notes[0].pitch, 61);
+  assert.equal(result.report.licensedPreserved, 0);
+  assert.equal(result.report.after.scaleFit, 1);
+  assert.equal(result.report.after.unsafeScaleNotes, 0);
 });

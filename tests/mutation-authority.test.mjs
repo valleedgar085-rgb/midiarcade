@@ -40,3 +40,18 @@ test("automation-only transition FX is flagged if it rewrites notes", () => {
   assert.deepEqual(audit.violations, ["timing"]);
   assert.equal(audit.passed, false);
 });
+
+
+test("strict topology removal is not misclassified as a velocity rewrite", () => {
+  const before = song([
+    { id: "a", start: 0, pitch: 60, velocity: 88 },
+    { id: "b", start: 1, pitch: 64, velocity: 96 },
+  ]);
+  const after = song([
+    { id: "a", start: 0, pitch: 60, velocity: 88 },
+  ]);
+  const audit = auditStageMutationAuthority(before, after, "finalEnsembleRefinement");
+  assert.equal(audit.passed, true, JSON.stringify(audit));
+  assert.deepEqual(audit.changedMutations, ["topology", "timing", "duration"]);
+  assert.equal(audit.changedMutations.includes("velocity"), false);
+});
