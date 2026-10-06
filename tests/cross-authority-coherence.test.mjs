@@ -6,6 +6,7 @@ import {
   evaluateMacroEnsembleArc,
 } from "../src/core/cross-authority-coherence.js";
 import { createSpecialistDirectorPlan } from "../src/core/specialist-musicians.js";
+import { withCommittedCrossAuthorityCoherenceDiagnostics } from "../src/core/generation-executor.js";
 
 function song() {
   return {
@@ -184,4 +185,67 @@ test("macro ensemble pass accepts contrast created by role and pressure lift", (
   assert.equal(report.payoffPairs.length, 1);
   assert.equal(report.payoffPairs[0].healthy, true, JSON.stringify(report.payoffPairs[0]));
   assert.equal(report.checks.payoffLiftCoherent, true);
+});
+
+
+test("v4 committed coherence diagnostics preserve the main compatibility audit key", () => {
+  const source = song();
+  const before = structuredClone(source);
+  const report = evaluateCrossAuthorityCoherence(source);
+  const result = {
+    status: "committed",
+    song: source,
+    outputQualityDiagnostics: { existing: true },
+  };
+
+  const attached = withCommittedCrossAuthorityCoherenceDiagnostics(result, report);
+
+  assert.equal(attached.song, source);
+  assert.deepEqual(source, before);
+  assert.equal(attached.outputQualityDiagnostics.existing, true);
+  assert.deepEqual(attached.outputQualityDiagnostics.crossAuthorityCoherenceAudit, report);
+  assert.equal(report.mode, "read-only");
+  assert.equal(report.version, 4);
+  assert.equal(report.authority, "cross-authority-coherence-v4");
+});
+
+test("v4 section relationship diagnostics stay deterministic and expose exact failures", () => {
+  const source = song();
+  source.generationInterlock = {
+    sectionContracts: source.structure.map((section) => ({
+      sectionId: section.id,
+      featuredTrack: "melody",
+      harmonicGoalPitchClasses: section.id === "verse" ? [9, 0, 4] : [5, 9, 0],
+      coordination: {
+        featuredTrack: "melody",
+        roles: { drums: "foundation", bass: "foundation", chords: "support", melody: "feature" },
+        relationships: [
+          { kind: "rhythm-foundation" },
+          { kind: "harmonic-support" },
+          { kind: "lead-dialogue" },
+          { kind: "foreground-hierarchy" },
+          { kind: "cadence-team" },
+        ],
+      },
+    })),
+  };
+  source.tracks.push({
+    id: "counterpoint",
+    notes: [
+      { pitch: 69, start: 1, duration: 0.5, velocity: 80 },
+      { pitch: 69, start: 5, duration: 0.5, velocity: 80 },
+    ],
+  });
+
+  const first = evaluateCrossAuthorityCoherence(source);
+  const second = evaluateCrossAuthorityCoherence(source);
+
+  assert.equal(first.version, 4);
+  assert.deepEqual(first.sectionDiagnostics, second.sectionDiagnostics);
+  assert.deepEqual(first.sectionFailures, second.sectionFailures);
+  assert.ok(first.sectionDiagnostics.length > 0);
+  assert.equal(typeof first.sectionDiagnostics[0].relationships.kickBass, "number");
+  assert.equal(typeof first.sectionDiagnostics[0].relationships.chordMelody, "number");
+  assert.ok(first.sectionDiagnostics.some((entry) => entry.failures.includes("melody-counterline")));
+  assert.ok(first.sectionFailures.some((entry) => entry.failures.includes("melody-counterline")));
 });
