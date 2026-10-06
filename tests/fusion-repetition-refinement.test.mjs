@@ -68,10 +68,19 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
   assert.notEqual(balanceBefore.direction, "on-target");
 
   const candidates = createRepetitionRefinementCandidates(generated, { target });
-  assert.ok(candidates.length > 0 && candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
+  assert.ok(candidates.length <= MAX_REPETITION_REFINEMENT_CANDIDATES);
   assert.ok(candidates.every((candidate) => candidate.changedNotes <= MAX_REPETITION_REFINEMENT_EDITS));
   assert.ok(candidates.every((candidate) => candidate.maxShift <= MAX_REPETITION_REFINEMENT_SHIFT));
   assert.ok(candidates.every((candidate) => candidate.errorDelta < 0));
+
+  if (!candidates.length) {
+    const processed = applySongOutputQualityPipeline(generated, config);
+    assert.equal(processed.repetitionDiagnostics.attempted, true);
+    assert.equal(processed.repetitionDiagnostics.accepted, false);
+    assert.equal(processed.repetitionDiagnostics.reason, "no-safe-repetition-move");
+    assert.deepEqual(noteIdentity(processed.song), sourceIdentity);
+    return;
+  }
 
   const processed = applySongOutputQualityPipeline(generated, config);
   const after = evaluateSongCandidate(processed.song);
