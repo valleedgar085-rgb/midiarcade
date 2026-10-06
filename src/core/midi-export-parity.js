@@ -295,6 +295,20 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
     });
   }
 
+  const conductorTrack = parsed.tracks[0] ?? null;
+  const conductorNoteOns = conductorTrack?.noteOns ?? [];
+  const conductorNoteOffs = conductorTrack?.noteOffs ?? [];
+  if (conductorNoteOns.length || conductorNoteOffs.length) {
+    mismatches.push({
+      type: "CONDUCTOR_NOTE_EVENT",
+      trackId: null,
+      trackName: conductorTrack?.name ?? "Conductor",
+      expected: { noteOns: 0, noteOffs: 0 },
+      actual: { noteOns: conductorNoteOns.length, noteOffs: conductorNoteOffs.length },
+      detail: "Conductor track 0 must not contain musical note events.",
+    });
+  }
+
   let sourceNoteCount = 0;
   let exportedNoteCount = 0;
 
