@@ -6,6 +6,8 @@ import {
   GENRE_CRITIC_PROFILES,
 } from "../music-engine.js";
 import { normalizeGenreId } from "./genre-contract.js";
+import { evaluateCrossAuthorityCoherence } from "./cross-authority-coherence.js";
+import { resolveEnsembleCoherenceRepairHint } from "./generation-repair-router.js";
 import { createFusionPerformanceRebalanceCandidate } from "./fusion-performance-refinement.js";
 import {
   createEnsembleContinuityCandidates,
@@ -153,6 +155,10 @@ function assessRegisterCandidate(candidate, before, beforeFloor, evaluateCandida
     floorDelta,
     protectedDeltas: dimensionDeltas,
     protectedSafe,
+    targetRelationshipBefore,
+    targetRelationshipAfter,
+    targetRelationshipDelta,
+    targetImproved,
     accepted,
     reason: !release?.passed ? "release-gate"
       : !scaleSafe ? "scale-safety"
@@ -622,7 +628,22 @@ function compareEnsembleContinuityAssessments(left, right) {
   return left.candidateIndex - right.candidateIndex;
 }
 
-function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate) {
+const RELATIONSHIP_METRIC_KEYS = Object.freeze({
+  "melody-counterline": "melodyCounterline",
+  "chord-melody": "chordMelody",
+  "bass-harmony": "bassHarmony",
+});
+
+function coherenceRelationshipScore(report, repairHint) {
+  if (repairHint?.available !== true || repairHint?.sectionId == null) return null;
+  const key = RELATIONSHIP_METRIC_KEYS[String(repairHint.relationship ?? "")];
+  if (!key) return null;
+  const section = (report?.sectionDiagnostics ?? []).find((entry) => String(entry?.sectionId) === String(repairHint.sectionId));
+  const value = section?.relationships?.[key];
+  return Number.isFinite(Number(value)) ? Number(value) : null;
+}
+
+function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate, repairHint = null, beforeCoherence = null) {
   const after = evaluateCandidate(candidate.song);
   const release = evaluateReleaseGate(candidate.song, after);
   const scoreDelta = finite(after?.score) - finite(before?.score);
@@ -631,10 +652,21 @@ function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evalu
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
   const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
+  const targeted = candidate.targeted === true && repairHint?.available === true;
+  const afterCoherence = targeted ? evaluateCrossAuthorityCoherence(candidate.song) : null;
+  const targetRelationshipBefore = targeted ? coherenceRelationshipScore(beforeCoherence, repairHint) : null;
+  const targetRelationshipAfter = targeted ? coherenceRelationshipScore(afterCoherence, repairHint) : null;
+  const targetRelationshipDelta = targeted
+    && targetRelationshipBefore != null
+    && targetRelationshipAfter != null
+    ? targetRelationshipAfter - targetRelationshipBefore
+    : null;
+  const targetImproved = !targeted || (targetRelationshipDelta != null && targetRelationshipDelta > 1e-6);
   const accepted = Boolean(
     release?.passed
     && scaleSafe
     && candidate.continuityErrorDelta < -1e-6
+    && targetImproved
     && scoreDelta >= -1e-9
     && floorDelta >= -1e-9
     && protectedSafe
@@ -651,7 +683,8 @@ function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evalu
     reason: !release?.passed ? "release-gate"
       : !scaleSafe ? "scale-safety"
         : candidate.continuityErrorDelta >= -1e-6 ? "continuity-direction"
-          : !protectedSafe ? "protected-dimension-regression"
+          : !targetImproved ? "target-relationship-not-improved"
+            : !protectedSafe ? "protected-dimension-regression"
             : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "critic-regression"
               : accepted ? "continuity-win" : "critic-regression",
   };
@@ -662,7 +695,9 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
     return { song, diagnostics: disabledDiagnostics(MAX_ENSEMBLE_CONTINUITY_CANDIDATES) };
   }
 
-  const candidates = createEnsembleContinuityCandidates(song);
+  const beforeCoherence = evaluateCrossAuthorityCoherence(song);
+  const repairHint = config?.ensembleCoherenceRepairHint ?? resolveEnsembleCoherenceRepairHint(beforeCoherence);
+  const candidates = createEnsembleContinuityCandidates(song, { repairHint });
   if (!candidates.length) {
     return {
       song,
@@ -670,7 +705,10 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
         attempted: true,
         accepted: false,
         changed: false,
-        reason: "no-ensemble-dropout",
+        reason: repairHint?.available === true ? "no-targeted-ensemble-move" : "no-ensemble-dropout",
+        targetSectionId: repairHint?.available === true ? repairHint.sectionId ?? null : null,
+        targetRelationship: repairHint?.available === true ? repairHint.relationship ?? null : null,
+        authorizedMutations: repairHint?.available === true ? [...(repairHint.allowedMutations ?? [])] : [],
         candidatesEvaluated: 0,
         candidateLimit: MAX_ENSEMBLE_CONTINUITY_CANDIDATES,
         candidateIds: [],
@@ -681,7 +719,7 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
   const before = evaluateCandidate(song);
   const beforeFloor = creativeFloor(before);
   const assessments = candidates.map((candidate) => assessEnsembleContinuityCandidate(
-    candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate,
+    candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate, repairHint, beforeCoherence,
   ));
   const candidateIds = assessments.map(({ id }) => id);
   const accepted = assessments.filter(({ accepted: isAccepted }) => isAccepted)
@@ -696,6 +734,14 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
     changedNotes: finite(selected?.changedNotes),
     weakestTrackId: selected?.weakestTrackId ?? null,
     weakestSectionId: selected?.weakestSectionId ?? null,
+    targeted: Boolean(selected?.targeted),
+    targetSectionId: selected?.targetSectionId ?? null,
+    targetRelationship: selected?.targetRelationship ?? null,
+    targetTrackIds: [...(selected?.targetTrackIds ?? [])],
+    authorizedMutations: [...(selected?.authorizedMutations ?? [])],
+    targetRelationshipBefore: selected?.targetRelationshipBefore == null ? null : round(selected.targetRelationshipBefore, 4),
+    targetRelationshipAfter: selected?.targetRelationshipAfter == null ? null : round(selected.targetRelationshipAfter, 4),
+    targetRelationshipDelta: selected?.targetRelationshipDelta == null ? null : round(selected.targetRelationshipDelta, 4),
     candidatesEvaluated: assessments.length,
     candidateLimit: MAX_ENSEMBLE_CONTINUITY_CANDIDATES,
     candidateIds,
@@ -706,6 +752,7 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
       changedNotes: finite(assessment.changedNotes),
       afterContinuityDeficit: round(assessment.afterContinuityDeficit, 4),
       continuityErrorDelta: round(assessment.continuityErrorDelta, 4),
+      targetRelationshipDelta: assessment.targetRelationshipDelta == null ? null : round(assessment.targetRelationshipDelta, 4),
       scoreDelta: round(assessment.scoreDelta),
       floorDelta: round(assessment.floorDelta),
     })),
@@ -728,6 +775,9 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
       accepted: true,
       changedNotes: diagnostics.changedNotes,
       continuityErrorDelta: diagnostics.continuityErrorDelta,
+      targetSectionId: diagnostics.targetSectionId,
+      targetRelationship: diagnostics.targetRelationship,
+      targetRelationshipDelta: diagnostics.targetRelationshipDelta,
       scoreDelta: diagnostics.scoreDelta,
       candidatesEvaluated: diagnostics.candidatesEvaluated,
     },
