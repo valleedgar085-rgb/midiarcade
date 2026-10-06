@@ -15637,6 +15637,15 @@ function commitCandidate(candidates, search = {}) {
   );
   selected.song.tracks = committedLicensedColor.tracks;
 
+  // Tonic resolution is a pitch-writing authority and must finish before Final
+  // Assembly. Final Assembly then gets the last word on lead/counterpoint space
+  // without changing the committed melody landing pitch.
+  const committedTonicLandings = reconcileFinalTonicLandingContracts(
+    selected.song.tracks,
+    committedConfig,
+  );
+  selected.song.tracks = committedTonicLandings.tracks;
+
   // The single committed Final Assembly occurs after every engine note-writing
   // authority. It does not rerun any pitch/rhythm repair afterward.
   const committedFinalAssembly = runFinalAssemblyPass(
@@ -15646,12 +15655,8 @@ function commitCandidate(candidates, search = {}) {
     selected.song.songBlueprint ?? null,
     committedConfig,
   );
-  const committedTonicLandings = reconcileFinalTonicLandingContracts(
-    committedFinalAssembly.tracks,
-    committedConfig,
-  );
   const committedMemoryProvenance = reconcileFinalMotifMemoryProvenance(
-    committedTonicLandings.tracks,
+    committedFinalAssembly.tracks,
     selected.song.structure ?? selected.song.sections ?? [],
     selected.song.motifs ?? {},
   );
