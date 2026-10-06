@@ -47,7 +47,7 @@ const STRICT_MUTATION_QUALITY_STAGES = Object.freeze(new Set([
 ]));
 
 const QUALITY_STAGE_MUTATIONS = Object.freeze({
-  melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony"]),
+  melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony", "register"]),
 });
 
 const QUALITY_STAGE_OWNERS = Object.freeze({
@@ -61,7 +61,7 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   fusionPerformanceRefinement: ["ensemble", "groove"],
   melodyContinuityRefinement: ["phrase", "ensemble", "harmony"],
   melodyPhraseRefinement: ["phrase", "harmony", "ensemble"],
-  melodySectionDevelopmentRefinement: ["phrase", "harmony", "ensemble"],
+  melodySectionDevelopmentRefinement: ["phrase", "harmony", "register", "ensemble"],
   melodySectionMemoryAudit: [],
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
