@@ -446,6 +446,42 @@ test("targeted ensemble repair changes only the authorized relationship track in
   assert.ok(additions[0].start >= 24 && additions[0].start < 40);
 });
 
+test("targeted ensemble repair rejects inherited relationship names", () => {
+  const source = ensembleDropoutSong();
+  const candidates = createEnsembleContinuityCandidates(source, {
+    repairHint: {
+      available: true,
+      sectionId: "chorus-1",
+      relationship: "constructor",
+      allowedMutations: ["topology"],
+    },
+  });
+  assert.deepEqual(candidates, []);
+});
+
+test("targeted ensemble repair never extends a new note beyond the selected section", () => {
+  const source = ensembleDropoutSong();
+  const counterpoint = source.tracks.find((track) => track.id === "counterpoint");
+  counterpoint.notes = counterpoint.notes.filter((note) => note.id !== "qc2");
+  for (const bar of source.grooveConductor.bars) {
+    if (bar.sectionId === "chorus-1") bar.counterPulses = bar.bar === 9 ? [3.93] : [];
+  }
+  const candidates = createEnsembleContinuityCandidates(source, {
+    repairHint: {
+      available: true,
+      sectionId: "chorus-1",
+      relationship: "melody-counterline",
+      allowedMutations: ["topology"],
+    },
+  });
+
+  for (const candidate of candidates) {
+    const added = candidate.song.tracks.find((track) => track.id === "counterpoint").notes
+      .filter((note) => String(note.continuityRole ?? "") === "counterpoint-continuity-link");
+    assert.ok(added.every((note) => note.start + note.duration <= 40 + 1e-6));
+  }
+});
+
 test("targeted ensemble repair fails closed when the hint does not authorize topology", () => {
   const source = ensembleDropoutSong();
   const candidates = createEnsembleContinuityCandidates(source, {
