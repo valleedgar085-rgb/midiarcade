@@ -527,8 +527,8 @@ function buildTransitionContext(song) {
         0.92,
       ),
       pickupBeats,
-      payoffAnticipation: payoffDestination,
-      contrastReset: contrastToPayoff,
+      ...(payoffDestination ? { payoffAnticipation: true } : {}),
+      ...(contrastToPayoff ? { contrastReset: true } : {}),
     });
   }
   return transitions;
