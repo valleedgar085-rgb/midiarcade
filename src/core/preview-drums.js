@@ -58,7 +58,7 @@ export function drumSampleForPitch(cache, kitId, pitch) {
   return cache?.get(`${kitId}:${drumKind(pitch)}`) ?? null;
 }
 
-export function drumSampleEnvelope(character, bufferDuration) {
+export function drumSampleEnvelope(character, bufferDuration, { minimumAttackSeconds = 0.002 } = {}) {
   const kind = String(character?.kind ?? "snare");
   const sourceDuration = Math.max(0.018, Number(bufferDuration) || 0.08);
   const naturalDuration = kind === "kick"
@@ -77,17 +77,21 @@ export function drumSampleEnvelope(character, bufferDuration) {
     sourceDuration,
     clamp(naturalDuration * limits.scale, limits.min, limits.max),
   );
-  const attack = Math.min(0.002, duration * 0.08);
+  const requestedAttack = Math.max(0.001, Number(minimumAttackSeconds) || 0.002);
+  const attack = Math.min(requestedAttack, duration * 0.24);
   const releaseStart = clamp(duration * limits.release, attack, Math.max(attack, duration - 0.006));
   return Object.freeze({ duration, attack, releaseStart });
 }
 
-export function scheduleDrumSampleVoice(context, buffer, character, mixGain, when, destination, nodes) {
+export function scheduleDrumSampleVoice(context, buffer, character, mixGain, when, destination, nodes, {
+  minimumAttackSeconds = 0.002,
+  sourceTailSeconds = 0.005,
+} = {}) {
   if (!context?.createBufferSource || !buffer || !destination) return null;
   const source = context.createBufferSource();
   const gain = context.createGain();
   const kind = String(character?.kind ?? "snare");
-  const envelope = drumSampleEnvelope(character, buffer.duration);
+  const envelope = drumSampleEnvelope(character, buffer.duration, { minimumAttackSeconds });
   const duration = envelope.duration;
   const level = kind === "kick" ? 0.42 : ["snare", "clap"].includes(kind) ? 0.34 : 0.22;
   const peak = Math.max(0.0002, Number(character?.amplitude ?? 1) * Number(mixGain ?? 1) * level);
@@ -100,7 +104,7 @@ export function scheduleDrumSampleVoice(context, buffer, character, mixGain, whe
   nodes?.add(source);
   nodes?.add(gain);
   source.start(when);
-  source.stop(when + duration + 0.005);
+  source.stop(when + duration + Math.max(0.005, Number(sourceTailSeconds) || 0.005));
   return source;
 }
 
