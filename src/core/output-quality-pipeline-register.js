@@ -625,18 +625,34 @@ function compareEnsembleContinuityAssessments(left, right) {
 }
 
 const RELATIONSHIP_METRIC_KEYS = Object.freeze({
-  "melody-counterline": "melodyCounterline",
-  "chord-melody": "chordMelody",
-  "bass-harmony": "bassHarmony",
+  "chord-melody": Object.freeze({ key: "chordMelody", threshold: 0.5 }),
+  "bass-harmony": Object.freeze({ key: "bassHarmony", threshold: 0.5 }),
 });
 
-function coherenceRelationshipScore(report, repairHint) {
+function coherenceRelationshipState(report, repairHint) {
   if (repairHint?.available !== true || repairHint?.sectionId == null) return null;
-  const key = RELATIONSHIP_METRIC_KEYS[String(repairHint.relationship ?? "")];
-  if (!key) return null;
+  const relationship = String(repairHint.relationship ?? "");
   const section = (report?.sectionDiagnostics ?? []).find((entry) => String(entry?.sectionId) === String(repairHint.sectionId));
-  const value = section?.relationships?.[key];
-  return Number.isFinite(Number(value)) ? Number(value) : null;
+  if (!section) return null;
+
+  if (relationship === "melody-counterline") {
+    const dialogue = Number(section?.relationships?.melodyCounterline);
+    const collision = Number(section?.relationships?.melodyCounterlineCollisionControl);
+    if (!Number.isFinite(dialogue) || !Number.isFinite(collision)) return null;
+    return Object.freeze({
+      score: Math.min(1, dialogue / 0.55, collision / 0.5),
+      passed: dialogue >= 0.55 && collision >= 0.5,
+    });
+  }
+
+  const metric = RELATIONSHIP_METRIC_KEYS[relationship];
+  if (!metric) return null;
+  const value = Number(section?.relationships?.[metric.key]);
+  if (!Number.isFinite(value)) return null;
+  return Object.freeze({
+    score: Math.min(1, value / metric.threshold),
+    passed: value >= metric.threshold,
+  });
 }
 
 function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evaluateCandidate, evaluateReleaseGate, repairHint = null, beforeCoherence = null) {
@@ -650,14 +666,20 @@ function assessEnsembleContinuityCandidate(candidate, before, beforeFloor, evalu
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
   const targeted = candidate.targeted === true && repairHint?.available === true;
   const afterCoherence = targeted ? evaluateCrossAuthorityCoherence(candidate.song) : null;
-  const targetRelationshipBefore = targeted ? coherenceRelationshipScore(beforeCoherence, repairHint) : null;
-  const targetRelationshipAfter = targeted ? coherenceRelationshipScore(afterCoherence, repairHint) : null;
+  const targetRelationshipBeforeState = targeted ? coherenceRelationshipState(beforeCoherence, repairHint) : null;
+  const targetRelationshipAfterState = targeted ? coherenceRelationshipState(afterCoherence, repairHint) : null;
+  const targetRelationshipBefore = targetRelationshipBeforeState?.score ?? null;
+  const targetRelationshipAfter = targetRelationshipAfterState?.score ?? null;
   const targetRelationshipDelta = targeted
     && targetRelationshipBefore != null
     && targetRelationshipAfter != null
     ? targetRelationshipAfter - targetRelationshipBefore
     : null;
-  const targetImproved = !targeted || (targetRelationshipDelta != null && targetRelationshipDelta > 1e-6);
+  const targetImproved = !targeted || Boolean(
+    targetRelationshipDelta != null
+    && targetRelationshipDelta > 1e-6
+    && targetRelationshipAfterState?.passed === true
+  );
   const accepted = Boolean(
     release?.passed
     && scaleSafe
