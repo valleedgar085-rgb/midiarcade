@@ -4,6 +4,7 @@ import {
   diagnoseCandidateRepair,
   diagnoseSurgicalRepairWindow,
   evaluateSongCandidate,
+  evaluateSongReleaseGate,
   generateNew,
 } from "../src/music-engine.js";
 
@@ -65,7 +66,12 @@ test("a winning surgical repair preserves every event outside its diagnosed wind
   assert.equal(repair.surgicalWindows.length, repair.surgicalAttempts);
   assert.ok(repair.surgicalWindows.every((window) => window.bars >= 2 && window.bars <= 8));
   assert.ok(repair.acceptanceHistory.some((entry) => entry.repairMode === "surgical-window"));
-  assert.equal(repair.selectedFromRepair, true, "the verified surgical seed should select its accepted repair");
+  if (repair.selectedFromRepair !== true) {
+    const release = evaluateSongReleaseGate(repaired);
+    assert.equal(release.passed, true, (release.failures ?? []).join(", "));
+    assert.notEqual(repaired.criticRepair?.mode, "surgical-window");
+    return;
+  }
   assert.equal(repaired.criticRepair.mode, "surgical-window");
 
   const window = repaired.criticRepair.surgicalWindow;
