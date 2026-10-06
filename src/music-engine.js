@@ -7386,6 +7386,30 @@ function enforceScaleSafety(sourceTracks, config) {
   };
 }
 
+function restoreMusicalLookaheadCommitments(sourceTracks, config) {
+  const allowedScale = scalePitchClasses(config);
+  return sourceTracks.map((track) => {
+    if (!["bass", "melody", "counterpoint"].includes(track.id)) return track;
+    const notes = (track.notes ?? []).map((note) => {
+      const intent = note?.musicalLookaheadIntent;
+      const intendedPitch = Number(intent?.pitch);
+      if (
+        !intent
+        || !Number.isFinite(intendedPitch)
+        || intendedPitch < 0
+        || intendedPitch > 127
+        || !pitchFitsScale(intendedPitch, config, allowedScale)
+      ) return note;
+      const maxDrift = track.id === "bass" ? 2 : 7;
+      if (Math.abs(intendedPitch - finite(note.pitch, intendedPitch)) > maxDrift) return note;
+      return Math.round(finite(note.pitch)) === Math.round(intendedPitch)
+        ? note
+        : { ...note, pitch: Math.round(intendedPitch) };
+    });
+    return { ...track, notes };
+  });
+}
+
 function appendExpressionRamp(events, startBeat, endBeat, startValue, endValue, barBeats) {
   if (endBeat <= startBeat + 0.01) return;
   const steps = clamp(Math.ceil((endBeat - startBeat) / Math.max(0.5, barBeats / 2)), 2, 8);
@@ -10425,7 +10449,11 @@ function compose(config, options = {}) {
     songBlueprint,
     config,
   );
-  const tracks = finalAssemblyRepair.tracks;
+  // Late producer/assembly polish must not erase an explicitly composed
+  // future-chord connection while leaving its intent metadata behind.
+  // Restore only the original, scale-safe bounded pitch commitment; topology,
+  // timing, velocity, and harmony remain untouched.
+  const tracks = restoreMusicalLookaheadCommitments(finalAssemblyRepair.tracks, config);
   const finalTonalIntegrity = analyzeTonalIntegrity(
     tracks,
     harmony,
