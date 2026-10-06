@@ -53,6 +53,54 @@ test("phrase memory contract is deterministic and section-addressable", () => {
   assert.equal(phraseMemoryForSection(first, "outro-1").registerStrategy, "lift");
 });
 
+test("hook-first phrase contracts preserve final-hook identity while contrast resets it", () => {
+  const structure = [
+    { id: "intro-1", name: "intro", bars: 2 },
+    { id: "chorus-1", name: "chorus", bars: 4 },
+    { id: "verse-1", name: "verse", bars: 4 },
+    { id: "bridge-1", name: "bridge", bars: 4 },
+    { id: "prechorus-1", name: "prechorus", bars: 2 },
+    { id: "chorus-2", name: "chorus", bars: 8 },
+  ];
+  const sectionPlans = structure.map((section) => ({
+    sectionId: section.id,
+    role: section.name === "chorus" ? "peak" : "development",
+    cadence: section.name === "chorus" ? "resolve" : "open",
+  }));
+  const memoryMap = [
+    { sectionId: "intro-1", originSectionId: "intro-1", relationship: "introduction", recallStrength: 1, contrastAxis: "none" },
+    { sectionId: "chorus-1", originSectionId: "chorus-1", relationship: "statement", recallStrength: 1, contrastAxis: "none" },
+    { sectionId: "verse-1", originSectionId: "verse-1", relationship: "statement", recallStrength: 1, contrastAxis: "none" },
+    { sectionId: "bridge-1", originSectionId: "chorus-1", relationship: "contrast", recallStrength: 0.82, contrastAxis: "density" },
+    { sectionId: "prechorus-1", originSectionId: "chorus-1", relationship: "recall", recallStrength: 0.72, contrastAxis: "rhythm" },
+    { sectionId: "chorus-2", originSectionId: "chorus-1", relationship: "return", recallStrength: 0.74, contrastAxis: "none" },
+  ];
+  const songDNA = {
+    familyId: "hook-first-proof",
+    melodic: { direction: 1 },
+    rhythmic: { phraseBars: 4 },
+    sections: structure.map((section, index) => ({ sectionId: section.id, phraseSeed: 500 + index })),
+  };
+
+  const contract = createPhraseMemoryContract({ structure, sectionPlans, memoryMap, songDNA });
+  const firstHook = phraseMemoryForSection(contract, "chorus-1");
+  const contrast = phraseMemoryForSection(contract, "bridge-1");
+  const finalHook = phraseMemoryForSection(contract, "chorus-2");
+
+  assert.equal(firstHook.hookRole, "hook-anchor");
+  assert.equal(finalHook.hookRole, "developed-final-return");
+  assert.equal(finalHook.hookRecallIntervalBars, 4);
+  assert.ok(finalHook.recallStrength >= 0.92, "final hook must retain unusually strong family recall");
+  assert.ok(finalHook.motifMemory.contourRecall >= 0.9);
+  assert.ok(finalHook.motifMemory.rhythmRecall >= 0.92);
+  assert.equal(finalHook.transitionAnticipationBeats, 1.25);
+
+  assert.equal(contrast.hookRole, "contrast-reset");
+  assert.ok(contrast.recallStrength <= 0.42, "contrast must deliberately reduce hook identity");
+  assert.ok(contrast.motifMemory.rhythmRecall <= 0.4);
+  assert.equal(contrast.transitionAnticipationBeats, 1);
+});
+
 test("phrase performance stays bounded and is interpreted only at render time", () => {
   const contract = createPhraseMemoryContract({ structure: STRUCTURE, sectionPlans: PLANS, memoryMap: MEMORIES, songDNA: DNA });
   const resolution = phraseMemoryForSection(contract, "outro-1");
