@@ -1051,6 +1051,19 @@ export function createMelodySectionDevelopmentCandidates(song, {
       };
     })
     .filter(Boolean)
-    .filter((candidate) => candidate.memoryScoreDelta > 0 && candidate.sectionScoreDelta > 0)
+    .filter((candidate) => {
+      const threshold = candidate.relationship === "return" ? 0.74 : 0.60;
+      const hookSignatureCleared = candidate.authorityPhase === "5J"
+        && finite(candidate.beforeSection?.metrics?.hookSignatureSimilarity, 1) < threshold
+        && finite(candidate.afterSection?.metrics?.hookSignatureSimilarity, 0) >= threshold;
+      return (
+        candidate.memoryScoreDelta > 0
+        && candidate.sectionScoreDelta > 0
+      ) || (
+        hookSignatureCleared
+        && candidate.memoryScoreDelta >= 0
+        && candidate.sectionScoreDelta >= 0
+      );
+    })
     .slice(0, limit);
 }
