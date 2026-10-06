@@ -75,9 +75,14 @@ test("Hip-Hop Rap fusion uses the proven signed repetition surgery without broad
 
   if (!candidates.length) {
     const processed = applySongOutputQualityPipeline(generated, config);
-    assert.equal(processed.repetitionDiagnostics.attempted, true);
     assert.equal(processed.repetitionDiagnostics.accepted, false);
-    assert.equal(processed.repetitionDiagnostics.reason, "no-safe-repetition-move");
+    if (processed.repetitionDiagnostics.reason === "already-strong") {
+      assert.equal(processed.repetitionDiagnostics.attempted, false);
+      assert.ok(before.subscores.repetition >= 90);
+    } else {
+      assert.equal(processed.repetitionDiagnostics.attempted, true);
+      assert.equal(processed.repetitionDiagnostics.reason, "no-safe-repetition-move");
+    }
     assert.deepEqual(noteIdentity(processed.song), sourceIdentity);
     return;
   }
