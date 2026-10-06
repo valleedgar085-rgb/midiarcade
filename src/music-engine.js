@@ -10980,11 +10980,15 @@ function applyPhraseResolutions(
         trackId,
         protectedLanding: forceTonic,
       }) : null;
-      const target = lookahead?.pitch ?? nearestChordTone(landing.pitch, landingChord, direction);
+      const target = forceTonic
+        ? nearestChordTone(landing.pitch, targetChord, direction)
+        : lookahead?.pitch ?? nearestChordTone(landing.pitch, landingChord, direction);
       const maximumLeap = trackId === "counterpoint" ? 5 : 7;
       if (Math.abs(target - landing.pitch) <= maximumLeap || forceTonic) {
-        landing.pitch = nearestScalePitch(target, config, direction);
-        if (lookahead && landing.pitch === lookahead.pitch) landing.musicalLookaheadIntent = lookahead;
+        landing.pitch = forceTonic ? target : nearestScalePitch(target, config, direction);
+        if (!forceTonic && lookahead && landing.pitch === lookahead.pitch) {
+          landing.musicalLookaheadIntent = lookahead;
+        }
       }
       landing.duration = round(clamp(
         Math.max(
