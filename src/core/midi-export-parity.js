@@ -302,7 +302,6 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
     const expectedTrack = projection.tracks[index];
     const actualTrack = parsed.tracks[index + 1] ?? null;
     const expectedNotes = expectedTrack.notes ?? [];
-    const actualNotes = actualTrack?.notes ?? [];
     const actualNoteOns = actualTrack?.noteOns ?? [];
     sourceNoteCount += expectedNotes.length;
     exportedNoteCount += actualNoteOns.length;
@@ -346,7 +345,6 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
       });
     }
 
-    const actualNoteOns = actualTrack.noteOns ?? [];
     const actualNoteOffs = actualTrack.noteOffs ?? [];
     const usedNoteOns = new Set();
     const unresolvedNoteOns = [];
