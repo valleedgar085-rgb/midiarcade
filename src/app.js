@@ -5909,12 +5909,20 @@ export class PreviewPlayer {
     source.buffer = this.noiseBufferForKit(kit);
     const isHat = [42, 44, 46].includes(event.pitch);
     const isCymbal = [49, 51, 52, 55, 57, 59].includes(event.pitch);
-    const output = this.createDrumOutput(event, character, nodes, isCymbal ? 0.5 : isHat ? 0.18 : 0.38);
+    const isBackbeat = ["snare", "clap", "rim"].includes(character.kind);
+    const output = this.createDrumOutput(
+      event,
+      character,
+      nodes,
+      isCymbal ? 0.5 : isHat ? 0.18 : isBackbeat ? 0.22 : 0.3,
+    );
     filter.type = isHat || isCymbal ? "highpass" : "bandpass";
-    filter.frequency.value = character.filterFrequency;
-    filter.Q.value = isHat || isCymbal ? 0.8 : 1.3;
-    const duration = character.duration;
-    const drumPeak = character.peak * mixGain;
+    filter.frequency.value = isBackbeat
+      ? clamp(character.filterFrequency * 0.56, 900, 2600)
+      : character.filterFrequency;
+    filter.Q.value = isHat || isCymbal ? 0.8 : isBackbeat ? 1.7 : 1.3;
+    const duration = isBackbeat ? Math.min(character.duration, 0.14) : character.duration;
+    const drumPeak = character.peak * mixGain * (isBackbeat ? 0.68 : 1);
     this.shapeDrumGain(gain.gain, character, drumPeak, duration, when);
     source.connect(filter).connect(gain).connect(output);
     source.start(when);
@@ -5928,7 +5936,14 @@ export class PreviewPlayer {
       tone.type = "triangle";
       tone.frequency.setValueAtTime(voice.snareTone, when);
       tone.frequency.exponentialRampToValueAtTime(Math.max(90, voice.snareTone * 0.57), when + Math.min(0.1, voice.snareDecay * 0.7));
-      this.shapeDrumGain(toneGain.gain, character, character.toneLevel * mixGain, 0.13, when, false);
+      this.shapeDrumGain(
+        toneGain.gain,
+        character,
+        character.toneLevel * mixGain * (isBackbeat ? 1.35 : 1),
+        0.13,
+        when,
+        false,
+      );
       tone.connect(toneGain).connect(output);
       tone.start(when);
       tone.stop(when + 0.14);
