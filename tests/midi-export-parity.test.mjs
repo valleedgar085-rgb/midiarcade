@@ -192,6 +192,37 @@ test("parity audit identifies an exact pitch corruption in serialized MIDI", () 
   );
 });
 
+test("parity audit rejects musical notes placed on conductor track 0", () => {
+  const source = performedAuthoritySong();
+  const bytes = encodeMidi(source);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const conductorChunkOffset = 14;
+  assert.equal(String.fromCharCode(...bytes.slice(conductorChunkOffset, conductorChunkOffset + 4)), "MTrk");
+  const conductorLength = view.getUint32(conductorChunkOffset + 4);
+  const conductorDataStart = conductorChunkOffset + 8;
+  const conductorDataEnd = conductorDataStart + conductorLength;
+  const eot = bytes.slice(conductorDataEnd - 4, conductorDataEnd);
+  assert.deepEqual(Array.from(eot), [0x00, 0xff, 0x2f, 0x00]);
+
+  const injectedEvents = new Uint8Array([
+    0x00, 0x90, 60, 100,
+    0x00, 0x80, 60, 0,
+  ]);
+  const corrupted = new Uint8Array(bytes.length + injectedEvents.length);
+  corrupted.set(bytes.slice(0, conductorDataEnd - 4), 0);
+  corrupted.set(injectedEvents, conductorDataEnd - 4);
+  corrupted.set(bytes.slice(conductorDataEnd - 4), conductorDataEnd - 4 + injectedEvents.length);
+  const corruptedView = new DataView(corrupted.buffer, corrupted.byteOffset, corrupted.byteLength);
+  corruptedView.setUint32(conductorChunkOffset + 4, conductorLength + injectedEvents.length);
+
+  const audit = auditMidiExportParity(source, corrupted);
+  assert.equal(audit.passed, false);
+  assert.ok(
+    audit.mismatches.some((entry) => entry.type === "CONDUCTOR_NOTE_EVENT"),
+    JSON.stringify(audit.mismatches),
+  );
+});
+
 test("app export path uses verified MIDI bytes before browser or Android handoff", () => {
   const source = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
   assert.match(source, /const verifiedExport = encodeMidiVerified\(prepared\.song, prepared\.options\)/);
