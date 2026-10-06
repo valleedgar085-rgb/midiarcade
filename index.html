@@ -131,17 +131,17 @@
                 <label class="create-live-control">
                   <span><b>TEMPO</b><output id="tempoValue">84 BPM</output></span>
                   <input id="tempoControl" type="range" min="58" max="200" value="84" aria-label="Tempo in beats per minute" />
-                  <small>Updates current playback when the genre matches</small>
+                  <small>Sets the pace. The genre pocket stays a guide, not a lock.</small>
                 </label>
                 <label class="create-live-control">
                   <span><b>ENERGY</b><output id="energyValue">68</output></span>
                   <input id="energyControl" type="range" min="0" max="100" value="68" />
-                  <small>Calm to electric</small>
+                  <small>How hard the arrangement pushes.</small>
                 </label>
                 <label class="create-live-control">
                   <span><b>COMPLEXITY</b><output id="complexityValue">54</output></span>
                   <input id="complexityControl" type="range" min="0" max="100" value="54" />
-                  <small>Simple to intricate</small>
+                  <small>How busy and detailed the musical parts become.</small>
                 </label>
                 <label class="create-live-select">
                   <span>SONG LENGTH</span>
@@ -278,7 +278,7 @@
               <div class="creator-main-controls">
                 <div class="genre-direction">
                   <label class="select-control genre-select-control">
-                    <span>GENRE <small>SETS MUSICAL RULES</small></span>
+                    <span>GENRE <small>SETS GROOVE, HARMONY &amp; PLAYING STYLE</small></span>
                     <select id="genreControl" aria-label="Genre">
                       <optgroup label="★ Popular now">
                         <option value="popRadio">Pop Radio</option>
@@ -312,7 +312,7 @@
                     </select>
                   </label>
                   <label class="select-control genre-select-control secondary-genre-control">
-                    <span>FUSION PARTNER <small>BLEND TWO STYLES</small></span>
+                    <span>FUSION PARTNER <small>OPTIONAL SECOND STYLE</small></span>
                     <select id="secondaryGenreControl" aria-label="Secondary Fusion Genre">
                       <option value="none" selected>None · pure style</option>
                       <optgroup label="★ Popular now">
@@ -489,7 +489,7 @@
             <div class="generation-actions-bar" aria-label="Generation">
               <button class="generation-button generation-new" id="generateNew" type="button">
                 <span class="action-icon" aria-hidden="true"><svg viewBox="0 0 36 36"><path d="M18 3.5 21.2 14l10.3 4-10.3 4L18 32.5 14.8 22 4.5 18l10.3-4L18 3.5Z"/></svg></span>
-                <span class="action-copy"><small>USE THE SETTINGS ABOVE</small><strong>New song idea</strong><em>Replaces the full song; your choices stay selected</em></span>
+                <span class="action-copy"><small>USES YOUR DIRECTION</small><strong>Generate song</strong><em>Builds a fresh full arrangement from these choices</em></span>
                 <kbd>N</kbd>
               </button>
               <button class="generation-button generation-similar" id="generateSimilar" type="button">
