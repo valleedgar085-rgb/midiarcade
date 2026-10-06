@@ -161,8 +161,8 @@ function nearestPitchForPc(referencePitch, pitchClass, {
     .sort((left, right) => {
       const leftPreferred = left >= preferredMin && left <= preferredMax ? 0 : 1;
       const rightPreferred = right >= preferredMin && right <= preferredMax ? 0 : 1;
-      return leftPreferred - rightPreferred
-        || Math.abs(left - reference) - Math.abs(right - reference)
+      return Math.abs(left - reference) - Math.abs(right - reference)
+        || leftPreferred - rightPreferred
         || left - right;
     })[0];
 }
@@ -186,6 +186,7 @@ export function planBassHarmonyTarget({
   seed = "midi-arcade",
   variation = 0.48,
   complexity = 0.58,
+  register = null,
 } = {}) {
   const family = normalizeGenre(genre);
   const role = harmonicRole(bassGrooveRole);
@@ -211,7 +212,7 @@ export function planBassHarmonyTarget({
   const strategyIndex = Math.min(pool.length - 1, Math.floor(randomUnit(selectionSeed) * pool.length));
   const strategy = pool[Math.max(0, strategyIndex)] ?? "root";
   const targetPitchClass = targetPcForStrategy(strategy, chord, nextChord, selectionSeed);
-  const pitch = nearestPitchForPc(currentPitch, targetPitchClass);
+  const pitch = nearestPitchForPc(currentPitch, targetPitchClass, register ?? undefined);
 
   return Object.freeze({
     version: 1,
