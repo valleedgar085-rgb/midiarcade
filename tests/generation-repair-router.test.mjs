@@ -6,6 +6,7 @@ import {
   authorizeQualityStage,
   decideGenerationRepairAuthority,
   qualityStageAuthority,
+  resolveEnsembleCoherenceRepairHint,
   resolveFinalEnsembleRepairPlan,
   resolveWeaknessAuthority,
 } from "../src/core/generation-repair-router.js";
@@ -113,4 +114,33 @@ test("final ensemble repair plan stays inert when the committed ensemble is cohe
   assert.equal(plan.allowsFullRegeneration, false);
   assert.equal(plan.allowsSurgicalPostprocess, false);
   assert.deepEqual(plan.directives, []);
+});
+
+
+test("ensemble coherence hint keeps the main bounded-routing contract", () => {
+  const hint = resolveEnsembleCoherenceRepairHint({
+    sectionFailures: [
+      { sectionId: "verse-2", failures: ["melody-counterline", "density-balance"] },
+    ],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
+  });
+
+  assert.equal(hint.available, true);
+  assert.equal(hint.owner, "ensemble");
+  assert.equal(hint.specialist, "ensemble-specialist");
+  assert.equal(hint.sectionId, "verse-2");
+  assert.equal(hint.relationship, "melody-counterline");
+  assert.deepEqual(hint.allowedMutations, ["timing", "topology"]);
+  assert.equal("allowsFullRegeneration" in hint, false);
+});
+
+test("ensemble coherence hint fails closed when no actionable failure remains", () => {
+  const hint = resolveEnsembleCoherenceRepairHint({
+    sectionFailures: [],
+    macroDiagnostics: { payoffPairs: [], transitions: [] },
+  });
+
+  assert.equal(hint.available, false);
+  assert.equal(hint.owner, null);
+  assert.deepEqual(hint.allowedMutations, []);
 });
