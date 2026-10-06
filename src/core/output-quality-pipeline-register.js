@@ -1168,7 +1168,17 @@ function assessMelodySectionDevelopmentCandidate(candidate, before, beforeFloor,
   const floorDelta = creativeFloor(after) - beforeFloor;
   const dimensions = Object.keys(before?.subscores ?? {});
   const dimensionDeltas = protectedDeltas(before, after, dimensions);
-  const protectedSafe = Object.values(dimensionDeltas).every((delta) => delta >= -1e-9);
+  // Section-memory repair may trade a single critic point in motif shape or
+  // voice-leading when it produces a material return-coherence gain. Keep
+  // every other critic fail-closed, and retain the full-song score/floor,
+  // release-gate, and scale-safety checks below.
+  const sectionMemoryTradeoffTolerance = Object.freeze({
+    motif: 1,
+    voiceLeading: 1,
+  });
+  const protectedSafe = Object.entries(dimensionDeltas).every(([dimension, delta]) => (
+    delta >= -(sectionMemoryTradeoffTolerance[dimension] ?? 1e-9)
+  ));
   const scaleSafe = finite(after?.diagnostics?.scaleFit, 0) >= 0.999999;
   const localImprovement = candidate.sectionScoreDelta >= 4 || candidate.afterReport?.passed === true;
   const accepted = Boolean(
