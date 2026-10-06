@@ -101,7 +101,10 @@ export function parseMidiNoteTracks(input) {
     let runningStatus = null;
     let trackName = `Track-${trackIndex}`;
     let noteSequence = 0;
+    let noteOffSequence = 0;
     const notes = [];
+    const noteOns = [];
+    const noteOffs = [];
     const openNotes = new Map();
 
     while (state.offset < trackEnd) {
@@ -152,10 +155,18 @@ export function parseMidiNoteTracks(input) {
       const data2 = bytes[state.offset++];
 
       if (message === 0x90 && data2 > 0) {
+        const sequence = noteSequence++;
+        noteOns.push({
+          sequence,
+          channel,
+          pitch: data1,
+          tick: currentTick,
+          velocity: data2,
+        });
         const key = openNoteKey(channel, data1);
         const queue = openNotes.get(key) ?? [];
         queue.push({
-          sequence: noteSequence++,
+          sequence,
           startTick: currentTick,
           velocity: data2,
         });
@@ -164,6 +175,12 @@ export function parseMidiNoteTracks(input) {
       }
 
       if (message === 0x80 || (message === 0x90 && data2 === 0)) {
+        noteOffs.push({
+          sequence: noteOffSequence++,
+          channel,
+          pitch: data1,
+          tick: currentTick,
+        });
         closeParsedNote(
           openNotes,
           openNoteKey(channel, data1),
@@ -180,6 +197,8 @@ export function parseMidiNoteTracks(input) {
       trackIndex,
       name: trackName,
       notes,
+      noteOns,
+      noteOffs,
     });
     state.offset = trackEnd;
   }
@@ -284,12 +303,13 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
     const actualTrack = parsed.tracks[index + 1] ?? null;
     const expectedNotes = expectedTrack.notes ?? [];
     const actualNotes = actualTrack?.notes ?? [];
+    const actualNoteOns = actualTrack?.noteOns ?? [];
     sourceNoteCount += expectedNotes.length;
-    exportedNoteCount += actualNotes.length;
+    exportedNoteCount += actualNoteOns.length;
     trackBreakdown[expectedTrack.id] = {
       trackName: expectedTrack.trackName,
       source: expectedNotes.length,
-      exported: actualNotes.length,
+      exported: actualNoteOns.length,
     };
 
     if (!actualTrack) {
@@ -315,35 +335,42 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
       });
     }
 
-    if (expectedNotes.length !== actualNotes.length) {
+    if (expectedNotes.length !== actualNoteOns.length) {
       mismatches.push({
         type: "NOTE_COUNT_MISMATCH",
         trackId: expectedTrack.id,
         trackName: expectedTrack.trackName,
         expected: { count: expectedNotes.length },
-        actual: { count: actualNotes.length },
-        detail: `Expected ${expectedNotes.length} notes on ${expectedTrack.id}, found ${actualNotes.length}.`,
+        actual: { count: actualNoteOns.length },
+        detail: `Expected ${expectedNotes.length} note-on events on ${expectedTrack.id}, found ${actualNoteOns.length}.`,
       });
     }
 
-    const used = new Set();
-    const unresolved = [];
+    const actualNoteOns = actualTrack.noteOns ?? [];
+    const actualNoteOffs = actualTrack.noteOffs ?? [];
+    const usedNoteOns = new Set();
+    const unresolvedNoteOns = [];
 
     for (const expected of expectedNotes) {
-      const exact = takeMatch(actualNotes, used, (actual) => exactNoteMatch(expected, actual));
-      if (!exact) unresolved.push(expected);
+      const exact = takeMatch(actualNoteOns, usedNoteOns, (actual) => (
+        expected.channel === actual.channel
+        && expected.pitch === actual.pitch
+        && expected.onTick === actual.tick
+        && expected.velocity === actual.velocity
+      ));
+      if (!exact) unresolvedNoteOns.push(expected);
     }
 
-    for (const expected of unresolved) {
-      const samePitchAndStart = takeMatch(actualNotes, used, (actual) => (
+    for (const expected of unresolvedNoteOns) {
+      const samePitchAndTick = takeMatch(actualNoteOns, usedNoteOns, (actual) => (
         actual.pitch === expected.pitch
-        && actual.startTick === expected.onTick
+        && actual.tick === expected.onTick
       ));
-      const sameChannelAndStart = samePitchAndStart ?? takeMatch(actualNotes, used, (actual) => (
+      const sameChannelAndTick = samePitchAndTick ?? takeMatch(actualNoteOns, usedNoteOns, (actual) => (
         actual.channel === expected.channel
-        && actual.startTick === expected.onTick
+        && actual.tick === expected.onTick
       ));
-      const sameChannelAndPitch = sameChannelAndStart ?? takeMatch(actualNotes, used, (actual) => (
+      const sameChannelAndPitch = sameChannelAndTick ?? takeMatch(actualNoteOns, usedNoteOns, (actual) => (
         actual.channel === expected.channel
         && actual.pitch === expected.pitch
       ));
@@ -351,14 +378,25 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
       if (!sameChannelAndPitch) {
         const elsewhere = parsed.tracks
           .filter((track) => track.trackIndex !== index + 1)
-          .flatMap((track) => track.notes.map((note) => ({ track, note })))
-          .find(({ note }) => exactNoteMatch(expected, note));
+          .flatMap((track) => (track.noteOns ?? []).map((event) => ({ track, event })))
+          .find(({ event }) => (
+            event.channel === expected.channel
+            && event.pitch === expected.pitch
+            && event.tick === expected.onTick
+            && event.velocity === expected.velocity
+          ));
         if (elsewhere) {
           mismatches.push(mismatch(
             "TRACK_MISMATCH",
             expectedTrack,
             expected,
-            elsewhere.note,
+            {
+              channel: elsewhere.event.channel,
+              pitch: elsewhere.event.pitch,
+              startTick: elsewhere.event.tick,
+              endTick: elsewhere.event.tick,
+              velocity: elsewhere.event.velocity,
+            },
             `Note ${expected.noteId ?? ""} was serialized on MIDI track ${elsewhere.track.trackIndex} instead of ${index + 1}.`,
           ));
         } else {
@@ -367,19 +405,26 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
             expectedTrack,
             expected,
             null,
-            `Expected note ${expected.noteId ?? ""} was not found in the serialized track.`,
+            `Expected note-on ${expected.noteId ?? ""} was not found in the serialized track.`,
           ));
         }
         continue;
       }
 
       const actual = sameChannelAndPitch.note;
+      const actualShape = {
+        channel: actual.channel,
+        pitch: actual.pitch,
+        startTick: actual.tick,
+        endTick: actual.tick,
+        velocity: actual.velocity,
+      };
       if (expected.pitch !== actual.pitch) {
         mismatches.push(mismatch(
           "PITCH_MISMATCH",
           expectedTrack,
           expected,
-          actual,
+          actualShape,
           `Pitch changed from ${expected.pitch} to ${actual.pitch}.`,
         ));
       }
@@ -388,26 +433,17 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
           "CHANNEL_MISMATCH",
           expectedTrack,
           expected,
-          actual,
+          actualShape,
           `Channel changed from ${expected.channel + 1} to ${actual.channel + 1}.`,
         ));
       }
-      if (expected.onTick !== actual.startTick) {
+      if (expected.onTick !== actual.tick) {
         mismatches.push(mismatch(
           "TIMING_MISMATCH",
           expectedTrack,
           expected,
-          actual,
-          `Start tick changed from ${expected.onTick} to ${actual.startTick}.`,
-        ));
-      }
-      if (expected.offTick !== actual.endTick) {
-        mismatches.push(mismatch(
-          "DURATION_MISMATCH",
-          expectedTrack,
-          expected,
-          actual,
-          `End tick changed from ${expected.offTick} to ${actual.endTick}.`,
+          actualShape,
+          `Start tick changed from ${expected.onTick} to ${actual.tick}.`,
         ));
       }
       if (expected.velocity !== actual.velocity) {
@@ -415,27 +451,91 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
           "VELOCITY_MISMATCH",
           expectedTrack,
           expected,
-          actual,
+          actualShape,
           `Velocity changed from ${expected.velocity} to ${actual.velocity}.`,
         ));
       }
     }
 
-    actualNotes.forEach((actual, actualIndex) => {
-      if (used.has(actualIndex)) return;
+    actualNoteOns.forEach((actual, actualIndex) => {
+      if (usedNoteOns.has(actualIndex)) return;
       mismatches.push(mismatch(
         "UNEXPECTED_EXTRA_NOTE",
         expectedTrack,
         null,
-        actual,
-        `Serialized track contains an unexpected note at tick ${actual.startTick}.`,
+        {
+          channel: actual.channel,
+          pitch: actual.pitch,
+          startTick: actual.tick,
+          endTick: actual.tick,
+          velocity: actual.velocity,
+        },
+        `Serialized track contains an unexpected note-on at tick ${actual.tick}.`,
       ));
+    });
+
+    const usedNoteOffs = new Set();
+    const unresolvedNoteOffs = [];
+    for (const expected of expectedNotes) {
+      const exact = takeMatch(actualNoteOffs, usedNoteOffs, (actual) => (
+        expected.channel === actual.channel
+        && expected.pitch === actual.pitch
+        && expected.offTick === actual.tick
+      ));
+      if (!exact) unresolvedNoteOffs.push(expected);
+    }
+
+    for (const expected of unresolvedNoteOffs) {
+      const sameChannelAndPitch = takeMatch(actualNoteOffs, usedNoteOffs, (actual) => (
+        actual.channel === expected.channel
+        && actual.pitch === expected.pitch
+      ));
+      if (!sameChannelAndPitch) {
+        mismatches.push(mismatch(
+          "DURATION_MISMATCH",
+          expectedTrack,
+          expected,
+          null,
+          `Expected note-off for pitch ${expected.pitch} at tick ${expected.offTick} was not found.`,
+        ));
+        continue;
+      }
+      const actual = sameChannelAndPitch.note;
+      mismatches.push(mismatch(
+        "DURATION_MISMATCH",
+        expectedTrack,
+        expected,
+        {
+          channel: actual.channel,
+          pitch: actual.pitch,
+          startTick: actual.tick,
+          endTick: actual.tick,
+          velocity: 0,
+        },
+        `Note-off tick changed from ${expected.offTick} to ${actual.tick} for pitch ${expected.pitch}.`,
+      ));
+    }
+
+    actualNoteOffs.forEach((actual, actualIndex) => {
+      if (usedNoteOffs.has(actualIndex)) return;
+      mismatches.push({
+        type: "UNEXPECTED_NOTE_OFF",
+        trackId: expectedTrack.id,
+        trackName: expectedTrack.trackName,
+        expected: null,
+        actual: {
+          channel: actual.channel,
+          pitch: actual.pitch,
+          tick: actual.tick,
+        },
+        detail: `Serialized track contains an unexpected note-off for pitch ${actual.pitch} at tick ${actual.tick}.`,
+      });
     });
   }
 
   const extraMusicalTracks = parsed.tracks.slice(projection.tracks.length + 1);
   for (const track of extraMusicalTracks) {
-    exportedNoteCount += track.notes.length;
+    exportedNoteCount += (track.noteOns ?? []).length;
     mismatches.push({
       type: "TRACK_MISMATCH",
       trackId: null,
