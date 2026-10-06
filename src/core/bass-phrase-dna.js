@@ -306,8 +306,14 @@ export function createBassPhrasePlan({
   // machine-interlock sources are hats, so this still preserves offbeat motion
   // without forcing bass onto the kick.
   if (source.length && !steps.length) {
-    const fallback = normalizeStep(source[0], gridSteps, wrap);
-    if (fallback != null) steps = [fallback];
+    const fallback = applyOpeningBoundary(
+      uniqueSorted(source
+        .map((step) => normalizeStep(step, gridSteps, wrap))
+        .filter((step) => step != null)),
+      gridSteps,
+      openingBoundary,
+    );
+    if (fallback.length) steps = fallback;
   }
 
   return Object.freeze({
