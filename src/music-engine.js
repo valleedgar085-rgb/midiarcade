@@ -9010,19 +9010,34 @@ function reconcileFinalTonicLandingContracts(sourceTracks, config) {
       if (mod(note.pitch, 12) === tonic) continue;
 
       const candidates = [];
+      const pairedLeadTrack = track.id === "melody"
+        ? tracks.find((entry) => entry.id === "counterpoint")
+        : track.id === "counterpoint"
+          ? tracks.find((entry) => entry.id === "melody")
+          : null;
       for (
         let pitch = Math.max(0, Math.round(finite(policy.min, 0)));
         pitch <= Math.min(127, Math.round(finite(policy.max, 127)));
         pitch += 1
       ) {
         if (mod(pitch, 12) !== tonic) continue;
+        const noteStart = finite(note.start);
+        const noteEnd = noteStart + Math.max(0.02, finite(note.duration, 0.25));
         const overlapsSamePitch = (track.notes ?? []).some((other) => (
           other !== note
           && Math.round(finite(other?.pitch, -1)) === pitch
-          && finite(note.start) < finite(other?.start) + Math.max(0.02, finite(other?.duration, 0.25)) - 1e-6
-          && finite(other?.start) < finite(note.start) + Math.max(0.02, finite(note.duration, 0.25)) - 1e-6
+          && noteStart < finite(other?.start) + Math.max(0.02, finite(other?.duration, 0.25)) - 1e-6
+          && finite(other?.start) < noteEnd - 1e-6
         ));
-        if (!overlapsSamePitch) candidates.push(pitch);
+        if (overlapsSamePitch) continue;
+
+        const leadConflict = (pairedLeadTrack?.notes ?? []).some((other) => {
+          const otherStart = finite(other?.start);
+          const otherEnd = otherStart + Math.max(0.02, finite(other?.duration, 0.25));
+          if (!(noteStart < otherEnd - 1e-6 && otherStart < noteEnd - 1e-6)) return false;
+          return [0, 1, 6, 11].includes(mod(Math.abs(pitch - finite(other?.pitch)), 12));
+        });
+        if (!leadConflict) candidates.push(pitch);
       }
       candidates.sort((left, right) => (
         Math.abs(left - finite(note.pitch, left)) - Math.abs(right - finite(note.pitch, right))
