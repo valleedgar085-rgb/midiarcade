@@ -187,6 +187,7 @@ test("v3 maps weak ensemble relationships to their exact section and relationshi
   assert.equal(report.sectionDiagnostics[0].sectionId, "verse");
   assert.equal(typeof report.sectionDiagnostics[0].relationships.kickBass, "number");
   assert.equal(typeof report.sectionDiagnostics[0].relationships.chordMelody, "number");
+  assert.equal(typeof report.sectionDiagnostics[0].relationships.melodyCounterlineCollisionControl, "number");
   assert.ok(report.sectionDiagnostics.some((entry) => entry.failures.includes("melody-counterline")));
   assert.ok(report.sectionFailures.some((entry) => entry.failures.includes("melody-counterline")));
 });
