@@ -335,16 +335,20 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
     }
 
     for (const expected of unresolved) {
-      const sameStart = takeMatch(actualNotes, used, (actual) => (
+      const samePitchAndStart = takeMatch(actualNotes, used, (actual) => (
+        actual.pitch === expected.pitch
+        && actual.startTick === expected.onTick
+      ));
+      const sameChannelAndStart = samePitchAndStart ?? takeMatch(actualNotes, used, (actual) => (
         actual.channel === expected.channel
         && actual.startTick === expected.onTick
       ));
-      const samePitch = sameStart ?? takeMatch(actualNotes, used, (actual) => (
+      const sameChannelAndPitch = sameChannelAndStart ?? takeMatch(actualNotes, used, (actual) => (
         actual.channel === expected.channel
         && actual.pitch === expected.pitch
       ));
 
-      if (!samePitch) {
+      if (!sameChannelAndPitch) {
         const elsewhere = parsed.tracks
           .filter((track) => track.trackIndex !== index + 1)
           .flatMap((track) => track.notes.map((note) => ({ track, note })))
@@ -369,7 +373,7 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
         continue;
       }
 
-      const actual = samePitch.note;
+      const actual = sameChannelAndPitch.note;
       if (expected.pitch !== actual.pitch) {
         mismatches.push(mismatch(
           "PITCH_MISMATCH",
