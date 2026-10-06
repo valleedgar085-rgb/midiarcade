@@ -38,6 +38,23 @@ test("anchor events resolve to the active chord root in the bass register", () =
   assert.ok(result.pitch >= 28 && result.pitch <= 55);
 });
 
+
+test("configured sub register keeps the nearest octave-1 target eligible before preferred-range bias", () => {
+  const result = target({
+    bassGrooveRole: "anchor",
+    currentPitch: 27,
+    index: 0,
+    register: {
+      minimum: 24,
+      maximum: 55,
+      preferredMin: 35,
+      preferredMax: 52,
+    },
+  });
+  assert.equal(result.targetPitchClass, 0);
+  assert.equal(result.pitch, 24);
+});
+
 test("Hip-Hop replies choose from approved chord-support tones rather than arbitrary scale motion", () => {
   const result = target();
   assert.equal(result.role, "REPLY");
