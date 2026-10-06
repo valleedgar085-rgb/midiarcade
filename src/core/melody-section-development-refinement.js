@@ -83,6 +83,15 @@ function isProtectedAnchor(note) {
     || note?.phraseRole === "turnaround"
   );
 }
+
+function isHookSignatureProtectedAnchor(note) {
+  // Phase 5J is a pitch-only hook-identity authority. Downstream ensemble tags
+  // may annotate the opening hook cell, but they must not make a broken return
+  // permanently unrepairable. The 5J contract explicitly preserves turnaround
+  // anchors; timing, duration, velocity, topology, scale safety, and release
+  // gates remain unchanged and authoritative.
+  return note?.phraseRole === "turnaround";
+}
 function sourceContract(song, sectionId) {
   return (song?.phraseMemory?.sections ?? []).find((entry) => String(entry?.sectionId) === String(sectionId)) ?? null;
 }
@@ -378,7 +387,7 @@ function hookSignatureSearchCandidates(song, report, { maxCandidates = 2 } = {})
 
   const allowedFor = ({ note }, position) => {
     const current = localPitches[position];
-    if (isProtectedAnchor(note)) return [current];
+    if (position === 0 || isHookSignatureProtectedAnchor(note)) return [current];
     const options = [current];
     for (
       let pitch = Math.max(minPitch, current - 7);
@@ -469,7 +478,7 @@ function hookSignatureSearchCandidates(song, report, { maxCandidates = 2 } = {})
       if (option.pitches[position] === localPitches[position]) continue;
       const entry = target[position];
       const note = track?.notes?.[entry.index];
-      if (!note || isProtectedAnchor(note)) continue;
+      if (!note || isHookSignatureProtectedAnchor(note)) continue;
       note.pitch = option.pitches[position];
       tag(
         note,
@@ -534,7 +543,7 @@ function hookSignatureRecallCandidate(song, report) {
 
   for (let position = 0; position < 4; position += 1) {
     if (
-      isProtectedAnchor(target[position]?.note)
+      isHookSignatureProtectedAnchor(target[position]?.note)
       && desired[position] !== localPitches[position]
     ) return null;
     if (position > 0 && Math.abs(desired[position] - desired[position - 1]) > 12) return null;
@@ -549,7 +558,7 @@ function hookSignatureRecallCandidate(song, report) {
     if (desired[position] === localPitches[position]) continue;
     const entry = target[position];
     const note = track?.notes?.[entry.index];
-    if (!note || isProtectedAnchor(note)) continue;
+    if (!note || isHookSignatureProtectedAnchor(note)) continue;
     note.pitch = desired[position];
     tag(note, report.sourceSectionId, position === 3 ? "hook-signature-payoff" : "hook-signature-recall");
     changed += 1;
