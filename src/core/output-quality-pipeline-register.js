@@ -718,8 +718,14 @@ export function applyEnsembleContinuityRefinement(song, config, evaluateCandidat
   }
 
   const beforeCoherence = evaluateCrossAuthorityCoherence(song);
-  const repairHint = config?.ensembleCoherenceRepairHint ?? resolveEnsembleCoherenceRepairHint(beforeCoherence);
-  const candidates = createEnsembleContinuityCandidates(song, { repairHint });
+  const explicitHint = config?.ensembleCoherenceRepairHint ?? null;
+  const resolvedHint = explicitHint ?? resolveEnsembleCoherenceRepairHint(beforeCoherence);
+  let repairHint = resolvedHint;
+  let candidates = createEnsembleContinuityCandidates(song, { repairHint });
+  if (!candidates.length && !explicitHint && resolvedHint?.available === true) {
+    repairHint = null;
+    candidates = createEnsembleContinuityCandidates(song);
+  }
   if (!candidates.length) {
     return {
       song,
