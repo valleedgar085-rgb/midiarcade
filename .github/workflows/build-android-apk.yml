@@ -11,9 +11,27 @@ permissions:
   contents: read
 
 jobs:
-  debug-apk:
+  quality:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify full repository quality
+        run: npm run quality
+      - name: Verify music quality
+        run: npm run quality:music
+
+  debug-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
