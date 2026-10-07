@@ -464,7 +464,7 @@ test("targeted ensemble repair never extends a new note beyond the selected sect
   const counterpoint = source.tracks.find((track) => track.id === "counterpoint");
   counterpoint.notes = counterpoint.notes.filter((note) => note.id !== "qc2");
   for (const bar of source.grooveConductor.bars) {
-    if (bar.sectionId === "chorus-1") bar.counterPulses = bar.bar === 9 ? [3.93] : [];
+    if (bar.sectionId === "chorus-1") bar.counterPulses = bar.bar === 9 ? [3.7] : [];
   }
   const candidates = createEnsembleContinuityCandidates(source, {
     repairHint: {
@@ -475,9 +475,11 @@ test("targeted ensemble repair never extends a new note beyond the selected sect
     },
   });
 
+  assert.ok(candidates.length > 0, "boundary fixture must produce at least one repair candidate");
   for (const candidate of candidates) {
     const added = candidate.song.tracks.find((track) => track.id === "counterpoint").notes
       .filter((note) => String(note.continuityRole ?? "") === "counterpoint-continuity-link");
+    assert.ok(added.length > 0, "boundary candidate must add a counterpoint continuity link");
     assert.ok(added.every((note) => note.start + note.duration <= 40 + 1e-6));
   }
 });
