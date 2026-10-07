@@ -7,6 +7,8 @@ import {
   ENSEMBLE_CONTINUITY_TRACKS,
 } from "../src/core/ensemble-continuity-refinement.js";
 import { applyEnsembleContinuityRefinement } from "../src/core/output-quality-pipeline-register.js";
+import { evaluateCrossAuthorityCoherence } from "../src/core/cross-authority-coherence.js";
+import { resolveEnsembleCoherenceRepairHint } from "../src/core/generation-repair-router.js";
 
 function ensembleDropoutSong() {
   const harmony = Array.from({ length: 12 }, (_, bar) => ({
@@ -272,6 +274,25 @@ test("final ensemble continuity stage accepts only a release-safe no-regression 
   assert.ok(result.diagnostics.changedNotes >= 1);
   assert.ok(result.diagnostics.continuityErrorDelta < 0);
   assert.ok(result.song !== source);
+});
+
+test("auto-resolved unsupported coherence hints fall back to general ensemble continuity repair", () => {
+  const source = addEnsembleContractsForTargeting(ensembleDropoutSong());
+  const hint = resolveEnsembleCoherenceRepairHint(evaluateCrossAuthorityCoherence(source));
+
+  assert.equal(hint.available, true);
+  assert.equal(hint.relationship, "kick-bass");
+
+  const result = applyEnsembleContinuityRefinement(
+    source,
+    { ensembleContinuityRefinement: true },
+    (candidateSong) => evaluationFor(candidateSong),
+    () => ({ passed: true, totalScore: 92 }),
+  );
+
+  assert.ok(result.diagnostics.candidatesEvaluated > 0);
+  assert.notEqual(result.diagnostics.reason, "no-targeted-ensemble-move");
+  assert.ok(result.diagnostics.candidateIds.includes("focused-ensemble-link"));
 });
 
 test("ensemble continuity fails closed when another critic regresses", () => {
