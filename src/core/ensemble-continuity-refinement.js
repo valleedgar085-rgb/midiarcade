@@ -9,6 +9,30 @@ const MAX_DEEP_ENSEMBLE_LINKS = 6;
 
 const EXCLUDED_SECTION_NAMES = ["intro", "outro", "breakdown", "interlude"];
 
+const TARGET_TRACKS_BY_RELATIONSHIP = Object.freeze({
+  "melody-counterline": Object.freeze(["counterpoint"]),
+  "chord-melody": Object.freeze(["chords"]),
+  "bass-harmony": Object.freeze(["chords"]),
+});
+
+function targetedRepairScope(repairHint) {
+  if (repairHint?.available !== true) return null;
+  const allowedMutations = Array.isArray(repairHint?.allowedMutations) ? repairHint.allowedMutations : [];
+  const relationship = String(repairHint?.relationship ?? "");
+  const sectionId = repairHint?.sectionId == null ? "" : String(repairHint.sectionId);
+  const trackIds = Object.prototype.hasOwnProperty.call(TARGET_TRACKS_BY_RELATIONSHIP, relationship)
+    ? TARGET_TRACKS_BY_RELATIONSHIP[relationship]
+    : null;
+  if (!sectionId || !trackIds?.length || !allowedMutations.includes("topology")) return Object.freeze({ supported: false });
+  return Object.freeze({
+    supported: true,
+    sectionId,
+    relationship,
+    trackIds,
+    allowedMutations: Object.freeze([...allowedMutations]),
+  });
+}
+
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
@@ -303,6 +327,7 @@ function sourceVelocity(song, metric, start, fallback) {
 
 function repairNote(song, metric, window, ordinal) {
   const start = chooseBeat(song, metric, window);
+  const remaining = window.end - start;
   const chord = harmonyAt(song, start);
   const center = registerCenter(song, metric.trackId, metric);
   const base = {
@@ -311,22 +336,28 @@ function repairNote(song, metric, window, ordinal) {
     continuityRole: `${metric.trackId}-continuity-link`,
   };
   if (metric.trackId === "drums") {
+    if (remaining < 0.04) return null;
     return {
       ...base,
       id: `drum-continuity-${metric.id}-${ordinal}`,
       pitch: 36,
-      duration: 0.08,
+      duration: round(Math.min(0.08, remaining), 4),
       velocity: Math.max(1, Math.min(127, Math.round(sourceVelocity(song, metric, start, 92) * 0.9))),
     };
   }
+  if (remaining < 0.12) return null;
   const range = metric.trackId === "counterpoint" ? [55, 84]
     : metric.trackId === "chords" ? [45, 72]
       : [40, 68];
   const pitch = rootPitchNear(chord, center, range[0], range[1]);
   const chordEnd = chord ? finite(chord.start) + Math.max(0.25, finite(chord.duration, 1)) : window.end;
-  const available = Math.max(0.12, Math.min(window.end, chordEnd) - start);
+  const available = Math.min(remaining, Math.min(window.end, chordEnd) - start);
+  if (available < 0.12) return null;
   const maxDuration = metric.trackId === "pad" ? 2.5 : metric.trackId === "chords" ? 1.5 : 0.65;
-  const duration = round(clamp(available * (metric.trackId === "pad" ? 0.9 : 0.72), 0.12, maxDuration), 4);
+  const duration = round(Math.min(
+    clamp(available * (metric.trackId === "pad" ? 0.9 : 0.72), 0.12, maxDuration),
+    remaining,
+  ), 4);
   return {
     ...base,
     id: `${metric.trackId}-continuity-${metric.id}-${ordinal}`,
@@ -341,19 +372,27 @@ function repairNote(song, metric, window, ordinal) {
   };
 }
 
-function opportunities(song) {
+function opportunities(song, repairHint = null) {
+  const scope = targetedRepairScope(repairHint);
+  if (scope && !scope.supported) return [];
+  const allowedTracks = scope ? new Set(scope.trackIds) : null;
   return ENSEMBLE_CONTINUITY_TRACKS
+    .filter((trackId) => !allowedTracks || allowedTracks.has(trackId))
     .flatMap((trackId) => analyzeTrack(song, trackId).actionable)
+    .filter((metric) => !scope || metric.id === scope.sectionId)
     .sort((left, right) => right.deficit - left.deficit || left.index - right.index || left.trackId.localeCompare(right.trackId));
 }
 
 function addRepairs(song, requests) {
   const candidate = cloneValue(song);
   const grouped = new Map();
+  let changedNotes = 0;
   requests.forEach((metric, index) => {
     const note = repairNote(candidate, metric, metric.windows[0], index);
+    if (!note) return;
     if (!grouped.has(metric.trackId)) grouped.set(metric.trackId, []);
     grouped.get(metric.trackId).push(note);
+    changedNotes += 1;
   });
   for (const [trackId, notes] of grouped) {
     const trackObject = track(candidate, trackId);
@@ -361,13 +400,21 @@ function addRepairs(song, requests) {
     trackObject.notes = [...(trackObject.notes ?? []), ...notes]
       .sort((left, right) => finite(left?.start) - finite(right?.start) || finite(left?.pitch) - finite(right?.pitch));
   }
-  return candidate;
+  return { song: candidate, changedNotes };
 }
 
-function candidateRequestSets(song, analysis = analyzeEnsembleContinuity(song)) {
-  const all = opportunities(song);
+function candidateRequestSets(song, analysis = analyzeEnsembleContinuity(song), repairHint = null) {
+  const scope = targetedRepairScope(repairHint);
+  const all = opportunities(song, repairHint);
   if (!all.length) return [];
   const weakest = all[0];
+  if (scope?.supported) {
+    return [{
+      id: `targeted-${scope.relationship}-link`,
+      requests: [weakest],
+      targeting: scope,
+    }];
+  }
   const byTrack = [];
   const seen = new Set();
   for (const metric of all) {
@@ -390,14 +437,16 @@ function candidateRequestSets(song, analysis = analyzeEnsembleContinuity(song)) 
 
 export function createEnsembleContinuityCandidates(song, {
   maxCandidates = MAX_ENSEMBLE_CONTINUITY_CANDIDATES,
+  repairHint = null,
 } = {}) {
   const before = analyzeEnsembleContinuity(song);
   if (before.deficit <= 0) return [];
   const seen = new Set();
-  return candidateRequestSets(song, before)
+  return candidateRequestSets(song, before, repairHint)
     .slice(0, Math.max(0, Math.min(MAX_ENSEMBLE_CONTINUITY_CANDIDATES, Math.floor(maxCandidates))))
     .map((entry, candidateIndex) => {
-      const candidateSong = addRepairs(song, entry.requests);
+      const repair = addRepairs(song, entry.requests);
+      const candidateSong = repair.song;
       const after = analyzeEnsembleContinuity(candidateSong);
       const signature = JSON.stringify(ENSEMBLE_CONTINUITY_TRACKS.map((trackId) => (
         track(candidateSong, trackId)?.notes?.map((note) => [finite(note.start), finite(note.pitch), finite(note.duration)]) ?? []
@@ -409,7 +458,12 @@ export function createEnsembleContinuityCandidates(song, {
         id: entry.id,
         candidateIndex,
         song: candidateSong,
-        changedNotes: entry.requests.length,
+        changedNotes: repair.changedNotes,
+        targeted: Boolean(entry.targeting?.supported),
+        targetSectionId: entry.targeting?.sectionId ?? null,
+        targetRelationship: entry.targeting?.relationship ?? null,
+        targetTrackIds: entry.targeting?.trackIds ? [...entry.targeting.trackIds] : [],
+        authorizedMutations: entry.targeting?.allowedMutations ? [...entry.targeting.allowedMutations] : [],
         beforeContinuityDeficit: before.deficit,
         afterContinuityDeficit: after.deficit,
         continuityErrorDelta,
