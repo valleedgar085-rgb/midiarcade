@@ -350,7 +350,7 @@ function repairNote(song, metric, window, ordinal) {
     : metric.trackId === "chords" ? [45, 72]
       : [40, 68];
   const pitch = rootPitchNear(chord, center, range[0], range[1]);
-  const chordEnd = chord ? finite(chord.start) + Math.max(0.25, finite(chord.duration, 1)) : window.end;
+  const chordEnd = chord ? finite(chord.start) + Math.max(0.05, finite(chord.duration, 0.25)) : window.end;
   const available = Math.min(remaining, Math.min(window.end, chordEnd) - start);
   if (available < 0.12) return null;
   const maxDuration = metric.trackId === "pad" ? 2.5 : metric.trackId === "chords" ? 1.5 : 0.65;
