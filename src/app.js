@@ -1,7 +1,7 @@
 import {
   createMidiExportReport,
   defaultChordPathForGenre,
-  encodeMidi,
+  encodeMidiVerified,
   generateNew,
   generateSimilar,
   GENRE_PROFILES,
@@ -4508,8 +4508,10 @@ async function exportSong() {
     const clone = buildExportSongSnapshot();
     const prepared = prepareMidiExport(clone, currentExportSetup());
     const exportReport = createMidiExportReport(prepared.song, prepared.options);
-    const bytes = encodeMidi(prepared.song, prepared.options);
-    const payload = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const verifiedExport = encodeMidiVerified(prepared.song, prepared.options);
+    const payload = verifiedExport.bytes instanceof Uint8Array
+      ? verifiedExport.bytes
+      : new Uint8Array(verifiedExport.bytes);
     const keyStr = songKey().toLowerCase();
     const modeStr = songMode().toLowerCase();
     const bpmVal = Math.round(songBpm());
