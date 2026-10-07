@@ -148,6 +148,7 @@ export function evaluateCrossAuthorityCoherence(song, { specialistPlan = null } 
         bassHarmony: Number(entry.harmonicSupport ?? 0),
         chordMelody: Number(entry.leadHarmonySeparation ?? 0),
         melodyCounterline: Number(entry.leadDialogue ?? 0),
+        melodyCounterlineCollisionControl: Number(entry.collisionControl ?? 0),
         entranceExit: Number(entry.cadenceTeam ?? 0),
         densityBalance: Number(entry.roleHierarchy ?? 0),
         transitionContinuity: Number(entry.cadenceTeam ?? 0),
