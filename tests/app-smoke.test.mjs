@@ -445,7 +445,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(cssSource, /--font-display:[^;]+;[\s\S]*?--font-data:[^;]+;/, "typography must separate expressive titles from precise musical data");
   assert.match(cssSource, /\.creative-thread[\s\S]*?--thread-color:\s*var\(--focus-color\)/, "shared focus must have one adaptive visual thread");
   assert.match(appSource, /function updateCreativeThreadPlayback[\s\S]*?is-playing-section/, "playback must illuminate its section across the shared timeline");
-  assert.match(appSource, /buildExportSongSnapshot\(\)[\s\S]*?prepareMidiExport\(clone[\s\S]*?encodeMidi\(prepared\.song/, "export must snapshot the live mix before applying a non-destructive export profile");
+  assert.match(appSource, /buildExportSongSnapshot\(\)[\s\S]*?prepareMidiExport\(clone[\s\S]*?encodeMidiVerified\(prepared\.song/, "export must snapshot the live mix before applying a non-destructive export profile and parity verification");
   assert.doesNotMatch(appSource, /encodeMidi\(clone, \{ includeMuted: true \}\)/, "export must not force muted or non-soloed notes back on");
   assert.match(appSource, /function buildExportSongSnapshot[\s\S]*?mute: state\.muted\.has\(id\)[\s\S]*?solo: state\.solo\.has\(id\)/, "the export snapshot must use the exact live mute and solo state");
   const historySource = appSource.slice(appSource.indexOf("function createHistorySnapshot"), appSource.indexOf("function pushHistory"));

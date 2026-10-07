@@ -37,6 +37,10 @@ import {
 import { analyzeTonalIntegrity, refineTonalIntegrity } from "./core/tonal-integrity.js";
 import { canonicalMidiPitch } from "./core/pitch-contract.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
+import {
+  auditMidiBytesAgainstProjection,
+  MidiExportParityViolationError,
+} from "./core/midi-export-parity.js";
 import { analyzeRoleRegisters, refineRoleRegisters } from "./core/role-register-refinement.js";
 import { resolveAutoScale } from "./core/scale-intent.js";
 import {
@@ -15099,6 +15103,47 @@ function cutoffControllerValue(value) {
   return clamp(Math.round((cutoff - 1000) / 13000 * 127), 0, 127);
 }
 
+function midiNoteProjectionForTrack(track, song, ppq, channel) {
+  const defaults = TRACK_DEFINITIONS[track.id] ?? {};
+  const settings = track.settings ?? {};
+  const velocityScale = Math.sqrt(
+    clamp(finite(settings.velocity, defaults.velocity ?? 1), 0.1, 1.5)
+    / Math.max(0.1, finite(defaults.velocity, settings.velocity ?? 1)),
+  );
+  const gateScale = clamp(Math.sqrt(
+    clamp(finite(settings.gate, defaults.gate ?? 1), 0.08, 1.5)
+    / Math.max(0.08, finite(defaults.gate, settings.gate ?? 1)),
+  ), 0.65, 1.4);
+  const totalTicks = Math.round(song.meta.totalBeats * ppq);
+
+  return (track.notes ?? []).map((note, sourceIndex) => {
+    const performedNote = resolvePerformedNote(note);
+    const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
+    const pitch = canonicalMidiPitch(performedNote.pitch);
+    const velocity = clamp(Math.round(
+      (finite(performedNote.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
+    ), 1, 127);
+    const onTick = clamp(Math.round(finite(performedNote.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
+    const offTick = clamp(
+      Math.max(onTick + 1, Math.round((
+        finite(performedNote.start, 0)
+        + finite(performedNote.duration, 0.25) * gateScale * phrasePerformance.durationScale
+      ) * ppq)),
+      1,
+      totalTicks,
+    );
+    return Object.freeze({
+      sourceIndex,
+      noteId: note?.id != null ? String(note.id) : `${String(track.id)}:${sourceIndex}`,
+      channel,
+      pitch,
+      velocity,
+      onTick,
+      offTick,
+    });
+  });
+}
+
 function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel = null) {
   const channel = track.id === "drums" ? 9 : clamp(Math.round(finite(exportChannel, track.channel ?? 0)), 0, 15);
   const defaults = TRACK_DEFINITIONS[track.id] ?? {};
@@ -15174,33 +15219,9 @@ function musicalTrack(track, song, ppq, audible, trackIndex = 0, exportChannel =
   }
 
   if (audible) {
-    const velocityScale = Math.sqrt(
-      clamp(finite(settings.velocity, defaults.velocity ?? 1), 0.1, 1.5)
-      / Math.max(0.1, finite(defaults.velocity, settings.velocity ?? 1)),
-    );
-    const gateScale = clamp(Math.sqrt(
-      clamp(finite(settings.gate, defaults.gate ?? 1), 0.08, 1.5)
-      / Math.max(0.08, finite(defaults.gate, settings.gate ?? 1)),
-    ), 0.65, 1.4);
-    const totalTicks = Math.round(song.meta.totalBeats * ppq);
-    for (const note of track.notes ?? []) {
-      const performedNote = resolvePerformedNote(note);
-      const phrasePerformance = performanceTransformForNote(note, renderPhrasePerformance(note));
-      const pitch = canonicalMidiPitch(performedNote.pitch);
-      const velocity = clamp(Math.round(
-        (finite(performedNote.velocity, 90) + phrasePerformance.velocityDelta) * velocityScale,
-      ), 1, 127);
-      const onTick = clamp(Math.round(finite(performedNote.start, 0) * ppq), 0, Math.max(0, totalTicks - 1));
-      const offTick = clamp(
-        Math.max(onTick + 1, Math.round((
-          finite(performedNote.start, 0)
-          + finite(performedNote.duration, 0.25) * gateScale * phrasePerformance.durationScale
-        ) * ppq)),
-        1,
-        totalTicks,
-      );
-      events.push({ tick: onTick, order: 20, data: [0x90 | channel, pitch, velocity] });
-      events.push({ tick: offTick, order: 10, data: [0x80 | channel, pitch, 0] });
+    for (const noteEvent of midiNoteProjectionForTrack(track, song, ppq, channel)) {
+      events.push({ tick: noteEvent.onTick, order: 20, data: [0x90 | channel, noteEvent.pitch, noteEvent.velocity] });
+      events.push({ tick: noteEvent.offTick, order: 10, data: [0x80 | channel, noteEvent.pitch, 0] });
     }
   }
   const endTick = Math.round(song.meta.totalBeats * ppq);
@@ -15300,6 +15321,49 @@ export function createMidiExportReport(song, options = {}) {
   };
 }
 
+export function createMidiExportProjection(song, options = {}) {
+  if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("createMidiExportProjection requires a song JSON object");
+  const ppq = clamp(Math.round(finite(options.ppq, song.meta.ppq ?? PPQ)), 24, 32767);
+  const tracks = selectedExportTracks(song, options);
+  const channels = resolveExportChannels(tracks);
+  const soloed = tracks.filter((track) => track.settings?.solo);
+  const includeMuted = Boolean(options.includeMuted);
+  const alwaysIncluded = new Set(Array.isArray(options.alwaysIncludeTrackIds) ? options.alwaysIncludeTrackIds.map(String) : []);
+  const projectedTracks = tracks.map((track, trackIndex) => {
+    const audible = includeMuted
+      || alwaysIncluded.has(String(track.id))
+      || (!track.settings?.mute && (!soloed.length || track.settings?.solo));
+    const channel = track.id === "drums" ? 9 : channels.get(track);
+    const trackName = `${String(trackIndex + 1).padStart(2, "0")} ${track.name ?? track.id}`;
+    const notes = audible
+      ? midiNoteProjectionForTrack(track, song, ppq, channel)
+        .sort((left, right) => left.onTick - right.onTick || left.sourceIndex - right.sourceIndex)
+      : [];
+    return Object.freeze({
+      trackIndex: trackIndex + 1,
+      id: String(track.id),
+      name: String(track.name ?? track.id),
+      trackName,
+      channel,
+      program: clamp(Math.round(finite(track.program, 0)), 0, 127),
+      audible,
+      notes: Object.freeze(notes),
+    });
+  });
+  return Object.freeze({
+    version: 1,
+    authority: "midi-export-projection-v1",
+    ppq,
+    trackCount: projectedTracks.length,
+    noteCount: projectedTracks.reduce((sum, track) => sum + track.notes.length, 0),
+    tracks: Object.freeze(projectedTracks),
+  });
+}
+
+export function auditMidiExportParity(song, midiBytes, options = {}) {
+  return auditMidiBytesAgainstProjection(createMidiExportProjection(song, options), midiBytes);
+}
+
 export function encodeMidi(song, options = {}) {
   if (!song?.meta || !Array.isArray(song.tracks)) throw new TypeError("encodeMidi requires a song JSON object");
   const ppq = clamp(Math.round(finite(options.ppq, song.meta.ppq ?? PPQ)), 24, 32767);
@@ -15325,6 +15389,14 @@ export function encodeMidi(song, options = {}) {
     ...u16(ppq),
   ];
   return new Uint8Array([...header, ...chunks.flat()]);
+}
+
+export function encodeMidiVerified(song, options = {}) {
+  const bytes = encodeMidi(song, options);
+  const projection = createMidiExportProjection(song, options);
+  const audit = auditMidiBytesAgainstProjection(projection, bytes);
+  if (!audit.passed) throw new MidiExportParityViolationError(audit);
+  return Object.freeze({ bytes, projection, audit });
 }
 
 /** Create a browser Blob containing the type-1 MIDI file. */
