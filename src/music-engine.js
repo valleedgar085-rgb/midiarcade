@@ -12550,7 +12550,7 @@ function configFromSong(song) {
   };
 }
 
-function candidateSeed(baseSeed, phase, index) {
+export function candidateSeed(baseSeed, phase, index) {
   const entropy = hashSeed(`${baseSeed}::${phase}::${index}`).toString(36);
   return `${baseSeed}:${phase}:${index}:${entropy}`;
 }
