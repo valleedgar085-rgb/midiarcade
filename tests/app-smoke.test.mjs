@@ -139,6 +139,8 @@ test("A5 Finish exposes track list, section journey, and explicit default handof
 test("bundled Hip-Hop drum kits map and preload real offline one-shots", async () => {
   assert.equal(bundledDrumSamplePath("basement-knock", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
   assert.equal(bundledDrumSamplePath("basement-knock", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 36), "./assets/audio/drums/cc0-bounce/kick.wav");
+  assert.equal(bundledDrumSamplePath("dusty-tape", 38), "./assets/audio/drums/cc0-bounce/snare.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 39), "./assets/audio/drums/cc0-soulful-vintage/clap.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 42), "./assets/audio/drums/cc0-soulful-vintage/hat.wav");
   assert.equal(bundledDrumSamplePath("dusty-tape", 46), "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav");
@@ -781,6 +783,7 @@ test("browser app initializes against the engine contract", async () => {
   assert.equal(await recoveryPlayer.recoverAudioContext(interruptedContext), true);
   assert.equal(interruptedContext.state, "running", "an interrupted context must be resumed and resynchronized");
   recoveryPlayer.playing = false;
+  recoveryPlayer.clearTimers();
 
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:keys", "native:keys"), false, "an older waiter for a shared same-port connect must not tear down the winner");
   assert.equal(app.shouldDisconnectStaleMidiConnection("native:old", "native:new"), true, "a stale different-port connection should be disposed");

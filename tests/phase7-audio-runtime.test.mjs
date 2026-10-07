@@ -55,6 +55,17 @@ test("Phase 7 wires runtime graph budgets into the real PreviewPlayer", () => {
   assert.match(appSource, /this\.previewBudget\.preserveSnareSnap/);
 });
 
+test("Phase 7 drives preview lookahead from a worker pulse when available", () => {
+  const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  const workerSource = fs.readFileSync(new URL("../src/preview-scheduler-worker.js", import.meta.url), "utf8");
+
+  assert.match(appSource, /new Worker\(new URL\("\.\/preview-scheduler-worker\.js", import\.meta\.url\)/);
+  assert.match(appSource, /startSchedulerPulse\(\)/);
+  assert.match(appSource, /worker\.postMessage\(\{ type: "start", intervalMs: this\.previewRuntime\.scheduleIntervalMs \}\)/);
+  assert.match(workerSource, /self\.postMessage\(\{ type: "tick" \}\)/);
+  assert.doesNotMatch(workerSource, /AudioContext|currentTime/, "worker is only a wake-up pulse; Web Audio time remains authoritative");
+});
+
 test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android audio", () => {
   const appSource = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
   assert.match(appSource, /document\.visibilityState === "hidden"/);
@@ -64,6 +75,11 @@ test("Phase 7 suspends hidden playback cleanly and recovers interrupted Android 
   assert.match(appSource, /this\.context\.suspend\(\)\.catch/);
   assert.match(appSource, /\["suspended", "interrupted"\]\.includes\(this\.context\?\.state\)/);
   assert.match(appSource, /recoverAudioContext\(this\.context\)/);
+  assert.match(
+    appSource,
+    /recoverAudioContext[\s\S]*?this\.schedule\(\);[\s\S]*?this\.startSchedulerPulse\(\)/,
+    "audio-context recovery must restart the lookahead pulse after hidden/interrupted playback",
+  );
 });
 
 test("Phase 7 uses longer click-safe release windows", () => {

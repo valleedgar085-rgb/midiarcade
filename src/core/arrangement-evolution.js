@@ -463,6 +463,11 @@ function allTrackNotes(song) {
 }
 
 function transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes) {
+  const fromName = sectionName(from);
+  const payoffDestination = isPayoff(to);
+  if (payoffDestination && isContrast(from)) return "drop-out";
+  if (payoffDestination && ["prechorus", "build"].includes(fromName)) return "lift";
+
   const delta = toEnergy - fromEnergy;
   if (delta >= 0.14) return "lift";
   if (delta > -0.22) return "push";
@@ -490,7 +495,20 @@ function buildTransitionContext(song) {
     const toEnergy = sectionEnergy(song, to);
     const type = transitionTypeForBoundary(from, to, fromEnergy, toEnergy, notes);
     const delta = toEnergy - fromEnergy;
-    const pickupBeats = type === "lift" ? 1 : type === "push" ? 0.75 : 0.5;
+    const payoffDestination = isPayoff(to);
+    const setupToPayoff = payoffDestination && ["prechorus", "build"].includes(sectionName(from));
+    const contrastToPayoff = payoffDestination && isContrast(from);
+    const pickupBeats = payoffDestination
+      ? type === "drop-out"
+        ? 1
+        : setupToPayoff
+          ? 1.25
+          : 1
+      : type === "lift"
+        ? 1
+        : type === "push"
+          ? 0.75
+          : 0.5;
     const connectionId = `connection:${from.id}->${to.id}`;
     transitions.push({
       connectionId,
@@ -500,7 +518,14 @@ function buildTransitionContext(song) {
       fromSection: sectionName(from),
       toSection: sectionName(to),
       type,
-      strength: clampRange(0.38 + Math.abs(delta) * 1.5, 0.38, 0.92),
+      strength: clampRange(
+        0.38
+          + Math.abs(delta) * 1.5
+          + (payoffDestination ? 0.1 : 0)
+          + (setupToPayoff || contrastToPayoff ? 0.08 : 0),
+        0.38,
+        0.92,
+      ),
       pickupBeats,
     });
   }

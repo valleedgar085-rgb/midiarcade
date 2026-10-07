@@ -1,6 +1,13 @@
 import { clampFinite as clamp, finite } from "../utils.js";
 import { phraseLandingProfile } from "./phrase-architecture.js";
 
+const PAYOFF_SECTION_NAMES = new Set(["chorus", "drop", "theme"]);
+const CONTRAST_SECTION_NAMES = new Set(["bridge", "breakdown"]);
+
+function normalizedSectionName(section) {
+  return String(section?.name ?? section?.type ?? "idea").toLowerCase();
+}
+
 function round(value, digits = 3) {
   const factor = 10 ** digits;
   return Math.round((finite(value) + Number.EPSILON) * factor) / factor;
@@ -69,6 +76,12 @@ export function createPhraseMemoryContract({
   const memories = new Map(memoryMap.map((memory) => [memory.sectionId, memory]));
   const dnaSections = new Map((songDNA?.sections ?? []).map((entry) => [entry.sectionId, entry]));
   const direction = songDNA?.melodic?.direction === -1 ? -1 : 1;
+  const lastPayoffIndex = structure.reduce(
+    (last, section, index) => (PAYOFF_SECTION_NAMES.has(normalizedSectionName(section)) ? index : last),
+    -1,
+  );
+  const phraseBars = Math.max(1, Math.round(finite(songDNA?.rhythmic?.phraseBars, 4)));
+  const hookRecallIntervalBars = phraseBars <= 4 ? 4 : 8;
 
   const sections = structure.map((section, index) => {
     const plan = plans.get(section.id) ?? {};
@@ -87,7 +100,19 @@ export function createPhraseMemoryContract({
       role: plan.role,
     });
     const landing = phraseLandingProfile(landingRole);
-    const recallStrength = clamp(memory.recallStrength ?? 1, 0, 1);
+    const rawRecallStrength = clamp(memory.recallStrength ?? 1, 0, 1);
+    const sectionName = normalizedSectionName(section);
+    const payoffSection = PAYOFF_SECTION_NAMES.has(sectionName);
+    const contrastSection = CONTRAST_SECTION_NAMES.has(sectionName) || memory.relationship === "contrast";
+    const returningHook = payoffSection && ["recall", "return"].includes(memory.relationship);
+    const finalReturningHook = returningHook && index === lastPayoffIndex;
+    const recallStrength = contrastSection
+      ? Math.min(rawRecallStrength, 0.42)
+      : finalReturningHook
+        ? Math.max(rawRecallStrength, 0.92)
+        : returningHook
+          ? Math.max(rawRecallStrength, 0.86)
+          : rawRecallStrength;
     const seed = finite(dna.phraseSeed, index);
     const transform = transformFor({
       relationship: memory.relationship,
@@ -102,6 +127,33 @@ export function createPhraseMemoryContract({
       landingRole,
     });
     const recalled = ["recall", "return", "contrast"].includes(memory.relationship);
+    const motifMemory = finalReturningHook
+      ? {
+        contourRecall: 0.92,
+        rhythmRecall: 0.94,
+        endingRecall: 0.9,
+      }
+      : returningHook
+        ? {
+          contourRecall: Math.max(0.86, round(0.48 + recallStrength * 0.42)),
+          rhythmRecall: Math.max(0.9, round(0.55 + recallStrength * 0.38)),
+          endingRecall: Math.max(0.84, round(0.7 + recallStrength * 0.25)),
+        }
+        : contrastSection
+          ? {
+            contourRecall: 0.42,
+            rhythmRecall: 0.4,
+            endingRecall: 0.55,
+          }
+          : {
+            contourRecall: round(recalled ? 0.48 + recallStrength * 0.42 : 1),
+            rhythmRecall: round(recalled ? 0.55 + recallStrength * 0.38 : 1),
+            endingRecall: round(
+              landingRole === "answer" || landingRole === "resolution"
+                ? 0.7 + recallStrength * 0.25
+                : 0.5 + recallStrength * 0.2,
+            ),
+          };
 
     return {
       sectionId: section.id,
@@ -115,15 +167,18 @@ export function createPhraseMemoryContract({
       registerStrategy,
       recallStrength: round(recallStrength),
       phraseSeed: Number.isFinite(Number(dna.phraseSeed)) ? Number(dna.phraseSeed) : null,
-      motifMemory: {
-        contourRecall: round(recalled ? 0.48 + recallStrength * 0.42 : 1),
-        rhythmRecall: round(recalled ? 0.55 + recallStrength * 0.38 : 1),
-        endingRecall: round(
-          landingRole === "answer" || landingRole === "resolution"
-            ? 0.7 + recallStrength * 0.25
-            : 0.5 + recallStrength * 0.2,
-        ),
-      },
+      hookRole: finalReturningHook
+        ? "developed-final-return"
+        : returningHook
+          ? "recognizable-return"
+          : payoffSection
+            ? "hook-anchor"
+            : contrastSection
+              ? "contrast-reset"
+              : "support",
+      hookRecallIntervalBars,
+      transitionAnticipationBeats: payoffSection ? 1.25 : contrastSection ? 1 : 0.75,
+      motifMemory,
       performance: {
         direction: landing.direction,
         avoidRoot: landing.avoidRoot,

@@ -89,3 +89,67 @@ test("Phase 9D contracts prove cadence, recall, and drum spotlight edits without
     "spotlight candidate creation must not mutate source drum velocities",
   );
 });
+
+
+test("payoff return recall reappears on four-bar windows instead of only at section entry", () => {
+  const song = {
+    genre: "pop",
+    bars: 16,
+    meta: {
+      beatsPerBar: 4,
+      totalBeats: 64,
+      keyPc: 0,
+      scaleIntervals: [0, 2, 4, 5, 7, 9, 11],
+    },
+    motifs: { melody: { lengthBeats: 4 } },
+    songBlueprint: { qualityTargets: { repetition: 0.68 } },
+    phraseMemory: {
+      sections: [
+        { sectionId: "chorus-b", hookRole: "developed-final-return", hookRecallIntervalBars: 4 },
+      ],
+    },
+    structure: [
+      { id: "chorus-a", name: "chorus", startBeat: 0, endBeat: 16 },
+      { id: "chorus-b", name: "chorus", startBeat: 16, endBeat: 64 },
+    ],
+    memoryMap: [
+      { sectionId: "chorus-b", originSectionId: "chorus-a", relationship: "return" },
+    ],
+    harmony: [{ start: 0, duration: 64, tones: [0, 4, 7] }],
+    tracks: [
+      {
+        id: "melody",
+        notes: [
+          { id: "s0", start: 0, pitch: 60, duration: 0.25, velocity: 88 },
+          { id: "s1", start: 1, pitch: 64, duration: 0.25, velocity: 90 },
+          { id: "s2", start: 2, pitch: 67, duration: 0.25, velocity: 92 },
+
+          { id: "r0", start: 16.25, pitch: 60, duration: 0.25, velocity: 88 },
+          { id: "r1", start: 17.5, pitch: 64, duration: 0.25, velocity: 90 },
+
+          { id: "r2", start: 32.25, pitch: 60, duration: 0.25, velocity: 88 },
+          { id: "r3", start: 33.5, pitch: 64, duration: 0.25, velocity: 90 },
+
+          { id: "r4", start: 48.25, pitch: 60, duration: 0.25, velocity: 88 },
+          { id: "r5", start: 49.5, pitch: 64, duration: 0.25, velocity: 90 },
+          { id: "landing", start: 63, pitch: 67, duration: 0.25, velocity: 92 },
+        ],
+      },
+    ],
+  };
+
+  const recall = createReturnDevelopmentCandidates(song, { returnDevelopment: true })
+    .find(({ id }) => id === "rhythmic-recall");
+  assert.ok(recall, "expected a rhythmic-recall candidate for the recurring chorus");
+
+  const edits = recall.song.tracks[0].notes.filter(
+    (note) => note.returnDevelopmentRole === "rhythmic-recall",
+  );
+  assert.ok(edits.length >= 4, "hook recall should reinforce more than the opening window");
+
+  const windows = new Set(edits.map((note) => Math.floor((note.start - 16) / 16)));
+  assert.ok(windows.has(0), "first return window should carry hook DNA");
+  assert.ok(windows.has(1), "second four-bar window should carry hook DNA");
+  assert.ok(windows.has(2), "third four-bar window should carry hook DNA");
+  assert.ok(edits.every((note) => note.start < 63), "cadence landing must remain protected from rhythmic recall");
+});

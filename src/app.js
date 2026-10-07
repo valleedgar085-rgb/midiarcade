@@ -4956,6 +4956,7 @@ export class PreviewPlayer {
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
+    this.schedulerWorker = null;
     this.frame = null;
     this.idleTimer = null;
     this.events = [];
@@ -5173,6 +5174,7 @@ export class PreviewPlayer {
       if (this.eventIndex < 0) this.eventIndex = this.events.length;
       this.lastScheduleAt = this.context.currentTime;
       this.schedule();
+      this.startSchedulerPulse();
       return true;
     })();
     this.recoveryPromise = recovery;
@@ -5340,7 +5342,7 @@ export class PreviewPlayer {
     }
     $("#playhead").classList.add("visible");
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startSchedulerPulse();
     this.updateFrame();
     setWorkflowStep(3);
     return true;
@@ -5907,12 +5909,20 @@ export class PreviewPlayer {
     source.buffer = this.noiseBufferForKit(kit);
     const isHat = [42, 44, 46].includes(event.pitch);
     const isCymbal = [49, 51, 52, 55, 57, 59].includes(event.pitch);
-    const output = this.createDrumOutput(event, character, nodes, isCymbal ? 0.5 : isHat ? 0.18 : 0.38);
+    const isBackbeat = ["snare", "clap", "rim"].includes(character.kind);
+    const output = this.createDrumOutput(
+      event,
+      character,
+      nodes,
+      isCymbal ? 0.5 : isHat ? 0.18 : isBackbeat ? 0.22 : 0.3,
+    );
     filter.type = isHat || isCymbal ? "highpass" : "bandpass";
-    filter.frequency.value = character.filterFrequency;
-    filter.Q.value = isHat || isCymbal ? 0.8 : 1.3;
-    const duration = character.duration;
-    const drumPeak = character.peak * mixGain;
+    filter.frequency.value = isBackbeat
+      ? clamp(character.filterFrequency * 0.56, 900, 2600)
+      : character.filterFrequency;
+    filter.Q.value = isHat || isCymbal ? 0.8 : isBackbeat ? 1.7 : 1.3;
+    const duration = isBackbeat ? Math.min(character.duration, 0.14) : character.duration;
+    const drumPeak = character.peak * mixGain * (isBackbeat ? 0.68 : 1);
     this.shapeDrumGain(gain.gain, character, drumPeak, duration, when);
     source.connect(filter).connect(gain).connect(output);
     source.start(when);
@@ -5926,7 +5936,14 @@ export class PreviewPlayer {
       tone.type = "triangle";
       tone.frequency.setValueAtTime(voice.snareTone, when);
       tone.frequency.exponentialRampToValueAtTime(Math.max(90, voice.snareTone * 0.57), when + Math.min(0.1, voice.snareDecay * 0.7));
-      this.shapeDrumGain(toneGain.gain, character, character.toneLevel * mixGain, 0.13, when, false);
+      this.shapeDrumGain(
+        toneGain.gain,
+        character,
+        character.toneLevel * mixGain * (isBackbeat ? 1.35 : 1),
+        0.13,
+        when,
+        false,
+      );
       tone.connect(toneGain).connect(output);
       tone.start(when);
       tone.stop(when + 0.14);
@@ -5963,7 +5980,7 @@ export class PreviewPlayer {
     this.eventIndex = 0;
     this.lastScheduleAt = this.context.currentTime;
     this.schedule();
-    this.timer = setInterval(() => this.schedule(), this.previewRuntime.scheduleIntervalMs);
+    this.startSchedulerPulse();
     this.updateFrame();
   }
 
@@ -6003,10 +6020,49 @@ export class PreviewPlayer {
     this.frame = setTimeout(() => this.updateFrame(), PREVIEW_AUDIO_LIMITS.visualIntervalMs);
   }
 
-  clearTimers() {
+  startSchedulerPulse() {
+    this.stopSchedulerPulse();
+    const tick = () => this.schedule();
+    if (typeof Worker === "function") {
+      try {
+        const worker = new Worker(new URL("./preview-scheduler-worker.js", import.meta.url), { type: "module" });
+        worker.onmessage = (event) => {
+          if (worker !== this.schedulerWorker || event?.data?.type !== "tick") return;
+          tick();
+        };
+        worker.onerror = () => {
+          if (worker !== this.schedulerWorker) return;
+          try { worker.terminate(); } catch { /* worker already stopped */ }
+          this.schedulerWorker = null;
+          if (this.playing && !this.timer) {
+            this.timer = setInterval(tick, this.previewRuntime.scheduleIntervalMs);
+          }
+        };
+        this.schedulerWorker = worker;
+        worker.postMessage({ type: "start", intervalMs: this.previewRuntime.scheduleIntervalMs });
+        return "worker";
+      } catch {
+        this.schedulerWorker = null;
+      }
+    }
+    this.timer = setInterval(tick, this.previewRuntime.scheduleIntervalMs);
+    return "timer";
+  }
+
+  stopSchedulerPulse() {
+    if (this.schedulerWorker) {
+      const worker = this.schedulerWorker;
+      this.schedulerWorker = null;
+      try { worker.postMessage({ type: "stop" }); } catch { /* worker unavailable */ }
+      try { worker.terminate(); } catch { /* worker already stopped */ }
+    }
     clearInterval(this.timer);
-    clearTimeout(this.frame);
     this.timer = null;
+  }
+
+  clearTimers() {
+    this.stopSchedulerPulse();
+    clearTimeout(this.frame);
     this.frame = null;
   }
 

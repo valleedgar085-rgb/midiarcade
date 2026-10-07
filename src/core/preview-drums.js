@@ -13,8 +13,12 @@ const BUNDLED_DRUM_SAMPLES = Object.freeze({
     "open-hat": "./assets/audio/drums/cc0-bounce/open-hat.wav",
   }),
   "dusty-tape": Object.freeze({
-    kick: "./assets/audio/drums/cc0-soulful-vintage/kick.wav",
-    snare: "./assets/audio/drums/cc0-soulful-vintage/snare.wav",
+    // The vintage kick/snare sources are intentionally not used for preview:
+    // spectral QA found too much high-frequency noise for clean phone playback.
+    // Keep the Dusty Tape kit identity in its clap/hats while borrowing the
+    // proven low-end/backbeat anchors from the clean Bounce set.
+    kick: "./assets/audio/drums/cc0-bounce/kick.wav",
+    snare: "./assets/audio/drums/cc0-bounce/snare.wav",
     clap: "./assets/audio/drums/cc0-soulful-vintage/clap.wav",
     hat: "./assets/audio/drums/cc0-soulful-vintage/hat.wav",
     "open-hat": "./assets/audio/drums/cc0-soulful-vintage/open-hat.wav",

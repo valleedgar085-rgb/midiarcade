@@ -219,6 +219,41 @@ test("genre storytelling layouts give Pop, Rock, and Techno distinct long-form a
   );
 });
 
+test("bridge-to-hook boundaries create a real breath before the payoff", () => {
+  const song = fixtureSong();
+  let evolved = null;
+  for (let index = 0; index < 256; index += 1) {
+    const candidate = {
+      genre: "pop",
+      bars: song.meta.bars,
+      seed: `hook-payoff-transition-${index}`,
+      arrangementEvolution: true,
+    };
+    const result = evolveSongArrangement(song, candidate);
+    if (!result.changed) continue;
+    const bridgeReturn = (result.song.arrangementTransitions ?? []).find(
+      (transition) => transition.fromSection === "bridge" && transition.toSection === "chorus",
+    );
+    if (bridgeReturn) {
+      evolved = result.song;
+      break;
+    }
+  }
+  assert.ok(evolved, "expected a deterministic evolved arrangement with a bridge-to-chorus boundary");
+
+  const payoffTransitions = (evolved.arrangementTransitions ?? []).filter(
+    (transition) => transition.toSection === "chorus",
+  );
+  assert.ok(payoffTransitions.length >= 1, "chorus arrivals must publish payoff transitions");
+  assert.ok(payoffTransitions.every((transition) => transition.pickupBeats >= 1));
+
+  const bridgeReturn = payoffTransitions.find((transition) => transition.fromSection === "bridge");
+  assert.ok(bridgeReturn, "the evolved form must preserve a bridge directly before a chorus return");
+  assert.equal(bridgeReturn.type, "drop-out");
+  assert.ok(bridgeReturn.pickupBeats >= 1, "bridge-to-hook must reserve a full-beat breath");
+  assert.ok(bridgeReturn.strength >= 0.56);
+});
+
 test("arrangement evolution moves complete sections atomically without changing song duration or section identity", () => {
   const source = fixtureSong();
   const before = structuredClone(source);
