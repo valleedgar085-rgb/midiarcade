@@ -278,6 +278,15 @@ test("final ensemble continuity stage accepts only a release-safe no-regression 
 
 test("auto-resolved unsupported coherence hints fall back to general ensemble continuity repair", () => {
   const source = addEnsembleContractsForTargeting(ensembleDropoutSong());
+  for (const bar of source.grooveConductor.bars) {
+    if (["verse-1", "chorus-1"].includes(bar.sectionId)) bar.bassPulses = [0];
+  }
+  source.tracks.find((track) => track.id === "bass").notes = [
+    { id: "bv1", pitch: 36, start: 9.5, duration: 0.4, velocity: 86 },
+    { id: "bv2", pitch: 41, start: 13.5, duration: 0.4, velocity: 86 },
+    { id: "bc1", pitch: 36, start: 25.5, duration: 0.4, velocity: 88 },
+    { id: "bc2", pitch: 43, start: 29.5, duration: 0.4, velocity: 88 },
+  ];
   const hint = resolveEnsembleCoherenceRepairHint(evaluateCrossAuthorityCoherence(source));
 
   assert.equal(hint.available, true);
