@@ -6826,6 +6826,52 @@ function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   }));
 }
 
+function findCollidingNotes(answers, foreground, threshold = 0.105) {
+  if (!answers.length || !foreground.length) return [];
+
+  let sortedAnswers = answers;
+  let sortedFg = foreground;
+
+  for (let i = 1; i < answers.length; i++) {
+    if (answers[i].start < answers[i - 1].start) {
+      sortedAnswers = [...answers].sort((a, b) => a.start - b.start);
+      break;
+    }
+  }
+
+  for (let i = 1; i < foreground.length; i++) {
+    if (foreground[i].start < foreground[i - 1].start) {
+      sortedFg = [...foreground].sort((a, b) => a.start - b.start);
+      break;
+    }
+  }
+
+  const collidingAnswers = [];
+  let leadIdx = 0;
+  const fgLen = sortedFg.length;
+
+  for (let j = 0; j < sortedAnswers.length; j++) {
+    const note = sortedAnswers[j];
+    const targetMin = note.start - threshold;
+    const targetMax = note.start + threshold;
+
+    while (leadIdx < fgLen && sortedFg[leadIdx].start <= targetMin) {
+      leadIdx++;
+    }
+
+    if (leadIdx < fgLen && sortedFg[leadIdx].start < targetMax) {
+      collidingAnswers.push(note);
+    }
+  }
+
+  if (sortedAnswers !== answers) {
+    const collidingSet = new Set(collidingAnswers);
+    return answers.filter((note) => collidingSet.has(note));
+  }
+
+  return collidingAnswers;
+}
+
 function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
   const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
@@ -6835,7 +6881,7 @@ function evaluateProducerIntentContract(sourceTracks, structure, producerIntent)
     ));
     const foreground = notesFor(scene.foregroundTrack);
     const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
-    const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
+    const collidingAnswers = findCollidingNotes(answers, foreground, 0.105);
     const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles ?? {}).filter(([, role]) => role === "rest").map(([id]) => id);
