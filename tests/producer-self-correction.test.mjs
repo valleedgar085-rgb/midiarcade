@@ -10,6 +10,8 @@ import {
 function result(id, {
   score = 88,
   floor = 72,
+  criticalFloor = floor,
+  lowestCriticalDimension = "density",
   targetReached = false,
   focusRoute = "groove-first",
   focusDimension = "density",
@@ -24,7 +26,7 @@ function result(id, {
       meta: {
         scoreDetails: {
           totalScore: score,
-          balance: { creativeFloor: floor },
+          balance: { creativeFloor: floor, criticalFloor, lowestCriticalDimension },
           releaseGate: { passed: releasePassed },
           candidateSearch: {
             targetReached,
@@ -111,6 +113,51 @@ test("self-correction comparison accepts measurable improvement and rejects regr
   const protectedResult = selectSelfCorrectedResult(original, releaseRegression);
   assert.equal(protectedResult.result, original);
   assert.equal(protectedResult.reason, "release-regression-rejected");
+});
+
+test("self-correction can accept a tiny aggregate tradeoff when it clears a dangerous critical floor", () => {
+  const original = result("critical-original", {
+    score: 94,
+    floor: 78,
+    criticalFloor: 62,
+    lowestCriticalDimension: "registerHealth",
+    releasePassed: true,
+  });
+  const corrected = result("critical-corrected", {
+    score: 93,
+    floor: 78,
+    criticalFloor: 72,
+    lowestCriticalDimension: "registerHealth",
+    releasePassed: true,
+  });
+
+  const selected = selectSelfCorrectedResult(original, corrected);
+  assert.equal(selected.result, corrected);
+  assert.equal(selected.selected, "corrected");
+  assert.equal(selected.reason, "critical-floor-cleared");
+  assert.equal(selected.scoreDelta, -1);
+  assert.equal(selected.criticalFloorDelta, 10);
+});
+
+test("self-correction never clears a critical floor by accepting a release regression", () => {
+  const original = result("critical-safe", {
+    score: 94,
+    floor: 78,
+    criticalFloor: 62,
+    lowestCriticalDimension: "registerHealth",
+    releasePassed: true,
+  });
+  const corrected = result("critical-unsafe", {
+    score: 94,
+    floor: 80,
+    criticalFloor: 78,
+    lowestCriticalDimension: "registerHealth",
+    releasePassed: false,
+  });
+
+  const selected = selectSelfCorrectedResult(original, corrected);
+  assert.equal(selected.result, original);
+  assert.equal(selected.reason, "release-regression-rejected");
 });
 
 test("executor performs exactly one focused correction and records the full adaptive loop", async () => {

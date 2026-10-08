@@ -165,6 +165,8 @@ test("register pipeline commits a critic-verified phrase-register win without da
   assert.equal(processed.registerHealthDiagnostics.accepted, true);
   assert.ok(processed.registerHealthDiagnostics.registerHealthDelta >= 0.75);
   assert.ok(processed.registerHealthDiagnostics.candidatesEvaluated <= MAX_REGISTER_HEALTH_CANDIDATES);
+  assert.equal(processed.registerHealthDiagnostics.candidateSummaries.length, processed.registerHealthDiagnostics.candidatesEvaluated);
+  assert.ok(processed.registerHealthDiagnostics.candidateSummaries.every((candidate) => candidate.id && candidate.reason));
   assert.equal(processed.song.outputQualityEvolution.registerHealthRefinement.accepted, true);
   assert.deepEqual(track(processed.song, "drums"), track(source, "drums"));
   assert.deepEqual(track(processed.song, "bass"), track(source, "bass"));
@@ -194,6 +196,8 @@ test("register pipeline fails closed when the full critic cannot verify the loca
   assert.strictEqual(processed.song, source);
   assert.equal(processed.registerHealthDiagnostics.accepted, false);
   assert.equal(processed.registerHealthDiagnostics.reason, "critic-regression");
+  assert.equal(processed.registerHealthDiagnostics.candidateSummaries.length, processed.registerHealthDiagnostics.candidatesEvaluated);
+  assert.ok(processed.registerHealthDiagnostics.candidateSummaries.every((candidate) => candidate.accepted === false));
 });
 
 test("result wrapper reports rejected register diagnostics without changing result identity", () => {
