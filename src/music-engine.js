@@ -6419,6 +6419,7 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
   let previousCounter = null;
   let contrary = 0;
   let oblique = 0;
+  let sectionIndex = 0;
   const shapedCounterpoint = counterpoint.map((note) => {
     const priorIndex = melody.findLastIndex((lead) => lead.start <= note.start + 0.001);
     const lead = melody[Math.max(0, priorIndex)];
@@ -6446,7 +6447,13 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
     const relationship = leadDirection && counterDirection === -leadDirection ? "contrary" : "oblique";
     if (relationship === "contrary") contrary += 1;
     else oblique += 1;
-    const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6);
+    while (sectionIndex < structure.length && note.start >= structure[sectionIndex].endBeat - 1e-6) {
+      sectionIndex++;
+    }
+    const candidateSection = structure[sectionIndex];
+    const section = (candidateSection && note.start >= candidateSection.startBeat - 1e-6 && note.start < candidateSection.endBeat - 1e-6)
+      ? candidateSection
+      : null;
     const shaped = {
       ...note,
       pitch,
