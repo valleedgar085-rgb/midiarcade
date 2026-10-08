@@ -2157,6 +2157,18 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     ),
   });
   const direction = songDNA.melodic.direction;
+  const sourcePlansById = new Map();
+  const sourcePlansByName = new Map();
+  if (Array.isArray(source?.sectionPlans)) {
+    for (const plan of source.sectionPlans) {
+      if (plan?.sectionId != null && !sourcePlansById.has(plan.sectionId)) {
+        sourcePlansById.set(plan.sectionId, plan);
+      }
+      if (plan?.sectionName != null && !sourcePlansByName.has(plan.sectionName)) {
+        sourcePlansByName.set(plan.sectionName, plan);
+      }
+    }
+  }
   const sectionPlans = structure.map((section, index) => {
     const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
     const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
@@ -2188,8 +2200,8 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       index,
       index === structure.length - 1,
     );
-    const sourcePlan = source?.sectionPlans?.find((plan) => plan.sectionId === section.id)
-      ?? source?.sectionPlans?.find((plan) => plan.sectionName === section.name);
+    const sourcePlan = sourcePlansById.get(section.id)
+      ?? sourcePlansByName.get(section.name);
     const baseDevelopmentPath = developmentPathForTransform(motifTransform);
     const patternVariant = Number.isFinite(Number(sourcePlan?.patternVariant))
       ? mod(Math.round(sourcePlan.patternVariant), baseDevelopmentPath.length)
