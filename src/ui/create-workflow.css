@@ -1017,3 +1017,152 @@
   }
 }
 
+
+
+/* Android phone ergonomics V2: compact flow + active-control feedback */
+@media (max-width: 600px) {
+  body:has(#tab-create.is-active) #preGenSection .creator-heading {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .creator-heading-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .creator-heading-actions .tiny-button {
+    justify-content: center;
+    width: 100%;
+    min-width: 0;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .create-live-control,
+  body:has(#tab-create.is-active) #preGenSection .create-live-select,
+  body:has(#tab-create.is-active) #preGenSection .mini-range,
+  body:has(#tab-create.is-active) #preGenSection .genre-select-control,
+  body:has(#tab-create.is-active) #preGenSection .generation-envelope-select {
+    transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .create-live-control:focus-within,
+  body:has(#tab-create.is-active) #preGenSection .create-live-select:focus-within,
+  body:has(#tab-create.is-active) #preGenSection .mini-range:focus-within,
+  body:has(#tab-create.is-active) #preGenSection .genre-select-control:focus-within,
+  body:has(#tab-create.is-active) #preGenSection .generation-envelope-select:focus-within {
+    border-color: color-mix(in srgb, var(--accent) 56%, rgba(255, 255, 255, 0.14));
+    background: color-mix(in srgb, var(--accent) 8%, rgba(255, 255, 255, 0.028));
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .create-live-control:focus-within output,
+  body:has(#tab-create.is-active) #preGenSection .mini-range:focus-within output {
+    background: color-mix(in srgb, var(--accent) 20%, rgba(255, 255, 255, 0.05));
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .create-stage-heading .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    padding: 3px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.075);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.025);
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .generation-intent {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 9px;
+    padding: 9px 10px;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .generation-intent-icon {
+    margin-top: 3px;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .generation-intent strong {
+    font-size: 0.78rem;
+    line-height: 1.25;
+  }
+
+  body:has(#tab-create.is-active) #preGenSection .generation-intent p {
+    margin-top: 2px;
+    line-height: 1.35;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .showcase-arc-wrap {
+    margin-top: 9px;
+  }
+}
+
+@media (min-width: 400px) and (max-width: 600px) {
+  body:has(#tab-create.is-active) #tab-create .song-showcase {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    column-gap: 12px;
+    row-gap: 8px;
+    align-items: start;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .song-showcase .showcase-art {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 112px;
+    max-width: 112px;
+    margin: 0;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .song-showcase .showcase-copy {
+    display: contents;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .showcase-copy > .eyebrow {
+    grid-column: 2;
+    align-self: end;
+    margin: 2px 0 0;
+    font-size: 0.54rem;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .showcase-copy > .title-row {
+    grid-column: 2;
+    min-width: 0;
+    align-self: start;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .song-showcase .title-row h1 {
+    font-size: clamp(1.35rem, 5.8vw, 1.8rem);
+    line-height: 0.98;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .song-showcase #songSummary {
+    margin-top: 4px;
+    font-size: 0.7rem;
+    line-height: 1.35;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .song-facts,
+  body:has(#tab-create.is-active) #tab-create .create-live-controls,
+  body:has(#tab-create.is-active) #tab-create .showcase-actions,
+  body:has(#tab-create.is-active) #tab-create .taste-actions,
+  body:has(#tab-create.is-active) #tab-create .showcase-arc-wrap {
+    grid-column: 1 / -1;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .showcase-actions {
+    margin-top: 2px;
+  }
+
+  body:has(#tab-create.is-active) #tab-create .showcase-action {
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 399px) {
+  body:has(#tab-create.is-active) #tab-create .showcase-art {
+    max-width: 132px;
+    margin-bottom: 4px;
+  }
+}

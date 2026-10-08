@@ -128,3 +128,13 @@ test("Create-specific CSS stays outside the protected global stylesheet budget a
   assert.match(pkg.scripts.dev, /npm run build/);
   assert.match(pkg.scripts.dev, /--directory www/);
 });
+
+
+test("Android Create V2 compacts Now Playing and makes the active control obvious", () => {
+  assert.match(css, /Android phone ergonomics V2: compact flow \+ active-control feedback/);
+  assert.match(css, /body:has\(#tab-create\.is-active\) #preGenSection \.creator-heading-actions\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /#preGenSection \.create-live-control:focus-within,[\s\S]*?#preGenSection \.generation-envelope-select:focus-within\s*\{[\s\S]*?border-color:/);
+  assert.match(css, /#preGenSection \.generation-intent\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\)/);
+  assert.match(css, /@media \(min-width: 400px\) and \(max-width: 600px\)[\s\S]*?#tab-create \.song-showcase \.showcase-copy\s*\{[\s\S]*?display:\s*contents/);
+  assert.match(css, /#tab-create \.song-showcase \.showcase-art\s*\{[\s\S]*?width:\s*112px/);
+});
