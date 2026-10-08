@@ -42,6 +42,7 @@ const PROFILES = Object.freeze({
     ],
     harmonicGoals: [
       { id: "I-V-vi-IV", weight: 1.5, sections: ["verse", "chorus", "drop", "theme"], moods: ["neutral", "intense"], progression: [0, 4, 5, 3] },
+      { id: "vi-IV-I-V", weight: 1.4, sections: ["verse", "chorus"], moods: ["neutral", "intense"], progression: [5, 3, 0, 4] },
       { id: "I-IV-V-I", weight: 1.3, sections: ["verse", "chorus", "idea"], moods: ["calm", "neutral", "intense"], progression: [0, 3, 4, 0] },
       { id: "prechorus-lift", weight: 1.25, sections: ["prechorus"], moods: ["calm", "neutral", "intense"], progression: [3, 4, 4, 4] },
       { id: "ii-V-I", weight: 0.7, sections: ["bridge"], moods: ["neutral", "intense"], progression: [1, 4, 0, 0] },
@@ -83,6 +84,7 @@ const PROFILES = Object.freeze({
     ],
     harmonicGoals: [
       { id: "minor-sample-loop", weight: 1.45, sections: ["verse", "chorus", "theme"], moods: ["calm", "neutral", "intense"], progression: [0, 5, 3, 0] },
+      { id: "i-VI-III-VII", weight: 1.35, sections: ["verse", "chorus", "theme"], moods: ["calm", "neutral", "intense"], progression: [0, 5, 2, 6] },
       { id: "soulful-i-iv", weight: 1.15, sections: ["verse", "bridge"], moods: ["calm", "neutral"], progression: [0, 3, 0, 4] },
       { id: "hook-lift", weight: 1, sections: ["chorus", "theme"], moods: ["neutral", "intense"], progression: [0, 3, 5, 4] },
     ],
@@ -142,6 +144,7 @@ const PROFILES = Object.freeze({
     ],
     harmonicGoals: [
       { id: "I-IV-V-I", weight: 1.4, sections: ["verse", "chorus", "drop", "build"], moods: ["neutral", "intense"], progression: [0, 3, 4, 0] },
+      { id: "i-VI-IV-V", weight: 1.35, sections: ["verse", "chorus", "drop"], moods: ["neutral", "intense"], progression: [0, 5, 3, 4] },
       { id: "ii-V-I", weight: 0.9, sections: ["build", "bridge"], moods: ["intense"], progression: [1, 4, 0, 0] },
       { id: "modal-interchange", weight: 1, sections: ["breakdown"], moods: ["calm", "neutral"], progression: [0, 6, 5, 4] },
     ],
