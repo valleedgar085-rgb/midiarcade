@@ -6828,8 +6828,9 @@ function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
 
 function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
   const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
+  const sectionById = indexFirstById(structure);
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const section = sectionById.get(scene.sectionId);
     const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
       section && note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
     ));
@@ -6895,11 +6896,12 @@ function evaluateProducerIntentContract(sourceTracks, structure, producerIntent)
 function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
   const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
   const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
   let removedAnswerCollisions = 0;
 
   for (const scene of producerIntent?.scenes ?? []) {
     if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const section = sectionById.get(scene.sectionId);
     const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
     const answerTrack = trackById.get(scene.answerTrack);
     if (!section || !answerTrack || !foreground.length) continue;
