@@ -6826,13 +6826,36 @@ function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   }));
 }
 
-function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
-  const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
+export function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const notesBySectionTrack = new Map();
+  const sections = structure ?? [];
+  for (const track of sourceTracks ?? []) {
+    const trackNotes = track.notes ?? [];
+    for (let i = 0; i < trackNotes.length; i += 1) {
+      const note = trackNotes[i];
+      for (let j = 0; j < sections.length; j += 1) {
+        const section = sections[j];
+        if (note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6) {
+          let trackMap = notesBySectionTrack.get(section.id);
+          if (!trackMap) {
+            trackMap = new Map();
+            notesBySectionTrack.set(section.id, trackMap);
+          }
+          let list = trackMap.get(track.id);
+          if (!list) {
+            list = [];
+            trackMap.set(track.id, list);
+          }
+          list.push(note);
+          break;
+        }
+      }
+    }
+  }
+
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
-    const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
-      section && note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
-    ));
+    const trackMap = notesBySectionTrack.get(scene.sectionId);
+    const notesFor = (id) => trackMap?.get(id) ?? [];
     const foreground = notesFor(scene.foregroundTrack);
     const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
     const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
