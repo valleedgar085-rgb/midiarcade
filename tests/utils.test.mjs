@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clamp, clampFinite, finite } from "../src/utils.js";
+import { clamp, clampFinite, escapeHtml, finite } from "../src/utils.js";
 
 test("clamp returns value unchanged when within bounds", () => {
   assert.equal(clamp(5, 0, 10), 5);
@@ -54,4 +54,17 @@ test("clampFinite preserves finite coercion and fallback semantics", () => {
   assert.equal(clampFinite(undefined), 0);
   assert.equal(clampFinite(undefined, -1, 1), -1);
   assert.equal(clampFinite(4, -1, 1), 1);
+});
+
+test("escapeHtml escapes HTML special characters correctly", () => {
+  assert.equal(escapeHtml('<script>alert("XSS")</script>'), "&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;");
+  assert.equal(escapeHtml("Tom & Jerry's <Bait>"), "Tom &amp; Jerry&#39;s &lt;Bait&gt;");
+});
+
+test("escapeHtml handles non-string or empty inputs gracefully", () => {
+  assert.equal(escapeHtml(""), "");
+  assert.equal(escapeHtml(null), "");
+  assert.equal(escapeHtml(undefined), "");
+  assert.equal(escapeHtml(123), "123");
+  assert.equal(escapeHtml(0), "0");
 });
