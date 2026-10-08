@@ -8,7 +8,7 @@ import {
   ONE_SHOT_KITS,
   TRACK_DEFINITIONS,
 } from "./music-engine.js";
-import { clamp } from "./utils.js";
+import { clamp, escapeHtml } from "./utils.js";
 import { deriveSongTitle } from "./core/song-title.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
@@ -3563,9 +3563,9 @@ function renderFinishWorkspace() {
   ));
   const finishSectionNames = normalizeSections().map((section) => section.name || section.id).filter(Boolean);
   $("#finishFacts").innerHTML = [
-    `TRACKS · ${finishTrackNames.join(" · ")}`,
-    `SECTIONS · ${finishSectionNames.join(" → ")}`,
-    `${songKey()} ${songMode().replace(/([a-z])([A-Z])/g, "$1 $2")} · ${Math.round(songBpm())} BPM · ${songBars()} bars`,
+    `TRACKS · ${finishTrackNames.map(escapeHtml).join(" · ")}`,
+    `SECTIONS · ${finishSectionNames.map(escapeHtml).join(" → ")}`,
+    `${escapeHtml(songKey())} ${escapeHtml(songMode().replace(/([a-z])([A-Z])/g, "$1 $2"))} · ${Math.round(songBpm())} BPM · ${songBars()} bars`,
     "PERFORMANCE · velocity + articulation + CC expression",
     "HANDOFF · Type-1 multitrack MIDI with section markers",
   ].map((fact) => `<span>${fact}</span>`).join("");
