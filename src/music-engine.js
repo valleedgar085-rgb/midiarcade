@@ -6809,9 +6809,24 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
 
 function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
-  const sectionForNote = (note) => structure.find((section) => (
-    note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
-  ));
+  const sectionForNote = (note) => {
+    if (!structure || structure.length === 0) return undefined;
+    let low = 0;
+    let high = structure.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const section = structure[mid];
+      if (note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6) {
+        return section;
+      }
+      if (note.start < section.startBeat - 1e-6) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return undefined;
+  };
   return sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => {
