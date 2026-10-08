@@ -2157,6 +2157,18 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     ),
   });
   const direction = songDNA.melodic.direction;
+  const sourcePlansById = new Map();
+  const sourcePlansByName = new Map();
+  if (Array.isArray(source?.sectionPlans)) {
+    for (const plan of source.sectionPlans) {
+      if (plan?.sectionId != null && !sourcePlansById.has(plan.sectionId)) {
+        sourcePlansById.set(plan.sectionId, plan);
+      }
+      if (plan?.sectionName != null && !sourcePlansByName.has(plan.sectionName)) {
+        sourcePlansByName.set(plan.sectionName, plan);
+      }
+    }
+  }
   const sectionPlans = structure.map((section, index) => {
     const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
     const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
@@ -2188,8 +2200,8 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       index,
       index === structure.length - 1,
     );
-    const sourcePlan = source?.sectionPlans?.find((plan) => plan.sectionId === section.id)
-      ?? source?.sectionPlans?.find((plan) => plan.sectionName === section.name);
+    const sourcePlan = sourcePlansById.get(section.id)
+      ?? sourcePlansByName.get(section.name);
     const baseDevelopmentPath = developmentPathForTransform(motifTransform);
     const patternVariant = Number.isFinite(Number(sourcePlan?.patternVariant))
       ? mod(Math.round(sourcePlan.patternVariant), baseDevelopmentPath.length)
@@ -4211,9 +4223,13 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
   const bars = [];
+  const assignmentMap = new Map();
+  for (const entry of motifs?.sectionAssignments ?? []) {
+    if (!assignmentMap.has(entry.sectionId)) assignmentMap.set(entry.sectionId, entry);
+  }
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
-    const assignment = motifs?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+    const assignment = assignmentMap.get(section.id);
     // Recurring verses, choruses, and drops share a groove family. The section
     // ID remains unique for arrangement bookkeeping, but no longer randomizes
     // the rhythmic foundation of a musical return.
@@ -5794,8 +5810,10 @@ function phraseDevelopment(config, section, repeat, repeatStart, motif, counterp
   };
 }
 
-function motifForSection(motifProgram, section, counterpoint, fallback) {
-  const assignment = motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+function motifForSection(motifProgram, section, counterpoint, fallback, assignmentMap = null) {
+  const assignment = assignmentMap
+    ? assignmentMap.get(section.id)
+    : motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
   const familyMember = motifProgram?.family?.[assignment?.motifId ?? "A"];
   const selected = counterpoint ? familyMember?.counterpoint : familyMember?.melody;
   return validMotif(selected) ? selected : fallback;
@@ -6017,8 +6035,12 @@ function generateLead(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const counterpointDialogue = counterpoint && ["hipHop", "pop", "rap", "trap"].includes(config.genre);
+  const assignmentMap = new Map();
+  for (const entry of motifProgram?.sectionAssignments ?? []) {
+    if (!assignmentMap.has(entry.sectionId)) assignmentMap.set(entry.sectionId, entry);
+  }
   for (const [sectionIndex, section] of structure.entries()) {
-    const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
+    const activeMotif = motifForSection(motifProgram, section, counterpoint, motif, assignmentMap);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
     const sectionLength = section.endBeat - section.startBeat;
@@ -6218,7 +6240,7 @@ function generateLead(
     let figures = 0;
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
       const section = structure[sectionIndex];
-      const closingMotif = motifForSection(motifProgram, section, false, motif);
+      const closingMotif = motifForSection(motifProgram, section, false, motif, assignmentMap);
       if (section.endBeat - section.startBeat < 1) continue;
       const force = config.tripletAmount >= 0.5 && config.genre === "trap" && config.energy >= 0.82 && config.complexity >= 0.72 && figures === 0 && sectionIndex === 0;
       if (!force && !rng.bool(config.tripletAmount * (0.16 + config.complexity * 0.3))) continue;
@@ -6419,6 +6441,7 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
   let previousCounter = null;
   let contrary = 0;
   let oblique = 0;
+  let sectionIndex = 0;
   const shapedCounterpoint = counterpoint.map((note) => {
     const priorIndex = melody.findLastIndex((lead) => lead.start <= note.start + 0.001);
     const lead = melody[Math.max(0, priorIndex)];
@@ -6446,7 +6469,13 @@ function shapeMelodicDialogue(melodyNotes, counterNotes, harmony, config, struct
     const relationship = leadDirection && counterDirection === -leadDirection ? "contrary" : "oblique";
     if (relationship === "contrary") contrary += 1;
     else oblique += 1;
-    const section = structure.find((candidate) => note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6);
+    while (sectionIndex < structure.length && note.start >= structure[sectionIndex].endBeat - 1e-6) {
+      sectionIndex++;
+    }
+    const candidateSection = structure[sectionIndex];
+    const section = (candidateSection && note.start >= candidateSection.startBeat - 1e-6 && note.start < candidateSection.endBeat - 1e-6)
+      ? candidateSection
+      : null;
     const shaped = {
       ...note,
       pitch,
@@ -6809,9 +6838,24 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
 
 function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   const scenes = new Map((producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
-  const sectionForNote = (note) => structure.find((section) => (
-    note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
-  ));
+  const sectionForNote = (note) => {
+    if (!structure || structure.length === 0) return undefined;
+    let low = 0;
+    let high = structure.length - 1;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      const section = structure[mid];
+      if (note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6) {
+        return section;
+      }
+      if (note.start < section.startBeat - 1e-6) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+    return undefined;
+  };
   return sourceTracks.map((track) => ({
     ...track,
     notes: (track.notes ?? []).map((note) => {
@@ -6826,16 +6870,84 @@ function tagProducerIntentRoles(sourceTracks, structure, producerIntent) {
   }));
 }
 
-function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
-  const trackById = new Map((sourceTracks ?? []).map((track) => [track.id, track]));
+function findCollidingNotes(answers, foreground, threshold = 0.105) {
+  if (!answers.length || !foreground.length) return [];
+
+  let sortedAnswers = answers;
+  let sortedFg = foreground;
+
+  for (let i = 1; i < answers.length; i++) {
+    if (answers[i].start < answers[i - 1].start) {
+      sortedAnswers = [...answers].sort((a, b) => a.start - b.start);
+      break;
+    }
+  }
+
+  for (let i = 1; i < foreground.length; i++) {
+    if (foreground[i].start < foreground[i - 1].start) {
+      sortedFg = [...foreground].sort((a, b) => a.start - b.start);
+      break;
+    }
+  }
+
+  const collidingAnswers = [];
+  let leadIdx = 0;
+  const fgLen = sortedFg.length;
+
+  for (let j = 0; j < sortedAnswers.length; j++) {
+    const note = sortedAnswers[j];
+    const targetMin = note.start - threshold;
+    const targetMax = note.start + threshold;
+
+    while (leadIdx < fgLen && sortedFg[leadIdx].start <= targetMin) {
+      leadIdx++;
+    }
+
+    if (leadIdx < fgLen && sortedFg[leadIdx].start < targetMax) {
+      collidingAnswers.push(note);
+    }
+  }
+
+  if (sortedAnswers !== answers) {
+    const collidingSet = new Set(collidingAnswers);
+    return answers.filter((note) => collidingSet.has(note));
+  }
+
+  return collidingAnswers;
+}
+
+export function evaluateProducerIntentContract(sourceTracks, structure, producerIntent) {
+  const notesBySectionTrack = new Map();
+  const sections = structure ?? [];
+  for (const track of new Map((sourceTracks ?? []).map((track) => [track.id, track])).values()) {
+    const trackNotes = track.notes ?? [];
+    for (let i = 0; i < trackNotes.length; i += 1) {
+      const note = trackNotes[i];
+      for (let j = 0; j < sections.length; j += 1) {
+        const section = sections[j];
+        if (note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6) {
+          let trackMap = notesBySectionTrack.get(section.id);
+          if (!trackMap) {
+            trackMap = new Map();
+            notesBySectionTrack.set(section.id, trackMap);
+          }
+          let list = trackMap.get(track.id);
+          if (!list) {
+            list = [];
+            trackMap.set(track.id, list);
+          }
+          list.push(note);
+        }
+      }
+    }
+  }
+
   const sceneReports = (producerIntent?.scenes ?? []).map((scene) => {
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
-    const notesFor = (id) => (trackById.get(id)?.notes ?? []).filter((note) => (
-      section && note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
-    ));
+    const trackMap = notesBySectionTrack.get(scene.sectionId);
+    const notesFor = (id) => trackMap?.get(id) ?? [];
     const foreground = notesFor(scene.foregroundTrack);
     const answers = scene.answerTrack ? notesFor(scene.answerTrack) : [];
-    const collidingAnswers = answers.filter((note) => foreground.some((lead) => Math.abs(lead.start - note.start) < 0.105));
+    const collidingAnswers = findCollidingNotes(answers, foreground, 0.105);
     const protectedSharedAnchors = collidingAnswers.filter(isProtectedArrangementNote).length;
     const collisions = collidingAnswers.length - protectedSharedAnchors;
     const restTrackIds = Object.entries(scene.roles ?? {}).filter(([, role]) => role === "rest").map(([id]) => id);
@@ -6895,11 +7007,12 @@ function evaluateProducerIntentContract(sourceTracks, structure, producerIntent)
 function enforceProducerIntentContract(sourceTracks, structure, producerIntent) {
   const tracks = tagProducerIntentRoles(sourceTracks, structure, producerIntent);
   const trackById = indexFirstById(tracks);
+  const sectionById = indexFirstById(structure);
   let removedAnswerCollisions = 0;
 
   for (const scene of producerIntent?.scenes ?? []) {
     if (!scene.answerTrack || scene.answerTrack === scene.foregroundTrack) continue;
-    const section = structure.find((candidate) => candidate.id === scene.sectionId);
+    const section = sectionById.get(scene.sectionId);
     const foreground = trackById.get(scene.foregroundTrack)?.notes ?? [];
     const answerTrack = trackById.get(scene.answerTrack);
     if (!section || !answerTrack || !foreground.length) continue;

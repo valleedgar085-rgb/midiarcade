@@ -18,3 +18,12 @@ export function finite(value, fallback = 0) {
 export function clampFinite(value, min = 0, max = 1) {
   return clamp(finite(value, min), min, max);
 }
+
+export function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
