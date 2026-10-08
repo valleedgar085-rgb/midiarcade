@@ -4211,9 +4211,10 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
   const bars = [];
+  const assignmentMap = new Map((motifs?.sectionAssignments ?? []).map((entry) => [entry.sectionId, entry]));
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
-    const assignment = motifs?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+    const assignment = assignmentMap.get(section.id);
     // Recurring verses, choruses, and drops share a groove family. The section
     // ID remains unique for arrangement bookkeeping, but no longer randomizes
     // the rhythmic foundation of a musical return.
@@ -5794,8 +5795,10 @@ function phraseDevelopment(config, section, repeat, repeatStart, motif, counterp
   };
 }
 
-function motifForSection(motifProgram, section, counterpoint, fallback) {
-  const assignment = motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+function motifForSection(motifProgram, section, counterpoint, fallback, assignmentMap = null) {
+  const assignment = assignmentMap
+    ? assignmentMap.get(section.id)
+    : motifProgram?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
   const familyMember = motifProgram?.family?.[assignment?.motifId ?? "A"];
   const selected = counterpoint ? familyMember?.counterpoint : familyMember?.melody;
   return validMotif(selected) ? selected : fallback;
@@ -6017,8 +6020,9 @@ function generateLead(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const counterpointDialogue = counterpoint && ["hipHop", "pop", "rap", "trap"].includes(config.genre);
+  const assignmentMap = new Map((motifProgram?.sectionAssignments ?? []).map((entry) => [entry.sectionId, entry]));
   for (const [sectionIndex, section] of structure.entries()) {
-    const activeMotif = motifForSection(motifProgram, section, counterpoint, motif);
+    const activeMotif = motifForSection(motifProgram, section, counterpoint, motif, assignmentMap);
     const sectionPlan = blueprintPlanForSection(songBlueprint, section);
     const intensity = clamp(section.intensity * (0.56 + config.energy * 0.58), 0.25, 1.25);
     const sectionLength = section.endBeat - section.startBeat;
@@ -6218,7 +6222,7 @@ function generateLead(
     let figures = 0;
     for (let sectionIndex = 0; sectionIndex < structure.length && figures < maxFigures; sectionIndex += 1) {
       const section = structure[sectionIndex];
-      const closingMotif = motifForSection(motifProgram, section, false, motif);
+      const closingMotif = motifForSection(motifProgram, section, false, motif, assignmentMap);
       if (section.endBeat - section.startBeat < 1) continue;
       const force = config.tripletAmount >= 0.5 && config.genre === "trap" && config.energy >= 0.82 && config.complexity >= 0.72 && figures === 0 && sectionIndex === 0;
       if (!force && !rng.bool(config.tripletAmount * (0.16 + config.complexity * 0.3))) continue;
