@@ -4210,10 +4210,13 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     tripletAmount: config.tripletAmount,
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
+  const assignmentMap = new Map(
+    (motifs?.sectionAssignments ?? []).map((entry) => [entry.sectionId, entry]),
+  );
   const bars = [];
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
-    const assignment = motifs?.sectionAssignments?.find((entry) => entry.sectionId === section.id);
+    const assignment = assignmentMap.get(section.id);
     // Recurring verses, choruses, and drops share a groove family. The section
     // ID remains unique for arrangement bookkeeping, but no longer randomizes
     // the rhythmic foundation of a musical return.
