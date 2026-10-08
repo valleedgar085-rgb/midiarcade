@@ -1721,8 +1721,16 @@ function createHistorySnapshot() {
 function updateHistoryButtons() {
   const undoButton = $("#undoButton");
   const redoButton = $("#redoButton");
-  if (undoButton) undoButton.disabled = state.history.length === 0;
-  if (redoButton) redoButton.disabled = state.future.length === 0;
+  if (undoButton) {
+    const disabled = state.history.length === 0;
+    undoButton.disabled = disabled;
+    undoButton.setAttribute("aria-disabled", String(disabled));
+  }
+  if (redoButton) {
+    const disabled = state.future.length === 0;
+    redoButton.disabled = disabled;
+    redoButton.setAttribute("aria-disabled", String(disabled));
+  }
 }
 
 function pushHistory(snapshot = createHistorySnapshot(), { preserveFuture = false } = {}) {
@@ -3655,7 +3663,13 @@ function updateRangeDisplays() {
   ];
   for (const [inputSelector, outputSelector, formatter] of mappings) {
     const input = $(inputSelector);
-    $(outputSelector).textContent = state.autoControls.has(input.id) ? "AUTO" : formatter(input.value);
+    if (!input) continue;
+    const isAuto = state.autoControls.has(input.id);
+    const text = isAuto ? "AUTO" : formatter(input.value);
+    const output = $(outputSelector);
+    if (output) output.textContent = text;
+    input.setAttribute("aria-valuenow", String(input.value));
+    input.setAttribute("aria-valuetext", text);
     updateRangeFill(input);
   }
   renderTempoPocket();
@@ -5334,6 +5348,7 @@ export class PreviewPlayer {
     setPlaybackPresentation(true);
     $("#playButton").classList.add("playing");
     $("#playButton").setAttribute("aria-label", "Pause song");
+    $("#playButton").setAttribute("aria-pressed", "true");
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.add("playing");
@@ -6115,6 +6130,7 @@ export class PreviewPlayer {
     if (this.context) this.suspendWhenIdle();
     $("#playButton").classList.remove("playing");
     $("#playButton").setAttribute("aria-label", "Play song");
+    $("#playButton").setAttribute("aria-pressed", "false");
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.remove("playing");
@@ -6182,6 +6198,7 @@ function setPlaybackPresentation(playing) {
   showcaseButton?.classList.toggle("is-playing", playing);
   if (showcaseButton) {
     showcaseButton.setAttribute("aria-label", playing ? "Pause current song" : "Play current song");
+    showcaseButton.setAttribute("aria-pressed", String(playing));
     const label = $("strong", showcaseButton);
     if (label) label.textContent = playing ? "Pause song" : "Play song";
   }
@@ -6189,6 +6206,7 @@ function setPlaybackPresentation(playing) {
   mixButton?.classList.toggle("is-playing", playing);
   if (mixButton) {
     mixButton.setAttribute("aria-label", playing ? "Pause the mix" : "Listen to the mix");
+    mixButton.setAttribute("aria-pressed", String(playing));
     const label = $("b", mixButton);
     if (label) label.textContent = playing ? "Pause" : "Listen";
   }
@@ -6197,8 +6215,15 @@ function setPlaybackPresentation(playing) {
 function updatePlaybackUi(position, duration, { view = playbackViewForSong(), refreshDetails = true } = {}) {
   const ratio = clamp(position / Math.max(0.01, duration), 0, 1);
   $("#currentTime").textContent = formatTime(position);
-  $("#songScrubber").value = Math.round(ratio * 1000);
-  $("#songScrubber").style.setProperty("--range-fill", `${ratio * 100}%`);
+  const scrubber = $("#songScrubber");
+  if (scrubber) {
+    const val = Math.round(ratio * 1000);
+    scrubber.value = val;
+    scrubber.style.setProperty("--range-fill", `${ratio * 100}%`);
+    scrubber.setAttribute("aria-valuenow", String(val));
+    scrubber.setAttribute("aria-valuetext", `${formatTime(position)} of ${formatTime(duration)}`);
+  }
+  $("#totalTime").textContent = formatTime(duration);
   const playhead = $("#playhead");
   if (playhead) {
     playhead.classList.toggle("visible", Boolean(player.playing || ratio > 0));
