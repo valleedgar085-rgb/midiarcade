@@ -258,6 +258,8 @@ class MockElement {
   querySelector() { return new MockElement(); }
   querySelectorAll() { return []; }
   append() {}
+  appendChild(node) { this.children = this.children || []; this.children.push(node); return node; }
+  replaceChildren(...nodes) { this.children = nodes; }
   remove() {}
   click() {}
   close() { this.open = false; }
@@ -567,6 +569,7 @@ test("browser app initializes against the engine contract", async () => {
     querySelectorAll() { return []; },
     addEventListener() {},
     createElement() { return new MockElement(); },
+    createElementNS(_ns, tag) { return new MockElement(tag); },
   };
 
   // This fixture intentionally opts out of Auto so the legacy interaction checks below
@@ -1214,5 +1217,18 @@ test("piano-roll visual closes when leaving the Shape workspace", () => {
     appSource,
     /workspace !== "arrange" && state\.sectionEditorOpen[\s\S]*?state\.sectionEditorOpen = false;[\s\S]*?renderSectionEditor\(\)/,
     "the precision editor must never stay visually open across normal workspaces",
+  );
+});
+
+test("mobile play icon rendering uses safe SVG DOM elements without innerHTML", () => {
+  assert.doesNotMatch(
+    appSource,
+    /mobileIcon\.innerHTML\s*=/,
+    "mobileIcon must not use innerHTML assignment",
+  );
+  assert.match(
+    appSource,
+    /createSvgElement/,
+    "mobileIcon must use DOM SVG element creation without innerHTML",
   );
 });

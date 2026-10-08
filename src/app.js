@@ -5353,7 +5353,28 @@ export class PreviewPlayer {
     if (mobileDockPlay) {
       mobileDockPlay.classList.add("playing");
       const mobileIcon = $("#mobilePlayIcon");
-      if (mobileIcon) mobileIcon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+      if (mobileIcon) {
+        const createSvgElement = (tag) => typeof document.createElementNS === "function"
+          ? document.createElementNS("http://www.w3.org/2000/svg", tag)
+          : document.createElement(tag);
+        const rect1 = createSvgElement("rect");
+        rect1.setAttribute("x", "6");
+        rect1.setAttribute("y", "4");
+        rect1.setAttribute("width", "4");
+        rect1.setAttribute("height", "16");
+        const rect2 = createSvgElement("rect");
+        rect2.setAttribute("x", "14");
+        rect2.setAttribute("y", "4");
+        rect2.setAttribute("width", "4");
+        rect2.setAttribute("height", "16");
+        if (typeof mobileIcon.replaceChildren === "function") {
+          mobileIcon.replaceChildren(rect1, rect2);
+        } else {
+          mobileIcon.textContent = "";
+          mobileIcon.appendChild(rect1);
+          mobileIcon.appendChild(rect2);
+        }
+      }
       const mobileText = $("#mobilePlayText");
       if (mobileText) mobileText.textContent = "Pause";
     }
@@ -6135,7 +6156,19 @@ export class PreviewPlayer {
     if (mobileDockPlay) {
       mobileDockPlay.classList.remove("playing");
       const mobileIcon = $("#mobilePlayIcon");
-      if (mobileIcon) mobileIcon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3" />';
+      if (mobileIcon) {
+        const createSvgElement = (tag) => typeof document.createElementNS === "function"
+          ? document.createElementNS("http://www.w3.org/2000/svg", tag)
+          : document.createElement(tag);
+        const polygon = createSvgElement("polygon");
+        polygon.setAttribute("points", "5 3 19 12 5 21 5 3");
+        if (typeof mobileIcon.replaceChildren === "function") {
+          mobileIcon.replaceChildren(polygon);
+        } else {
+          mobileIcon.textContent = "";
+          mobileIcon.appendChild(polygon);
+        }
+      }
       const mobileText = $("#mobilePlayText");
       if (mobileText) mobileText.textContent = "Play";
     }
