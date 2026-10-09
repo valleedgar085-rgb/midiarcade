@@ -507,12 +507,23 @@ function getFallbackEntropy() {
   return (Date.now() ^ fallbackEntropySequence) >>> 0;
 }
 
+function getRandomUint32() {
+  const cryptoObject = globalThis.crypto;
+  if (cryptoObject?.getRandomValues) {
+    const words = new Uint32Array(1);
+    cryptoObject.getRandomValues(words);
+    return words[0];
+  }
+  return getFallbackEntropy();
+}
+
+function getSecureRandomFloat() {
+  return getRandomUint32() / 0x100000000;
+}
+
 function createSeed() {
   seedSequence = (seedSequence + 1) >>> 0;
-  const cryptoObject = globalThis.crypto;
-  const entropy = cryptoObject?.getRandomValues
-    ? cryptoObject.getRandomValues(new Uint32Array(1))[0]
-    : getFallbackEntropy();
+  const entropy = getRandomUint32();
   return [
     "arcade",
     Date.now().toString(36),
@@ -4345,8 +4356,8 @@ async function regenerateTrack(id, options = {}) {
 function randomizeTrackControls() {
   for (const id of TRACK_ORDER) {
     const settings = state.trackSettings[id];
-    settings.density = Math.round(clamp(settings.density + (Math.random() - 0.5) * 32, 14, 94));
-    settings.variation = Math.round(clamp(settings.variation + (Math.random() - 0.5) * 38, 5, 95));
+    settings.density = Math.round(clamp(settings.density + (getSecureRandomFloat() - 0.5) * 32, 14, 94));
+    settings.variation = Math.round(clamp(settings.variation + (getSecureRandomFloat() - 0.5) * 38, 5, 95));
   }
   renderTrackRack();
   showToast("The band has a new balance. Generate a related idea to hear it compose.");
@@ -4385,7 +4396,7 @@ function reshapeArrangement() {
 }
 
 function chooseRecipe() {
-  state.recipeIndex = (state.recipeIndex + 1 + Math.floor(Math.random() * (RECIPES.length - 1))) % RECIPES.length;
+  state.recipeIndex = (state.recipeIndex + 1 + Math.floor(getSecureRandomFloat() * (RECIPES.length - 1))) % RECIPES.length;
   const recipe = RECIPES[state.recipeIndex];
   $("#modeControl").value = recipe.mode;
   $("#grooveControl").value = recipe.groove;
