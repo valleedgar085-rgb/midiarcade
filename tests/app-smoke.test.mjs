@@ -1255,3 +1255,16 @@ test("timeline rendering escapes section names and track metadata against XSS", 
     "harmony insight lane text and attributes must be escaped with escapeHtml",
   );
 });
+
+test("piano roll grid rendering escapes pitch labels and cell titles against XSS", () => {
+  assert.match(
+    appSource,
+    /const rawLabel = isDrums \? \(DRUM_NOTE_MAP\[pitch\] \|\| `Hit \${pitch}`\) : pitchLabel\(pitch\);[\s\S]*?const label = escapeHtml\(rawLabel\);/,
+    "piano roll key labels must escape raw label using escapeHtml",
+  );
+  assert.match(
+    appSource,
+    /const pitchTitle = escapeHtml\(isDrums \? \(DRUM_NOTE_MAP\[pitch\] \|\| pitch\) : pitchLabel\(pitch\)\);[\s\S]*?title="\${pitchTitle} at beat \${stepStart\.toFixed\(2\)}"/,
+    "piano roll cell titles must escape pitch labels using escapeHtml",
+  );
+});

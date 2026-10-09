@@ -3182,7 +3182,8 @@ function renderPianoRollGrid() {
 
   keysContainer.innerHTML = pitches.map((pitch) => {
     const isBlack = isBlackKey(pitch);
-    const label = isDrums ? (DRUM_NOTE_MAP[pitch] || `Hit ${pitch}`) : pitchLabel(pitch);
+    const rawLabel = isDrums ? (DRUM_NOTE_MAP[pitch] || `Hit ${pitch}`) : pitchLabel(pitch);
+    const label = escapeHtml(rawLabel);
     const isRoot = !isBlack && (pitch % 12 === 0);
     return `<div class="pr-key-label ${isBlack ? "is-black" : ""} ${isRoot ? "is-root" : ""}"><span>${label}</span></div>`;
   }).join("");
@@ -3204,7 +3205,8 @@ function renderPianoRollGrid() {
         return nPitch === pitch && nStart >= stepStart - 0.01 && nStart < stepEnd - 0.01;
       });
 
-      cellsHtml += `<div class="pr-cell ${isBlackRow ? "is-black-row" : ""} ${hasNote ? "has-note" : ""}" data-pitch="${pitch}" data-step="${c}" data-start="${stepStart}" role="gridcell" title="${isDrums ? (DRUM_NOTE_MAP[pitch] || pitch) : pitchLabel(pitch)} at beat ${stepStart.toFixed(2)}"></div>`;
+      const pitchTitle = escapeHtml(isDrums ? (DRUM_NOTE_MAP[pitch] || pitch) : pitchLabel(pitch));
+      cellsHtml += `<div class="pr-cell ${isBlackRow ? "is-black-row" : ""} ${hasNote ? "has-note" : ""}" data-pitch="${pitch}" data-step="${c}" data-start="${stepStart}" role="gridcell" title="${pitchTitle} at beat ${stepStart.toFixed(2)}"></div>`;
     }
   }
   grid.innerHTML = cellsHtml;
