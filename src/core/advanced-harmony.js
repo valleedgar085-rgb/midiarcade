@@ -7,8 +7,18 @@
  * - Polyrhythmic & time signature meter math (3/4, 6/8, 5/4, 4/4)
  */
 
+function hashSeed(seed) {
+  const text = String(seed ?? 12345);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) || 1;
+}
+
 function createRng(seed = 12345) {
-  let s = Math.abs(seed | 0) || 1;
+  let s = typeof seed === "number" ? (Math.abs(seed | 0) || 1) : hashSeed(seed);
   return function () {
     s = (s * 16807) % 2147483647;
     return (s - 1) / 2147483646;
@@ -31,7 +41,7 @@ export function resolveMeterBeats(timeSignature = "4/4") {
 
 export function applyModalInterchange(progression = [], mode = "major", seed = 12345) {
   if (!Array.isArray(progression) || !progression.length) return [];
-  const rng = createRng(seed);
+  const rng = typeof seed === "function" ? seed : createRng(seed);
   const result = [...progression];
   const normalizedMode = String(mode ?? "major").trim().toLowerCase();
   if (!["major", "ionian"].includes(normalizedMode)) return result;
@@ -62,20 +72,25 @@ export function applyModalInterchange(progression = [], mode = "major", seed = 1
 
 export function applySecondaryDominants(progression = [], seed = 12345) {
   if (!Array.isArray(progression) || progression.length < 2) return [...progression];
-  const rng = createRng(seed);
+  const rng = typeof seed === "function" ? seed : createRng(seed);
   const result = [...progression];
 
-  // Target V or ii with a preceding secondary dominant (V7/V or V7/ii)
+  // Target V (4/5), ii (1/2), vi (5/6), IV (3/4) with secondary dominant
   for (let i = 0; i < result.length - 1; i++) {
     const nextChord = result[i + 1];
     const nextDegree = typeof nextChord === "number" ? nextChord : nextChord.degree;
 
-    if ((nextDegree === 5 || nextDegree === 2) && rng() < 0.3) {
-      const secDomDegree = nextDegree === 5 ? 25 : 22; // V7/V or V7/ii marker
+    let secDomDegree = null;
+    if (nextDegree === 4 || nextDegree === 5) secDomDegree = 25; // V7/V
+    else if (nextDegree === 1 || nextDegree === 2) secDomDegree = 22; // V7/ii
+    else if (nextDegree === 5 || nextDegree === 6) secDomDegree = 26; // V7/vi
+    else if (nextDegree === 3) secDomDegree = 24; // V7/IV
+
+    if (secDomDegree !== null && rng() < 0.3) {
       if (typeof result[i] === "number") {
         result[i] = secDomDegree;
       } else {
-        result[i] = { ...result[i], secondaryDominant: true, targetDegree: nextDegree };
+        result[i] = { ...result[i], secondaryDominant: true, targetDegree: nextDegree, degree: secDomDegree };
       }
     }
   }
