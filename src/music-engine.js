@@ -5539,57 +5539,77 @@ function applySpectrumPlan(sourceTracks, structure, spectrumPlan, config) {
     }
   }
 
-  const tracks = sourceTracks.map((track) => ({
-    ...track,
-    notes: track.notes.map((note) => {
-      if (track.id === "drums") return { ...note, spectrumRole: note.pitch === 36 ? "sub-transient" : note.pitch >= 42 ? "high-percussion" : "drum-body" };
-      const section = structure.find((candidate) => (
-        note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
-      )) ?? structure.at(-1);
-      const plan = sectionPlans.get(section?.id);
-      let pitch = note.pitch;
-      let spectrumRole = track.id;
-      if (track.id === "bass") {
-        if (note === featuredBassNote) {
-          pitch += 12;
-          spectrumRole = "upper-harmonic";
-        } else {
-          if (note.bassRegisterRole === "sub-anchor" && pitch > 47 && pitch - 12 >= 24) pitch -= 12;
-          spectrumRole = note.bassRegisterRole ?? (pitch <= 43 ? "sub-anchor" : "bass-movement");
+  const tracks = sourceTracks.map((track) => {
+    let sectionIndex = 0;
+    return {
+      ...track,
+      notes: track.notes.map((note) => {
+        if (track.id === "drums") return { ...note, spectrumRole: note.pitch === 36 ? "sub-transient" : note.pitch >= 42 ? "high-percussion" : "drum-body" };
+        if (structure.length) {
+          if (note.start < structure[sectionIndex].startBeat - 1e-6) {
+            sectionIndex = 0;
+          }
+          while (
+            sectionIndex < structure.length - 1
+            && note.start >= structure[sectionIndex].endBeat - 1e-6
+          ) {
+            sectionIndex += 1;
+          }
         }
-      } else if (
-        track.id === "melody"
-        && plan?.role === "peak"
-        && ["development", "turnaround"].includes(note.phraseRole)
-        && pitch <= 96
-      ) {
-        pitch += 12;
-        spectrumRole = "featured-air";
-      } else if (
-        track.id === "counterpoint"
-        && plan?.role === "peak"
-        && note.phraseRole === "answer"
-        && pitch <= 96
-      ) {
-        pitch += 12;
-        spectrumRole = "answer-presence";
-      } else if (["chords", "pad"].includes(track.id)) {
-        const top = topAtOnset.get(`${track.id}:${round(note.start, 4)}`);
-        if (plan?.highLift >= 0.72 && note.pitch === top && pitch <= 96) {
+        const candidateSection = structure[sectionIndex];
+        const section = (candidateSection
+          && note.start >= candidateSection.startBeat - 1e-6
+          && note.start < candidateSection.endBeat - 1e-6
+        ) ? candidateSection : (
+          structure.find((candidate) => (
+            note.start >= candidate.startBeat - 1e-6 && note.start < candidate.endBeat - 1e-6
+          )) ?? structure.at(-1)
+        );
+        const plan = sectionPlans.get(section?.id);
+        let pitch = note.pitch;
+        let spectrumRole = track.id;
+        if (track.id === "bass") {
+          if (note === featuredBassNote) {
+            pitch += 12;
+            spectrumRole = "upper-harmonic";
+          } else {
+            if (note.bassRegisterRole === "sub-anchor" && pitch > 47 && pitch - 12 >= 24) pitch -= 12;
+            spectrumRole = note.bassRegisterRole ?? (pitch <= 43 ? "sub-anchor" : "bass-movement");
+          }
+        } else if (
+          track.id === "melody"
+          && plan?.role === "peak"
+          && ["development", "turnaround"].includes(note.phraseRole)
+          && pitch <= 96
+        ) {
           pitch += 12;
-          spectrumRole = track.id === "pad" ? "air-bed" : "harmonic-presence";
-        } else {
-          spectrumRole = track.id === "pad" ? "spectral-bed" : "harmonic-body";
+          spectrumRole = "featured-air";
+        } else if (
+          track.id === "counterpoint"
+          && plan?.role === "peak"
+          && note.phraseRole === "answer"
+          && pitch <= 96
+        ) {
+          pitch += 12;
+          spectrumRole = "answer-presence";
+        } else if (["chords", "pad"].includes(track.id)) {
+          const top = topAtOnset.get(`${track.id}:${round(note.start, 4)}`);
+          if (plan?.highLift >= 0.72 && note.pitch === top && pitch <= 96) {
+            pitch += 12;
+            spectrumRole = track.id === "pad" ? "air-bed" : "harmonic-presence";
+          } else {
+            spectrumRole = track.id === "pad" ? "spectral-bed" : "harmonic-body";
+          }
         }
-      }
-      return {
-        ...note,
-        pitch: clamp(pitch, 0, 127),
-        ...(note === featuredBassNote ? { bassRegisterRole: "upper-harmonic" } : {}),
-        spectrumRole,
-      };
-    }),
-  }));
+        return {
+          ...note,
+          pitch: clamp(pitch, 0, 127),
+          ...(note === featuredBassNote ? { bassRegisterRole: "upper-harmonic" } : {}),
+          spectrumRole,
+        };
+      }),
+    };
+  });
   const pitched = tracks.filter((track) => track.id !== "drums").flatMap((track) => track.notes);
   return {
     tracks,
