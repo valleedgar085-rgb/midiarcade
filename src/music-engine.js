@@ -1080,6 +1080,8 @@ export function createSeededRandom(seed) {
   };
 }
 
+let fallbackSeedSequence = 0;
+
 function randomSeed() {
   const cryptoObject = globalThis.crypto;
   if (cryptoObject?.getRandomValues) {
@@ -1087,7 +1089,8 @@ function randomSeed() {
     cryptoObject.getRandomValues(words);
     return `arcade-${Array.from(words, (word) => word.toString(36)).join("-")}`;
   }
-  return `arcade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  fallbackSeedSequence = (fallbackSeedSequence + 1) >>> 0;
+  return `arcade-${Date.now().toString(36)}-${fallbackSeedSequence.toString(36)}`;
 }
 
 function normalizeKey(value) {
