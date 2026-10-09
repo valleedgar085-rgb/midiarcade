@@ -20,14 +20,36 @@ function scalePitchClasses(meta = {}) {
 }
 
 function harmonyAt(harmony = [], beat = 0) {
-  let result = harmony[0] ?? null;
-  for (const event of harmony) {
-    const start = finite(event?.start);
-    const duration = Math.max(0, finite(event?.duration));
-    if (start <= beat + 1e-6) result = event;
-    if (beat >= start - 1e-6 && beat < start + duration - 1e-6) return event;
+  if (!harmony || harmony.length === 0) return harmony?.[0] ?? null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let best = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
   }
-  return result;
+
+  if (best === -1) {
+    return harmony[0] ?? null;
+  }
+
+  const bestEvent = harmony[best];
+  const bestStart = finite(bestEvent?.start ?? bestEvent?.startBeat, 0);
+  const bestDuration = Math.max(0, finite(bestEvent?.duration ?? bestEvent?.durationBeats, 0.25));
+
+  if (beat >= bestStart - 1e-6 && beat < bestStart + bestDuration - 1e-6) {
+    return bestEvent;
+  }
+
+  return bestEvent ?? null;
 }
 
 function notePitch(note) {
