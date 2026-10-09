@@ -2284,11 +2284,20 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       harmonicGoalDegree: sourcePlan?.harmonicGoalDegree ?? harmonicStory.goalDegree,
     };
   });
+  const sourceTransitionsByPair = new Map();
+  if (Array.isArray(source?.transitions)) {
+    for (const transition of source.transitions) {
+      if (transition?.fromSectionId != null && transition?.toSectionId != null) {
+        const key = `${transition.fromSectionId}->${transition.toSectionId}`;
+        if (!sourceTransitionsByPair.has(key)) {
+          sourceTransitionsByPair.set(key, transition);
+        }
+      }
+    }
+  }
   const transitions = sectionPlans.slice(0, -1).map((from, index) => {
     const to = sectionPlans[index + 1];
-    const sourceTransition = source?.transitions?.find((transition) => (
-      transition.fromSectionId === from.sectionId && transition.toSectionId === to.sectionId
-    ));
+    const sourceTransition = sourceTransitionsByPair.get(`${from.sectionId}->${to.sectionId}`);
     const type = sourceTransition?.type ?? transitionType(from, to);
     const energyDelta = to.energy - from.energy;
     const strength = sourceTransition?.strength ?? round(clamp(
