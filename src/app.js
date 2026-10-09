@@ -500,13 +500,19 @@ function runWorkflowAction() {
 }
 
 let seedSequence = 0;
+let fallbackEntropySequence = 0;
+
+function getFallbackEntropy() {
+  fallbackEntropySequence = (fallbackEntropySequence + 1) >>> 0;
+  return (Date.now() ^ fallbackEntropySequence) >>> 0;
+}
 
 function createSeed() {
   seedSequence = (seedSequence + 1) >>> 0;
   const cryptoObject = globalThis.crypto;
   const entropy = cryptoObject?.getRandomValues
     ? cryptoObject.getRandomValues(new Uint32Array(1))[0]
-    : Math.floor(Math.random() * 0xffffffff);
+    : getFallbackEntropy();
   return [
     "arcade",
     Date.now().toString(36),
