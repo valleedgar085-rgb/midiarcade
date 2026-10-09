@@ -151,6 +151,45 @@ function compareNarrativeCandidates(left, right) {
   return left.attemptIndex - right.attemptIndex;
 }
 
+/**
+ * Shortlist musically different arrangement stories before critic audition.
+ * A family describes *how* the song develops; the section-role order describes
+ * *what* the listener hears. Prefer diversity in both, then preserve the
+ * original strongest-first ranking. When distinct safe candidates are scarce,
+ * fill the remaining places with the best available alternatives.
+ *
+ * This is only discovery ranking. The existing release critic still owns
+ * musical acceptance and may reject every proposed reorder.
+ */
+export function selectNarrativelyDistinctArrangements(discovered, maxCandidates = MAX_ARRANGEMENT_CANDIDATES) {
+  const limit = boundedCandidateLimit(maxCandidates);
+  const ranked = [...discovered].sort(compareNarrativeCandidates);
+  const chosen = [];
+  const usedOrders = new Set();
+  const usedFamilies = new Set();
+  const usedRoleOrders = new Set();
+
+  const take = (qualifies) => {
+    for (const candidate of ranked) {
+      if (chosen.length >= limit) return;
+      if (usedOrders.has(candidate.orderKey) || !qualifies(candidate)) continue;
+      chosen.push(candidate);
+      usedOrders.add(candidate.orderKey);
+      usedFamilies.add(candidate.evolution.family);
+      usedRoleOrders.add(candidate.narrativeOrderKey);
+    }
+  };
+
+  // Use each of the three audition slots for a different musical story where
+  // the bounded discovery pool provides one, not three close re-orderings.
+  take((candidate) => !usedFamilies.has(candidate.evolution.family)
+    && !usedRoleOrders.has(candidate.narrativeOrderKey));
+  take((candidate) => !usedRoleOrders.has(candidate.narrativeOrderKey));
+  take((candidate) => !usedFamilies.has(candidate.evolution.family));
+  take(() => true);
+  return chosen.sort(compareNarrativeCandidates);
+}
+
 function performanceProfileForFamily(family) {
   if (["hook-first", "early-impact", "bridge-payoff", "double-peak"].includes(family)) return "impact";
   if (["verse-driven", "slow-bloom"].includes(family)) return "restraint";
@@ -213,6 +252,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
     discovered.push({
       attemptIndex,
       orderKey,
+      narrativeOrderKey: sectionNames(evolved.song).join(">"),
       narrativeScore: (() => {
         const names = sectionNames(evolved.song);
         return Math.round((
@@ -225,9 +265,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
     });
   }
 
-  return discovered
-    .sort(compareNarrativeCandidates)
-    .slice(0, limit)
+  return selectNarrativelyDistinctArrangements(discovered, limit)
     .map((candidate, candidateIndex) => {
       const profile = performanceProfileForFamily(candidate.evolution.family);
       const performance = protectFusionPerformance
@@ -243,6 +281,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
             attemptIndex: candidate.attemptIndex,
             limit,
             narrativeScore: candidate.narrativeScore,
+            narrativeOrderKey: candidate.narrativeOrderKey,
             discoveredCandidates: discovered.length,
             performanceProfile: profile,
             performanceChanged: performance.changed,
@@ -257,6 +296,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
         attemptIndex: candidate.attemptIndex,
         orderKey: candidate.orderKey,
         narrativeScore: candidate.narrativeScore,
+        narrativeOrderKey: candidate.narrativeOrderKey,
         song: auditionSong,
         evolution: candidate.evolution,
         performance: performance.diagnostics,
