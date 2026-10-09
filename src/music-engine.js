@@ -5087,83 +5087,12 @@ function applyRhythmSectionTurnaroundConversation(sourceTracks, harmony, config,
   };
 }
 
-function runDirectorEnsembleCoordination(
-  sourceTracks,
-  structure,
-  harmony,
-  generationInterlock,
-  config,
-  grooveConductor,
-  directorContext = null,
-) {
-  const tracks = Object.fromEntries(
-    Object.entries(sourceTracks).map(([id, notes]) => [
-      id,
-      (notes ?? []).map((note) => ({ ...note })),
-    ]),
-  );
-  const contracts = new Map(
-    (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
-  );
-  // Whole-song generation and scoped Director recomposition now use the same
-  // ensemble contract. Scoped work may override one section's intent, while
-  // normal generation follows the pre-composed interlock contract unchanged.
-  // This keeps coordination deterministic and bounded instead of deferring
-  // ensemble awareness until a later repair pass.
-  const coordinationMode = directorContext ? "scoped-director" : "whole-song-contract";
-  const sparseDensityCalibrationProtected = ["drumBass", "funk", "jazz", "afrobeats"].includes(config.genre);
-  const coordinationMutationsEnabled = !sparseDensityCalibrationProtected && (
-    Boolean(directorContext)
-    || finite(config?.energy, 0.5) >= 0.22
-    || finite(config?.complexity, 0.5) >= 0.26
-  );
-  const barBeats = beatsPerBar(config);
-  const sectionForBeat = (beat) => structure.find((section) => (
-    beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
-  )) ?? structure.at(-1);
-  const intentForSection = (section) => {
-    const contract = contracts.get(String(section?.id ?? "")) ?? {};
-    if (directorContext?.sectionId != null && String(directorContext.sectionId) === String(section?.id)) {
-      return { ...contract, ...(directorContext.intent ?? {}) };
-    }
-    return contract;
-  };
-  const barContractFor = (section, beat) => {
-    const contract = contracts.get(String(section?.id ?? ""));
-    const absoluteBar = Math.max(0, Math.floor(beat / barBeats));
-    return contract?.bars?.find((entry) => Number(entry.bar) === absoluteBar) ?? null;
-  };
-  const near = (values, beat, threshold = 0.09) => values.some((value) => Math.abs(value - beat) <= threshold);
-  const drums = tracks.drums ?? [];
-  const bass = tracks.bass ?? [];
-  const chords = tracks.chords ?? [];
-  const melody = tracks.melody ?? [];
-  const counterpoint = tracks.counterpoint ?? [];
-  const kickOnsets = drums.filter((note) => note.pitch === 36).map((note) => note.start);
-  const bassOnsets = bass.map((note) => note.start);
+function coordinateBassGrooveRelationships(bassNotes, grooveConductor, barBeats) {
   let rhythmLocksObserved = 0;
-  let harmonicPocketMoves = 0;
-  let harmonicPocketSoftens = 0;
-  let counterAnswersMoved = 0;
-  let supportSpaceYields = 0;
-  let restingRoleNotesRemoved = 0;
-  const roleFor = (section, trackId) => intentForSection(section)?.ensembleRoles?.[trackId] ?? "support";
-  const isProtectedTeamworkNote = (note) => Boolean(
-    note?.phraseAnchor
-    || note?.resolutionRole
-    || note?.transitionRole
-    || note?.transitionFeature
-    || note?.transitionHandoffRole
-    || note?.memoryRole
-    || note?.motifHandoffRole
-    || note?.finalAssemblyRole
-    || note?.ensembleCadenceRole
-  );
-
   // Groove DNA owns the low-end relationship. This pass only annotates notes
   // that already sit on the authored bass lane; it never derives bass timing
   // from kick positions.
-  for (const note of bass) {
+  for (const note of bassNotes) {
     const relationship = nearestGroovePulse(
       grooveConductor,
       "bassPulses",
@@ -5176,6 +5105,23 @@ function runDirectorEnsembleCoordination(
     note.ensemblePartner = "groove-dna";
     rhythmLocksObserved += 1;
   }
+  return rhythmLocksObserved;
+}
+
+function coordinateHarmonicPocket(
+  chords,
+  kickOnsets,
+  bassOnsets,
+  harmony,
+  barBeats,
+  sectionForBeat,
+  intentForSection,
+  barContractFor,
+  near,
+  coordinationMutationsEnabled,
+) {
+  let harmonicPocketMoves = 0;
+  let harmonicPocketSoftens = 0;
 
   // Chord attacks yield a little space when the complete low-frequency
   // foundation lands on the same instant. Prefer an authored chord lane from
@@ -5242,6 +5188,20 @@ function runDirectorEnsembleCoordination(
     }
   }
 
+  return { harmonicPocketMoves, harmonicPocketSoftens };
+}
+
+function coordinateCounterpointLeadDialogue(
+  melody,
+  counterpoint,
+  barBeats,
+  sectionForBeat,
+  intentForSection,
+  barContractFor,
+  near,
+  coordinationMutationsEnabled,
+) {
+  let counterAnswersMoved = 0;
   // Counterpoint is an answer voice. When it lands directly on the lead call,
   // move the whole answer to the nearest authored counter lane (or a bounded
   // quarter-beat answer) rather than allowing both voices to race on one onset.
@@ -5296,40 +5256,165 @@ function runDirectorEnsembleCoordination(
     }
   }
 
+  return counterAnswersMoved;
+}
+
+function enforceSupportNegativeSpace(
+  tracks,
+  barBeats,
+  sectionForBeat,
+  intentForSection,
+  roleFor,
+  barContractFor,
+  isProtectedTeamworkNote,
+  coordinationMutationsEnabled,
+) {
+  let supportSpaceYields = 0;
+  let restingRoleNotesRemoved = 0;
+
   // Enforce the same foreground/support hierarchy before later arrangement
   // and repair passes. "rest" is genuine negative space; support/texture parts
   // yield on authored space pulses unless they carry a protected musical role.
-  if (coordinationMutationsEnabled) for (const trackId of ["chords", "counterpoint", "pad"]) {
-    const source = tracks[trackId] ?? [];
-    tracks[trackId] = source.filter((note) => {
-      const section = sectionForBeat(note.start);
-      const intent = intentForSection(section);
-      const role = roleFor(section, trackId);
-      if (role === "rest" && !isProtectedTeamworkNote(note)) {
-        restingRoleNotesRemoved += 1;
-        return false;
-      }
-      if (["foreground", "answer"].includes(role) || isProtectedTeamworkNote(note)) return true;
-      const barContract = barContractFor(section, note.start);
-      const barStart = Math.floor(note.start / barBeats) * barBeats;
-      const localBeat = round(note.start - barStart);
-      const onReservedSpace = (barContract?.spaces ?? []).some((space) => Math.abs(finite(space) - localBeat) <= 0.07);
-      const silenceBudget = clamp(finite(intent?.silenceBudget, 0.13), 0.05, 0.4);
-      if (!onReservedSpace || silenceBudget < 0.16) return true;
-      // Keep harmony continuity by soft-yielding chords/pads; counterpoint may
-      // actually rest because its job is to answer the lead rather than fill
-      // every hole.
-      if (trackId === "counterpoint") {
+  if (coordinationMutationsEnabled) {
+    for (const trackId of ["chords", "counterpoint", "pad"]) {
+      const source = tracks[trackId] ?? [];
+      tracks[trackId] = source.filter((note) => {
+        const section = sectionForBeat(note.start);
+        const intent = intentForSection(section);
+        const role = roleFor(section, trackId);
+        if (role === "rest" && !isProtectedTeamworkNote(note)) {
+          restingRoleNotesRemoved += 1;
+          return false;
+        }
+        if (["foreground", "answer"].includes(role) || isProtectedTeamworkNote(note)) return true;
+        const barContract = barContractFor(section, note.start);
+        const barStart = Math.floor(note.start / barBeats) * barBeats;
+        const localBeat = round(note.start - barStart);
+        const onReservedSpace = (barContract?.spaces ?? []).some((space) => Math.abs(finite(space) - localBeat) <= 0.07);
+        const silenceBudget = clamp(finite(intent?.silenceBudget, 0.13), 0.05, 0.4);
+        if (!onReservedSpace || silenceBudget < 0.16) return true;
+        // Keep harmony continuity by soft-yielding chords/pads; counterpoint may
+        // actually rest because its job is to answer the lead rather than fill
+        // every hole.
+        if (trackId === "counterpoint") {
+          supportSpaceYields += 1;
+          return false;
+        }
+        note.velocity = clamp(note.velocity - Math.round(4 + silenceBudget * 14), 1, 127);
+        note.ensembleCoordinationRole = "negative-space-yield";
+        note.ensemblePartner = intent?.featuredTrack ?? "foreground";
         supportSpaceYields += 1;
-        return false;
-      }
-      note.velocity = clamp(note.velocity - Math.round(4 + silenceBudget * 14), 1, 127);
-      note.ensembleCoordinationRole = "negative-space-yield";
-      note.ensemblePartner = intent?.featuredTrack ?? "foreground";
-      supportSpaceYields += 1;
-      return true;
-    });
+        return true;
+      });
+    }
   }
+
+  return { supportSpaceYields, restingRoleNotesRemoved };
+}
+
+function runDirectorEnsembleCoordination(
+  sourceTracks,
+  structure,
+  harmony,
+  generationInterlock,
+  config,
+  grooveConductor,
+  directorContext = null,
+) {
+  const tracks = Object.fromEntries(
+    Object.entries(sourceTracks).map(([id, notes]) => [
+      id,
+      (notes ?? []).map((note) => ({ ...note })),
+    ]),
+  );
+  const contracts = new Map(
+    (generationInterlock?.sectionContracts ?? []).map((contract) => [String(contract.sectionId), contract]),
+  );
+  // Whole-song generation and scoped Director recomposition now use the same
+  // ensemble contract. Scoped work may override one section's intent, while
+  // normal generation follows the pre-composed interlock contract unchanged.
+  // This keeps coordination deterministic and bounded instead of deferring
+  // ensemble awareness until a later repair pass.
+  const coordinationMode = directorContext ? "scoped-director" : "whole-song-contract";
+  const sparseDensityCalibrationProtected = ["drumBass", "funk", "jazz", "afrobeats"].includes(config.genre);
+  const coordinationMutationsEnabled = !sparseDensityCalibrationProtected && (
+    Boolean(directorContext)
+    || finite(config?.energy, 0.5) >= 0.22
+    || finite(config?.complexity, 0.5) >= 0.26
+  );
+  const barBeats = beatsPerBar(config);
+  const sectionForBeat = (beat) => structure.find((section) => (
+    beat >= section.startBeat - 1e-6 && beat < section.endBeat - 1e-6
+  )) ?? structure.at(-1);
+  const intentForSection = (section) => {
+    const contract = contracts.get(String(section?.id ?? "")) ?? {};
+    if (directorContext?.sectionId != null && String(directorContext.sectionId) === String(section?.id)) {
+      return { ...contract, ...(directorContext.intent ?? {}) };
+    }
+    return contract;
+  };
+  const barContractFor = (section, beat) => {
+    const contract = contracts.get(String(section?.id ?? ""));
+    const absoluteBar = Math.max(0, Math.floor(beat / barBeats));
+    return contract?.bars?.find((entry) => Number(entry.bar) === absoluteBar) ?? null;
+  };
+  const near = (values, beat, threshold = 0.09) => values.some((value) => Math.abs(value - beat) <= threshold);
+  const drums = tracks.drums ?? [];
+  const bass = tracks.bass ?? [];
+  const chords = tracks.chords ?? [];
+  const melody = tracks.melody ?? [];
+  const counterpoint = tracks.counterpoint ?? [];
+  const kickOnsets = drums.filter((note) => note.pitch === 36).map((note) => note.start);
+  const bassOnsets = bass.map((note) => note.start);
+  const roleFor = (section, trackId) => intentForSection(section)?.ensembleRoles?.[trackId] ?? "support";
+  const isProtectedTeamworkNote = (note) => Boolean(
+    note?.phraseAnchor
+    || note?.resolutionRole
+    || note?.transitionRole
+    || note?.transitionFeature
+    || note?.transitionHandoffRole
+    || note?.memoryRole
+    || note?.motifHandoffRole
+    || note?.finalAssemblyRole
+    || note?.ensembleCadenceRole
+  );
+
+  const rhythmLocksObserved = coordinateBassGrooveRelationships(bass, grooveConductor, barBeats);
+
+  const { harmonicPocketMoves, harmonicPocketSoftens } = coordinateHarmonicPocket(
+    chords,
+    kickOnsets,
+    bassOnsets,
+    harmony,
+    barBeats,
+    sectionForBeat,
+    intentForSection,
+    barContractFor,
+    near,
+    coordinationMutationsEnabled,
+  );
+
+  const counterAnswersMoved = coordinateCounterpointLeadDialogue(
+    melody,
+    counterpoint,
+    barBeats,
+    sectionForBeat,
+    intentForSection,
+    barContractFor,
+    near,
+    coordinationMutationsEnabled,
+  );
+
+  const { supportSpaceYields, restingRoleNotesRemoved } = enforceSupportNegativeSpace(
+    tracks,
+    barBeats,
+    sectionForBeat,
+    intentForSection,
+    roleFor,
+    barContractFor,
+    isProtectedTeamworkNote,
+    coordinationMutationsEnabled,
+  );
 
   for (const id of Object.keys(tracks)) {
     tracks[id].sort((left, right) => left.start - right.start || left.pitch - right.pitch);
