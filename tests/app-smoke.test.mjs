@@ -1232,3 +1232,26 @@ test("mobile play icon rendering uses safe SVG DOM elements without innerHTML", 
     "mobileIcon must use DOM SVG element creation without innerHTML",
   );
 });
+
+test("timeline rendering escapes section names and track metadata against XSS", () => {
+  assert.match(
+    appSource,
+    /const sectionIdAttr = escapeHtml\(section\.id\);[\s\S]*?const sectionNameText = escapeHtml\(section\.name\);/,
+    "section id and section name in timeline section chips must be escaped with escapeHtml",
+  );
+  assert.match(
+    appSource,
+    /const escapedTrackId = escapeHtml\(id\);[\s\S]*?const escapedMetaName = escapeHtml\(meta\.name\);[\s\S]*?const escapedMetaColor = escapeHtml\(meta\.color\);/,
+    "track metadata in timeline rows must be escaped with escapeHtml",
+  );
+  assert.match(
+    appSource,
+    /title="Open \${escapedMetaName} in \${escapedSectionName} piano roll"/,
+    "timeline clip attributes and titles must use escaped variables",
+  );
+  assert.match(
+    appSource,
+    /title="\${escapeHtml\(notes\)}"><b>\${escapeHtml\(symbol\)}<\/b><small>\${escapeHtml\(roman\)}<\/small>/,
+    "harmony insight lane text and attributes must be escaped with escapeHtml",
+  );
+});
