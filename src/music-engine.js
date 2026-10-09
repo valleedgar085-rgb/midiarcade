@@ -2376,9 +2376,36 @@ function applySongBlueprint(structure, blueprint) {
   });
 }
 
-function blueprintPlanForSection(blueprint, section) {
-  return blueprint?.sectionPlans?.find((plan) => plan.sectionId === section.id)
-    ?? blueprint?.sectionPlans?.find((plan) => plan.sectionName === section.name)
+export function blueprintPlanMap(blueprint) {
+  if (!blueprint) return null;
+  if (blueprint instanceof Map) return blueprint;
+  if (blueprint._planMap) return blueprint._planMap;
+  const map = new Map();
+  if (Array.isArray(blueprint.sectionPlans)) {
+    for (const plan of blueprint.sectionPlans) {
+      if (plan?.sectionId != null && !map.has(plan.sectionId)) map.set(plan.sectionId, plan);
+      if (plan?.sectionName != null && !map.has(plan.sectionName)) map.set(plan.sectionName, plan);
+    }
+  }
+  if (Object.isExtensible(blueprint)) {
+    try {
+      Object.defineProperty(blueprint, "_planMap", { value: map, writable: true, configurable: true, enumerable: false });
+    } catch (_) {}
+  }
+  return map;
+}
+
+export function blueprintPlanForSection(blueprint, section) {
+  if (!blueprint || !section) return null;
+  if (blueprint instanceof Map) {
+    return (section.id ? blueprint.get(section.id) : null)
+      ?? (section.name ? blueprint.get(section.name) : null)
+      ?? null;
+  }
+  const map = blueprint._planMap ?? blueprintPlanMap(blueprint);
+  if (!map) return null;
+  return (section.id ? map.get(section.id) : null)
+    ?? (section.name ? map.get(section.name) : null)
     ?? null;
 }
 
