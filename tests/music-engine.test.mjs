@@ -551,6 +551,33 @@ test("phase 40 reconciles repaired tracks with the actual final interlock plan",
   assert.deepEqual(song, engine.generateNew(input), "repair reconciliation must remain deterministic");
 });
 
+test("blueprintPlanForSection and blueprintPlanMap perform O(1) section plan lookups", () => {
+  const config = { ...CONFIG, genre: "pop", seed: "blueprint-lookup", bars: 16 };
+  const song = engine.generateNew(config);
+  const blueprint = song.songBlueprint;
+
+  const planMap = engine.blueprintPlanMap(blueprint);
+  assert.ok(planMap instanceof Map);
+
+  for (const section of song.structure) {
+    const plan = engine.blueprintPlanForSection(blueprint, section);
+    assert.ok(plan, `blueprintPlanForSection should find plan for section ${section.id}`);
+    assert.equal(plan.sectionId, section.id);
+
+    const planFromMap = engine.blueprintPlanForSection(planMap, section);
+    assert.equal(planFromMap, plan);
+  }
+
+  // Edge cases: name-only section lookup, invalid inputs
+  const nameOnlySection = { name: song.structure[0].name };
+  const planByName = engine.blueprintPlanForSection(blueprint, nameOnlySection);
+  assert.ok(planByName);
+
+  assert.equal(engine.blueprintPlanForSection(null, nameOnlySection), null);
+  assert.equal(engine.blueprintPlanForSection(blueprint, null), null);
+  assert.equal(engine.blueprintPlanMap(null), null);
+});
+
 test("song blueprint coordinates narrative, section energy, cadence, and motif development", () => {
   const config = { ...CONFIG, genre: "pop", seed: "blueprint-story", bars: 32 };
   const song = engine.generateNew(config);
