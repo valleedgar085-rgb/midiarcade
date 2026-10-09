@@ -71,9 +71,53 @@ Track A workflow convergence is now implemented across A1 → A5. The next relea
 
 ## 3. North-star workflow
 
-The entire app should reinforce one loop:
+The user-selected [Improved MIDI Arcade Workflow](https://whimsical.com/edgars-workspace76/improved-midi-arcade-workflow-NUVkEsXDrq5SwcABJBoJ91) is the **master creative-process flowchart** (16 steps, 18 connectors, checked on October 9, 2026). The existing **Create → Shape → Mix → Finish** screens remain the app's navigational workspaces, not a competing generation architecture. Implement the flow through existing code before introducing modules, controls, or new competing song authorities.
 
-**Create → Shape → Mix → Finish**
+### Whimsical master path and loops
+
+The board's exact forward route is:
+
+1. Start music project
+2. Set tempo and musical key
+3. Choose Arcade kit or sound pack
+4. Preview loops and sounds
+5. **Fits the musical idea?** — No returns to kit/sound selection; Yes continues
+6. Connect or map MIDI controller
+7. Play pads or keys to trigger and manipulate sounds
+8. Adjust pitch, timing, effects, and macros
+9. **Performance sounds right?** — No returns to pad/key performance; Yes continues
+10. Record MIDI into DAW
+11. Quantize and edit MIDI notes
+12. Build song sections and layers
+13. **Arrangement complete?** — No returns to preview loops/sounds; Yes continues
+14. Mix levels and effects
+15. Export audio track
+16. Finished
+
+The diagram describes a **producer-led manual/performance route**. MIDI Arcade's existing automatic composition route remains available in Create: producer intent → deterministic generation → quality-gated audition of up to three distinct safe **arrangement candidates** → one accepted authoritative song → Shape/Mix/Finish. Integrate the two routes at preview, arrangement evaluation, musical revision, and output. Do not require MIDI hardware or an external DAW to generate a song.
+
+### Implementation correspondence (preserve existing code)
+
+| Whimsical stage | Existing MIDI Arcade integration | Boundary / next change |
+| --- | --- | --- |
+| Start; tempo/key | Create song configuration and current-song authority | Keep established Song → Feel → Structure → Generate interface |
+| Select Arcade kit/sound pack | Existing drum kits, one-shot choices, instrument program selection | Full arbitrary sound-pack import is **not** established by this mapping |
+| Preview loops/sounds; musical-fit check | Preview audio, New/Similar generation, listening and candidate audition | Add producer-readable accept/retry controls only where genuinely missing; No must not mutate the accepted source |
+| Connect/map controller; play pads/keys | Existing Android/native and browser MIDI input paths, playback runtime | Treat detailed controller mapping and any unimplemented pad performance mode as future work; preserve audio budgets |
+| Adjust pitch/timing/effects; performance-fit check | Shape selection/Before-After/Accept-Discard and Mix controls | Preserve narrow-scope editing and explicit acceptance; never auto-commit failed auditions |
+| Record MIDI into DAW; quantize/edit | Existing Type-1 MIDI handoff and Shape note editing | Export/import is **not** real-time MIDI recording into an external DAW; direct recording requires a separate verified feature |
+| Build song sections/layers; arrangement-complete check | `arrangement-candidates.js`, `arrangement-evolution.js`, `arrangement-performance.js`, `arranger-matrix.js`, `ui/arrangement-logic.js`, critic/release postprocess | Keep `MAX_ARRANGEMENT_CANDIDATES = 3`; fewer than three is acceptable when no safe distinct candidate exists; reject regressions and retain baseline |
+| Mix levels/effects | Mix workspace, velocity/gate/pan, preview runtime | Reuse the current supported effect/sound controls; do not invent an unrestricted effects rack |
+| Export audio track; Finished | Finish and clone-only Type-1 multitrack MIDI export | PCM/WAV/MP3 audio-file export is **not** verified as supported; treat audio rendering/export as a separate planned capability, not as completed MIDI export |
+
+### Three-arrangement integration: current workstream
+
+- Keep **one** generator and selection authority. Generate bounded, deterministic arrangement alternatives from the same compatible song context; retain the existing maximum of three and the global generation/repair caps.
+- Improve **musical differences**, not arbitrary section shuffles: hook placement/recall, verse breathing room, dramatic rise and payoff, drum/bass conversation, phrase returns, and transition continuity. Genre and explicit producer intent remain authoritative.
+- Audition each safe candidate using the existing quality critic and release gate. Commit only a winning nonregressive song; when all alternatives lose, preserve the original. The selected song is the sole canonical source for Shape, Mix, playback, Similar, and export.
+- Check Hip-Hop and Pop full-song examples for reproducibility, candidate uniqueness, arrangement narrative, section timing, note multiplicity, preview/MIDI parity, and Android playback stability before considering an APK.
+- Treat the linked board as an evolving *product flow*, not evidence that every manual-performance and audio-export feature has shipped. Do not rewrite the engine, replace the four-tab navigation, or delete functional modules to reproduce a diagram literally.
+
 
 ### Create — decide what song to make
 
