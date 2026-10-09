@@ -11079,6 +11079,31 @@ function generationInterlockScoreForSong(song, ensembleAuthority = evaluateEnsem
   ), 20, 100);
 }
 
+const CRITIC_FALLBACK_SCORE = 70;
+const CRITIC_FALLBACK_SUBSCORES = Object.freeze({
+  harmonic: CRITIC_FALLBACK_SCORE,
+  groove: CRITIC_FALLBACK_SCORE,
+  motif: CRITIC_FALLBACK_SCORE,
+  storyArc: CRITIC_FALLBACK_SCORE,
+  density: CRITIC_FALLBACK_SCORE,
+  voiceLeading: CRITIC_FALLBACK_SCORE,
+  separation: CRITIC_FALLBACK_SCORE,
+  cadence: CRITIC_FALLBACK_SCORE,
+  repetition: CRITIC_FALLBACK_SCORE,
+  transitions: CRITIC_FALLBACK_SCORE,
+  harmonicJourney: CRITIC_FALLBACK_SCORE,
+  performance: CRITIC_FALLBACK_SCORE,
+  orchestration: CRITIC_FALLBACK_SCORE,
+  memory: CRITIC_FALLBACK_SCORE,
+  production: CRITIC_FALLBACK_SCORE,
+  phraseResolution: CRITIC_FALLBACK_SCORE,
+  tensionFollow: CRITIC_FALLBACK_SCORE,
+  drumVariety: CRITIC_FALLBACK_SCORE,
+  registerHealth: CRITIC_FALLBACK_SCORE,
+  stageInterlock: CRITIC_FALLBACK_SCORE,
+  genreAuthenticity: CRITIC_FALLBACK_SCORE,
+});
+
 /**
  * Critic 6.0 evaluates musical correctness and whether a candidate fulfills
  * the shared song blueprint. It rewards intentional repetition, clean
@@ -11088,31 +11113,9 @@ function generationInterlockScoreForSong(song, ensembleAuthority = evaluateEnsem
  * and production readiness.
  */
 export function evaluateSongCandidate(song) {
-  const fallback = {
-    harmonic: 70,
-    groove: 70,
-    motif: 70,
-    storyArc: 70,
-    density: 70,
-    voiceLeading: 70,
-    separation: 70,
-    cadence: 70,
-    repetition: 70,
-    transitions: 70,
-    harmonicJourney: 70,
-    performance: 70,
-    orchestration: 70,
-    memory: 70,
-    production: 70,
-    phraseResolution: 70,
-    tensionFollow: 70,
-    drumVariety: 70,
-    registerHealth: 70,
-    stageInterlock: 70,
-    genreAuthenticity: 70,
-  };
+  const fallback = CRITIC_FALLBACK_SUBSCORES;
   if (!song || !Array.isArray(song.tracks) || !song.meta) {
-    return { version: 6, score: 70, subscores: fallback };
+    return { version: 6, score: CRITIC_FALLBACK_SCORE, subscores: fallback };
   }
 
   const track = (id) => song.tracks.find((candidate) => candidate.id === id) ?? { notes: [] };
