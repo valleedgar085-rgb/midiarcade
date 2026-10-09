@@ -75,7 +75,9 @@ test("kick/bass accent is withheld when there is no aligned existing bass hit", 
   const result = applyArrangementPerformance(source, { profile: "balanced" });
   assert.equal(result.diagnostics.bassKickAccents, 0);
   const kicks = result.song.tracks.find(({ id }) => id === "drums").notes;
-  assert.equal(kicks[2].velocity, source.tracks[0].notes[2].velocity);
+  assert.equal(kicks[2].arrangementPerformanceRole, "payoff-open",
+    "existing payoff opening is allowed, but no bass-aligned conversation accent should be applied");
+  assert.ok(kicks[2].velocity >= source.tracks[0].notes[2].velocity);
 });
 
 test("arrangement family connects existing pre-payoff breath without extending audition budget", () => {
