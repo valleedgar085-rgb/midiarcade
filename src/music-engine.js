@@ -4917,7 +4917,11 @@ const CHARACTERISTIC_VOICE_BY_GENRE = deepFreeze({
 function applyCharacteristicVoice(sourceTracks, structure, config) {
   const preferred = CHARACTERISTIC_VOICE_BY_GENRE[config.genre] ?? "melody";
   const candidates = [preferred, "melody", "bass", "chords", "counterpoint", "pad"];
-  const trackId = candidates.find((id) => sourceTracks.find((track) => track.id === id)?.notes?.length) ?? "melody";
+  const activeTrackIds = new Set();
+  for (const track of sourceTracks) {
+    if (track.notes?.length) activeTrackIds.add(track.id);
+  }
+  const trackId = candidates.find((id) => activeTrackIds.has(id)) ?? "melody";
   const sectionsCovered = new Set();
   const tracks = sourceTracks.map((track) => {
     if (track.id !== trackId) return track;
