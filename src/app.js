@@ -6352,6 +6352,13 @@ function bindGlobalControls() {
       menuDropdown.setAttribute("aria-hidden", "true");
       menuBtn.setAttribute("aria-expanded", "false");
     });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && menuDropdown.getAttribute("aria-hidden") === "false") {
+        menuDropdown.setAttribute("aria-hidden", "true");
+        menuBtn.setAttribute("aria-expanded", "false");
+        menuBtn.focus();
+      }
+    });
     $("#menuItemNew")?.addEventListener("click", () => runGeneration("new"));
     $("#menuItemSimilar")?.addEventListener("click", () => runGeneration("songVariations"));
     $("#menuItemReset")?.addEventListener("click", () => $("#resetControlsButton")?.click());
