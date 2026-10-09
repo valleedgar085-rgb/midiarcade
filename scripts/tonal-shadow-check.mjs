@@ -38,6 +38,11 @@ const SCALE_NAMES = Object.freeze({
   diminishedHalfWhole: "half-whole diminished",
   diminishedWholeHalf: "diminished",
   enigmatic: "enigmatic",
+  neapolitanMajor: "neapolitan major",
+  neapolitanMinor: "balinese",
+  hungarianMajor: "hungarian major",
+  prometheus: "prometheus",
+  augmented: "augmented",
 });
 
 function pitchClassFromMidi(pitch) {

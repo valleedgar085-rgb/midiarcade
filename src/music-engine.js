@@ -79,6 +79,10 @@ import {
   analyzeMelodyContinuity,
   createMelodyContinuityCandidates,
 } from "./core/melody-continuity-refinement.js";
+import {
+  applyModalInterchange,
+  applySecondaryDominants,
+} from "./core/advanced-harmony.js";
 
 export const PPQ = 480;
 
@@ -104,6 +108,11 @@ export const SCALES = deepFreeze({
   doubleHarmonic: [0, 1, 4, 5, 7, 8, 11],
   hirajoshi: [0, 2, 3, 7, 8],
   hungarianMinor: [0, 2, 3, 6, 7, 8, 11],
+  neapolitanMajor: [0, 1, 3, 5, 7, 9, 11],
+  neapolitanMinor: [0, 1, 3, 5, 7, 8, 11],
+  hungarianMajor: [0, 3, 4, 6, 7, 9, 10],
+  prometheus: [0, 2, 4, 6, 9, 10],
+  augmented: [0, 3, 4, 7, 8, 11],
   inSen: [0, 1, 5, 7, 10],
   persian: [0, 1, 4, 5, 6, 8, 11],
   iwato: [0, 1, 5, 6, 10],
@@ -667,6 +676,11 @@ const SCALE_ALIASES = {
   japanesehirajoshi: "hirajoshi",
   hungarianminor: "hungarianMinor",
   gypsyminor: "hungarianMinor",
+  neapolitanmajor: "neapolitanMajor",
+  neapolitanminor: "neapolitanMinor",
+  hungarianmajor: "hungarianMajor",
+  prometheus: "prometheus",
+  augmented: "augmented",
   insen: "inSen",
   persian: "persian",
   iwato: "iwato",
@@ -1808,6 +1822,11 @@ function createPerformanceProfile(config, style, rng, source = null) {
   const phraseOffset = timingPocket === "laidBack" ? pocket
     : timingPocket === "pushed" ? -pocket
       : timingPocket === "elastic" ? round(pocket * 0.55) : 0;
+
+  const relaxedGroove = ["neoSoul", "loFiHipHop", "rnbSoul", "jazz"].includes(config.genre);
+  const chordPocketOffset = round((laidBack ? pocket * (relaxedGroove ? 1.15 : 1) : live ? pocket * 0.45 : 0) + phraseOffset * 0.45);
+  const melodyPocketOffset = round((laidBack ? pocket * (relaxedGroove ? 0.88 : 0.72) : live ? pocket * 0.3 : 0) + phraseOffset);
+
   return {
     version: 1,
     feel: { id: selected.id, label: selected.label },
@@ -1819,8 +1838,8 @@ function createPerformanceProfile(config, style, rng, source = null) {
       // Bass attacks stay phase-locked to the kick; the surrounding instruments
       // carry the timing pocket so low-frequency transients remain clean.
       bass: 0,
-      chords: round((laidBack ? pocket : live ? pocket * 0.45 : 0) + phraseOffset * 0.45),
-      melody: round((laidBack ? pocket * 0.72 : live ? pocket * 0.3 : 0) + phraseOffset),
+      chords: chordPocketOffset,
+      melody: melodyPocketOffset,
       counterpoint: round((laidBack ? pocket * 0.52 : live ? -pocket * 0.2 : 0) - phraseOffset * 0.55),
       pad: round((laidBack ? pocket * 0.8 : 0) + Math.max(0, phraseOffset) * 0.7),
     },
@@ -5761,8 +5780,36 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
         );
       }
     }
+
+    const chopGenres = ["hipHop", "loFiHipHop", "rap", "trap", "drill", "rnbSoul", "funk"];
+    const allowChops = chopGenres.includes(config.genre) || config.chordPath === "hipHop";
+    if (allowChops && chord.duration >= 1.5) {
+      const chopRng = rng.fork(`chord-chop-${chord.bar}-${chord.start}`);
+      const chopChance = 0.22 + (config.surprise * 0.28) + (config.energy * 0.15) + (config.mood === "intense" ? 0.12 : 0);
+      if (chopRng.bool(clamp(chopChance, 0.15, 0.7))) {
+        const candidateOffbeats = [0.75, 1.75, 2.25, 2.75, 3.25, 3.75].filter((off) => (
+          off < chord.duration - 0.15 && !offsets.some((existing) => Math.abs(existing - off) < 0.3)
+        ));
+        if (candidateOffbeats.length > 0) {
+          const chopOffset = chopRng.pick(candidateOffbeats);
+          const chopDuration = Math.min(0.18, chord.duration - chopOffset);
+          const chopVelocity = eventVelocity(config, settings, intensity * 1.15, chopRng, 0.85);
+          for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
+            addNote(
+              notes,
+              voicing[voiceIndex],
+              chord.start + chopOffset,
+              chopDuration,
+              chopVelocity,
+              totalBeats,
+              { rhythmicFeature: "chord-chop", genrePhrase: "unexpected-chop" },
+            );
+          }
+        }
+      }
+    }
   }
-  return notes;
+  return notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
 function sectionDegreeShift(section) {
