@@ -79,6 +79,10 @@ import {
   analyzeMelodyContinuity,
   createMelodyContinuityCandidates,
 } from "./core/melody-continuity-refinement.js";
+import {
+  applyModalInterchange,
+  applySecondaryDominants,
+} from "./core/advanced-harmony.js";
 
 export const PPQ = 480;
 
@@ -104,6 +108,11 @@ export const SCALES = deepFreeze({
   doubleHarmonic: [0, 1, 4, 5, 7, 8, 11],
   hirajoshi: [0, 2, 3, 7, 8],
   hungarianMinor: [0, 2, 3, 6, 7, 8, 11],
+  neapolitanMajor: [0, 1, 3, 5, 7, 9, 11],
+  neapolitanMinor: [0, 1, 3, 5, 7, 8, 11],
+  hungarianMajor: [0, 3, 4, 6, 7, 9, 10],
+  prometheus: [0, 2, 4, 6, 9, 10],
+  augmented: [0, 3, 4, 7, 8, 11],
   inSen: [0, 1, 5, 7, 10],
   persian: [0, 1, 4, 5, 6, 8, 11],
   iwato: [0, 1, 5, 6, 10],
@@ -667,6 +676,11 @@ const SCALE_ALIASES = {
   japanesehirajoshi: "hirajoshi",
   hungarianminor: "hungarianMinor",
   gypsyminor: "hungarianMinor",
+  neapolitanmajor: "neapolitanMajor",
+  neapolitanminor: "neapolitanMinor",
+  hungarianmajor: "hungarianMajor",
+  prometheus: "prometheus",
+  augmented: "augmented",
   insen: "inSen",
   persian: "persian",
   iwato: "iwato",
@@ -1808,6 +1822,11 @@ function createPerformanceProfile(config, style, rng, source = null) {
   const phraseOffset = timingPocket === "laidBack" ? pocket
     : timingPocket === "pushed" ? -pocket
       : timingPocket === "elastic" ? round(pocket * 0.55) : 0;
+
+  const relaxedGroove = ["neoSoul", "loFiHipHop", "rnbSoul", "jazz"].includes(config.genre);
+  const chordPocketOffset = round((laidBack ? pocket * (relaxedGroove ? 1.15 : 1) : live ? pocket * 0.45 : 0) + phraseOffset * 0.45);
+  const melodyPocketOffset = round((laidBack ? pocket * (relaxedGroove ? 0.88 : 0.72) : live ? pocket * 0.3 : 0) + phraseOffset);
+
   return {
     version: 1,
     feel: { id: selected.id, label: selected.label },
@@ -1819,8 +1838,8 @@ function createPerformanceProfile(config, style, rng, source = null) {
       // Bass attacks stay phase-locked to the kick; the surrounding instruments
       // carry the timing pocket so low-frequency transients remain clean.
       bass: 0,
-      chords: round((laidBack ? pocket : live ? pocket * 0.45 : 0) + phraseOffset * 0.45),
-      melody: round((laidBack ? pocket * 0.72 : live ? pocket * 0.3 : 0) + phraseOffset),
+      chords: chordPocketOffset,
+      melody: melodyPocketOffset,
       counterpoint: round((laidBack ? pocket * 0.52 : live ? -pocket * 0.2 : 0) - phraseOffset * 0.55),
       pad: round((laidBack ? pocket * 0.8 : 0) + Math.max(0, phraseOffset) * 0.7),
     },
@@ -2376,9 +2395,36 @@ function applySongBlueprint(structure, blueprint) {
   });
 }
 
-function blueprintPlanForSection(blueprint, section) {
-  return blueprint?.sectionPlans?.find((plan) => plan.sectionId === section.id)
-    ?? blueprint?.sectionPlans?.find((plan) => plan.sectionName === section.name)
+export function blueprintPlanMap(blueprint) {
+  if (!blueprint) return null;
+  if (blueprint instanceof Map) return blueprint;
+  if (blueprint._planMap) return blueprint._planMap;
+  const map = new Map();
+  if (Array.isArray(blueprint.sectionPlans)) {
+    for (const plan of blueprint.sectionPlans) {
+      if (plan?.sectionId != null && !map.has(plan.sectionId)) map.set(plan.sectionId, plan);
+      if (plan?.sectionName != null && !map.has(plan.sectionName)) map.set(plan.sectionName, plan);
+    }
+  }
+  if (Object.isExtensible(blueprint)) {
+    try {
+      Object.defineProperty(blueprint, "_planMap", { value: map, writable: true, configurable: true, enumerable: false });
+    } catch (_) {}
+  }
+  return map;
+}
+
+export function blueprintPlanForSection(blueprint, section) {
+  if (!blueprint || !section) return null;
+  if (blueprint instanceof Map) {
+    return (section.id ? blueprint.get(section.id) : null)
+      ?? (section.name ? blueprint.get(section.name) : null)
+      ?? null;
+  }
+  const map = blueprint._planMap ?? blueprintPlanMap(blueprint);
+  if (!map) return null;
+  return (section.id ? map.get(section.id) : null)
+    ?? (section.name ? map.get(section.name) : null)
     ?? null;
 }
 
@@ -4898,7 +4944,11 @@ const CHARACTERISTIC_VOICE_BY_GENRE = deepFreeze({
 function applyCharacteristicVoice(sourceTracks, structure, config) {
   const preferred = CHARACTERISTIC_VOICE_BY_GENRE[config.genre] ?? "melody";
   const candidates = [preferred, "melody", "bass", "chords", "counterpoint", "pad"];
-  const trackId = candidates.find((id) => sourceTracks.find((track) => track.id === id)?.notes?.length) ?? "melody";
+  const activeTrackIds = new Set();
+  for (const track of sourceTracks) {
+    if (track.notes?.length) activeTrackIds.add(track.id);
+  }
+  const trackId = candidates.find((id) => activeTrackIds.has(id)) ?? "melody";
   const sectionsCovered = new Set();
   const tracks = sourceTracks.map((track) => {
     if (track.id !== trackId) return track;
@@ -5761,8 +5811,36 @@ function generateChords(config, structure, harmony, style, settings, rng, groove
         );
       }
     }
+
+    const chopGenres = ["hipHop", "loFiHipHop", "rap", "trap", "drill", "rnbSoul", "funk"];
+    const allowChops = chopGenres.includes(config.genre) || config.chordPath === "hipHop";
+    if (allowChops && chord.duration >= 1.5) {
+      const chopRng = rng.fork(`chord-chop-${chord.bar}-${chord.start}`);
+      const chopChance = 0.22 + (config.surprise * 0.28) + (config.energy * 0.15) + (config.mood === "intense" ? 0.12 : 0);
+      if (chopRng.bool(clamp(chopChance, 0.15, 0.7))) {
+        const candidateOffbeats = [0.75, 1.75, 2.25, 2.75, 3.25, 3.75].filter((off) => (
+          off < chord.duration - 0.15 && !offsets.some((existing) => Math.abs(existing - off) < 0.3)
+        ));
+        if (candidateOffbeats.length > 0) {
+          const chopOffset = chopRng.pick(candidateOffbeats);
+          const chopDuration = Math.min(0.18, chord.duration - chopOffset);
+          const chopVelocity = eventVelocity(config, settings, intensity * 1.15, chopRng, 0.85);
+          for (let voiceIndex = 0; voiceIndex < voicing.length; voiceIndex += 1) {
+            addNote(
+              notes,
+              voicing[voiceIndex],
+              chord.start + chopOffset,
+              chopDuration,
+              chopVelocity,
+              totalBeats,
+              { rhythmicFeature: "chord-chop", genrePhrase: "unexpected-chop" },
+            );
+          }
+        }
+      }
+    }
   }
-  return notes;
+  return notes.sort((left, right) => left.start - right.start || left.pitch - right.pitch);
 }
 
 function sectionDegreeShift(section) {
@@ -11079,6 +11157,31 @@ function generationInterlockScoreForSong(song, ensembleAuthority = evaluateEnsem
   ), 20, 100);
 }
 
+const CRITIC_FALLBACK_SCORE = 70;
+const CRITIC_FALLBACK_SUBSCORES = Object.freeze({
+  harmonic: CRITIC_FALLBACK_SCORE,
+  groove: CRITIC_FALLBACK_SCORE,
+  motif: CRITIC_FALLBACK_SCORE,
+  storyArc: CRITIC_FALLBACK_SCORE,
+  density: CRITIC_FALLBACK_SCORE,
+  voiceLeading: CRITIC_FALLBACK_SCORE,
+  separation: CRITIC_FALLBACK_SCORE,
+  cadence: CRITIC_FALLBACK_SCORE,
+  repetition: CRITIC_FALLBACK_SCORE,
+  transitions: CRITIC_FALLBACK_SCORE,
+  harmonicJourney: CRITIC_FALLBACK_SCORE,
+  performance: CRITIC_FALLBACK_SCORE,
+  orchestration: CRITIC_FALLBACK_SCORE,
+  memory: CRITIC_FALLBACK_SCORE,
+  production: CRITIC_FALLBACK_SCORE,
+  phraseResolution: CRITIC_FALLBACK_SCORE,
+  tensionFollow: CRITIC_FALLBACK_SCORE,
+  drumVariety: CRITIC_FALLBACK_SCORE,
+  registerHealth: CRITIC_FALLBACK_SCORE,
+  stageInterlock: CRITIC_FALLBACK_SCORE,
+  genreAuthenticity: CRITIC_FALLBACK_SCORE,
+});
+
 /**
  * Critic 6.0 evaluates musical correctness and whether a candidate fulfills
  * the shared song blueprint. It rewards intentional repetition, clean
@@ -11088,31 +11191,9 @@ function generationInterlockScoreForSong(song, ensembleAuthority = evaluateEnsem
  * and production readiness.
  */
 export function evaluateSongCandidate(song) {
-  const fallback = {
-    harmonic: 70,
-    groove: 70,
-    motif: 70,
-    storyArc: 70,
-    density: 70,
-    voiceLeading: 70,
-    separation: 70,
-    cadence: 70,
-    repetition: 70,
-    transitions: 70,
-    harmonicJourney: 70,
-    performance: 70,
-    orchestration: 70,
-    memory: 70,
-    production: 70,
-    phraseResolution: 70,
-    tensionFollow: 70,
-    drumVariety: 70,
-    registerHealth: 70,
-    stageInterlock: 70,
-    genreAuthenticity: 70,
-  };
+  const fallback = CRITIC_FALLBACK_SUBSCORES;
   if (!song || !Array.isArray(song.tracks) || !song.meta) {
-    return { version: 6, score: 70, subscores: fallback };
+    return { version: 6, score: CRITIC_FALLBACK_SCORE, subscores: fallback };
   }
 
   const track = (id) => song.tracks.find((candidate) => candidate.id === id) ?? { notes: [] };

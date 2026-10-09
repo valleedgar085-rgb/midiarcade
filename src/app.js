@@ -2257,7 +2257,7 @@ function renderArrangementInsights(sections, bars) {
       <polyline points="${polyline}" vector-effect="non-scaling-stroke"></polyline>
       ${points.map((point) => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="1.1"></circle>`).join("")}
     </svg>
-    <span class="energy-arc-caption">${points.map(({ section, energy }) => `${section.name} ${Math.round(energy * 100)}%`).join(" · ")}</span>`;
+    <span class="energy-arc-caption">${points.map(({ section, energy }) => `${escapeHtml(section.name)} ${Math.round(energy * 100)}%`).join(" · ")}</span>`;
 
   const harmony = Array.isArray(state.song?.harmony) ? state.song.harmony : [];
   const totalBeats = Math.max(1, bars * Number(state.song?.meta?.beatsPerBar ?? 4));
@@ -2268,7 +2268,7 @@ function renderArrangementInsights(sections, bars) {
       const symbol = event.symbol || event.roman || event.chord?.symbol || event.chord?.roman || "I";
       const roman = event.roman || event.chord?.roman || "";
       const notes = Array.isArray(event.notes) ? event.notes.join(" · ") : (Array.isArray(event.chord?.notes) ? event.chord.notes.join(" · ") : symbol);
-      return `<span style="--harmony-left:${(start / totalBeats * 100).toFixed(3)}%;--harmony-width:${(duration / totalBeats * 100).toFixed(3)}%" title="${notes}"><b>${symbol}</b><small>${roman}</small></span>`;
+      return `<span style="--harmony-left:${(start / totalBeats * 100).toFixed(3)}%;--harmony-width:${(duration / totalBeats * 100).toFixed(3)}%" title="${escapeHtml(notes)}"><b>${escapeHtml(symbol)}</b><small>${escapeHtml(roman)}</small></span>`;
     }).join("")
   }</div>`;
 }
@@ -2290,13 +2290,18 @@ function renderTimeline() {
     const playing = state.playingSection === section.id ? " is-playing-section" : "";
     const energy = clamp(section.energy, 0, 1);
     const noteCount = sectionNotes(section).length;
-    return `<button class="section-chip${active}${playing}" data-section="${section.id}" type="button" draggable="true" style="grid-column:${section.start + 1} / span ${section.bars};--section-border:${(0.12 + energy * 0.18).toFixed(2)};--section-fill:${(0.025 + energy * 0.045).toFixed(3)}" title="Focus ${section.name}. Drag to reorder." aria-label="${section.name}, ${section.bars} bars, ${noteCount} notes. Drag or press Alt plus an arrow key to reorder."><span>${section.name}</span><small>${section.bars} bars · ${noteCount} notes</small></button>`;
+    const sectionIdAttr = escapeHtml(section.id);
+    const sectionNameText = escapeHtml(section.name);
+    return `<button class="section-chip${active}${playing}" data-section="${sectionIdAttr}" type="button" draggable="true" style="grid-column:${section.start + 1} / span ${section.bars};--section-border:${(0.12 + energy * 0.18).toFixed(2)};--section-fill:${(0.025 + energy * 0.045).toFixed(3)}" title="Focus ${sectionNameText}. Drag to reorder." aria-label="${sectionNameText}, ${section.bars} bars, ${noteCount} notes. Drag or press Alt plus an arrow key to reorder."><span>${sectionNameText}</span><small>${section.bars} bars · ${noteCount} notes</small></button>`;
   }).join("");
 
   const rows = tracks.map((track, index) => {
     const id = trackId(track, index);
     const meta = TRACK_META[id] || { name: track.name || id, icon: "•", color: "#ae8cff" };
     const notes = trackNotes(track);
+    const escapedTrackId = escapeHtml(id);
+    const escapedMetaName = escapeHtml(meta.name);
+    const escapedMetaColor = escapeHtml(meta.color);
     const clips = sections.map((section) => {
       const sectionStart = section.start * beatsPerBar;
       const sectionEnd = (section.start + section.bars) * beatsPerBar;
@@ -2310,11 +2315,13 @@ function renderTimeline() {
       const active = state.focusedSection === section.id ? " active" : "";
       const playing = state.playingSection === section.id ? " is-playing-section" : "";
       const muted = state.muted.has(id) ? " muted" : "";
-      return `<button class="timeline-clip${active}${playing}${muted}" data-section="${section.id}" data-editor-track="${id}" type="button" title="Open ${meta.name} in ${section.name} piano roll" style="grid-column:${section.start + 1} / span ${section.bars}">${stitches}</button>`;
+      const escapedSectionId = escapeHtml(section.id);
+      const escapedSectionName = escapeHtml(section.name);
+      return `<button class="timeline-clip${active}${playing}${muted}" data-section="${escapedSectionId}" data-editor-track="${escapedTrackId}" type="button" title="Open ${escapedMetaName} in ${escapedSectionName} piano roll" style="grid-column:${section.start + 1} / span ${section.bars}">${stitches}</button>`;
     }).join("");
 
-    return `<div class="timeline-row${state.selectedTrack === id ? " is-focus-track" : ""}" data-timeline-track="${id}" style="--track-color:${meta.color}">
-      <div class="timeline-track-label"><i></i><span>${meta.name.toUpperCase()}</span></div>
+    return `<div class="timeline-row${state.selectedTrack === id ? " is-focus-track" : ""}" data-timeline-track="${escapedTrackId}" style="--track-color:${escapedMetaColor}">
+      <div class="timeline-track-label"><i></i><span>${escapedMetaName.toUpperCase()}</span></div>
       <div class="timeline-lane" style="--bars:${bars}">${clips}</div>
     </div>`;
   }).join("");
@@ -2352,9 +2359,11 @@ function renderMobileSectionJump() {
   if (!container || !list) return;
   const sections = normalizeSections();
   container.hidden = sections.length < 2;
-  list.innerHTML = sections.map((section, index) => (
-    `<button type="button" role="listitem" data-mobile-section="${section.id}" aria-pressed="false" aria-label="Queue ${section.name}"><i></i><span>${index + 1}</span><b>${section.name}</b></button>`
-  )).join("");
+  list.innerHTML = sections.map((section, index) => {
+    const escapedSectionId = escapeHtml(section.id);
+    const escapedSectionName = escapeHtml(section.name);
+    return `<button type="button" role="listitem" data-mobile-section="${escapedSectionId}" aria-pressed="false" aria-label="Queue ${escapedSectionName}"><i></i><span>${index + 1}</span><b>${escapedSectionName}</b></button>`;
+  }).join("");
   syncMobileSectionJump();
 }
 
@@ -3833,7 +3842,11 @@ function ensureGenerationDebuggerControls() {
     button.type = "button";
     button.setAttribute("aria-label", "Generation debugger");
     button.title = "Generation debugger";
-    button.innerHTML = "<span>&lt;/&gt;</span><b>DEBUG</b>";
+    const icon = document.createElement("span");
+    icon.textContent = "</>";
+    const label = document.createElement("b");
+    label.textContent = "DEBUG";
+    button.append(icon, label);
     $("#helpButton")?.before(button);
   }
 
@@ -3842,7 +3855,14 @@ function ensureGenerationDebuggerControls() {
     item.className = "menu-item";
     item.id = "menuItemDebugger";
     item.type = "button";
-    item.innerHTML = '<span class="menu-icon">&lt;/&gt;</span><b>Generation Debugger</b><kbd>D</kbd>';
+    const icon = document.createElement("span");
+    icon.className = "menu-icon";
+    icon.textContent = "</>";
+    const label = document.createElement("b");
+    label.textContent = "Generation Debugger";
+    const kbd = document.createElement("kbd");
+    kbd.textContent = "D";
+    item.append(icon, label, kbd);
     $("#menuItemPrivacy")?.before(item);
   }
 
