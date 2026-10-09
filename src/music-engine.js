@@ -6770,13 +6770,42 @@ function isProtectedArrangementNote(note) {
   );
 }
 
-function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
+export function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, rng) {
   const matrix = new Map((songBlueprint?.orchestrationMatrix ?? []).map((entry) => [entry.sectionId, entry]));
   const scenes = new Map((songBlueprint?.producerIntent?.scenes ?? []).map((scene) => [scene.sectionId, scene]));
+
+  const notesByTrackAndSection = new Map();
+  for (const [trackId, sourceNotes] of Object.entries(rawTracks)) {
+    const sectionNotesMap = new Map();
+    const sectionArrays = structure.map(() => []);
+    for (let i = 0; i < structure.length; i += 1) {
+      sectionNotesMap.set(structure[i].id, sectionArrays[i]);
+    }
+    for (const note of sourceNotes) {
+      let low = 0;
+      let high = structure.length - 1;
+      while (low <= high) {
+        const mid = (low + high) >> 1;
+        const section = structure[mid];
+        if (note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6) {
+          sectionArrays[mid].push(note);
+          break;
+        }
+        if (note.start < section.startBeat - 1e-6) {
+          high = mid - 1;
+        } else {
+          low = mid + 1;
+        }
+      }
+    }
+    notesByTrackAndSection.set(trackId, sectionNotesMap);
+  }
+
   return Object.fromEntries(Object.entries(rawTracks).map(([id, sourceNotes]) => {
     const result = [];
+    const sectionNotesMap = notesByTrackAndSection.get(id);
     for (const section of structure) {
-      const notes = sourceNotes.filter((note) => note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6);
+      const notes = sectionNotesMap?.get(section.id) ?? [];
       const lane = matrix.get(section.id)?.lanes?.[id];
       const scene = scenes.get(section.id);
       const producerRole = scene?.roles?.[id] ?? lane?.role ?? "support";
@@ -6791,9 +6820,7 @@ function applyOrchestrationMatrix(rawTracks, structure, songBlueprint, config, r
       }
       const kept = [];
       const foregroundAttacks = scene?.foregroundTrack && scene.foregroundTrack !== id
-        ? (rawTracks[scene.foregroundTrack] ?? []).filter((note) => (
-          note.start >= section.startBeat - 1e-6 && note.start < section.endBeat - 1e-6
-        ))
+        ? (notesByTrackAndSection.get(scene.foregroundTrack)?.get(section.id) ?? [])
         : [];
       const rolePresence = {
         foreground: 1,
