@@ -2073,10 +2073,18 @@ export function hookReturnRecallStrength({
   return round(Math.max(base, dnaTarget));
 }
 
-function createMemoryMap(structure, sectionPlans, hookSectionId, source = null, config = null, songDNA = null) {
+export function createMemoryMap(structure, sectionPlans, hookSectionId, source = null, config = null, songDNA = null) {
   const firstByName = new Map();
+  const inheritedBySectionId = source?.memoryMap ? new Map() : null;
+  if (Array.isArray(source?.memoryMap)) {
+    for (const entry of source.memoryMap) {
+      if (entry?.sectionId != null && !inheritedBySectionId.has(entry.sectionId)) {
+        inheritedBySectionId.set(entry.sectionId, entry);
+      }
+    }
+  }
   return structure.map((section, index) => {
-    const inherited = source?.memoryMap?.find((entry) => entry.sectionId === section.id);
+    const inherited = inheritedBySectionId?.get(section.id);
     if (inherited) return clone(inherited);
     const plan = sectionPlans[index];
     const origin = firstByName.get(section.name);
