@@ -3833,7 +3833,11 @@ function ensureGenerationDebuggerControls() {
     button.type = "button";
     button.setAttribute("aria-label", "Generation debugger");
     button.title = "Generation debugger";
-    button.innerHTML = "<span>&lt;/&gt;</span><b>DEBUG</b>";
+    const icon = document.createElement("span");
+    icon.textContent = "</>";
+    const label = document.createElement("b");
+    label.textContent = "DEBUG";
+    button.append(icon, label);
     $("#helpButton")?.before(button);
   }
 
@@ -3842,7 +3846,14 @@ function ensureGenerationDebuggerControls() {
     item.className = "menu-item";
     item.id = "menuItemDebugger";
     item.type = "button";
-    item.innerHTML = '<span class="menu-icon">&lt;/&gt;</span><b>Generation Debugger</b><kbd>D</kbd>';
+    const icon = document.createElement("span");
+    icon.className = "menu-icon";
+    icon.textContent = "</>";
+    const label = document.createElement("b");
+    label.textContent = "Generation Debugger";
+    const kbd = document.createElement("kbd");
+    kbd.textContent = "D";
+    item.append(icon, label, kbd);
     $("#menuItemPrivacy")?.before(item);
   }
 

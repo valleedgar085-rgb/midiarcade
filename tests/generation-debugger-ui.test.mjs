@@ -14,6 +14,8 @@ test("generation debugger exposes the existing flight recorder without changing 
   assert.doesNotMatch(html, /id="copyDebuggerReport"/, "debug actions are injected at runtime");
   assert.match(app, /function ensureGenerationDebuggerControls\(\)/);
   assert.match(app, /button\.id = "debuggerButton"/);
+  assert.doesNotMatch(app, /button\.innerHTML =/, "debugger button is built with DOM creation methods rather than innerHTML");
+  assert.doesNotMatch(app, /item\.innerHTML =/, "debugger menu item is built with DOM creation methods rather than innerHTML");
   assert.match(app, /copy\.id = "copyDebuggerReport"/);
   assert.match(app, /import\("\.\/ui\/performance-ab-runtime\.js"\)/);
   assert.match(performanceAbRuntime, /ensurePerformanceAbControls\(dialog\)/);
