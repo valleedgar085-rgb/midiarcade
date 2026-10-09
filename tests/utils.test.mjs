@@ -59,6 +59,14 @@ test("clampFinite preserves finite coercion and fallback semantics", () => {
 test("escapeHtml escapes HTML special characters correctly", () => {
   assert.equal(escapeHtml('<script>alert("XSS")</script>'), "&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;");
   assert.equal(escapeHtml("Tom & Jerry's <Bait>"), "Tom &amp; Jerry&#39;s &lt;Bait&gt;");
+  assert.equal(
+    escapeHtml('Hit 36" onmouseover="alert(1)'),
+    "Hit 36&quot; onmouseover=&quot;alert(1)"
+  );
+  assert.equal(
+    escapeHtml('<img src=x onerror=alert("xss")>'),
+    "&lt;img src=x onerror=alert(&quot;xss&quot;)&gt;"
+  );
 });
 
 test("escapeHtml handles non-string or empty inputs gracefully", () => {
