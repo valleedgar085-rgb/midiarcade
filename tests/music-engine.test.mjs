@@ -290,6 +290,32 @@ test("genre fusion engine blends two distinct genres into a valid hybrid profile
   assertAllGeneratedPitchesInScale(song);
 });
 
+test("createSongBlueprint resolves source transitions preserving custom transition properties", () => {
+  const song = engine.generateNew({ genre: "synthwave", seed: "blueprint-transition-test", bars: 16 });
+
+  const customTransition = {
+    fromSectionId: song.songBlueprint.sectionPlans[0].sectionId,
+    toSectionId: song.songBlueprint.sectionPlans[1].sectionId,
+    type: "launch",
+    strength: 0.95,
+    pickupBeats: 1,
+  };
+
+  song.songBlueprint.transitions = [customTransition];
+
+  const similar = engine.generateSimilar(song, { seed: "similar-test" });
+  const similarTransitions = similar.songBlueprint.transitions;
+
+  const matched = similarTransitions.find(
+    (t) => t.fromSectionId === customTransition.fromSectionId && t.toSectionId === customTransition.toSectionId
+  );
+
+  assert.ok(matched, "Source transition should be preserved in generated song blueprint");
+  assert.strictEqual(matched.type, "launch");
+  assert.strictEqual(matched.strength, 0.95);
+  assert.strictEqual(matched.pickupBeats, 1);
+});
+
 test("exotic and regional 30+ scales remain scale-safe in generation", () => {
   const exoticScales = ["doubleHarmonic", "hirajoshi", "hungarianMinor", "bebopDominant", "wholeTone"];
   for (const scale of exoticScales) {
