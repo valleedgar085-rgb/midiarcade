@@ -2819,12 +2819,22 @@ function createHarmony(config, structure, rng, blueprint = null, songBlueprint =
   }));
   if (Array.isArray(blueprint) && blueprint.length) {
     const sourceBars = Math.max(1, ...blueprint.map((event) => Math.round(finite(event.bar, 0)) + 1));
+    const eventsByBar = new Map();
+    for (const event of blueprint) {
+      const b = Math.round(finite(event.bar, 0));
+      let barEvents = eventsByBar.get(b);
+      if (!barEvents) {
+        barEvents = [];
+        eventsByBar.set(b, barEvents);
+      }
+      barEvents.push(event);
+    }
     for (let bar = 0; bar < config.bars; bar += 1) {
       const section = sectionForBar(structure, bar);
       const sectionPlan = blueprintPlanForSection(songBlueprint, section);
       const localBar = Math.max(0, bar - section.startBar);
       const sourceBar = mod(bar, sourceBars);
-      let events = blueprint.filter((event) => Math.round(finite(event.bar, 0)) === sourceBar);
+      let events = eventsByBar.get(sourceBar) ?? [];
       if (!events.length) events = [blueprint[bar % blueprint.length]];
       events = [...events].sort((a, b) => finite(a.start, 0) - finite(b.start, 0));
       const sourceStart = sourceBar * barBeats;
@@ -4293,6 +4303,23 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
   for (const entry of motifs?.sectionAssignments ?? []) {
     if (!assignmentMap.has(entry.sectionId)) assignmentMap.set(entry.sectionId, entry);
   }
+  const motifPulsesMap = new Map();
+  if (motifs?.family) {
+    for (const [motifId, familyMember] of Object.entries(motifs.family)) {
+      const activeMotif = familyMember?.melody;
+      if (validMotif(activeMotif)) {
+        const motifBars = Math.max(1, Math.ceil(activeMotif.lengthBeats / barBeats));
+        const pulsesByBar = Array.from({ length: motifBars }, () => []);
+        for (const event of activeMotif.events) {
+          const b = Math.floor(event.offset / barBeats);
+          if (b >= 0 && b < motifBars) {
+            pulsesByBar[b].push(mod(event.offset, barBeats));
+          }
+        }
+        motifPulsesMap.set(motifId, pulsesByBar);
+      }
+    }
+  }
   for (let bar = 0; bar < config.bars; bar += 1) {
     const section = sectionForBar(structure, bar);
     const assignment = assignmentMap.get(section.id);
@@ -4320,15 +4347,9 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     anchors = uniqueGrooveOffsets(humanGrooveAdjustment.anchors, barBeats);
     const answers = uniqueGrooveOffsets(grooveDNALanes.leadPulses ?? [], barBeats)
       .filter((offset) => !anchors.includes(offset));
-    const familyMember = motifs?.family?.[assignment?.motifId ?? "A"];
-    const activeMotif = familyMember?.melody;
-    const motifBars = validMotif(activeMotif) ? Math.max(1, Math.ceil(activeMotif.lengthBeats / barBeats)) : 1;
-    const motifBar = mod(bar - section.startBar, motifBars);
-    const motifPulses = validMotif(activeMotif)
-      ? activeMotif.events
-        .filter((event) => Math.floor(event.offset / barBeats) === motifBar)
-        .map((event) => mod(event.offset, barBeats))
-      : [];
+    const pulsesByBar = motifPulsesMap.get(assignment?.motifId ?? "A");
+    const motifBar = pulsesByBar ? mod(bar - section.startBar, pulsesByBar.length) : 0;
+    const motifPulses = pulsesByBar ? (pulsesByBar[motifBar] ?? []) : [];
     // Groove DNA protected cells are the only rhythmic negative-space
     // authority. Motif attacks remain protected from accidental conflicts.
     const spaces = uniqueGrooveOffsets(
