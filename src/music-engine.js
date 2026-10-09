@@ -1087,7 +1087,8 @@ function randomSeed() {
     cryptoObject.getRandomValues(words);
     return `arcade-${Array.from(words, (word) => word.toString(36)).join("-")}`;
   }
-  return `arcade-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const entropy = (Date.now() ^ 0x6d2b79f5) >>> 0;
+  return `arcade-${Date.now().toString(36)}-${entropy.toString(36)}`;
 }
 
 function normalizeKey(value) {
