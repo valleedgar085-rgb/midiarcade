@@ -48,6 +48,7 @@ import {
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  clickSafePreviewStartTime,
   previewNoteAttack,
   rampAudioParamValue,
   normalizeMixAssistant,
@@ -5436,13 +5437,17 @@ export class PreviewPlayer {
       void this.recoverAudioContext(this.context);
       return;
     }
-    this.lastScheduleAt = this.context.currentTime;
-    const currentSongTime = this.offset + (this.context.currentTime - this.startedAt);
+    // Capture the audio clock once for this entire batch. Re-reading currentTime
+    // for every note causes simultaneous hits to drift apart as JS builds nodes.
+    const scheduleNow = this.context.currentTime;
+    this.lastScheduleAt = scheduleNow;
+    const currentSongTime = this.offset + (scheduleNow - this.startedAt);
     const horizon = currentSongTime + this.previewRuntime.lookAheadSeconds;
     while (this.eventIndex < this.events.length && this.events[this.eventIndex].time <= horizon) {
       const event = this.events[this.eventIndex++];
       if (event.time >= currentSongTime - this.previewRuntime.lateEventGraceSeconds) {
-        const when = this.context.currentTime + Math.max(0, event.time - currentSongTime);
+        const desiredWhen = scheduleNow + Math.max(0, event.time - currentSongTime);
+        const when = clickSafePreviewStartTime(scheduleNow, desiredWhen);
         this.scheduleEvent(event, when);
       }
     }
