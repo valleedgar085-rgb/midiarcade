@@ -107,7 +107,8 @@ function hookSimilarity(source, returning) {
     openingNotes: a.noteCount,
     returningNotes: b.noteCount,
     // Exact repetition is recognizable, but report it for later artistic judgment.
-    literalRepeat: JSON.stringify(a) === JSON.stringify(b),
+    literalRepeat: JSON.stringify(a) === JSON.stringify(b)
+      && source.every((note, index) => Math.round(finite(note.pitch)) === Math.round(finite(returning[index].pitch))),
   });
 }
 
