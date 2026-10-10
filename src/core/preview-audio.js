@@ -54,10 +54,20 @@ export function pitchedVoiceEnvelopeTiming(trackId, attackSeconds, durationSecon
   const requestedAttack = previewNoteAttack(attackSeconds);
   // A modest onset slope avoids the tiny broadband click of an otherwise
   // almost instantaneous oscillator opening, without smearing bass/kick pocket.
-  const floor = trackId === "bass" ? 0.009 : 0.01;
+  // Chord stacks and featured melodic voices can expose small high-frequency
+  // ticks even after the filter points were chronologically repaired. Give
+  // these two audible foreground layers a slightly softer onset and a less
+  // compressed filter sweep. The now-clean bass and counterpoint envelopes
+  // are deliberately unchanged.
+  const foreground = trackId === "chords" || trackId === "melody";
+  const floor = trackId === "chords" ? 0.02
+    : trackId === "melody" ? 0.016
+      : trackId === "bass" ? 0.009 : 0.01;
   const attack = Math.min(Math.max(floor, requestedAttack), Math.max(floor, duration * 0.42));
-  const filterPeakSeconds = Math.max(0.024, attack + 0.022);
-  const filterRestSeconds = Math.max(filterPeakSeconds + 0.014, duration * 0.82);
+  const filterPeakSeconds = foreground
+    ? Math.max(trackId === "chords" ? 0.052 : 0.046, attack + 0.03)
+    : Math.max(0.024, attack + 0.022);
+  const filterRestSeconds = Math.max(filterPeakSeconds + (foreground ? 0.024 : 0.014), duration * 0.82);
   return Object.freeze({ attack, filterPeakSeconds, filterRestSeconds });
 }
 
