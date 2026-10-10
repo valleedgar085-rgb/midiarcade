@@ -1896,12 +1896,25 @@ function featuredTrackForSection(section, plan, config, occurrence = 0) {
 
 function createOrchestrationMatrix(config, structure, sectionPlans, source = null) {
   const occurrences = new Map();
+  const inheritedBySectionId = new Map();
+  const inheritedBySectionName = new Map();
+  if (Array.isArray(source?.orchestrationMatrix)) {
+    for (const entry of source.orchestrationMatrix) {
+      if (entry?.sectionId != null && !inheritedBySectionId.has(entry.sectionId)) {
+        inheritedBySectionId.set(entry.sectionId, entry);
+      }
+      if (entry?.sectionName != null && !inheritedBySectionName.has(entry.sectionName)) {
+        inheritedBySectionName.set(entry.sectionName, entry);
+      }
+    }
+  }
+
   return structure.map((section, index) => {
     const plan = sectionPlans[index];
     const occurrence = occurrences.get(section.name) ?? 0;
     occurrences.set(section.name, occurrence + 1);
-    const inherited = source?.orchestrationMatrix?.find((entry) => entry.sectionId === section.id)
-      ?? source?.orchestrationMatrix?.find((entry) => entry.sectionName === section.name);
+    const inherited = inheritedBySectionId.get(section.id)
+      ?? inheritedBySectionName.get(section.name);
     const creativeReturn = occurrence > 0
       && Boolean(config.creativeSpotlightRotation)
       && ["verse", "chorus", "theme", "idea"].includes(section.name);
