@@ -38,10 +38,22 @@ test("formatLevel formats volume gain into decibels and percentage", () => {
   assert.equal(formatLevel(0.0001), "−∞ dB · muted");
 });
 
+test("formatLevel correctly handles threshold boundaries for muted level and near-zero decibels", () => {
+  // Boundary around mute threshold (gain <= 0.0001)
+  assert.equal(formatLevel(0.0001), "−∞ dB · muted");
+  assert.equal(formatLevel("0.0001"), "−∞ dB · muted");
+  assert.equal(formatLevel(0.00011), "-79.2 dB · 0%");
+
+  // Boundary around 0.0 dB threshold (|decibels| < 0.05)
+  assert.equal(formatLevel(0.996), "0.0 dB · 100%");
+  assert.equal(formatLevel(0.99), "-0.1 dB · 99%");
+});
+
 test("formatLevel clamps gain to bounds [0, 1] and handles invalid inputs", () => {
   assert.equal(formatLevel(1.5), "0.0 dB · 100%");
   assert.equal(formatLevel(-0.5), "−∞ dB · muted");
   assert.equal(formatLevel("0.8"), "-1.9 dB · 80%");
+  assert.equal(formatLevel(null), "−∞ dB · muted");
   assert.equal(formatLevel(undefined), "−∞ dB · muted");
   assert.equal(formatLevel(NaN), "−∞ dB · muted");
   assert.equal(formatLevel("abc"), "−∞ dB · muted");
