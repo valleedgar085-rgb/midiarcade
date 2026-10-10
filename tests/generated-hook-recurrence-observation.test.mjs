@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import * as engine from "../src/music-engine.js";
+import { evaluateChorusHookRecurrence } from "../src/core/chorus-hook-recurrence.js";
+
+const STYLES = ["pop", "hipHop", "rap"];
+
+/**
+ * Observation-only baseline for Phase 4. These are real deterministic songs,
+ * not synthetic "perfect-hook" fixtures. A low score is a finding, not a
+ * reason to silently alter MIDI or block releases during calibration.
+ */
+test("real generated pop/hip-hop/rap songs produce deterministic read-only hook audits", { timeout: 120_000 }, () => {
+  for (const genre of STYLES) {
+    const config = {
+      seed: "phase4-hook-audit-" + genre + "-32",
+      genre,
+      key: "E",
+      scale: "minor",
+      bars: 32,
+      energy: 0.64,
+      complexity: 0.58,
+      variation: 0.62,
+      swing: 0.14,
+      humanize: 0.10,
+    };
+    const song = engine.generateNew(config);
+    const notes = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
+    const before = JSON.stringify(notes);
+    const report = evaluateChorusHookRecurrence(song);
+    assert.equal(JSON.stringify(notes), before, genre + ": audit changed actual MIDI notes");
+    assert.deepEqual(report, evaluateChorusHookRecurrence(song));
+    assert.equal(report.mode, "read-only");
+    assert.ok(["unavailable", "incomplete", "evaluated"].includes(report.status));
+    assert.ok(report.score === null || (report.score >= 0 && report.score <= 100));
+    console.log("PHASE4_HOOK_BASELINE", JSON.stringify({
+      genre,
+      seed: config.seed,
+      status: report.status,
+      score: report.score,
+      reason: report.reason,
+      chorusesCompared: report.comparisons.length,
+      returns: report.comparisons.map((comparison) => ({
+        sectionId: comparison.sectionId,
+        score: comparison.score,
+        contour: comparison.contour,
+        rhythm: comparison.rhythm,
+        literalRepeat: comparison.literalRepeat,
+      })),
+      verseRest: report.verses.map((verse) => ({
+        sectionId: verse.sectionId,
+        notesPerBar: verse.notesPerBar,
+        leadRestFraction: verse.leadRestFraction,
+      })),
+    }));
+  }
+});
