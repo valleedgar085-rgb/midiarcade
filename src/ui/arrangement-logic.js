@@ -15,6 +15,19 @@ function setEventStart(event, value) {
   event[key] = value;
 }
 
+function cloneAndShiftEvent(event, offset = 0) {
+  const copy = clone(event);
+  if (offset !== 0) {
+    setEventStart(copy, eventStart(event) + offset);
+  }
+  return copy;
+}
+
+function mapTimedEvents(events, mapperFn) {
+  if (!Array.isArray(events)) return events;
+  return events.map(mapperFn).sort((left, right) => eventStart(left) - eventStart(right));
+}
+
 function eventPitch(event) {
   return finite(event?.pitch ?? event?.note ?? event?.midi, 60);
 }
@@ -159,19 +172,18 @@ function uniqueSectionId(sections, base) {
 
 function duplicateTimedEvents(events, sourceStart, sourceEnd, insertionBeat, beatLength) {
   if (!Array.isArray(events)) return events;
-  const output = [];
-  for (const original of events) {
-    const event = clone(original);
+  return events.flatMap((original) => {
     const start = eventStart(original);
-    if (start >= insertionBeat - 1e-7) setEventStart(event, start + beatLength);
-    output.push(event);
-    if (start >= sourceStart - 1e-7 && start < sourceEnd - 1e-7) {
-      const copy = clone(original);
-      setEventStart(copy, start + beatLength);
-      output.push(copy);
+    const shiftsLater = start >= insertionBeat - 1e-7;
+    const isSource = start >= sourceStart - 1e-7 && start < sourceEnd - 1e-7;
+
+    const event = cloneAndShiftEvent(original, shiftsLater ? beatLength : 0);
+    if (isSource) {
+      const copy = cloneAndShiftEvent(original, beatLength);
+      return [event, copy];
     }
-  }
-  return output.sort((left, right) => eventStart(left) - eventStart(right));
+    return [event];
+  }).sort((left, right) => eventStart(left) - eventStart(right));
 }
 
 /**
@@ -270,29 +282,19 @@ function relocateSongSections(sourceSong, sectionId, targetIndex) {
     return beat >= start - 1e-7 && beat < start + sectionBars(section) * beatsPerBar - 1e-7;
   });
   const relocate = (event) => {
-    const source = sourceForBeat(eventStart(event));
+    const start = eventStart(event);
+    const source = sourceForBeat(start);
     const destination = destinationById.get(String(source?.id));
-    if (!source || !destination) return;
-    setEventStart(event, eventStart(event) + destination.startBeat - sectionStartBeat(source, beatsPerBar));
+    if (!source || !destination) return clone(event);
+    const offset = destination.startBeat - sectionStartBeat(source, beatsPerBar);
+    return cloneAndShiftEvent(event, offset);
   };
   song.tracks = (song.tracks ?? []).map((track) => ({
     ...track,
-    notes: (track.notes ?? []).map((note) => {
-      const next = clone(note);
-      relocate(next);
-      return next;
-    }).sort((left, right) => eventStart(left) - eventStart(right)),
-    automation: (track.automation ?? []).map((event) => {
-      const next = clone(event);
-      relocate(next);
-      return next;
-    }).sort((left, right) => eventStart(left) - eventStart(right)),
+    notes: mapTimedEvents(track.notes, relocate),
+    automation: mapTimedEvents(track.automation, relocate),
   }));
-  song.harmony = (song.harmony ?? []).map((event) => {
-    const next = clone(event);
-    relocate(next);
-    return next;
-  }).sort((left, right) => eventStart(left) - eventStart(right));
+  song.harmony = mapTimedEvents(song.harmony, relocate);
   song.structure = reordered;
   song.sections = clone(reordered);
   song.manualArrangement = {
@@ -336,8 +338,7 @@ function transformSongSection(sourceSong, sectionId, operation, value, trackId) 
       const additions = (track.notes ?? []).filter(inRange).filter((_, index) => index % 5 === 0).slice(0, 24).flatMap((note) => {
         const start = eventStart(note) + 0.5;
         if (start >= rangeEnd - 0.05) return [];
-        const copy = clone(note);
-        setEventStart(copy, start);
+        const copy = cloneAndShiftEvent(note, 0.5);
         setEventVelocity(copy, Math.max(1, eventVelocity(copy) - (track.id === "bass" ? 10 : 16)));
         return [copy];
       });
