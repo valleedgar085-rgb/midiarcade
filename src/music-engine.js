@@ -7,6 +7,7 @@
  */
 
 import { planMusicalLookahead } from "./core/musical-lookahead.js";
+import { planBassHarmonyTarget } from "./core/bass-harmony-planner.js";
 import {
   cadentialHarmonyDegree,
   phraseLandingProfile,
@@ -4819,6 +4820,9 @@ function generateBass(
   const totalBeats = config.bars * beatsPerBar(config);
   const barBeats = beatsPerBar(config);
   const bassOctave = config.genre === "trap" ? Math.max(0, settings.octave - 1) : settings.octave;
+  const bassRegisterMinimum = clamp((bassOctave + 1) * 12, 0, 127);
+  const bassRegisterMaximum = Math.min(127, bassRegisterMinimum + 31);
+  const bassPreferredMaximum = Math.min(bassRegisterMaximum, bassRegisterMinimum + 16);
   let harmonicLifts = 0;
   for (let eventIndex = 0; eventIndex < harmony.length; eventIndex += 1) {
     const chord = harmony[eventIndex];
@@ -4879,6 +4883,25 @@ function generateBass(
         pitch = midiForDegree(config, chord.degree + movement, bassOctave);
       }
       const last = index === offsets.length - 1;
+      const bassHarmonyPlan = planBassHarmonyTarget({
+        genre: config.genre,
+        chord,
+        nextChord,
+        bassGrooveRole,
+        currentPitch: pitch,
+        index,
+        eventCount: offsets.length,
+        seed: `${config.seed ?? "midi-arcade"}:bass-harmony:${chord.start}:${index}`,
+        variation: settings.variation,
+        complexity: config.complexity,
+        register: {
+          minimum: bassRegisterMinimum,
+          maximum: bassRegisterMaximum,
+          preferredMin: bassRegisterMinimum,
+          preferredMax: bassPreferredMaximum,
+        },
+      });
+      pitch = bassHarmonyPlan.pitch;
       if (last && rng.bool(settings.variation * config.complexity * 0.5)) {
         // Keep the seeded articulation stream stable, including the final event.
         const approach = rng.pick([-2, -1, 1, 2]);
@@ -4933,11 +4956,16 @@ function generateBass(
           phraseRole: barPlan?.role ?? "statement",
           genrePhrase: barPlan?.genrePhrase ?? null,
           bassGrooveRole,
+          bassHarmonyRole: bassHarmonyPlan.role,
+          bassHarmonyStrategy: bassHarmonyPlan.strategy,
+          bassHarmonyTargetPc: bassHarmonyPlan.targetPitchClass,
+          bassHarmonyPlanId: bassHarmonyPlan.id,
           ...(lookahead ? { musicalLookaheadIntent: lookahead } : {}),
         },
       );
     }
   }
+
   return notes;
 }
 
@@ -7582,6 +7610,33 @@ function enforceScaleSafety(sourceTracks, config) {
   };
 }
 
+function restoreMusicalLookaheadCommitments(sourceTracks, config) {
+  const allowedScale = scalePitchClasses(config);
+  return sourceTracks.map((track) => {
+    if (!["bass", "melody", "counterpoint"].includes(track.id)) return track;
+    const notes = (track.notes ?? []).map((note) => {
+      const intent = note?.musicalLookaheadIntent;
+      const intendedPitch = Number(intent?.pitch);
+      if (
+        !intent
+        || !Number.isFinite(intendedPitch)
+        || intendedPitch < 0
+        || intendedPitch > 127
+        || !pitchFitsScale(intendedPitch, config, allowedScale)
+      ) return note;
+      const registerPolicy = DAW_REGISTER_POLICIES[track.id];
+      if (
+        registerPolicy
+        && (intendedPitch < registerPolicy.min || intendedPitch > registerPolicy.peakMax)
+      ) return note;
+      return Math.round(finite(note.pitch)) === Math.round(intendedPitch)
+        ? note
+        : { ...note, pitch: Math.round(intendedPitch) };
+    });
+    return { ...track, notes };
+  });
+}
+
 function appendExpressionRamp(events, startBeat, endBeat, startValue, endValue, barBeats) {
   if (endBeat <= startBeat + 0.01) return;
   const steps = clamp(Math.ceil((endBeat - startBeat) / Math.max(0.5, barBeats / 2)), 2, 8);
@@ -8445,6 +8500,9 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalValidation: finalTonalIntegrity,
   });
   const noteCount = song.tracks.reduce((sum, track) => sum + (track.notes?.length ?? 0), 0);
+  const committedNotes = song.tracks.flatMap((track) => track.notes ?? []);
+  const committedTripletEvents = committedNotes.filter((note) => String(note.rhythmicFeature ?? "").startsWith("triplet-")).length;
+  const committedSnareRollEvents = committedNotes.filter((note) => note.rhythmicFeature === "snare-roll").length;
   const finalMaster = song.finalMaster
     ? {
       ...song.finalMaster,
@@ -8505,6 +8563,11 @@ export function refreshCommittedGenerationDiagnostics(song, config = {}) {
     finalAssembly,
     finalMaster,
     producerPass,
+    idea: song.idea ? {
+      ...song.idea,
+      tripletEvents: committedTripletEvents,
+      snareRollEvents: committedSnareRollEvents,
+    } : song.idea,
     wholeSongCompletion,
     committedEnsembleCoordination,
     committedAuthorityValidation: Object.freeze({
@@ -10613,7 +10676,11 @@ function compose(config, options = {}) {
     songBlueprint,
     config,
   );
-  const tracks = finalAssemblyRepair.tracks;
+  // Late producer/assembly polish must not erase an explicitly composed
+  // future-chord connection while leaving its intent metadata behind.
+  // Restore only the original, scale-safe bounded pitch commitment; topology,
+  // timing, velocity, and harmony remain untouched.
+  const tracks = restoreMusicalLookaheadCommitments(finalAssemblyRepair.tracks, config);
   const finalTonalIntegrity = analyzeTonalIntegrity(
     tracks,
     harmony,

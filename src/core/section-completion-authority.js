@@ -198,7 +198,7 @@ function shapeLandingDuration(
   note,
   boundary,
   maximumHold = 1,
-  { seamOffset = 0.025, allowExtend = true } = {},
+  { seamOffset = 0.025, allowExtend = true, maxExtensionGap = 0.55 } = {},
 ) {
   if (!note) return false;
   const desiredEnd = boundary - seamOffset;
@@ -208,7 +208,7 @@ function shapeLandingDuration(
     nextDuration = Math.max(0.04, desiredEnd - finite(note.start));
   } else if (
     allowExtend
-    && desiredEnd - currentEnd <= 0.55
+    && desiredEnd - currentEnd <= maxExtensionGap
     && desiredEnd > currentEnd + 0.04
   ) {
     nextDuration = Math.min(
@@ -312,10 +312,13 @@ export function applySectionCompletionAuthority(
       if (shapeLandingDuration(
         landing,
         contract.boundaryBeat,
-        trackId === "bass" ? 1.25 : 1,
+        contract.isFinal && trackId === "bass"
+          ? beatsPerBar
+          : trackId === "bass" ? 1.25 : 1,
         {
           seamOffset: contract.requiresSeamClear ? 0.04 : 0.025,
-          allowExtend: !protectedLanding,
+          allowExtend: !protectedLanding || (contract.isFinal && trackId === "bass"),
+          maxExtensionGap: contract.isFinal && trackId === "bass" ? beatsPerBar : 0.55,
         },
       )) {
         durationsShaped += 1;
