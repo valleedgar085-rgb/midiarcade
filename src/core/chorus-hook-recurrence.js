@@ -112,6 +112,48 @@ function hookSimilarity(source, returning) {
   });
 }
 
+/**
+ * Independent onset alignment. This counts shared attacks on the song's
+ * beat grid even when a returning phrase adds a pickup, omits an ending,
+ * or changes note pitches. It does not alter the legacy hook score.
+ */
+function onsetAlignment(source, returning, sourceStart, returningStart) {
+  const left = source.map((note) => finite(note.start) - sourceStart);
+  const right = returning.map((note) => finite(note.start) - returningStart);
+  let i = 0;
+  let j = 0;
+  let sharedAttacks = 0;
+  const tolerance = 0.125;
+  while (i < left.length && j < right.length) {
+    if (Math.abs(left[i] - right[j]) <= tolerance) {
+      sharedAttacks += 1;
+      i += 1;
+      j += 1;
+    } else if (left[i] < right[j]) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  const sourceCoverage = left.length ? sharedAttacks / left.length : 0;
+  const returnCoverage = right.length ? sharedAttacks / right.length : 0;
+  const extraPickup = left.length > 0 && right.length > 0 && right[0] < left[0] - tolerance;
+  const missingTail = left.length > 0 && right.length > 0
+    && left.at(-1) > right.at(-1) + tolerance;
+  return Object.freeze({
+    sharedAttacks,
+    sourceOnsetCoverage: round(sourceCoverage),
+    returnOnsetCoverage: round(returnCoverage),
+    extraPickup,
+    missingTail,
+    reason: extraPickup && missingTail ? "pickup-and-shortened-return"
+      : missingTail ? "shortened-return"
+        : extraPickup ? "extra-pickup"
+          : returnCoverage >= 0.9 && sourceCoverage >= 0.65
+            ? "onsets-preserved" : "phrase-onsets-changed",
+  });
+}
+
 function verseSpace(song, section, notes) {
   const bounds = sectionBounds(song, section);
   const length = Math.max(0.25, bounds.end - bounds.start);
@@ -180,11 +222,13 @@ export function evaluateChorusHookRecurrence(song) {
     const sourceNotes = windowBars === 4 ? openingHook(song, source, notes, 4) : twoBarSource;
     const returningNotes = windowBars === 4 ? openingHook(song, section, notes, 4) : twoBarReturn;
     const result = hookSimilarity(sourceNotes, returningNotes);
+    const alignment = onsetAlignment(sourceNotes, returningNotes, sourceRange.start, targetRange.start);
     return Object.freeze({
       sourceSectionId: String(source?.id ?? ""),
       sectionId: String(section?.id ?? ""),
       windowBars,
       available: result !== null,
+      ...alignment,
       ...(result ?? { score: null, reason: "insufficient-opening-notes" }),
     });
   });
