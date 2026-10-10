@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
 import { evaluateChorusHookRecurrence } from "../src/core/chorus-hook-recurrence.js";
+import { createChorusHookDevelopmentCandidates } from "../src/core/chorus-hook-development.js";
 
 const STYLES = ["pop", "hipHop", "rap"];
 
@@ -12,8 +13,9 @@ const STYLES = ["pop", "hipHop", "rap"];
  */
 test("real generated pop/hip-hop/rap songs produce deterministic read-only hook audits", { timeout: 120_000 }, () => {
   for (const genre of STYLES) {
+    for (const variation of [0, 1, 2]) {
     const config = {
-      seed: "phase4-hook-audit-" + genre + "-32",
+      seed: "phase4-hook-audit-" + genre + "-32" + (variation ? "-v" + variation : ""),
       genre,
       key: "E",
       scale: "minor",
@@ -28,7 +30,12 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
     const notes = song.tracks.find((track) => track.id === "melody")?.notes ?? [];
     const before = JSON.stringify(notes);
     const report = evaluateChorusHookRecurrence(song);
-    assert.equal(JSON.stringify(notes), before, genre + ": audit changed actual MIDI notes");
+    const candidateSummaries = createChorusHookDevelopmentCandidates(song).map((candidate) => ({
+      id: candidate.id, localScoreDelta: candidate.localScoreDelta,
+      beforeScore: candidate.beforeScore, afterScore: candidate.afterScore,
+      changedNotes: candidate.changedNotes,
+    }));
+    assert.equal(JSON.stringify(notes), before, genre + ": audit/proposals changed actual MIDI notes");
     assert.deepEqual(report, evaluateChorusHookRecurrence(song));
     assert.equal(report.mode, "read-only");
     assert.ok(["unavailable", "incomplete", "evaluated"].includes(report.status));
@@ -39,9 +46,11 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
       status: report.status,
       score: report.score,
       reason: report.reason,
+      candidateSummaries,
       chorusesCompared: report.comparisons.length,
       returns: report.comparisons.map((comparison) => ({
         sectionId: comparison.sectionId,
+        windowBars: comparison.windowBars,
         score: comparison.score,
         contour: comparison.contour,
         rhythm: comparison.rhythm,
@@ -53,5 +62,6 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
         leadRestFraction: verse.leadRestFraction,
       })),
     }));
+    }
   }
 });

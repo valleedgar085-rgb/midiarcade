@@ -48,9 +48,9 @@ function melodyNotes(song) {
     .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
 }
 
-function openingHook(song, section, notes) {
+function openingHook(song, section, notes, windowBars = 2) {
   const bounds = sectionBounds(song, section);
-  const end = Math.min(bounds.end, bounds.start + bounds.beatsPerBar * 2);
+  const end = Math.min(bounds.end, bounds.start + bounds.beatsPerBar * windowBars);
   return notes.filter((note) => finite(note.start) >= bounds.start - 1e-6
     && finite(note.start) < end - 1e-6).slice(0, MAX_HOOK_NOTES);
 }
@@ -166,12 +166,24 @@ export function evaluateChorusHookRecurrence(song) {
     });
   }
   const source = choruses[0];
-  const sourceNotes = openingHook(song, source, notes);
   const comparisons = choruses.slice(1).map((section) => {
-    const result = hookSimilarity(sourceNotes, openingHook(song, section, notes));
+    const twoBarSource = openingHook(song, source, notes, 2);
+    const twoBarReturn = openingHook(song, section, notes, 2);
+    // A deliberate two-bar pickup can contain fewer than four note attacks.
+    // Compare up to four bars ONLY when both actual section durations allow it,
+    // rather than classifying sparse hip-hop hooks as absent too early.
+    const sourceRange = sectionBounds(song, source);
+    const targetRange = sectionBounds(song, section);
+    const canExtend = sourceRange.end - sourceRange.start >= sourceRange.beatsPerBar * 4
+      && targetRange.end - targetRange.start >= targetRange.beatsPerBar * 4;
+    const windowBars = canExtend && (twoBarSource.length < 4 || twoBarReturn.length < 4) ? 4 : 2;
+    const sourceNotes = windowBars === 4 ? openingHook(song, source, notes, 4) : twoBarSource;
+    const returningNotes = windowBars === 4 ? openingHook(song, section, notes, 4) : twoBarReturn;
+    const result = hookSimilarity(sourceNotes, returningNotes);
     return Object.freeze({
       sourceSectionId: String(source?.id ?? ""),
       sectionId: String(section?.id ?? ""),
+      windowBars,
       available: result !== null,
       ...(result ?? { score: null, reason: "insufficient-opening-notes" }),
     });
