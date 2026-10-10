@@ -17,6 +17,7 @@ import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
+import { auditSelectedArrangementHandoff } from "./core/arrangement-handoff-audit.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
 import { createGenerationExecutor } from "./core/generation-executor.js";
 import { acceptCompositionCandidate } from "./core/blueprint-composer.js";
@@ -4560,6 +4561,10 @@ async function exportSong() {
   try {
     const clone = buildExportSongSnapshot();
     const prepared = prepareMidiExport(clone, currentExportSetup());
+    const arrangementHandoff = auditSelectedArrangementHandoff(state.song, clone, prepared.song);
+    if (!arrangementHandoff.passed) {
+      throw new Error(`MIDI export stopped: accepted arrangement changed during handoff (${arrangementHandoff.issues.join(", ")}).`);
+    }
     const exportReport = createMidiExportReport(prepared.song, prepared.options);
     const verifiedExport = encodeMidiVerified(prepared.song, prepared.options);
     const payload = verifiedExport.bytes instanceof Uint8Array
