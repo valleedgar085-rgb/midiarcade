@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as engine from "../src/music-engine.js";
 import { evaluateChorusHookRecurrence } from "../src/core/chorus-hook-recurrence.js";
-import { createChorusHookDevelopmentCandidates } from "../src/core/chorus-hook-development.js";
+import { createChorusHookDevelopmentCandidates, createChorusHookRhythmCandidates } from "../src/core/chorus-hook-development.js";
 
 const STYLES = ["pop", "hipHop", "rap"];
 
@@ -35,6 +35,11 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
       beforeScore: candidate.beforeScore, afterScore: candidate.afterScore,
       changedNotes: candidate.changedNotes,
     }));
+    const rhythmCandidateSummaries = createChorusHookRhythmCandidates(song).map((candidate) => ({
+      id: candidate.id, localScoreDelta: candidate.localScoreDelta,
+      rhythmGain: candidate.rhythmGain, shiftBeats: candidate.shiftBeats,
+      beforeScore: candidate.beforeScore, afterScore: candidate.afterScore,
+    }));
     assert.equal(JSON.stringify(notes), before, genre + ": audit/proposals changed actual MIDI notes");
     assert.deepEqual(report, evaluateChorusHookRecurrence(song));
     assert.equal(report.mode, "read-only");
@@ -47,6 +52,7 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
       score: report.score,
       reason: report.reason,
       candidateSummaries,
+      rhythmCandidateSummaries,
       chorusesCompared: report.comparisons.length,
       returns: report.comparisons.map((comparison) => ({
         sectionId: comparison.sectionId,
@@ -54,6 +60,9 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
         score: comparison.score,
         contour: comparison.contour,
         rhythm: comparison.rhythm,
+        interval: comparison.interval,
+        duration: comparison.duration,
+        noteCoverage: comparison.noteCoverage,
         literalRepeat: comparison.literalRepeat,
       })),
       verseRest: report.verses.map((verse) => ({
