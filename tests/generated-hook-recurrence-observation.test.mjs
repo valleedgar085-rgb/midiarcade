@@ -94,6 +94,10 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
         interval: comparison.interval,
         duration: comparison.duration,
         noteCoverage: comparison.noteCoverage,
+        sharedAttacks: comparison.sharedAttacks,
+        sourceOnsetCoverage: comparison.sourceOnsetCoverage,
+        returnOnsetCoverage: comparison.returnOnsetCoverage,
+        onsetDiagnosis: comparison.reason,
         literalRepeat: comparison.literalRepeat,
       })),
       verseRest: report.verses.map((verse) => ({
