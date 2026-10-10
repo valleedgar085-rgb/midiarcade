@@ -49,6 +49,7 @@ import {
   characteristicTrackForPreview,
   clickSafeStopTime,
   previewNoteAttack,
+  atmosphereEnvelopeTiming,
   rampAudioParamValue,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
@@ -5752,11 +5753,16 @@ export class PreviewPlayer {
       reverb: event.reverb,
       articulation,
     });
+    // Short Atmosphere notes need a shorter fade than a full-length held pad.
+    // In the previous envelope their filter "rest" could precede the peak.
+    // Keep all other instruments' existing synthesis and expression unchanged.
+    const atmosphereTiming = event.id === "pad" ? atmosphereEnvelopeTiming(attack, duration) : null;
+    const effectiveAttack = atmosphereTiming?.attack ?? attack;
     const filterPeak = clamp(filterBase * voice.filterPeak, 180, 14000);
     const filterRest = clamp(filterBase * voice.filterRest, 140, 12000);
     filter.frequency.setValueAtTime(Math.max(120, filterBase * 0.62), when);
-    filter.frequency.exponentialRampToValueAtTime(filterPeak, when + Math.max(0.018, attack + 0.045));
-    filter.frequency.exponentialRampToValueAtTime(filterRest, when + Math.max(0.08, duration * 0.82));
+    filter.frequency.exponentialRampToValueAtTime(filterPeak, when + (atmosphereTiming?.filterPeakSeconds ?? Math.max(0.018, attack + 0.045)));
+    filter.frequency.exponentialRampToValueAtTime(filterRest, when + (atmosphereTiming?.filterRestSeconds ?? Math.max(0.08, duration * 0.82)));
     mainLevel.gain.value = voice.mainLevel;
     const basePeak = (Number(event.baseVelocity ?? event.velocity) / 127)
       * voice.peak
@@ -5769,17 +5775,17 @@ export class PreviewPlayer {
       ? event.expressionCurve
       : fallbackCurve;
     const startPeak = Math.max(0.0002, basePeak * clamp(Number(expressionCurve[0]?.value ?? 1), 0, 1));
-    const envelopeEnd = Math.max(duration, attack + 0.01);
+    const envelopeEnd = Math.max(duration, effectiveAttack + 0.01);
     gain.gain.setValueAtTime(0.0001, when);
-    gain.gain.exponentialRampToValueAtTime(startPeak, when + attack);
-    let previousCurveTime = when + attack;
+    gain.gain.exponentialRampToValueAtTime(startPeak, when + effectiveAttack);
+    let previousCurveTime = when + effectiveAttack;
     for (const [index, point] of expressionCurve.slice(1).entries()) {
       const lastPoint = index === expressionCurve.length - 2;
       const requestedOffset = clamp(Number(point.offset ?? envelopeEnd), 0, envelopeEnd);
-      const latestInterior = Math.max(attack + 0.002, envelopeEnd - 0.002);
+      const latestInterior = Math.max(effectiveAttack + 0.002, envelopeEnd - 0.002);
       const scheduledOffset = lastPoint
         ? envelopeEnd
-        : clamp(requestedOffset, attack + 0.002, latestInterior);
+        : clamp(requestedOffset, effectiveAttack + 0.002, latestInterior);
       const curveTime = Math.max(previousCurveTime + 0.001, when + scheduledOffset);
       const decayPosition = clamp(requestedOffset / Math.max(0.01, duration), 0, 1);
       const naturalDecay = 1 - decayPosition * 0.28;
