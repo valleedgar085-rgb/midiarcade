@@ -16,6 +16,26 @@ export const PREVIEW_TRANSITION = Object.freeze({
   sourceTailSeconds: 0.024,
 });
 
+/**
+ * Atmosphere has long programmed attacks (up to 420 ms) even when a produced
+ * pad note lasts only a sixteenth/eighth note. The old filter ramp could schedule
+ * its peak *later* than its resting target for those notes. Web Audio then
+ * reorders automation points, producing a sharp spectral sweep / click.
+ *
+ * Preserve authored long-note fades; compress the attack only for short pad
+ * notes and ensure filter movements progress strictly forward in time.
+ * This affects preview synthesis only, not the song or MIDI events.
+ */
+export function atmosphereEnvelopeTiming(attackSeconds, durationSeconds) {
+  const duration = Math.max(0.04, Number.isFinite(Number(durationSeconds))
+    ? Number(durationSeconds) : 0.04);
+  const wantedAttack = previewNoteAttack(attackSeconds);
+  const attack = Math.min(wantedAttack, Math.max(PREVIEW_TRANSITION.minimumNoteAttackSeconds, duration * 0.45));
+  const filterPeakSeconds = Math.max(0.018, attack + 0.02);
+  const filterRestSeconds = Math.max(filterPeakSeconds + 0.025, duration * 0.82);
+  return Object.freeze({ attack, filterPeakSeconds, filterRestSeconds });
+}
+
 export function previewNoteAttack(attackSeconds) {
  const requested=Number(attackSeconds);
  const safeAttack=Number.isFinite(requested)&&requested>0?requested:0;
