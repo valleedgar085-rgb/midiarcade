@@ -69,6 +69,18 @@ export function previewGraphBudget(profile = FULL_PROFILE) {
     : { ...FULL_GRAPH_BUDGET };
 }
 
+/**
+ * A/B diagnostic: Android uses less headroom for stacked synth chords and
+ * melodic voices than desktop, potentially driving the final compressors
+ * into audibly aggressive gain reduction. This is only a preview output level,
+ * not a change to any generated music, instrument patch or MIDI.
+ *
+ * Keep the full profile unchanged for a clean cross-device comparison.
+ */
+export function previewMasterOutputGain(profile = FULL_PROFILE) {
+  return profile?.mode === "constrained" ? 0.26 : 0.42;
+}
+
 export function previewAudioLatencyHint(profile = FULL_PROFILE) {
   // Favor steadier output on Android and other constrained devices. Preview is
   // song playback, so reliable buffers matter more than instrument-like response.
