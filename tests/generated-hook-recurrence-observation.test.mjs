@@ -12,8 +12,9 @@ const STYLES = ["pop", "hipHop", "rap"];
  */
 test("real generated pop/hip-hop/rap songs produce deterministic read-only hook audits", { timeout: 120_000 }, () => {
   for (const genre of STYLES) {
+    for (const variation of [0, 1, 2]) {
     const config = {
-      seed: "phase4-hook-audit-" + genre + "-32",
+      seed: "phase4-hook-audit-" + genre + "-32" + (variation ? "-v" + variation : ""),
       genre,
       key: "E",
       scale: "minor",
@@ -53,5 +54,6 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
         leadRestFraction: verse.leadRestFraction,
       })),
     }));
+    }
   }
 });
