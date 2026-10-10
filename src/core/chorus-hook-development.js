@@ -199,7 +199,11 @@ export function createChorusHookRhythmCandidates(song, {
 
   const weakest = [...before.comparisons]
     .filter((comparison) => comparison.available && comparison.score < 0.66
-      && comparison.rhythm < 0.92)
+      && comparison.rhythm < 0.92
+      // A shortened return can have a lower sequence-rhythm score even when
+      // every remaining attack is precisely aligned with the original hook.
+      // Do not retime such phrases to chase a diagnostic number.
+      && !(comparison.returnOnsetCoverage >= 0.9 && comparison.sourceOnsetCoverage >= 0.65))
     .sort((a, b) => a.score - b.score || a.sectionId.localeCompare(b.sectionId))[0];
   if (!weakest) return [];
 
