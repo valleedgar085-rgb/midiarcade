@@ -81,8 +81,12 @@ export function drumSampleEnvelope(character, bufferDuration) {
     sourceDuration,
     clamp(naturalDuration * limits.scale, limits.min, limits.max),
   );
-  const attack = Math.min(0.002, duration * 0.08);
-  const releaseStart = clamp(duration * limits.release, attack, Math.max(attack, duration - 0.006));
+  // A two-millisecond attack is barely one output buffer on some phones.
+  // Give the sampled transient a short but meaningful fade-in, and ensure
+  // short hats reach the release floor before the buffer source is torn down.
+  const attack = Math.min(0.004, duration * 0.14);
+  const tailFade = Math.min(0.012, duration * 0.35);
+  const releaseStart = clamp(duration * limits.release, attack, Math.max(attack, duration - tailFade));
   return Object.freeze({ duration, attack, releaseStart });
 }
 
