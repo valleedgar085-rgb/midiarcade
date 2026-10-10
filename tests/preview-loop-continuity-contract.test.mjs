@@ -17,7 +17,7 @@ test("PreviewPlayer master transitions use held ramps for play and pause", () =>
   const play = appSource.match(/async play\(\)\s*\{[\s\S]*?\n\s*schedule\(\)/)?.[0] ?? "";
   const pause = appSource.match(/pause\(\)\s*\{[\s\S]*?\n\s*stop\(\)/)?.[0] ?? "";
 
-  assert.match(play, /rampAudioParamValue\(this\.master\.gain,\s*0\.42/);
+  assert.match(play, /rampAudioParamValue\\(this\\.master\\.gain,\\s*previewMasterOutputGain\\(this\\.previewRuntime\\)/);
   assert.doesNotMatch(play, /setValueAtTime\(0\.0001,\s*now\)/);
   assert.match(pause, /rampAudioParamValue\(this\.master\.gain,\s*0\.0001/);
   assert.ok(
