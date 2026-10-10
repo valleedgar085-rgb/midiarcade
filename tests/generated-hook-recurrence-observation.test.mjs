@@ -45,6 +45,37 @@ test("real generated pop/hip-hop/rap songs produce deterministic read-only hook 
     assert.equal(report.mode, "read-only");
     assert.ok(["unavailable", "incomplete", "evaluated"].includes(report.status));
     assert.ok(report.score === null || (report.score >= 0 && report.score <= 100));
+    if (genre === "rap" && report.score !== null && report.score < 66) {
+      const comparisons = report.comparisons.map((pair) => {
+        const sections = song.structure ?? song.sections ?? [];
+        const a = sections.find((section) => String(section.id) === String(pair.sourceSectionId));
+        const b = sections.find((section) => String(section.id) === String(pair.sectionId));
+        const beatsPerBar = Number(song.meta?.beatsPerBar ?? 4);
+        function opening(section) {
+          const start = Number(section?.startBeat ?? Number(section?.startBar ?? 0) * beatsPerBar);
+          const end = start + pair.windowBars * beatsPerBar;
+          const values = notes.filter((note) => note.start >= start && note.start < end)
+            .sort((left, right) => left.start - right.start || left.pitch - right.pitch)
+            .slice(0, 12).map((note) => ({
+              at: Math.round((note.start - start) * 1000) / 1000,
+              duration: note.duration,
+              pitch: note.pitch,
+              protected: Boolean(note.motifMemoryCore || note.ensembleCadenceRole
+                || note.transitionHandoffRole || note.motifHandoffRole || note.finalAssemblyRole),
+            }));
+          return {
+            start, notes: values,
+            leadPulses: (song.grooveConductor?.bars ?? [])
+              .filter((bar) => bar.bar >= Math.floor(start / beatsPerBar)
+                && bar.bar < Math.ceil(end / beatsPerBar))
+              .map((bar) => ({ bar: bar.bar, pulses: bar.leadPulses })),
+          };
+        }
+        return { score: pair.score, rhythm: pair.rhythm,
+          contour: pair.contour, source: opening(a), returning: opening(b) };
+      });
+      console.log("PHASE4_WEAK_RAP_PHRASES", JSON.stringify({ seed: config.seed, comparisons }));
+    }
     console.log("PHASE4_HOOK_BASELINE", JSON.stringify({
       genre,
       seed: config.seed,
