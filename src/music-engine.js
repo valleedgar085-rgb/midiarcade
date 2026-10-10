@@ -8220,6 +8220,7 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
         || right.velocity - left.velocity
         || left.start - right.start
       ))[0];
+    let synthesizedCounterpointAnchor = false;
     if (!anchor && entry.featuredTrack === "counterpoint") {
       const melodyAnchor = (fallbackById.get("melody") ?? [])
         .filter((note) => note.start >= section.startBeat - 0.03 && note.start < section.endBeat - 1e-6)
@@ -8247,9 +8248,25 @@ function runCandidateAssemblyRepair(sourceTracks, fallbackTracks, structure, son
           answerToBeat: round(melodyAnchor.start),
           dialogueSectionId: section.id,
         };
+        synthesizedCounterpointAnchor = true;
       }
     }
     if (!anchor) continue;
+    if (synthesizedCounterpointAnchor) {
+      const melodyTrack = trackById.get("melody");
+      const plannedAnswer = interlaceCounterpoint(
+        [anchor],
+        melodyTrack?.notes ?? [],
+        config,
+        [section],
+        [],
+      )[0] ?? null;
+      if (!plannedAnswer) continue;
+      anchor = {
+        ...anchor,
+        ...plannedAnswer,
+      };
+    }
     const restoredStart = round(clamp(anchor.start, section.startBeat, section.endBeat - 0.02));
     track.notes.push({
       ...anchor,
