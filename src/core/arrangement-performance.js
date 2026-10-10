@@ -1,8 +1,10 @@
 import { cloneValue } from "./clone-value.js";
-export const ARRANGEMENT_PERFORMANCE_VERSION = 2;
+export const ARRANGEMENT_PERFORMANCE_VERSION = 3;
 
 const SAFE_TRACKS = new Set(["drums", "chords", "counterpoint", "pad"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme"]);
+const LYRIC_SECTION_NAMES = new Set(["verse", "idea"]);
+const KICK_PITCHES = new Set([35, 36]);
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -134,13 +136,45 @@ function applyLocalizedVacuum(song, transition, boundary, pickupBeats) {
   return { changedNotes, vacuumNotes };
 }
 
+/**
+ * Strengthen one existing kick hit that agrees with the bass entrance.
+ * Never move notes, invent hits, or repeatedly accent an already-shaped
+ * arrival. A short first-beat window keeps the effect local to the handoff.
+ */
+function accentBassKickConversation(song, transition, boundary, strength) {
+  const bass = (song.tracks ?? []).find((track) => String(track?.id) === "bass");
+  const drums = (song.tracks ?? []).find((track) => String(track?.id) === "drums");
+  if (!bass || !drums) return 0;
+  const bassOnsets = (bass.notes ?? [])
+    .map(noteStart)
+    .filter((start) => start >= boundary - 1e-6 && start < boundary + 1 - 1e-6);
+  const matchingKick = (drums.notes ?? [])
+    .filter((note) => {
+      const start = noteStart(note);
+      return KICK_PITCHES.has(notePitch(note))
+        && start >= boundary - 1e-6 && start < boundary + 1 - 1e-6
+        && bassOnsets.some((onset) => Math.abs(start - onset) <= 0.0625)
+        && note.transitionHandoffId !== transitionId(transition)
+        && noteVelocity(note) < 120;
+    })
+    .sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right))[0];
+  if (!matchingKick) return 0;
+  const before = noteVelocity(matchingKick);
+  setNoteVelocity(matchingKick, before + Math.max(1, Math.round(3 * strength)));
+  matchingKick.arrangementPerformanceRole = "bass-kick-conversation";
+  matchingKick.arrangementPerformanceTransitionId = transitionId(transition);
+  return Math.abs(noteVelocity(matchingKick) - before) > 1e-6 ? 1 : 0;
+}
+
 function shapeTransition(song, transition, profile, options = {}) {
   const boundary = transitionBoundary(song, transition);
-  if (!Number.isFinite(boundary)) return { changedNotes: 0, pickups: 0, arrivals: 0, payoff: false };
+  if (!Number.isFinite(boundary)) return { changedNotes: 0, pickups: 0, arrivals: 0, payoff: false, lyricSpaceNotes: 0, bassKickAccents: 0 };
 
   const pickupBeats = clamp(transition.pickupBeats, 0.25, 1.5);
   const destination = sectionById(song, transition.toSectionId);
   const payoff = PAYOFF_NAMES.has(sectionName(destination));
+  const source = sectionById(song, transition.fromSectionId);
+  const hookToVerse = PAYOFF_NAMES.has(sectionName(source)) && LYRIC_SECTION_NAMES.has(sectionName(destination));
   const strength = clamp(transition.strength, 0.38, 0.92);
   const pickupBoost = Math.round((profile.pickupBoost + (payoff ? profile.payoffBonus : 0)) * strength);
   const arrivalBoost = Math.round((profile.arrivalBoost + (payoff ? profile.payoffBonus : 0)) * strength);
@@ -148,6 +182,7 @@ function shapeTransition(song, transition, profile, options = {}) {
   let pickups = 0;
   let arrivals = 0;
   let vacuumNotes = 0;
+  let lyricSpaceNotes = 0;
 
   if (payoff && wantsLocalizedVacuum(song, transition, options)) {
     const vacuum = applyLocalizedVacuum(song, transition, boundary, pickupBeats);
@@ -177,7 +212,16 @@ function shapeTransition(song, transition, profile, options = {}) {
       .filter((note) => Math.abs(noteStart(note) - boundary) <= 1e-6)
       .sort((left, right) => notePitch(left) - notePitch(right))[0];
     if (arrival) {
-      if (markArrival(arrival, transition, arrivalBoost)) changedNotes += 1;
+      // After a hook, leave an open pocket for the verse instead of
+      // accenting the backing parts at the same strength as the chorus.
+      const lyricBreath = hookToVerse && trackId !== "drums";
+      const delta = lyricBreath ? -Math.max(2, Math.round(profile.breathCut * strength)) : arrivalBoost;
+      if (markArrival(arrival, transition, delta)) changedNotes += 1;
+      if (lyricBreath) {
+        arrival.arrangementPerformanceRole = "post-hook-lyrical-space";
+        arrival.arrangementPerformanceTransitionId = transitionId(transition);
+        lyricSpaceNotes += 1;
+      }
       arrivals += 1;
     }
 
@@ -197,7 +241,9 @@ function shapeTransition(song, transition, profile, options = {}) {
     }
   }
 
-  return { changedNotes, pickups, arrivals, payoff, vacuumNotes };
+  const bassKickAccents = payoff ? accentBassKickConversation(song, transition, boundary, strength) : 0;
+  changedNotes += bassKickAccents;
+  return { changedNotes, pickups, arrivals, payoff, vacuumNotes, lyricSpaceNotes, bassKickAccents };
 }
 
 const PROFILES = Object.freeze({
@@ -254,6 +300,8 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced", 
   let arrivals = 0;
   let payoffTransitions = 0;
   let vacuumNotes = 0;
+  let lyricSpaceNotes = 0;
+  let bassKickAccents = 0;
 
   for (const transition of song.arrangementTransitions) {
     const shaped = shapeTransition(song, transition, selectedProfile, { spaceStrategy });
@@ -261,6 +309,8 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced", 
     pickups += shaped.pickups;
     arrivals += shaped.arrivals;
     vacuumNotes += shaped.vacuumNotes ?? 0;
+    lyricSpaceNotes += shaped.lyricSpaceNotes ?? 0;
+    bassKickAccents += shaped.bassKickAccents ?? 0;
     if (shaped.payoff) payoffTransitions += 1;
   }
 
@@ -283,6 +333,8 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced", 
     payoffTransitions,
     spaceStrategy,
     vacuumNotes,
+    lyricSpaceNotes,
+    bassKickAccents,
     safeTracks: Object.freeze([...SAFE_TRACKS]),
   });
   song.outputQualityEvolution = {

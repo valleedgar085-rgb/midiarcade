@@ -196,6 +196,14 @@ function performanceProfileForFamily(family) {
   return "balanced";
 }
 
+function performanceSpaceStrategyForFamily(family) {
+  // An earned breath before a return is more musical than a permanent gap.
+  // The performance pass keeps the drums and all note timing intact.
+  return ["bridge-payoff", "slow-bloom", "double-peak"].includes(family)
+    ? "vacuum-before-payoff"
+    : null;
+}
+
 function protectedFusionPerformance(song, profile) {
   return Object.freeze({
     changed: false,
@@ -268,9 +276,10 @@ export function createArrangementCandidates(sourceSong, config = {}, {
   return selectNarrativelyDistinctArrangements(discovered, limit)
     .map((candidate, candidateIndex) => {
       const profile = performanceProfileForFamily(candidate.evolution.family);
+      const spaceStrategy = performanceSpaceStrategyForFamily(candidate.evolution.family);
       const performance = protectFusionPerformance
         ? protectedFusionPerformance(candidate.song, profile)
-        : applyArrangementPerformance(candidate.song, { profile });
+        : applyArrangementPerformance(candidate.song, { profile, spaceStrategy });
       const auditionSong = performance.changed ? performance.song : candidate.song;
       auditionSong.outputQualityEvolution = {
         ...(auditionSong.outputQualityEvolution ?? {}),
@@ -284,6 +293,7 @@ export function createArrangementCandidates(sourceSong, config = {}, {
             narrativeOrderKey: candidate.narrativeOrderKey,
             discoveredCandidates: discovered.length,
             performanceProfile: profile,
+            performanceSpaceStrategy: protectFusionPerformance ? null : spaceStrategy,
             performanceChanged: performance.changed,
             performanceChangedNotes: performance.diagnostics?.changedNotes ?? 0,
             staleMarkersCleared: performance.diagnostics?.staleMarkersCleared ?? 0,
