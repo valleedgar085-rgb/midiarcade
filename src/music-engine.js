@@ -4105,13 +4105,37 @@ function varyMotifs(source, config, style, rng) {
   return result;
 }
 
-function harmonyAt(harmony, beat) {
-  let result = harmony[0];
-  for (const event of harmony) {
-    if (event.start <= beat + 1e-6) result = event;
-    if (beat < event.start + event.duration - 1e-6 && beat >= event.start - 1e-6) return event;
+function harmonyAt(harmony = [], beat = 0) {
+  if (!harmony || harmony.length === 0) return harmony?.[0];
+  let low = 0;
+  let high = harmony.length - 1;
+  let best = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
   }
-  return result;
+
+  if (best === -1) {
+    return harmony[0];
+  }
+
+  const bestEvent = harmony[best];
+  const bestStart = finite(bestEvent?.start ?? bestEvent?.startBeat, 0);
+  const bestDuration = Math.max(0.01, finite(bestEvent?.duration ?? bestEvent?.durationBeats, 0.25));
+
+  if (beat >= bestStart - 1e-6 && beat < bestStart + bestDuration - 1e-6) {
+    return bestEvent;
+  }
+
+  return bestEvent;
 }
 
 function midiForDegree(config, degree, octave) {
@@ -5367,9 +5391,34 @@ function runDirectorEnsembleCoordination(
 }
 
 function harmonyAtBeat(harmony = [], beat = 0) {
-  return harmony.find((event) => (
-    beat >= event.start - 1e-6 && beat < event.start + event.duration - 1e-6
-  )) ?? harmony[harmony.length - 1] ?? null;
+  if (!harmony || harmony.length === 0) return harmony?.[harmony.length - 1] ?? null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let best = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (best !== -1) {
+    const bestEvent = harmony[best];
+    const bestStart = finite(bestEvent?.start ?? bestEvent?.startBeat, 0);
+    const bestDuration = Math.max(0.01, finite(bestEvent?.duration ?? bestEvent?.durationBeats, 0.25));
+
+    if (beat >= bestStart - 1e-6 && beat < bestStart + bestDuration - 1e-6) {
+      return bestEvent;
+    }
+  }
+
+  return harmony[harmony.length - 1] ?? null;
 }
 
 function layeredPitchForTrack(trackId, layer, harmonyEvent, config, rng, bassCeiling = null) {

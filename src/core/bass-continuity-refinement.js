@@ -201,11 +201,34 @@ export function analyzeBassContinuity(song) {
 }
 
 function harmonyAt(song, beat) {
-  return (song?.harmony ?? []).find((chord) => {
-    const start = finite(chord?.start);
-    const end = start + Math.max(0.05, finite(chord?.duration, 0.25));
-    return beat >= start - 1e-6 && beat < end - 1e-6;
-  }) ?? null;
+  const harmony = Array.isArray(song) ? song : (song?.harmony ?? []);
+  if (!harmony || harmony.length === 0) return null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let best = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      best = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (best !== -1) {
+    const bestEvent = harmony[best];
+    const bestStart = finite(bestEvent?.start ?? bestEvent?.startBeat, 0);
+    const bestEnd = bestStart + Math.max(0.05, finite(bestEvent?.duration, 0.25));
+    if (beat >= bestStart - 1e-6 && beat < bestEnd - 1e-6) {
+      return bestEvent;
+    }
+  }
+
+  return null;
 }
 
 function bassRegisterCenter(song, section) {
