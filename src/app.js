@@ -32,7 +32,7 @@ import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, preview
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
-import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { previewAudioLatencyHint, previewGraphBudget, previewMasterOutputGain, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -5079,9 +5079,10 @@ export class PreviewPlayer {
         }
       }
 
-      // Master output — raised to 0.42 for phone speaker loudness.
+      // Shared preview output headroom: compare mobile compressor behavior
+      // without changing any instrument's note timing, tone or dynamics.
       this.master = this.context.createGain();
-      this.master.gain.value = 0.42;
+      this.master.gain.value = previewMasterOutputGain(this.previewRuntime);
 
       // High-pass at 35 Hz removes sub-bass rumble on phone speakers.
       const highpass = this.context.createBiquadFilter();
@@ -5373,7 +5374,7 @@ export class PreviewPlayer {
     void requestScreenWakeLock();
     if (this.master?.gain) {
       const now = this.context.currentTime;
-      rampAudioParamValue(this.master.gain, 0.42, now, this.previewBudget.masterFadeSeconds);
+      rampAudioParamValue(this.master.gain, previewMasterOutputGain(this.previewRuntime), now, this.previewBudget.masterFadeSeconds);
     }
     this.buildEvents();
     if (!hasAudiblePreviewEvents(this.events)) {
