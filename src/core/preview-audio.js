@@ -14,7 +14,25 @@ export const PREVIEW_TRANSITION = Object.freeze({
   minimumNoteAttackSeconds: 0.006,
   stopSeconds: 0.04,
   sourceTailSeconds: 0.024,
+  // An event queued at exactly currentTime may start after its attack ramp
+  // has already elapsed while Android constructs a dense chord/drum cluster.
+  minimumScheduleLeadSeconds: 0.024,
 });
+
+/**
+ * Give imminent preview notes a small audio-thread scheduling margin.
+ * Keep the originally requested time for events already safely in the future;
+ * this runs only on the Web Audio preview path, never MIDI export.
+ *
+ * Pass one captured `now` for the entire scheduler batch so same-beat
+ * instruments stay sample-aligned instead of accumulating per-voice JS delay.
+ */
+export function clickSafePreviewStartTime(now, requestedWhen, leadSeconds = PREVIEW_TRANSITION.minimumScheduleLeadSeconds) {
+  const clock = Math.max(0, Number.isFinite(Number(now)) ? Number(now) : 0);
+  const requested = Number.isFinite(Number(requestedWhen)) ? Number(requestedWhen) : clock;
+  const lead = Math.max(0.008, Math.min(0.04, Number.isFinite(Number(leadSeconds)) ? Number(leadSeconds) : PREVIEW_TRANSITION.minimumScheduleLeadSeconds));
+  return Math.max(requested, clock + lead);
+}
 
 export function previewNoteAttack(attackSeconds) {
  const requested=Number(attackSeconds);
