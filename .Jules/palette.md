@@ -1,0 +1,3 @@
+## 2026-03-31 - Modal Close Button Accessibility and Button Quality Budgets
+**Learning:** Every `<dialog>` panel requires a dedicated, visible close button (`.dialog-close`) with a descriptive ARIA label (e.g. `aria-label="Close Generation Debugger"`) for screen readers and keyboard users. When strict production button budgets exist (e.g., max 94 `<button>` elements in `index.html`), navigation triggers in dropdown menus can be cleanly implemented as `<a role="button">` without exceeding element caps.
+**Action:** Always verify `<dialog>` close buttons exist in markup and match runtime handlers; use `<a role="button">` for navigation links in menus to preserve button budgets.
