@@ -50,6 +50,7 @@ import {
   clickSafeStopTime,
   previewNoteAttack,
   atmosphereEnvelopeTiming,
+  pitchedVoiceEnvelopeTiming,
   rampAudioParamValue,
   normalizeMixAssistant,
   PREVIEW_TRANSITION,
@@ -5753,16 +5754,17 @@ export class PreviewPlayer {
       reverb: event.reverb,
       articulation,
     });
-    // Short Atmosphere notes need a shorter fade than a full-length held pad.
-    // In the previous envelope their filter "rest" could precede the peak.
-    // Keep all other instruments' existing synthesis and expression unchanged.
+    // The verified pad envelope stays intact. Other pitched instruments need
+    // the same chronological filter automation on short notes without mutating
+    // the arrangement or affecting the independent drum synth.
     const atmosphereTiming = event.id === "pad" ? atmosphereEnvelopeTiming(attack, duration) : null;
-    const effectiveAttack = atmosphereTiming?.attack ?? attack;
+    const pitchedTiming = pitchedVoiceEnvelopeTiming(event.id, attack, duration);
+    const effectiveAttack = atmosphereTiming?.attack ?? pitchedTiming?.attack ?? attack;
     const filterPeak = clamp(filterBase * voice.filterPeak, 180, 14000);
     const filterRest = clamp(filterBase * voice.filterRest, 140, 12000);
     filter.frequency.setValueAtTime(Math.max(120, filterBase * 0.62), when);
-    filter.frequency.exponentialRampToValueAtTime(filterPeak, when + (atmosphereTiming?.filterPeakSeconds ?? Math.max(0.018, attack + 0.045)));
-    filter.frequency.exponentialRampToValueAtTime(filterRest, when + (atmosphereTiming?.filterRestSeconds ?? Math.max(0.08, duration * 0.82)));
+    filter.frequency.exponentialRampToValueAtTime(filterPeak, when + (atmosphereTiming?.filterPeakSeconds ?? pitchedTiming?.filterPeakSeconds ?? Math.max(0.018, attack + 0.045)));
+    filter.frequency.exponentialRampToValueAtTime(filterRest, when + (atmosphereTiming?.filterRestSeconds ?? pitchedTiming?.filterRestSeconds ?? Math.max(0.08, duration * 0.82)));
     mainLevel.gain.value = voice.mainLevel;
     const basePeak = (Number(event.baseVelocity ?? event.velocity) / 127)
       * voice.peak

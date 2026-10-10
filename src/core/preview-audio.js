@@ -36,6 +36,31 @@ export function atmosphereEnvelopeTiming(attackSeconds, durationSeconds) {
   return Object.freeze({ attack, filterPeakSeconds, filterRestSeconds });
 }
 
+const PITCHED_PREVIEW_TRACKS = new Set(["bass", "chords", "melody", "counterpoint"]);
+
+/**
+ * Keep short pitched notes free of a spectral snap at the filter handoff.
+ * Some GM patches request a slow attack even when the note only lasts a
+ * sixteenth beat. Previously the filter's rest point could precede its peak.
+ *
+ * This is strictly a Web Audio preview envelope: no MIDI note timing, pitch,
+ * velocity, or arrangement data changes. Pad uses its existing verified
+ * Atmosphere envelope; drums use the independent percussion path.
+ */
+export function pitchedVoiceEnvelopeTiming(trackId, attackSeconds, durationSeconds) {
+  if (!PITCHED_PREVIEW_TRACKS.has(String(trackId))) return null;
+  const duration = Math.max(0.04, Number.isFinite(Number(durationSeconds))
+    ? Number(durationSeconds) : 0.04);
+  const requestedAttack = previewNoteAttack(attackSeconds);
+  // A modest onset slope avoids the tiny broadband click of an otherwise
+  // almost instantaneous oscillator opening, without smearing bass/kick pocket.
+  const floor = trackId === "bass" ? 0.009 : 0.01;
+  const attack = Math.min(Math.max(floor, requestedAttack), Math.max(floor, duration * 0.42));
+  const filterPeakSeconds = Math.max(0.024, attack + 0.022);
+  const filterRestSeconds = Math.max(filterPeakSeconds + 0.014, duration * 0.82);
+  return Object.freeze({ attack, filterPeakSeconds, filterRestSeconds });
+}
+
 export function previewNoteAttack(attackSeconds) {
  const requested=Number(attackSeconds);
  const safeAttack=Number.isFinite(requested)&&requested>0?requested:0;
