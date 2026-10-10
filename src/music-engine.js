@@ -2150,6 +2150,172 @@ export function createMemoryMap(structure, sectionPlans, hookSectionId, source =
   });
 }
 
+function createSectionTensionEnvelope(role, cadence, tension, sectionName, style, config, inheritedEnvelope) {
+  if (inheritedEnvelope) {
+    return clone(inheritedEnvelope);
+  }
+  const release = role === "release" || (cadence === "resolve" && sectionName === "outro");
+  const lifting = cadence === "lift";
+  const suspended = cadence === "suspend";
+  const peak = role === "peak";
+  const start = release ? Math.max(0.28, tension * 0.72)
+    : lifting ? tension * 0.56
+      : suspended ? tension * 0.62
+        : peak ? Math.max(0.58, tension * 0.76)
+          : tension * 0.68;
+  const crest = release ? Math.max(start, tension * 0.82)
+    : lifting ? tension + 0.12
+      : suspended ? tension + 0.1
+        : peak ? tension + 0.18
+          : tension + 0.08;
+  const end = release ? Math.min(0.24, tension * 0.34)
+    : lifting ? crest - 0.015
+      : suspended ? crest - 0.04
+        : cadence === "resolve" ? tension * 0.48
+          : tension * 0.82;
+  return {
+    start: round(clamp(start, 0.08, 1)),
+    peak: round(clamp(crest, 0.12, 1)),
+    end: round(clamp(end, 0.08, 1)),
+    peakAt: release ? 0.28 : lifting ? 0.88 : peak ? 0.68 : 0.62,
+    phraseBars: clamp(Math.round(finite(style.rhythmIdentity?.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
+    phraseLift: round(clamp(0.035 + config.evolution * 0.075, 0.035, 0.11)),
+    shape: release ? "release" : lifting ? "rise" : suspended ? "suspend" : peak ? "crest" : "arc",
+  };
+}
+
+function createBlueprintSectionPlans({ structure, narrativeId, peakSectionId, hookSectionId, direction, config, style, rng, source }) {
+  const sourcePlansById = new Map();
+  const sourcePlansByName = new Map();
+  if (Array.isArray(source?.sectionPlans)) {
+    for (const plan of source.sectionPlans) {
+      if (plan?.sectionId != null && !sourcePlansById.has(plan.sectionId)) {
+        sourcePlansById.set(plan.sectionId, plan);
+      }
+      if (plan?.sectionName != null && !sourcePlansByName.has(plan.sectionName)) {
+        sourcePlansByName.set(plan.sectionName, plan);
+      }
+    }
+  }
+  return structure.map((section, index) => {
+    const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
+    const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
+    const energy = narrativeEnergy(narrativeId, baseEnergy, progress, index);
+    const motifTransform = motifTransformForSection(section, index, structure, peakSectionId);
+    const cadence = index === structure.length - 1 || section.name === "outro"
+      ? "resolve"
+      : ["prechorus", "build"].includes(section.name)
+        ? "lift"
+        : ["bridge", "breakdown"].includes(section.name)
+          ? "suspend"
+          : ["chorus", "drop"].includes(section.name)
+            ? "resolve"
+            : "open";
+    const role = section.id === peakSectionId
+      ? "peak"
+      : section.id === hookSectionId
+        ? "hook"
+        : motifTransform === "resolution"
+          ? "release"
+          : motifTransform === "statement"
+            ? "statement"
+            : "development";
+    const harmonicStory = harmonicStoryForSection(
+      section,
+      role,
+      cadence,
+      narrativeId,
+      index,
+      index === structure.length - 1,
+    );
+    const sourcePlan = sourcePlansById.get(section.id)
+      ?? sourcePlansByName.get(section.name);
+    const baseDevelopmentPath = developmentPathForTransform(motifTransform);
+    const patternVariant = Number.isFinite(Number(sourcePlan?.patternVariant))
+      ? mod(Math.round(sourcePlan.patternVariant), baseDevelopmentPath.length)
+      : rng.int(0, Math.max(0, baseDevelopmentPath.length - 1));
+    const developmentPath = [
+      ...baseDevelopmentPath.slice(patternVariant),
+      ...baseDevelopmentPath.slice(0, patternVariant),
+    ];
+    const tension = round(clamp(energy * 0.72 + (cadence === "lift" ? 0.22 : cadence === "suspend" ? 0.12 : 0), 0, 1));
+    const tensionEnvelope = createSectionTensionEnvelope(
+      role,
+      cadence,
+      tension,
+      section.name,
+      style,
+      config,
+      sourcePlan?.tensionEnvelope,
+    );
+    return {
+      sectionId: section.id,
+      sectionName: section.name,
+      role,
+      energy: round(energy),
+      tension,
+      tensionEnvelope,
+      density: round(clamp(0.28 + energy * 0.58 + config.complexity * 0.1, 0.24, 1)),
+      registerLift: role === "peak" ? 1 : motifTransform === "resolution" ? -1 : 0,
+      harmonicActivity: round(clamp(0.25 + config.harmonicRhythm * 0.45 + energy * 0.24, 0.2, 1)),
+      cadence,
+      motifTransform,
+      patternVariant,
+      developmentPath,
+      direction,
+      harmonicRole: sourcePlan?.harmonicRole ?? harmonicStory.role,
+      harmonicColor: sourcePlan?.harmonicColor ?? harmonicStory.color,
+      harmonicStartDegree: sourcePlan?.harmonicStartDegree ?? harmonicStory.startDegree,
+      harmonicGoalDegree: sourcePlan?.harmonicGoalDegree ?? harmonicStory.goalDegree,
+    };
+  });
+}
+
+function createBlueprintTransitions(sectionPlans, source = null) {
+  const sourceTransitionsByPair = new Map();
+  if (Array.isArray(source?.transitions)) {
+    for (const transition of source.transitions) {
+      if (transition?.fromSectionId != null && transition?.toSectionId != null) {
+        const key = `${transition.fromSectionId}->${transition.toSectionId}`;
+        if (!sourceTransitionsByPair.has(key)) {
+          sourceTransitionsByPair.set(key, transition);
+        }
+      }
+    }
+  }
+  return sectionPlans.slice(0, -1).map((from, index) => {
+    const to = sectionPlans[index + 1];
+    const sourceTransition = sourceTransitionsByPair.get(`${from.sectionId}->${to.sectionId}`);
+    const type = sourceTransition?.type ?? transitionType(from, to);
+    const energyDelta = to.energy - from.energy;
+    const strength = sourceTransition?.strength ?? round(clamp(
+      0.42 + Math.abs(energyDelta) * 1.5 + (["launch", "drop-out"].includes(type) ? 0.18 : 0),
+      0.38,
+      1,
+    ));
+    return {
+      fromSectionId: from.sectionId,
+      toSectionId: to.sectionId,
+      type,
+      strength,
+      pickupBeats: sourceTransition?.pickupBeats ?? (strength > 0.72 ? 1 : 0.5),
+    };
+  });
+}
+
+function createBlueprintQualityTargets(config) {
+  return {
+    repetition: round(clamp(0.62 + (1 - config.surprise) * 0.12, 0.5, 0.82)),
+    sectionContrast: round(clamp(0.28 + config.evolution * 0.38, 0.24, 0.72)),
+    chordToneAnchors: round(clamp(0.68 + (1 - config.surprise) * 0.16, 0.62, 0.88)),
+    grooveLock: round(clamp(0.68 + config.energy * 0.18, 0.62, 0.9)),
+    transitionClarity: round(clamp(0.62 + config.evolution * 0.24, 0.58, 0.9)),
+    harmonicJourney: round(clamp(0.64 + config.complexity * 0.18, 0.6, 0.88)),
+    orchestrationContrast: round(clamp(0.58 + config.evolution * 0.3, 0.56, 0.9)),
+    memoryRecall: round(clamp(0.7 + (1 - config.surprise) * 0.14, 0.66, 0.88)),
+  };
+}
+
 function createSongBlueprint(config, structure, style, rng, source = null) {
   const sourceNarrativeId = String(source?.narrative?.id ?? "");
   const narrative = SONG_NARRATIVES.find((item) => item.id === sourceNarrativeId)
@@ -2186,144 +2352,20 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       8,
     ),
   });
-  const direction = songDNA.melodic.direction;
-  const sourcePlansById = new Map();
-  const sourcePlansByName = new Map();
-  if (Array.isArray(source?.sectionPlans)) {
-    for (const plan of source.sectionPlans) {
-      if (plan?.sectionId != null && !sourcePlansById.has(plan.sectionId)) {
-        sourcePlansById.set(plan.sectionId, plan);
-      }
-      if (plan?.sectionName != null && !sourcePlansByName.has(plan.sectionName)) {
-        sourcePlansByName.set(plan.sectionName, plan);
-      }
-    }
-  }
-  const sectionPlans = structure.map((section, index) => {
-    const progress = structure.length <= 1 ? 1 : index / (structure.length - 1);
-    const baseEnergy = clamp(sectionIntensity(section.name) / 1.18, 0.2, 1);
-    const energy = narrativeEnergy(narrative.id, baseEnergy, progress, index);
-    const motifTransform = motifTransformForSection(section, index, structure, peakSection?.id);
-    const cadence = index === structure.length - 1 || section.name === "outro"
-      ? "resolve"
-      : ["prechorus", "build"].includes(section.name)
-        ? "lift"
-        : ["bridge", "breakdown"].includes(section.name)
-          ? "suspend"
-          : ["chorus", "drop"].includes(section.name)
-            ? "resolve"
-            : "open";
-    const role = section.id === peakSection?.id
-      ? "peak"
-      : section.id === hookSection?.id
-        ? "hook"
-        : motifTransform === "resolution"
-          ? "release"
-          : motifTransform === "statement"
-            ? "statement"
-            : "development";
-    const harmonicStory = harmonicStoryForSection(
-      section,
-      role,
-      cadence,
-      narrative.id,
-      index,
-      index === structure.length - 1,
-    );
-    const sourcePlan = sourcePlansById.get(section.id)
-      ?? sourcePlansByName.get(section.name);
-    const baseDevelopmentPath = developmentPathForTransform(motifTransform);
-    const patternVariant = Number.isFinite(Number(sourcePlan?.patternVariant))
-      ? mod(Math.round(sourcePlan.patternVariant), baseDevelopmentPath.length)
-      : rng.int(0, Math.max(0, baseDevelopmentPath.length - 1));
-    const developmentPath = [
-      ...baseDevelopmentPath.slice(patternVariant),
-      ...baseDevelopmentPath.slice(0, patternVariant),
-    ];
-    const tension = round(clamp(energy * 0.72 + (cadence === "lift" ? 0.22 : cadence === "suspend" ? 0.12 : 0), 0, 1));
-    const inheritedEnvelope = sourcePlan?.tensionEnvelope;
-    const tensionEnvelope = inheritedEnvelope
-      ? clone(inheritedEnvelope)
-      : (() => {
-        const release = role === "release" || cadence === "resolve" && section.name === "outro";
-        const lifting = cadence === "lift";
-        const suspended = cadence === "suspend";
-        const peak = role === "peak";
-        const start = release ? Math.max(0.28, tension * 0.72)
-          : lifting ? tension * 0.56
-            : suspended ? tension * 0.62
-              : peak ? Math.max(0.58, tension * 0.76)
-                : tension * 0.68;
-        const crest = release ? Math.max(start, tension * 0.82)
-          : lifting ? tension + 0.12
-            : suspended ? tension + 0.1
-              : peak ? tension + 0.18
-                : tension + 0.08;
-        const end = release ? Math.min(0.24, tension * 0.34)
-          : lifting ? crest - 0.015
-            : suspended ? crest - 0.04
-              : cadence === "resolve" ? tension * 0.48
-                : tension * 0.82;
-        return {
-          start: round(clamp(start, 0.08, 1)),
-          peak: round(clamp(crest, 0.12, 1)),
-          end: round(clamp(end, 0.08, 1)),
-          peakAt: release ? 0.28 : lifting ? 0.88 : peak ? 0.68 : 0.62,
-          phraseBars: clamp(Math.round(finite(style.rhythmIdentity?.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
-          phraseLift: round(clamp(0.035 + config.evolution * 0.075, 0.035, 0.11)),
-          shape: release ? "release" : lifting ? "rise" : suspended ? "suspend" : peak ? "crest" : "arc",
-        };
-      })();
-    return {
-      sectionId: section.id,
-      sectionName: section.name,
-      role,
-      energy: round(energy),
-      tension,
-      tensionEnvelope,
-      density: round(clamp(0.28 + energy * 0.58 + config.complexity * 0.1, 0.24, 1)),
-      registerLift: role === "peak" ? 1 : motifTransform === "resolution" ? -1 : 0,
-      harmonicActivity: round(clamp(0.25 + config.harmonicRhythm * 0.45 + energy * 0.24, 0.2, 1)),
-      cadence,
-      motifTransform,
-      patternVariant,
-      developmentPath,
-      direction,
-      harmonicRole: sourcePlan?.harmonicRole ?? harmonicStory.role,
-      harmonicColor: sourcePlan?.harmonicColor ?? harmonicStory.color,
-      harmonicStartDegree: sourcePlan?.harmonicStartDegree ?? harmonicStory.startDegree,
-      harmonicGoalDegree: sourcePlan?.harmonicGoalDegree ?? harmonicStory.goalDegree,
-    };
+
+  const sectionPlans = createBlueprintSectionPlans({
+    structure,
+    narrativeId: narrative.id,
+    peakSectionId: peakSection?.id,
+    hookSectionId: hookSection?.id,
+    direction: songDNA.melodic.direction,
+    config,
+    style,
+    rng,
+    source,
   });
-  const sourceTransitionsByPair = new Map();
-  if (Array.isArray(source?.transitions)) {
-    for (const transition of source.transitions) {
-      if (transition?.fromSectionId != null && transition?.toSectionId != null) {
-        const key = `${transition.fromSectionId}->${transition.toSectionId}`;
-        if (!sourceTransitionsByPair.has(key)) {
-          sourceTransitionsByPair.set(key, transition);
-        }
-      }
-    }
-  }
-  const transitions = sectionPlans.slice(0, -1).map((from, index) => {
-    const to = sectionPlans[index + 1];
-    const sourceTransition = sourceTransitionsByPair.get(`${from.sectionId}->${to.sectionId}`);
-    const type = sourceTransition?.type ?? transitionType(from, to);
-    const energyDelta = to.energy - from.energy;
-    const strength = sourceTransition?.strength ?? round(clamp(
-      0.42 + Math.abs(energyDelta) * 1.5 + (["launch", "drop-out"].includes(type) ? 0.18 : 0),
-      0.38,
-      1,
-    ));
-    return {
-      fromSectionId: from.sectionId,
-      toSectionId: to.sectionId,
-      type,
-      strength,
-      pickupBeats: sourceTransition?.pickupBeats ?? (strength > 0.72 ? 1 : 0.5),
-    };
-  });
+
+  const transitions = createBlueprintTransitions(sectionPlans, source);
   const orchestrationMatrix = createOrchestrationMatrix(config, structure, sectionPlans, source);
   const producerIntent = createProducerIntentContract(
     config,
@@ -2342,6 +2384,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
     memoryMap,
     songDNA,
   });
+
   return {
     version: 6,
     narrative: { id: narrative.id, label: narrative.label },
@@ -2353,16 +2396,7 @@ function createSongBlueprint(config, structure, style, rng, source = null) {
       tension,
       ...clone(tensionEnvelope),
     })),
-    qualityTargets: {
-      repetition: round(clamp(0.62 + (1 - config.surprise) * 0.12, 0.5, 0.82)),
-      sectionContrast: round(clamp(0.28 + config.evolution * 0.38, 0.24, 0.72)),
-      chordToneAnchors: round(clamp(0.68 + (1 - config.surprise) * 0.16, 0.62, 0.88)),
-      grooveLock: round(clamp(0.68 + config.energy * 0.18, 0.62, 0.9)),
-      transitionClarity: round(clamp(0.62 + config.evolution * 0.24, 0.58, 0.9)),
-      harmonicJourney: round(clamp(0.64 + config.complexity * 0.18, 0.6, 0.88)),
-      orchestrationContrast: round(clamp(0.58 + config.evolution * 0.3, 0.56, 0.9)),
-      memoryRecall: round(clamp(0.7 + (1 - config.surprise) * 0.14, 0.66, 0.88)),
-    },
+    qualityTargets: createBlueprintQualityTargets(config),
     styleAnchor: {
       drumGroove: style.drumGroove,
       bassGroove: style.bassGroove,
