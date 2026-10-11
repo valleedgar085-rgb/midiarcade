@@ -1268,3 +1268,11 @@ test("piano roll grid rendering escapes pitch labels and cell titles against XSS
     "piano roll cell titles must escape pitch labels using escapeHtml",
   );
 });
+
+test("piano roll modal closes on backdrop click", () => {
+  assert.match(
+    appSource,
+    /modal\.addEventListener\("click",\s*\(event\)\s*=>\s*\{\s*if\s*\(event\.target\s*===\s*modal\)\s*closeModal\(\);\s*\}\);/,
+    "pianoRollModal must bind backdrop click handler to close",
+  );
+});

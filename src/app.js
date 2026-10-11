@@ -3238,8 +3238,12 @@ function bindPianoRollInteractions() {
   const modal = $("#pianoRollModal");
   if (!modal) return;
 
-  $("#closePianoRoll")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
-  $("#prSaveClose")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
+  const closeModal = () => modal.close?.() || modal.removeAttribute("open");
+  $("#closePianoRoll")?.addEventListener("click", closeModal);
+  $("#prSaveClose")?.addEventListener("click", closeModal);
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) closeModal();
+  });
 
   $("#prToolDraw")?.addEventListener("click", () => {
     pianoRollState.tool = "draw";
