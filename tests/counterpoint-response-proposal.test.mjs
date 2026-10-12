@@ -33,7 +33,7 @@ test("resolves attack collisions even without dissonant overlap", () => {
 test("keeps unrepairable conflicts unchanged rather than inventing space", () => {
   const result = proposeCounterpointResponses(
     [{ start: 0, duration: 2, pitch: 72 }],
-    [{ start: 0, duration: 0.25, pitch: 60 }],
+    [{ start: 0.25, duration: 0.25, pitch: 60 }],
     { sectionEndBeat: 0.5 },
   );
   assert.equal(result.changed, 0);
