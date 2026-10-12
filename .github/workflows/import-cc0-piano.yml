@@ -45,5 +45,17 @@ jobs:
           git add assets/audio/instruments/piano/*.wav
           if ! git diff --cached --quiet; then
             git commit -m "assets(audio): bundle six CC0 piano recordings"
-            git push origin HEAD:feat/phase4-2-studio-sound-foundation
+            # Other CI or development commits may have advanced the branch while
+            # audio was downloading. Rebase safely rather than force-pushing.
+            for attempt in 1 2 3 4 5; do
+              git fetch origin feat/phase4-2-studio-sound-foundation
+              git rebase origin/feat/phase4-2-studio-sound-foundation
+              if git push origin HEAD:feat/phase4-2-studio-sound-foundation; then
+                exit 0
+              fi
+              echo "Remote branch advanced; retrying rebase ($attempt/5)"
+              sleep 3
+            done
+            echo "Could not safely publish WAV assets after five retries" >&2
+            exit 1
           fi
