@@ -5056,10 +5056,13 @@ export class PreviewPlayer {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Web Audio is unavailable.");
       this.context = new AudioContextClass({ latencyHint: previewAudioLatencyHint(this.previewRuntime) });
-      // Warm samples asynchronously; never block playback or drum scheduling.
-      this.pitchedSamplePreload = preloadPitchedSamples(
-        this.context, PITCHED_SAMPLE_MANIFEST, this.pitchedSampleBuffers,
-      ).catch(() => this.pitchedSampleBuffers);
+      // Only load sample audio when A/B mode is enabled. Normal preview
+      // startup stays fast and does not need network or WAV decoding.
+      if (this.sampleInstrumentsEnabled) {
+        this.pitchedSamplePreload = preloadPitchedSamples(
+          this.context, PITCHED_SAMPLE_MANIFEST, this.pitchedSampleBuffers,
+        ).catch(() => this.pitchedSampleBuffers);
+      }
       const createdContext = this.context;
       createdContext.onstatechange = () => this.handleContextStateChange(createdContext);
       if (typeof window !== "undefined") {
@@ -5206,6 +5209,10 @@ export class PreviewPlayer {
     this.trackBuses.clear();
     this.noiseBuffers.clear();
     this.drumSampleBuffers.clear();
+    // Decoded buffers belong to the previous audio context. Replace the map
+    // so an in-flight preload cannot populate the replacement cache.
+    this.pitchedSampleBuffers = new Map();
+    this.pitchedSamplePreload = null;
     this.periodicWaves.clear();
   }
 
@@ -5738,15 +5745,18 @@ export class PreviewPlayer {
         const nodes = new Set();
         const output = context.createGain();
         nodes.add(output);
-        this.connectPreviewOutput(
-          output, event,
-          ({ bass: -0.08, chords: -0.18 }[event.id] || 0), 1, nodes,
-        );
         const source = schedulePitchedSample(context, buffer, event, entry.rootPitch, when, output, nodes);
         if (source) {
-          source.onended = () => { for (const node of nodes) { try { node.disconnect(); } catch {} } };
+          this.connectPreviewOutput(
+            output, event,
+            ({ bass: -0.08, chords: -0.18 }[event.id] || 0), 1, nodes,
+          );
+          // Keep sampled voices under the same pause/seek/polyphony limits
+          // and click-safe cleanup contract as oscillator voices.
+          this.registerScheduledVoice([source], nodes, event, when);
           return;
         }
+        // Failed sample scheduling must not leave an output chain attached.
         try { output.disconnect(); } catch {}
       }
     }
@@ -6331,13 +6341,7 @@ if (typeof document !== "undefined") {
       player.studioSoundEnabled = player.studioSoundEnabled !== true;
       toggle.textContent = player.studioSoundEnabled ? "Studio Sound: On" : "Studio Sound: Off";
       toggle.setAttribute("aria-pressed", String(player.studioSoundEnabled));
-      // Preload only when Studio mode is requested; absent sample assets
-      // are safely ignored and existing synthesis continues uninterrupted.
-      if (player.studioSoundEnabled && !player.pitchedSamplePreload && player.context) {
-        player.pitchedSamplePreload = preloadPitchedSamples(
-          player.context, PITCHED_SAMPLE_MANIFEST, player.pitchedSampleBuffers,
-        ).catch(() => player.pitchedSampleBuffers);
-      }
+      // Studio Sound uses harmonic synthesis, not the optional WAV bank.
     });
     host.append(toggle);
     const samples = document.createElement("button");
