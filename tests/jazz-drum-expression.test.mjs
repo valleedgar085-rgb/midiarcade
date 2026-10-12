@@ -58,6 +58,11 @@ test("Jazz groove expression observer exposes compact, deterministic drummer/bas
   assert.equal(report.bars, 4);
   assert.deepEqual(report.densityCurve, [6, 6, 6, 6]);
   assert.ok(report.bassKickCoincidence > 0);
+  assert.equal(report.fullBarUniqueness, 0.25);
+  assert.equal(report.kickSnareSkeletonUniqueness, 0.25);
+  assert.equal(report.adjacentCloneRatio, 1);
+  assert.equal(report.possibleOvervariation, false);
+
   assert.deepEqual(report, analyzeJazzDrumExpression(source));
   assert.equal(analyzeJazzDrumExpression({ genre: "house" }).available, false);
 });
