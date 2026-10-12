@@ -5738,6 +5738,8 @@ export class PreviewPlayer {
     const studioHarmonics = studioSoundHarmonics(event.id, {
       enabled: this.studioSoundEnabled === true,
       brightness: clamp(Number(event.cutoff ?? 8000) / 12000, 0, 1),
+      velocity: event.velocity,
+      pitch: event.pitch,
     });
     const studioWave = studioHarmonics && context.createPeriodicWave
       ? context.createPeriodicWave(new Float32Array(studioHarmonics.length), studioHarmonics, { disableNormalization: false })
