@@ -4,7 +4,7 @@ import { proposeCounterpointResponses } from "./counterpoint-response-proposal.j
 
 // A bounded, opt-in ensemble repair. The critic and release gate, not this
 // heuristic, own acceptance. The committed song is never mutated on rejection.
-export const MAX_COUNTERPOINT_RESPONSE_CANDIDATES = 2;
+export const MAX_COUNTERPOINT_RESPONSE_CANDIDATES = 4;
 const MAX_MOVED_NOTES_PER_CANDIDATE = 4;
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const round = (value) => Math.round((value + Number.EPSILON) * 10000) / 10000;
@@ -26,13 +26,18 @@ function sectionBounds(song, section) {
 }
 
 function conflictCount(melody, answers) {
-  return answers.reduce((count, note) => count + melody.filter((lead) => {
-    const onset = Math.abs(finite(lead.start) - finite(note.start)) < 0.12;
-    const overlapping = finite(note.start) < finite(lead.start) + finite(lead.duration, 0.25)
-      && finite(lead.start) < finite(note.start) + finite(note.duration, 0.25);
-    const interval = ((Math.abs(Math.round(finite(note.pitch)) - Math.round(finite(lead.pitch))) % 12) + 12) % 12;
-    return onset || (overlapping && [0, 1, 6, 11].includes(interval));
-  }).length, 0);
+  // Exactly mirror the critic: one onset penalty and one dissonance penalty
+  // per counterpoint note, not one penalty per overlapping lead note.
+  return answers.reduce((count, note) => {
+    const onset = melody.some((lead) => Math.abs(finite(lead.start) - finite(note.start)) < 0.12);
+    const dissonance = melody.some((lead) => {
+      const overlapping = finite(note.start) < finite(lead.start) + finite(lead.duration, 0.25)
+        && finite(lead.start) < finite(note.start) + finite(note.duration, 0.25);
+      const interval = Math.abs(Math.round(finite(note.pitch)) - Math.round(finite(lead.pitch))) % 12;
+      return overlapping && [0, 1, 6, 11].includes(interval);
+    });
+    return count + Number(onset) + Number(dissonance);
+  }, 0);
 }
 
 function preservesHarmonyWindow(song, before, after) {
@@ -62,52 +67,61 @@ export function createCounterpointResponseCandidates(song) {
 
   const sections = (song?.structure ?? []).map((section) => {
     const bounds = sectionBounds(song, section);
-    const lead = melody.filter((note) => finite(note.start) >= bounds.start - 1e-6
-      && finite(note.start) < bounds.end - 1e-6);
+    const lead = melody.filter((note) => finite(note.start) < bounds.end - 1e-6
+      && finite(note.start) + finite(note.duration, 0.25) > bounds.start + 1e-6);
     const indexed = answers.map((note, index) => ({ note, index })).filter(({ note }) =>
       finite(note.start) >= bounds.start - 1e-6 && finite(note.start) < bounds.end - 1e-6);
     return { id: String(section?.id ?? ""), bounds, lead, indexed,
       conflicts: conflictCount(lead, indexed.map(({ note }) => note)) };
   }).filter((section) => section.conflicts > 0 && section.lead.length && section.indexed.length)
     .sort((a, b) => b.conflicts - a.conflicts || a.bounds.start - b.bounds.start);
-  const weakest = sections[0];
-  if (!weakest) return [];
+  if (!sections.length) return [];
 
   const results = [];
-  for (const maxShiftBeats of [0.25, 0.5]) {
-    const proposal = proposeCounterpointResponses(
-      weakest.lead, weakest.indexed.map(({ note }) => note),
-      { maxShiftBeats, stepBeats: 0.125, sectionEndBeat: weakest.bounds.end },
-    );
-    const changedIndices = [];
-    const replacements = new Map();
-    proposal.proposals.forEach((entry, index) => {
-      if (changedIndices.length >= MAX_MOVED_NOTES_PER_CANDIDATE || !entry.changed) return;
-      if (!preservesHarmonyWindow(song, entry.original, entry.proposed)) return;
-      const originalIndex = weakest.indexed[index].index;
-      changedIndices.push(originalIndex);
-      replacements.set(originalIndex, entry.proposed);
-    });
-    if (!changedIndices.length) continue;
-    const changedNotes = answers.map((note, index) => replacements.get(index) ?? { ...note })
-      .sort((a, b) => finite(a.start) - finite(b.start) || finite(a.pitch) - finite(b.pitch));
-    const candidate = {
-      ...song,
-      tracks: song.tracks.map((track) => track.id === "counterpoint"
-        ? { ...track, notes: changedNotes }
-        : track),
-    };
-    results.push({
-      id: `counterpoint-response:${weakest.id}:${maxShiftBeats}`,
-      sectionId: weakest.id,
-      maxShiftBeats,
-      changedNotes: changedIndices.length,
-      beforeConflicts: weakest.conflicts,
-      afterConflicts: conflictCount(weakest.lead,
-        changedNotes.filter((note) => finite(note.start) >= weakest.bounds.start
-          && finite(note.start) < weakest.bounds.end)),
-      song: candidate,
-    });
+  // If the weakest section has no safe move, try the next weakest rather
+  // than incorrectly concluding that the entire song is unrepairable.
+  for (const section of sections.slice(0, 3)) {
+    for (const maxShiftBeats of [0.5, 1]) {
+      const proposal = proposeCounterpointResponses(
+        section.lead, section.indexed.map(({ note }) => note),
+        {
+          maxShiftBeats, stepBeats: 0.125,
+          sectionStartBeat: section.bounds.start,
+          sectionEndBeat: section.bounds.end,
+        },
+      );
+      const changedIndices = [];
+      const replacements = new Map();
+      proposal.proposals.forEach((entry, index) => {
+        if (changedIndices.length >= MAX_MOVED_NOTES_PER_CANDIDATE || !entry.changed) return;
+        if (!preservesHarmonyWindow(song, entry.original, entry.proposed)) return;
+        const originalIndex = section.indexed[index].index;
+        changedIndices.push(originalIndex);
+        replacements.set(originalIndex, entry.proposed);
+      });
+      if (!changedIndices.length) continue;
+      const changedNotes = answers.map((note, index) => replacements.get(index) ?? { ...note })
+        .sort((a, b) => finite(a.start) - finite(b.start) || finite(a.pitch) - finite(b.pitch));
+      const sectionAnswers = changedNotes.filter((note) => finite(note.start) >= section.bounds.start
+        && finite(note.start) < section.bounds.end);
+      const afterConflicts = conflictCount(section.lead, sectionAnswers);
+      if (afterConflicts >= section.conflicts) continue;
+      results.push({
+        id: `counterpoint-response:${section.id}:${maxShiftBeats}`,
+        sectionId: section.id,
+        maxShiftBeats,
+        changedNotes: changedIndices.length,
+        beforeConflicts: section.conflicts,
+        afterConflicts,
+        song: {
+          ...song,
+          tracks: song.tracks.map((track) => track.id === "counterpoint"
+            ? { ...track, notes: changedNotes }
+            : track),
+        },
+      });
+      if (results.length >= MAX_COUNTERPOINT_RESPONSE_CANDIDATES) return results;
+    }
   }
   return results.slice(0, MAX_COUNTERPOINT_RESPONSE_CANDIDATES);
 }
