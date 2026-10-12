@@ -47,6 +47,7 @@ import {
   runQualityStageSequence,
 } from "./output-quality-stage-runner.js";
 import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
+import { applyCounterpointResponseRefinement } from "./counterpoint-response-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
 const REPETITION_ATTEMPT_CEILING = 90;
@@ -1463,6 +1464,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "melodySectionDevelopmentRefinement", run: (current) => applyMelodySectionDevelopmentRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
+    { id: "counterpointResponseRefinement", run: (current) => applyCounterpointResponseRefinement(current, config, evaluate, release) },
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
@@ -1489,6 +1491,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     melodySectionMemoryDiagnostics: diagnostics.melodySectionMemoryAudit,
     bassContinuityDiagnostics: diagnostics.bassContinuityRefinement,
     ensembleContinuityDiagnostics: diagnostics.ensembleContinuityRefinement,
+    counterpointResponseDiagnostics: diagnostics.counterpointResponseRefinement,
     transitionFxDiagnostics: diagnostics.transitionFxRefinement,
   };
 }
@@ -1515,6 +1518,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["melodySectionMemoryAudit", processed.melodySectionMemoryDiagnostics],
     ["bassContinuityRefinement", processed.bassContinuityDiagnostics],
     ["ensembleContinuityRefinement", processed.ensembleContinuityDiagnostics],
+    ["counterpointResponseRefinement", processed.counterpointResponseDiagnostics],
     ["transitionFxRefinement", processed.transitionFxDiagnostics],
   ];
   const stageDiagnostics = Object.fromEntries(stageEntries.filter(([, diagnostics]) => diagnostics != null));
