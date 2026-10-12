@@ -39,9 +39,14 @@ test("sample scheduling returns null without a loaded buffer", () => {
 
 test("CC0 piano keyzones have valid local sample paths", () => {
   for (const pitch of [48, 53, 60, 65, 72, 77]) {
-    const entry = selectPitchedSample("chords", pitch);
-    assert.equal(entry?.rootPitch, pitch);
-    assert.ok(entry.path.endsWith(`piano-${pitch}.wav`));
+    const soft = selectPitchedSample("chords", pitch, PITCHED_SAMPLE_MANIFEST, 40);
+    const strong = selectPitchedSample("chords", pitch, PITCHED_SAMPLE_MANIFEST, 105);
+    assert.equal(soft?.rootPitch, pitch);
+    assert.equal(strong?.rootPitch, pitch);
+    assert.equal(soft?.velocityLayer, 1);
+    assert.equal(strong?.velocityLayer, 2);
+    assert.ok(soft.path.endsWith(`piano-${pitch}.wav`));
+    assert.ok(strong.path.endsWith(`piano-${pitch}-strong.wav`));
   }
 });
 
