@@ -5056,6 +5056,10 @@ export class PreviewPlayer {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Web Audio is unavailable.");
       this.context = new AudioContextClass({ latencyHint: previewAudioLatencyHint(this.previewRuntime) });
+      // Warm samples asynchronously; never block playback or drum scheduling.
+      this.pitchedSamplePreload = preloadPitchedSamples(
+        this.context, PITCHED_SAMPLE_MANIFEST, this.pitchedSampleBuffers,
+      ).catch(() => this.pitchedSampleBuffers);
       const createdContext = this.context;
       createdContext.onstatechange = () => this.handleContextStateChange(createdContext);
       if (typeof window !== "undefined") {
@@ -5727,7 +5731,7 @@ export class PreviewPlayer {
     const context = this.context;
     // Sample mode is independent from Studio harmonic mode. Empty/unavailable
     // licensed sample packs fall through to the known-good oscillator path.
-    if (this.studioSoundEnabled === true && this.sampleInstrumentsEnabled === true) {
+    if (this.sampleInstrumentsEnabled === true) {
       const entry = selectPitchedSample(event.id, event.pitch, PITCHED_SAMPLE_MANIFEST);
       const buffer = entry && this.pitchedSampleBuffers.get(entry.path);
       if (buffer) {
@@ -6336,6 +6340,24 @@ if (typeof document !== "undefined") {
       }
     });
     host.append(toggle);
+    const samples = document.createElement("button");
+    samples.id = "samplePianoToggle";
+    samples.type = "button";
+    samples.className = "track-toggle";
+    samples.textContent = "Sample Piano: Off";
+    samples.setAttribute("aria-label", "Toggle sampled piano chords; drums and bass remain unchanged");
+    samples.setAttribute("aria-pressed", "false");
+    samples.addEventListener("click", () => {
+      player.sampleInstrumentsEnabled = !player.sampleInstrumentsEnabled;
+      samples.textContent = player.sampleInstrumentsEnabled ? "Sample Piano: On" : "Sample Piano: Off";
+      samples.setAttribute("aria-pressed", String(player.sampleInstrumentsEnabled));
+      if (player.sampleInstrumentsEnabled && player.context && !player.pitchedSamplePreload) {
+        player.pitchedSamplePreload = preloadPitchedSamples(
+          player.context, PITCHED_SAMPLE_MANIFEST, player.pitchedSampleBuffers,
+        ).catch(() => player.pitchedSampleBuffers);
+      }
+    });
+    host.append(samples);
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", installStudioSoundToggle, { once: true });
