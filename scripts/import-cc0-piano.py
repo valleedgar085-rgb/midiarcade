@@ -11,9 +11,13 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEST = ROOT / "assets/audio/instruments/piano"
-BASE = "https://raw.githubusercontent.com/sfzinstruments/Osiris_Piano/main/UC/A/"
+# Pin the source revision for reproducible and license-auditable audio.
+SOURCE_REVISION = "18c6afccb60cff458edbf7c394571783e074e1e9"
+BASE = f"https://raw.githubusercontent.com/sfzinstruments/Osiris_Piano/{SOURCE_REVISION}/UC/A/"
 NOTES = {
-    "C3": 48, "F3": 53, "C4": 60, "F4": 65, "C5": 72, "F5": 77,
+    # Osiris SFZ calls middle C "C3" (MIDI 60), not C4.
+    # These keycenters were checked against its uc_mica_vl1_map.sfz.
+    "C2": 48, "F2": 53, "C3": 60, "F3": 65, "C4": 72, "F4": 77,
 }
 
 
@@ -29,9 +33,8 @@ def main():
             filename = f"Piano_UC_MicA_{note}_vl{layer}.flac"
             source = BASE + filename
             output = DEST / f"piano-{midi}{suffix}.wav"
-            if output.exists():
-                print(f"Already present: {output}")
-                continue
+            # Rebuild existing names as well: legacy files used the wrong
+            # octave convention; skipping them would preserve bad tuning.
             print(f"Fetching {source}")
             with urllib.request.urlopen(source, timeout=40) as response:
                 encoded = response.read()
