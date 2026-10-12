@@ -177,6 +177,10 @@ test("Jazz three-seed opt-in shadow retains release-gate, determinism and produc
       beforeGroove: before.subscores.groove, afterGroove: after.subscores.groove,
       beforeExpression: analyzeJazzDrumExpression(baseline).velocityContrast,
       afterExpression: analyzeJazzDrumExpression(afterPipeline.song).velocityContrast,
+      fullBarUniqueness: analyzeJazzDrumExpression(baseline).fullBarUniqueness,
+      skeletonUniqueness: analyzeJazzDrumExpression(baseline).kickSnareSkeletonUniqueness,
+      overvariationFlag: analyzeJazzDrumExpression(baseline).possibleOvervariation,
+      bassKickCoincidence: analyzeJazzDrumExpression(baseline).bassKickCoincidence,
       accepted: diag.accepted, reason: diag.reason,
       moved: diag.changedNotes ?? 0,
     });
