@@ -62,6 +62,8 @@ test("Jazz groove expression observer exposes compact, deterministic drummer/bas
   assert.equal(report.structuralBarUniqueness, 0.25);
   assert.equal(report.kickSnareSkeletonUniqueness, 0.25);
   assert.equal(report.adjacentCloneRatio, 1);
+  assert.equal(report.hatShapeDiversity, 0.25);
+  assert.equal(report.protectedFillBars, 0);
   assert.equal(report.possibleOvervariation, false);
 
   assert.deepEqual(report, analyzeJazzDrumExpression(source));
@@ -182,6 +184,7 @@ test("Jazz three-seed opt-in shadow retains release-gate, determinism and produc
       structuralBarUniqueness: analyzeJazzDrumExpression(baseline).structuralBarUniqueness,
       humanizedRepeatLikely: analyzeJazzDrumExpression(baseline).humanizedRepeatLikely,
       skeletonUniqueness: analyzeJazzDrumExpression(baseline).kickSnareSkeletonUniqueness,
+      hatShapeDiversity: analyzeJazzDrumExpression(baseline).hatShapeDiversity,
       overvariationFlag: analyzeJazzDrumExpression(baseline).possibleOvervariation,
       bassKickCoincidence: analyzeJazzDrumExpression(baseline).bassKickCoincidence,
       accepted: diag.accepted, reason: diag.reason,
