@@ -46,6 +46,42 @@ export async function preloadPitchedSamples(context, manifest = PITCHED_SAMPLE_M
   return cache;
 }
 
+// Match the perceived level of short piano recordings without pushing the
+// master bus harder. AudioBuffer analysis is cached: notes never rescan audio.
+const sampleLevelCache = new WeakMap();
+
+export function pitchedSampleLevelCompensation(buffer) {
+  if (!buffer || typeof buffer.getChannelData !== "function") return 1;
+  const previous = sampleLevelCache.get(buffer);
+  if (previous !== undefined) return previous;
+  let compensation = 1;
+  try {
+    const samples = buffer.getChannelData(0);
+    const sampleRate = Number(buffer.sampleRate) || 22050;
+    const sampleCount = Math.min(samples.length, Math.floor(sampleRate * 0.8));
+    let squareSum = 0;
+    let peak = 0;
+    let analyzed = 0;
+    for (let i = 0; i < sampleCount; i += 8) {
+      const amplitude = Math.abs(samples[i]);
+      if (!Number.isFinite(amplitude)) continue;
+      peak = Math.max(peak, amplitude);
+      squareSum += amplitude * amplitude;
+      analyzed += 1;
+    }
+    if (analyzed > 0 && peak > 0.0001) {
+      const rms = Math.sqrt(squareSum / analyzed);
+      // Capped boost for quiet recordings, backed off for loud transients.
+      // A safety ceiling prevents a single piano key from clipping its voice.
+      compensation = Math.max(0.2, Math.min(1.8, 0.11 / Math.max(rms, 0.0001), 0.7 / peak));
+    }
+  } catch {
+    compensation = 1;
+  }
+  sampleLevelCache.set(buffer, compensation);
+  return compensation;
+}
+
 export function schedulePitchedSample(context, buffer, event, rootPitch, when, destination, nodes) {
   if (!context?.createBufferSource || !context?.createGain || !buffer || !destination) return null;
   const pitch = Number(event?.pitch);
@@ -55,19 +91,21 @@ export function schedulePitchedSample(context, buffer, event, rootPitch, when, d
   const source = context.createBufferSource();
   const gain = context.createGain();
   const duration = Math.max(0.04, Math.min(6, Number(event?.duration) || 0.25));
-  const tail = 0.07;
+  const tail = 0.09;
   const available = Number(buffer.duration) / rate;
   if (!Number.isFinite(available) || available < 0.06) return null;
   const end = Math.min(duration + tail, available);
-  const attack = Math.min(0.014, end * 0.2);
+  const attack = Math.min(0.012, end * 0.2);
+  const release = Math.min(0.09, Math.max(0.018, end * 0.16));
   const peak = Math.max(0.0002, Math.min(0.48,
     (Math.max(1, Math.min(127, Number(event.velocity) || 90)) / 127) * 0.38
-    * Math.max(0, Math.min(1, Number(event.mixGain ?? 1)))));
+    * Math.max(0, Math.min(1, Number(event.mixGain ?? 1)))
+    * pitchedSampleLevelCompensation(buffer)));
   source.buffer = buffer;
   source.playbackRate.setValueAtTime(rate, when);
   gain.gain.setValueAtTime(0.0001, when);
   gain.gain.exponentialRampToValueAtTime(peak, when + attack);
-  gain.gain.setValueAtTime(peak, when + Math.max(attack + 0.001, end - 0.035));
+  gain.gain.setValueAtTime(peak, when + Math.max(attack + 0.001, end - release));
   gain.gain.exponentialRampToValueAtTime(0.0001, when + end);
   source.connect(gain).connect(destination);
   nodes?.add(source);
