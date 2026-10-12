@@ -164,12 +164,23 @@ export function applyCounterpointResponseRefinement(song, config = {}, evaluateC
       || afterCoherence?.checks?.grooveTimingStable === true;
     const negativeSpaceSafe = !beforeCoherence?.checks?.protectedNegativeSpace
       || afterCoherence?.checks?.protectedNegativeSpace === true;
-    const coherenceSafe = (!beforeCoherence?.passed || afterCoherence?.passed)
-      && grooveSafe && negativeSpaceSafe;
+    // Existing cross-authority problems must not become worse or be swapped
+    // for a new problem. Timing and negative-space violation counts are also
+    // non-increasing, even when a baseline already has a violation.
+    const beforeIssues = new Set(beforeCoherence?.issues ?? []);
+    const newIssues = (afterCoherence?.issues ?? []).filter((issue) => !beforeIssues.has(issue));
+    const coherenceSafe = newIssues.length === 0
+      && finite(afterCoherence?.score) >= finite(beforeCoherence?.score)
+      && (!beforeCoherence?.passed || afterCoherence?.passed)
+      && grooveSafe && negativeSpaceSafe
+      && finite(afterCoherence?.grooveLock?.timingViolations) <= finite(beforeCoherence?.grooveLock?.timingViolations)
+      && finite(afterCoherence?.grooveLock?.protectedSpaceViolations) <= finite(beforeCoherence?.grooveLock?.protectedSpaceViolations);
+    const afterSeparation = finite(after?.subscores?.separation);
     const accepted = Boolean(
       release?.passed && scaleSafe && coherenceSafe && protectedSafe
       && candidate.afterConflicts < candidate.beforeConflicts
-      && separationDelta >= 1 && scoreDelta >= -1e-9 && floorDelta >= -1e-9
+      && afterSeparation >= 72 && separationDelta >= 1
+      && scoreDelta >= -1e-9 && floorDelta >= -1e-9
     );
     return {
       ...candidate, accepted, after, release, scoreDelta, floorDelta, separationDelta,
@@ -179,7 +190,7 @@ export function applyCounterpointResponseRefinement(song, config = {}, evaluateC
           : !coherenceSafe ? "coherence-or-groove-violation"
             : !protectedSafe ? "protected-dimension-regression"
               : candidate.afterConflicts >= candidate.beforeConflicts ? "no-collision-improvement"
-                : separationDelta < 1 ? "separation-not-improved"
+                : separationDelta < 1 || afterSeparation < 72 ? "separation-below-release-floor"
                   : scoreDelta < -1e-9 || floorDelta < -1e-9 ? "overall-quality-regression"
                     : "accepted-separation-win",
     };
