@@ -101,5 +101,57 @@ test("target R&B seed preserves critic, release gates, and deterministic results
     accepted: first.diagnostics.accepted,
     reason: first.diagnostics.reason,
     candidateSummaries: first.diagnostics.candidates,
+    proposals: createCounterpointResponseCandidates(finished).map((entry) => ({
+      id: entry.id, section: entry.sectionId,
+      moved: entry.changedNotes, beforeConflicts: entry.beforeConflicts,
+      afterConflicts: entry.afterConflicts,
+    })),
   }));
+});
+
+test("three deterministic R&B lab seeds preserve the full critic under opt-in pipeline integration", () => {
+  const rows = [];
+  for (const seed of ["quality-lab-01", "quality-lab-02", "quality-lab-03"]) {
+    const config = {
+      ...applyOutputQualityEvolution({
+        genre: "rnbSoul", seed: `${seed}:rnbSoul`, bars: 16,
+        candidateCount: 1,
+      }, { kind: "new" }),
+      phraseResolutionRefinement: true,
+      registerHealthRefinement: true,
+    };
+    const raw = generateNew(config);
+    const baseline = applySongOutputQualityPipeline(raw, config).song;
+    const optimized = applySongOutputQualityPipeline(raw, {
+      ...config,
+      counterpointResponseRefinement: true,
+    });
+    const before = evaluateSongCandidate(baseline);
+    const after = evaluateSongCandidate(optimized.song);
+    const stage = optimized.counterpointResponseDiagnostics;
+    assert.ok(stage, `missing diagnostics for ${seed}`);
+    assert.ok(Number.isFinite(after.subscores.separation));
+    for (const key of Object.keys(before.subscores)) {
+      assert.ok(Number(after.subscores[key]) >= Number(before.subscores[key]) - 1e-9,
+        `${seed} ${key}: ${before.subscores[key]} -> ${after.subscores[key]}`);
+    }
+    if (stage.accepted) {
+      assert.equal(evaluateSongReleaseGate(optimized.song, after).passed, true);
+      assert.ok(after.subscores.separation > before.subscores.separation);
+      assert.equal(after.diagnostics.scaleFit, 1);
+      assert.equal(
+        optimized.song.meta.scoreDetails.outputQualityPostprocess.counterpointResponseRefinement.accepted,
+        true,
+      );
+    } else {
+      assert.deepEqual(optimized.song, baseline, `${seed} must not change unless accepted`);
+    }
+    rows.push({
+      seed, beforeSeparation: before.subscores.separation,
+      afterSeparation: after.subscores.separation,
+      accepted: stage.accepted, reason: stage.reason,
+      candidates: stage.candidatesEvaluated,
+    });
+  }
+  console.info("R&B counterpoint three-seed calibration", JSON.stringify(rows));
 });
