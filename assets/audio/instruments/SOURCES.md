@@ -10,10 +10,15 @@ Do not activate the pitched sample path until source files are bundled, decoded 
    instrument are CC0. Commercial APK redistribution needs explicit
    permission from Jeff Learman. Do not import or redistribute its audio.
    Original license: https://github.com/sfzinstruments/jlearman.jRhodes3d/blob/master/LICENSE
-2. **Versilian Community Sample Library (VCSL)** — CC0 instrument collection:
+2. **Osiris Piano (CC0)** — https://github.com/sfzinstruments/Osiris_Piano
+   Repository contains a CC0 1.0 LICENSE and sampled piano instruments.
+   Evaluate its electric-piano suitability by listening; it is not a Rhodes
+   substitute by license or instrument identity. Verify sample-specific
+   provenance and record chosen note roots before bundling.
+3. **Versilian Community Sample Library (VCSL)** — CC0 instrument collection:
    https://github.com/sgossner/VCSL
    Inspect the specific bass instrument and mapping, not just the repository license.
-3. **University of Iowa Musical Instrument Samples** — available for projects without
+4. **University of Iowa Musical Instrument Samples** — available for projects without
    restrictions, https://theremin.music.uiowa.edu/MIS.html
    Pizzicato double bass is an alternative to electric bass; it is *not* an 808.
    Source files are grouped into chromatic recordings and need note extraction.
