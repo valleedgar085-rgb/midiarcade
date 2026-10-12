@@ -14,15 +14,19 @@ export const PITCHED_SAMPLE_MANIFEST = Object.freeze({
   ]),
 });
 
-export function selectPitchedSample(trackId, pitch, manifest = PITCHED_SAMPLE_MANIFEST) {
+export function selectPitchedSample(trackId, pitch, manifest = PITCHED_SAMPLE_MANIFEST, velocity = 90) {
   const entries = manifest?.[trackId];
   if (!Array.isArray(entries) || !entries.length || !Number.isFinite(Number(pitch))) return null;
   const target = Math.max(0, Math.min(127, Math.round(Number(pitch))));
+  // The original piano mapping uses vl1 for MIDI velocities 1–63 and
+  // vl2 for 64–127. Select timbre after matching the note zone.
+  const desiredLayer = Number.isFinite(Number(velocity)) && Number(velocity) < 64 ? 1 : 2;
   const ranked = entries.filter((entry) =>
     entry && typeof entry.path === "string" && entry.path.startsWith("./assets/audio/instruments/")
     && Number.isInteger(entry.rootPitch) && entry.rootPitch >= 0 && entry.rootPitch <= 127
     && Math.abs(entry.rootPitch - target) <= 7);
   ranked.sort((a, b) => Math.abs(a.rootPitch - target) - Math.abs(b.rootPitch - target)
+    || Math.abs((a.velocityLayer ?? 1) - desiredLayer) - Math.abs((b.velocityLayer ?? 1) - desiredLayer)
     || a.rootPitch - b.rootPitch);
   return ranked[0] ?? null;
 }
