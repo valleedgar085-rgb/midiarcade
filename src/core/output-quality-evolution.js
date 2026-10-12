@@ -164,6 +164,11 @@ export function applyOutputQualityEvolution(config = {}, { kind = "new" } = {}) 
     ensembleContinuityRefinement: typeof source.ensembleContinuityRefinement === "boolean"
       ? source.ensembleContinuityRefinement
       : freshGeneration,
+    // R&B lead/counter dialogue is an opt-out, critic-guarded repair on
+    // fresh, single-genre songs. No other genre or variation is re-timed.
+    counterpointResponseRefinement: typeof source.counterpointResponseRefinement === "boolean"
+      ? source.counterpointResponseRefinement
+      : freshGeneration && profile.genre === "rnbSoul" && !source.secondaryGenre,
     transitionFxRefinement: typeof source.transitionFxRefinement === "boolean"
       ? source.transitionFxRefinement
       : freshGeneration,
