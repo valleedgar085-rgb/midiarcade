@@ -108,11 +108,25 @@ export function analyzeJazzDrumExpression(song) {
   const populatedSignatures = barSignatures.filter(Boolean);
   const fullBarUniqueness = populatedSignatures.length
     ? new Set(populatedSignatures).size / populatedSignatures.length : 0;
+  // Shadow structural identity at a 1/12-beat lattice so harmless swing and
+  // humanization do not masquerade as entirely different drum compositions.
+  const structuralSignatures = Array.from({ length: bars }, (_, bar) => {
+    const inBar = notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar);
+    return inBar.map((note) => {
+      const local = beatOffset(finite(note.start), barBeats);
+      const quantized = round(Math.round(local * 12) / 12, 4);
+      return `${Math.round(finite(note.pitch))}@${quantized}`;
+    }).sort().join("|");
+  }).filter(Boolean);
+  const structuralBarUniqueness = structuralSignatures.length
+    ? new Set(structuralSignatures).size / structuralSignatures.length : 0;
   const skeletonSignatures = Array.from({ length: bars }, (_, bar) => {
     const inBar = notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar
       && (KICKS.has(Number(note.pitch)) || SNARES.has(Number(note.pitch))));
-    return inBar.map((note) => `${Math.round(finite(note.pitch))}@${round(beatOffset(finite(note.start), barBeats), 3)}`)
-      .sort().join("|");
+    return inBar.map((note) => {
+      const local = beatOffset(finite(note.start), barBeats);
+      return `${Math.round(finite(note.pitch))}@${round(Math.round(local * 12) / 12, 4)}`;
+    }).sort().join("|");
   }).filter(Boolean);
   const skeletonUniqueness = skeletonSignatures.length
     ? new Set(skeletonSignatures).size / skeletonSignatures.length : 0;
@@ -140,9 +154,12 @@ export function analyzeJazzDrumExpression(song) {
     densityCurve: Object.freeze(densityCurve),
     microtimingSpreadProxy: round(meterDeviation),
     fullBarUniqueness: round(fullBarUniqueness),
+    structuralBarUniqueness: round(structuralBarUniqueness),
     kickSnareSkeletonUniqueness: round(skeletonUniqueness),
     adjacentCloneRatio: round(adjacentClones),
-    possibleOvervariation: populatedSignatures.length >= 8 && fullBarUniqueness >= 0.95,
+    possibleOvervariation: populatedSignatures.length >= 8 && structuralBarUniqueness >= 0.95,
+    humanizedRepeatLikely: populatedSignatures.length >= 8
+      && fullBarUniqueness >= 0.95 && structuralBarUniqueness < 0.8,
   });
 }
 
