@@ -1464,7 +1464,21 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     { id: "melodySectionDevelopmentRefinement", run: (current) => applyMelodySectionDevelopmentRefinement(current, config, evaluate, release) },
     { id: "bassContinuityRefinement", run: (current) => applyBassContinuityRefinement(current, config, evaluate, release) },
     { id: "ensembleContinuityRefinement", run: (current) => applyEnsembleContinuityRefinement(current, config, evaluate, release) },
-    { id: "counterpointResponseRefinement", run: (current) => applyCounterpointResponseRefinement(current, config, evaluate, release) },
+    {
+      id: "counterpointResponseRefinement",
+      run: (current) => {
+        const result = applyCounterpointResponseRefinement(current, config, evaluate, release);
+        if (result.diagnostics?.accepted) {
+          const evaluation = evaluate(result.song);
+          const releaseGate = release(result.song, evaluation);
+          result.song.meta = acceptedMetadata(
+            result.song, evaluation, releaseGate,
+            "counterpointResponseRefinement", result.diagnostics,
+          );
+        }
+        return result;
+      },
+    },
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
