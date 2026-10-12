@@ -22,7 +22,10 @@ function isProtected(note) {
   return Boolean(
     note?.drumFillId || note?.transitionFeature || note?.transitionHandoffRole
     || note?.transitionHandoffId || note?.phraseAnchor || note?.resolutionRole
-    || note?.finalAssemblyRole || feature.includes("fill") || feature.includes("roll")
+    || note?.ensembleAccent || note?.memoryRole || note?.motifHandoffRole
+    || note?.jazzMemoryPocketRecall || note?.jazzMemoryColorRecall
+    || note?.jazzMemoryGlobalRecall || note?.finalAssemblyRole
+    || feature.includes("fill") || feature.includes("roll")
   );
 }
 
