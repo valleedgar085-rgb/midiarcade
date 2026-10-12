@@ -109,3 +109,16 @@ test("sampled piano schedules a bounded gain and smooth release", () => {
     context, { duration: 0.03 }, { pitch: 60 }, 60, 3, {}, nodes,
   ), null, "too-short buffer falls back to the synth");
 });
+
+test("piano velocity zones select distinct CC0 dynamics without changing pitch", () => {
+  const manifest = { chords: [
+    { rootPitch: 60, path: "./assets/audio/instruments/piano/piano-60.wav", velocityLayer: 1 },
+    { rootPitch: 60, path: "./assets/audio/instruments/piano/piano-60-strong.wav", velocityLayer: 2 },
+    { rootPitch: 65, path: "./assets/audio/instruments/piano/piano-65.wav", velocityLayer: 1 },
+  ] };
+  assert.equal(selectPitchedSample("chords", 61, manifest, 63)?.velocityLayer, 1);
+  assert.equal(selectPitchedSample("chords", 61, manifest, 64)?.velocityLayer, 2);
+  assert.equal(selectPitchedSample("chords", 65, manifest, 120)?.rootPitch, 65);
+  assert.equal(selectPitchedSample("chords", 65, manifest, 120)?.velocityLayer, 1,
+    "missing upper layer safely falls back to available softer layer");
+});
