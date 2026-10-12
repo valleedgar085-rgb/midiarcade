@@ -5018,6 +5018,8 @@ export class PreviewPlayer {
     this.noiseBuffers = new Map();
     this.drumSampleBuffers = new Map();
     this.pitchedSampleBuffers = new Map();
+    this.sampleInstrumentsEnabled = false;
+    this.pitchedSamplePreload = null;
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -6325,6 +6327,13 @@ if (typeof document !== "undefined") {
       player.studioSoundEnabled = player.studioSoundEnabled !== true;
       toggle.textContent = player.studioSoundEnabled ? "Studio Sound: On" : "Studio Sound: Off";
       toggle.setAttribute("aria-pressed", String(player.studioSoundEnabled));
+      // Preload only when Studio mode is requested; absent sample assets
+      // are safely ignored and existing synthesis continues uninterrupted.
+      if (player.studioSoundEnabled && !player.pitchedSamplePreload && player.context) {
+        player.pitchedSamplePreload = preloadPitchedSamples(
+          player.context, PITCHED_SAMPLE_MANIFEST, player.pitchedSampleBuffers,
+        ).catch(() => player.pitchedSampleBuffers);
+      }
     });
     host.append(toggle);
   };
