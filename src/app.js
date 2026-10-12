@@ -6283,6 +6283,33 @@ export class PreviewPlayer {
 }
 
 const player = new PreviewPlayer();
+ 
+// Phase 4.2 A/B control: no persistence or effect on MIDI/arrangement.
+if (typeof document !== "undefined") {
+  const installStudioSoundToggle = () => {
+    const host = document.querySelector("#mixPlayButton")?.parentElement;
+    if (!host || document.querySelector("#studioSoundToggle")) return;
+    const toggle = document.createElement("button");
+    toggle.id = "studioSoundToggle";
+    toggle.type = "button";
+    toggle.className = "track-toggle";
+    toggle.textContent = "Studio Sound: Off";
+    toggle.setAttribute("aria-label", "Toggle studio sound for pitched instruments");
+    toggle.setAttribute("aria-pressed", "false");
+    toggle.addEventListener("click", () => {
+      player.studioSoundEnabled = player.studioSoundEnabled !== true;
+      toggle.textContent = player.studioSoundEnabled ? "Studio Sound: On" : "Studio Sound: Off";
+      toggle.setAttribute("aria-pressed", String(player.studioSoundEnabled));
+    });
+    host.append(toggle);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installStudioSoundToggle, { once: true });
+  } else {
+    installStudioSoundToggle();
+  }
+}
+
 
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
