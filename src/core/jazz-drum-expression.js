@@ -92,6 +92,11 @@ export function analyzeJazzDrumExpression(song) {
   const bassPocket = bass.length
     ? bass.filter((note) => kicks.some((kick) => Math.abs(finite(kick.start) - finite(note.start)) <= 0.10)).length / bass.length
     : 0;
+  // In Jazz the walking bass often speaks with the ride/hat quarter-note
+  // timekeeper, not a kick on every beat. Observe both relationships.
+  const bassCymbalPocket = bass.length
+    ? bass.filter((note) => hats.some((hat) => Math.abs(finite(hat.start) - finite(note.start)) <= 0.12)).length / bass.length
+    : 0;
   const meterDeviation = hats.length
     ? average(hats.map((note) => Math.abs(finite(note.start) - Math.round(finite(note.start) * 4) / 4)))
     : 0;
@@ -161,6 +166,7 @@ export function analyzeJazzDrumExpression(song) {
     evaluatedBars: viable.length,
     cymbalHits: hats.length,
     bassKickCoincidence: round(bassPocket),
+    bassCymbalCoincidence: round(bassCymbalPocket),
     kickSnareCounts,
     protectedFillBars: fills.size,
     hatShapeDiversity: round(hatShapeDiversity),
