@@ -9,6 +9,7 @@ import {
   TRACK_DEFINITIONS,
 } from "./music-engine.js";
 import { clamp, escapeHtml } from "./utils.js";
+import { studioSoundHarmonics } from "./core/studio-sound.js";
 import { deriveSongTitle } from "./core/song-title.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
@@ -5733,7 +5734,15 @@ export class PreviewPlayer {
     const velocityScale = 0.76 + (clamp(Number(event.velocity ?? 90), 1, 127) / 127) * 0.44;
     const filterBase = clamp(voice.filter * cutoffScale * velocityScale, 120, 15000);
     const targetFrequency = midiPitchToFrequency(event.pitch);
-    const periodicWave = this.periodicWaveForVoice(voice, event);
+    // Phase 4.2 opt-in preview timbre; original voice remains the default.
+    const studioHarmonics = studioSoundHarmonics(event.id, {
+      enabled: this.studioSoundEnabled === true,
+      brightness: clamp(Number(event.cutoff ?? 8000) / 12000, 0, 1),
+    });
+    const studioWave = studioHarmonics && context.createPeriodicWave
+      ? context.createPeriodicWave(new Float32Array(studioHarmonics.length), studioHarmonics, { disableNormalization: false })
+      : null;
+    const periodicWave = studioWave ?? this.periodicWaveForVoice(voice, event);
     if (periodicWave) oscillator.setPeriodicWave(periodicWave);
     else oscillator.type = voice.type;
     const glideSemitones = clamp(Number(event.glideFromSemitones || 0), -2, 2);
