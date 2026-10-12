@@ -151,7 +151,10 @@ test("Jazz three-seed opt-in shadow retains release-gate, determinism and produc
       jazzDrumExpressionRefinement: false,
     };
     const source = generateNew(config);
-    const baseline = applySongOutputQualityPipeline(structuredClone(source), config).song;
+    const baselineResult = applySongOutputQualityPipeline(structuredClone(source), config);
+    assert.equal(baselineResult.jazzDrumExpressionDiagnostics, undefined,
+      `${seed}: opt-out must not admit the expensive strict mutation stage`);
+    const baseline = baselineResult.song;
     const afterPipeline = applySongOutputQualityPipeline(structuredClone(source), {
       ...config, jazzDrumExpressionRefinement: true,
     });
