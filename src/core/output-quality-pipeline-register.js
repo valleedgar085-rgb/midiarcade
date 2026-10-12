@@ -47,6 +47,7 @@ import {
   runQualityStageSequence,
 } from "./output-quality-stage-runner.js";
 import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
+import { applyJazzDrumExpressionRefinement } from "./jazz-drum-expression.js";
 import { applyCounterpointResponseRefinement } from "./counterpoint-response-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
@@ -1482,6 +1483,22 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
+    // Strict stages deep-clone input for mutation audits. Admit this opt-in
+    // stage only when requested; the default song pipeline stays zero-cost.
+    ...(config.jazzDrumExpressionRefinement === true ? [{
+      id: "jazzDrumExpressionRefinement",
+      run: (current) => {
+        const result = applyJazzDrumExpressionRefinement(current, config, evaluate, release);
+        if (result.diagnostics?.accepted) {
+          const evaluation = evaluate(result.song);
+          result.song.meta = acceptedMetadata(
+            result.song, evaluation, release(result.song, evaluation),
+            "jazzDrumExpressionRefinement", result.diagnostics,
+          );
+        }
+        return result;
+      },
+    }] : []),
     { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
     { id: "melodySectionMemoryAudit", run: (current) => applyMelodySectionMemoryAudit(current) },
   ], {
@@ -1498,6 +1515,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     repetitionDiagnostics: diagnostics.repetitionRefinement,
     registerHealthDiagnostics: diagnostics.registerHealthRefinement,
     genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
+    jazzDrumExpressionDiagnostics: diagnostics.jazzDrumExpressionRefinement,
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
     melodyPhraseDiagnostics: diagnostics.melodyPhraseRefinement,
@@ -1525,6 +1543,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["repetitionRefinement", processed.repetitionDiagnostics],
     ["registerHealthRefinement", processed.registerHealthDiagnostics],
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
+    ["jazzDrumExpressionRefinement", processed.jazzDrumExpressionDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
     ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],
