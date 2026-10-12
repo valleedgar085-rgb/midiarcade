@@ -4,11 +4,12 @@ Do not activate the pitched sample path until source files are bundled, decoded 
 
 ## Approved candidates
 
-1. **J. Learman Rhodes Mark I Stage 73** — CC0 electric-piano multisamples, source:
-   https://github.com/smpldsnds/sfzinstruments-jlearman-jrhodes3d
-   Original recordings and mappings must be checked before selecting note roots.
-   Prefer a small mono subset with 3–5 semitone spacing and a single medium
-   velocity layer for the first APK, then add velocity layers if performance allows.
+1. **J. Learman Rhodes Mark I Stage 73 — NOT APPROVED for APK bundling.**
+   The original sample license is CC BY-NC 4.0 for redistribution inside
+   software, even though control files and musical works made with the
+   instrument are CC0. Commercial APK redistribution needs explicit
+   permission from Jeff Learman. Do not import or redistribute its audio.
+   Original license: https://github.com/sfzinstruments/jlearman.jRhodes3d/blob/master/LICENSE
 2. **Versilian Community Sample Library (VCSL)** — CC0 instrument collection:
    https://github.com/sgossner/VCSL
    Inspect the specific bass instrument and mapping, not just the repository license.
