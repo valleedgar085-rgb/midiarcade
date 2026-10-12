@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PITCHED_SAMPLE_MANIFEST, selectPitchedSample, preloadPitchedSamples, schedulePitchedSample } from "../src/core/pitched-samples.js";
 
-test("no sample assets means synth fallback for all tracks", () => {
+test("unmapped bass and drums always retain synth fallback", () => {
   assert.equal(selectPitchedSample("bass", 48), null);
-  assert.equal(selectPitchedSample("chords", 60), null);
+  assert.equal(selectPitchedSample("chords", 60)?.rootPitch, 60);
   assert.equal(selectPitchedSample("drums", 36), null);
   assert.deepEqual(PITCHED_SAMPLE_MANIFEST.bass, []);
 });
@@ -35,4 +35,12 @@ test("preload caches successful decodes and missing samples as null", async () =
 
 test("sample scheduling returns null without a loaded buffer", () => {
   assert.equal(schedulePitchedSample({}, null, { pitch: 60 }, 60, 0, {}, new Set()), null);
+});
+
+test("CC0 piano keyzones have valid local sample paths", () => {
+  for (const pitch of [48, 53, 60, 65, 72, 77]) {
+    const entry = selectPitchedSample("chords", pitch);
+    assert.equal(entry?.rootPitch, pitch);
+    assert.ok(entry.path.endsWith(`piano-${pitch}.wav`));
+  }
 });
