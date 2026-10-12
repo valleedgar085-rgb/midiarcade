@@ -1483,7 +1483,9 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
-    {
+    // Strict stages deep-clone input for mutation audits. Admit this opt-in
+    // stage only when requested; the default song pipeline stays zero-cost.
+    ...(config.jazzDrumExpressionRefinement === true ? [{
       id: "jazzDrumExpressionRefinement",
       run: (current) => {
         const result = applyJazzDrumExpressionRefinement(current, config, evaluate, release);
@@ -1496,7 +1498,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
         }
         return result;
       },
-    },
+    }] : []),
     { id: "transitionFxRefinement", run: (current) => applyTransitionFxRefinement(current, config, evaluate, release) },
     { id: "melodySectionMemoryAudit", run: (current) => applyMelodySectionMemoryAudit(current) },
   ], {
