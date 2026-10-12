@@ -95,9 +95,22 @@ export function analyzeJazzDrumExpression(song) {
   const meterDeviation = hats.length
     ? average(hats.map((note) => Math.abs(finite(note.start) - Math.round(finite(note.start) * 4) / 4)))
     : 0;
-  const fills = new Set(notes.filter(isProtected).map((note) => Math.floor(finite(note.start) / barBeats)));
+  const isFill = (note) => {
+    const feature = String(note?.rhythmicFeature ?? "");
+    return Boolean(note?.drumFillId || feature.includes("fill") || feature.includes("roll"));
+  };
+  const fills = new Set(notes.filter(isFill).map((note) => Math.floor(finite(note.start) / barBeats)));
   const densityCurve = Array.from({ length: bars }, (_, bar) =>
     notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar).length);
+  const hatShapeKeys = Array.from({ length: bars }, (_, bar) => {
+    const inBar = hats.filter((note) => Math.floor(finite(note.start) / barBeats) === bar);
+    return inBar.map((note) => {
+      const local = beatOffset(finite(note.start), barBeats);
+      return `${Math.round(finite(note.pitch))}@${round(Math.round(local * 12) / 12, 4)}`;
+    }).sort().join("|");
+  }).filter(Boolean);
+  const hatShapeDiversity = hatShapeKeys.length
+    ? new Set(hatShapeKeys).size / hatShapeKeys.length : 0;
   // Only aggregated uniqueness counts are exported; exact event signatures
   // are local and discarded, so the diagnostic cannot reconstruct a song.
   const barSignatures = Array.from({ length: bars }, (_, bar) => {
@@ -150,6 +163,7 @@ export function analyzeJazzDrumExpression(song) {
     bassKickCoincidence: round(bassPocket),
     kickSnareCounts,
     protectedFillBars: fills.size,
+    hatShapeDiversity: round(hatShapeDiversity),
     // Fixed-size aggregate curve only: no MIDI song, note sequence, or fingerprint is copied.
     densityCurve: Object.freeze(densityCurve),
     microtimingSpreadProxy: round(meterDeviation),
