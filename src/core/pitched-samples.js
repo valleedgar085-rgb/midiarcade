@@ -4,7 +4,14 @@
  */
 export const PITCHED_SAMPLE_MANIFEST = Object.freeze({
   bass: Object.freeze([]),
-  chords: Object.freeze([]),
+  chords: Object.freeze([
+    { path: "./assets/audio/instruments/piano/piano-48.wav", rootPitch: 48 },
+    { path: "./assets/audio/instruments/piano/piano-53.wav", rootPitch: 53 },
+    { path: "./assets/audio/instruments/piano/piano-60.wav", rootPitch: 60 },
+    { path: "./assets/audio/instruments/piano/piano-65.wav", rootPitch: 65 },
+    { path: "./assets/audio/instruments/piano/piano-72.wav", rootPitch: 72 },
+    { path: "./assets/audio/instruments/piano/piano-77.wav", rootPitch: 77 },
+  ]),
 });
 
 export function selectPitchedSample(trackId, pitch, manifest = PITCHED_SAMPLE_MANIFEST) {
