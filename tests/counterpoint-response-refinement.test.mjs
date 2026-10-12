@@ -121,8 +121,8 @@ test("three deterministic R&B lab seeds preserve the full critic under opt-in pi
       registerHealthRefinement: true,
     };
     const raw = generateNew(config);
-    const baseline = applySongOutputQualityPipeline(raw, config).song;
-    const optimized = applySongOutputQualityPipeline(raw, {
+    const baseline = applySongOutputQualityPipeline(structuredClone(raw), config).song;
+    const optimized = applySongOutputQualityPipeline(structuredClone(raw), {
       ...config,
       counterpointResponseRefinement: true,
     });
