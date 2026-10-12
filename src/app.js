@@ -10,6 +10,7 @@ import {
 } from "./music-engine.js";
 import { clamp, escapeHtml } from "./utils.js";
 import { studioSoundHarmonics } from "./core/studio-sound.js";
+import { PITCHED_SAMPLE_MANIFEST, selectPitchedSample, preloadPitchedSamples, schedulePitchedSample } from "./core/pitched-samples.js";
 import { deriveSongTitle } from "./core/song-title.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
@@ -5016,6 +5017,7 @@ export class PreviewPlayer {
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
     this.drumSampleBuffers = new Map();
+    this.pitchedSampleBuffers = new Map();
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -5721,6 +5723,27 @@ export class PreviewPlayer {
       return;
     }
     const context = this.context;
+    // Sample mode is independent from Studio harmonic mode. Empty/unavailable
+    // licensed sample packs fall through to the known-good oscillator path.
+    if (this.studioSoundEnabled === true && this.sampleInstrumentsEnabled === true) {
+      const entry = selectPitchedSample(event.id, event.pitch, PITCHED_SAMPLE_MANIFEST);
+      const buffer = entry && this.pitchedSampleBuffers.get(entry.path);
+      if (buffer) {
+        const nodes = new Set();
+        const output = context.createGain();
+        nodes.add(output);
+        this.connectPreviewOutput(
+          output, event,
+          ({ bass: -0.08, chords: -0.18 }[event.id] || 0), 1, nodes,
+        );
+        const source = schedulePitchedSample(context, buffer, event, entry.rootPitch, when, output, nodes);
+        if (source) {
+          source.onended = () => { for (const node of nodes) { try { node.disconnect(); } catch {} } };
+          return;
+        }
+        try { output.disconnect(); } catch {}
+      }
+    }
     const gain = context.createGain();
     const filter = context.createBiquadFilter();
     const oscillator = context.createOscillator();
