@@ -60,8 +60,8 @@ export function schedulePitchedSample(context, buffer, event, rootPitch, when, d
   if (!Number.isFinite(available) || available < 0.06) return null;
   const end = Math.min(duration + tail, available);
   const attack = Math.min(0.014, end * 0.2);
-  const peak = Math.max(0.0002, Math.min(0.32,
-    (Math.max(1, Math.min(127, Number(event.velocity) || 90)) / 127) * 0.22
+  const peak = Math.max(0.0002, Math.min(0.48,
+    (Math.max(1, Math.min(127, Number(event.velocity) || 90)) / 127) * 0.38
     * Math.max(0, Math.min(1, Number(event.mixGain ?? 1)))));
   source.buffer = buffer;
   source.playbackRate.setValueAtTime(rate, when);
