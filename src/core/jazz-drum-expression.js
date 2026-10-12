@@ -95,6 +95,28 @@ export function analyzeJazzDrumExpression(song) {
   const fills = new Set(notes.filter(isProtected).map((note) => Math.floor(finite(note.start) / barBeats)));
   const densityCurve = Array.from({ length: bars }, (_, bar) =>
     notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar).length);
+  // Only aggregated uniqueness counts are exported; exact event signatures
+  // are local and discarded, so the diagnostic cannot reconstruct a song.
+  const barSignatures = Array.from({ length: bars }, (_, bar) => {
+    const inBar = notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar);
+    return inBar.map((note) => `${Math.round(finite(note.pitch))}@${round(beatOffset(finite(note.start), barBeats), 3)}`)
+      .sort().join("|");
+  });
+  const populatedSignatures = barSignatures.filter(Boolean);
+  const fullBarUniqueness = populatedSignatures.length
+    ? new Set(populatedSignatures).size / populatedSignatures.length : 0;
+  const skeletonSignatures = Array.from({ length: bars }, (_, bar) => {
+    const inBar = notes.filter((note) => Math.floor(finite(note.start) / barBeats) === bar
+      && (KICKS.has(Number(note.pitch)) || SNARES.has(Number(note.pitch))));
+    return inBar.map((note) => `${Math.round(finite(note.pitch))}@${round(beatOffset(finite(note.start), barBeats), 3)}`)
+      .sort().join("|");
+  }).filter(Boolean);
+  const skeletonUniqueness = skeletonSignatures.length
+    ? new Set(skeletonSignatures).size / skeletonSignatures.length : 0;
+  const adjacentClones = populatedSignatures.length > 1
+    ? populatedSignatures.slice(1).filter((value, index) => value === populatedSignatures[index]).length
+      / (populatedSignatures.length - 1)
+    : 0;
   const kickSnareCounts = Object.freeze({
     kicks: kicks.length, snares: snares.length,
     // Timekeeping and accents are assessed separately from raw hit quantity.
@@ -114,6 +136,10 @@ export function analyzeJazzDrumExpression(song) {
     // Fixed-size aggregate curve only: no MIDI song, note sequence, or fingerprint is copied.
     densityCurve: Object.freeze(densityCurve),
     microtimingSpreadProxy: round(meterDeviation),
+    fullBarUniqueness: round(fullBarUniqueness),
+    kickSnareSkeletonUniqueness: round(skeletonUniqueness),
+    adjacentCloneRatio: round(adjacentClones),
+    possibleOvervariation: populatedSignatures.length >= 8 && fullBarUniqueness >= 0.95,
   });
 }
 
