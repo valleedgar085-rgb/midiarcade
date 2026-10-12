@@ -65,6 +65,7 @@ test("target R&B seed preserves critic, release gates, and deterministic results
       genre: "rnbSoul", seed: "quality-lab-03:rnbSoul", bars: 16, candidateCount: 1,
     }, { kind: "new" }),
     phraseResolutionRefinement: true, registerHealthRefinement: true,
+    counterpointResponseRefinement: false, // preserve the original failing control
   };
   const original = generateNew(baseConfig);
   const finished = applySongOutputQualityPipeline(original, baseConfig).song;
@@ -119,6 +120,7 @@ test("three deterministic R&B lab seeds preserve the full critic under opt-in pi
       }, { kind: "new" }),
       phraseResolutionRefinement: true,
       registerHealthRefinement: true,
+      counterpointResponseRefinement: false, // explicit non-repaired control
     };
     const raw = generateNew(config);
     const baseline = applySongOutputQualityPipeline(structuredClone(raw), config).song;
@@ -154,4 +156,21 @@ test("three deterministic R&B lab seeds preserve the full critic under opt-in pi
     });
   }
   console.info("R&B counterpoint three-seed calibration", JSON.stringify(rows));
+});
+
+test("R&B fresh generations enable guarded repair while other genres and variations remain unchanged", async () => {
+  const { applyOutputQualityEvolution: evolve } = await import("../src/core/output-quality-evolution.js");
+  const common = { seed: "counterpoint-feature-default", bars: 16 };
+  assert.equal(evolve({ ...common, genre: "rnbSoul" }, { kind: "new" })
+    .counterpointResponseRefinement, true);
+  assert.equal(evolve({ ...common, genre: "rnbSoul" }, { kind: "similar" })
+    .counterpointResponseRefinement, false);
+  assert.equal(evolve({ ...common, genre: "rnbSoul", secondaryGenre: "hipHop" }, { kind: "new" })
+    .counterpointResponseRefinement, false);
+  for (const genre of ["hipHop", "pop", "neoSoul", "jazz", "trap"]) {
+    assert.equal(evolve({ ...common, genre }, { kind: "new" })
+      .counterpointResponseRefinement, false, genre);
+  }
+  assert.equal(evolve({ ...common, genre: "rnbSoul", counterpointResponseRefinement: false }, { kind: "new" })
+    .counterpointResponseRefinement, false, "explicit opt-out remains authoritative");
 });
