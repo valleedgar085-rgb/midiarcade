@@ -65,6 +65,7 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   melodySectionMemoryAudit: [],
   bassContinuityRefinement: ["groove", "ensemble", "harmony"],
   ensembleContinuityRefinement: ["ensemble"],
+  counterpointResponseRefinement: ["ensemble"],
   genreIdentityRefinement: ["groove", "ensemble"],
   transitionFxRefinement: [],
 });
