@@ -37,6 +37,10 @@ function conflictCount(melody, answers) {
 
 function preservesHarmonyWindow(song, before, after) {
   if (before.start === after.start) return true;
+  const timeline = [...(song?.harmony ?? [])].sort((a, b) => finite(a?.start) - finite(b?.start));
+  const chordIndexAt = (beat) => timeline.reduce((index, chord, current) =>
+    finite(chord?.start) <= beat + 1e-6 ? current : index, -1);
+  if (chordIndexAt(finite(before.start)) !== chordIndexAt(finite(after.start))) return false;
   // Do not move a support note across a new chord downbeat. A note already
   // crossing a change cannot acquire an additional crossing either.
   return !(song?.harmony ?? []).some((chord) => {
