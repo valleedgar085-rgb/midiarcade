@@ -1,0 +1,71 @@
+/**
+ * Phase 4.2 sample instrument transport. Only explicitly bundled, licensed
+ * samples should be registered. Missing assets always retain synth playback.
+ */
+export const PITCHED_SAMPLE_MANIFEST = Object.freeze({
+  bass: Object.freeze([]),
+  chords: Object.freeze([]),
+});
+
+export function selectPitchedSample(trackId, pitch, manifest = PITCHED_SAMPLE_MANIFEST) {
+  const entries = manifest?.[trackId];
+  if (!Array.isArray(entries) || !entries.length || !Number.isFinite(Number(pitch))) return null;
+  const target = Math.max(0, Math.min(127, Math.round(Number(pitch))));
+  const ranked = entries.filter((entry) =>
+    entry && typeof entry.path === "string" && entry.path.startsWith("./assets/audio/instruments/")
+    && Number.isInteger(entry.rootPitch) && entry.rootPitch >= 0 && entry.rootPitch <= 127
+    && Math.abs(entry.rootPitch - target) <= 7);
+  ranked.sort((a, b) => Math.abs(a.rootPitch - target) - Math.abs(b.rootPitch - target)
+    || a.rootPitch - b.rootPitch);
+  return ranked[0] ?? null;
+}
+
+export async function preloadPitchedSamples(context, manifest = PITCHED_SAMPLE_MANIFEST, cache = new Map(), fetcher = globalThis.fetch) {
+  if (!context?.decodeAudioData || typeof fetcher !== "function") return cache;
+  const entries = [...new Set(Object.values(manifest).flat().map((entry) => entry?.path).filter(
+    (path) => typeof path === "string" && path.startsWith("./assets/audio/instruments/"),
+  ))];
+  await Promise.all(entries.map(async (path) => {
+    if (cache.has(path)) return;
+    try {
+      const response = await fetcher(path);
+      if (!response || ("ok" in response && !response.ok)) throw Error("sample-fetch-failed");
+      const bytes = await response.arrayBuffer();
+      cache.set(path, await context.decodeAudioData(bytes.slice(0)));
+    } catch {
+      cache.set(path, null);
+    }
+  }));
+  return cache;
+}
+
+export function schedulePitchedSample(context, buffer, event, rootPitch, when, destination, nodes) {
+  if (!context?.createBufferSource || !context?.createGain || !buffer || !destination) return null;
+  const pitch = Number(event?.pitch);
+  if (!Number.isFinite(pitch) || !Number.isInteger(rootPitch)) return null;
+  const rate = 2 ** ((pitch - rootPitch) / 12);
+  if (rate < 0.66 || rate > 1.5) return null;
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  const duration = Math.max(0.04, Math.min(6, Number(event?.duration) || 0.25));
+  const tail = 0.07;
+  const available = Number(buffer.duration) / rate;
+  if (!Number.isFinite(available) || available < 0.06) return null;
+  const end = Math.min(duration + tail, available);
+  const attack = Math.min(0.014, end * 0.2);
+  const peak = Math.max(0.0002, Math.min(0.32,
+    (Math.max(1, Math.min(127, Number(event.velocity) || 90)) / 127) * 0.22
+    * Math.max(0, Math.min(1, Number(event.mixGain ?? 1)))));
+  source.buffer = buffer;
+  source.playbackRate.setValueAtTime(rate, when);
+  gain.gain.setValueAtTime(0.0001, when);
+  gain.gain.exponentialRampToValueAtTime(peak, when + attack);
+  gain.gain.setValueAtTime(peak, when + Math.max(attack + 0.001, end - 0.035));
+  gain.gain.exponentialRampToValueAtTime(0.0001, when + end);
+  source.connect(gain).connect(destination);
+  nodes?.add(source);
+  nodes?.add(gain);
+  source.start(when);
+  source.stop(when + end + 0.005);
+  return source;
+}
