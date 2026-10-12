@@ -90,7 +90,7 @@ export function analyzeJazzDrumExpression(song) {
     ? bass.filter((note) => kicks.some((kick) => Math.abs(finite(kick.start) - finite(note.start)) <= 0.10)).length / bass.length
     : 0;
   const meterDeviation = hats.length
-    ? average(hats.map((note) => Math.abs(beatOffset(finite(note.start), 0.25) - 0.125)))
+    ? average(hats.map((note) => Math.abs(finite(note.start) - Math.round(finite(note.start) * 4) / 4)))
     : 0;
   const fills = new Set(notes.filter(isProtected).map((note) => Math.floor(finite(note.start) / barBeats)));
   const densityCurve = Array.from({ length: bars }, (_, bar) =>
