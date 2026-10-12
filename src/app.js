@@ -5739,7 +5739,7 @@ export class PreviewPlayer {
     // Sample mode is independent from Studio harmonic mode. Empty/unavailable
     // licensed sample packs fall through to the known-good oscillator path.
     if (this.sampleInstrumentsEnabled === true) {
-      const entry = selectPitchedSample(event.id, event.pitch, PITCHED_SAMPLE_MANIFEST);
+      const entry = selectPitchedSample(event.id, event.pitch, PITCHED_SAMPLE_MANIFEST, event.velocity);
       const buffer = entry && this.pitchedSampleBuffers.get(entry.path);
       if (buffer) {
         const nodes = new Set();
