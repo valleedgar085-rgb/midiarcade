@@ -310,6 +310,9 @@
   #tab-mix .track-card .track-voice {
     display: none !important;
   }
+  #tab-mix .track-card .mix-primary-balance {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   #tab-mix .mix-studio-tools *,
