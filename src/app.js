@@ -3728,10 +3728,14 @@ function renderExportSetup() {
   const trackNames = trackIds.map((id) => TRACK_META[id]?.name ?? id);
   const timingLabel = setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel";
   const isDefaultHandoff = profile.id === "full" && setup.timing === "performance";
-  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default · Full song" : profile.id === "selected" ? selectedName + " · focused export" : profile.label + " · focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${timingLabel} · ${trackNames.join(" + ")}</span>`;
+  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default · Full song" : profile.id === "selected" ? selectedName + " · focused export" : profile.label + " · focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${timingLabel} · ${trackNames.join(" + ")}</span><small class="finish-export-help">Tap Export .mid in the player bar to save. MIDI contains notes and controllers, not recorded audio.</small>`;
   if ($("#exportTrackCount")) {
     $("#exportTrackCount").textContent = `${trackCount} ${trackCount === 1 ? "MIDI TRACK" : "MIDI TRACKS"} · ${setup.timing === "tight" ? "TIGHT" : "GROOVE"}`;
   }
+  $("#exportButton")?.setAttribute(
+    "aria-label",
+    `Export ${trackCount} MIDI track${trackCount === 1 ? "" : "s"} with ${setup.timing === "tight" ? "tight grid" : "original groove"}`,
+  );
 }
 
 async function saveCoverArtwork() {
