@@ -7,7 +7,10 @@ import { analyzeJazzDrumExpression } from "./jazz-drum-expression.js";
 // bar, MIDI note, sound sample, or performance. Groove Conductor timekeepers,
 // kick/snare accents, and the existing user-approved Jazz default are sacred.
 const CYMBALS = new Set([42, 44, 46, 51, 53, 59]);
+const cymbalFamily = (note) => [42, 44, 46].includes(Number(note?.pitch))
+  ? "hat" : [51, 53, 59].includes(Number(note?.pitch)) ? "ride" : null;
 const MAX_CANDIDATES = 4;
+const MAX_RAW_PROPOSALS = 32;
 const MAX_MOVED_NOTES = 1;
 const MAX_SHIFT_BEATS = 0.28;
 const QUANTIZATION = 12; // 1/12 beat: captures swing triplets without jitter
@@ -90,21 +93,41 @@ function ornament(note, bar, beatsPerBar, phraseStart) {
   return Math.abs(local - Math.round(local)) > 0.14;
 }
 function matches(source, target, sourceBar, targetBar, beatsPerBar, phraseStart) {
+  const window = (note, bar) => {
+    const local = finite(note.start) - bar * beatsPerBar;
+    return local >= phraseStart - 1e-6 && local < phraseStart + 2 - 1e-6;
+  };
+  const countShared = (left, right) => {
+    const used = new Set();
+    let count = 0;
+    for (const note of left) {
+      const sig = quant(beatInBar(finite(note.start), beatsPerBar));
+      const index = right.findIndex((candidate, i) =>
+        !used.has(i) && cymbalFamily(candidate) === cymbalFamily(note)
+        && Math.abs(quant(beatInBar(finite(candidate.start), beatsPerBar)) - sig) < 1e-6);
+      if (index >= 0) {
+        used.add(index);
+        count += 1;
+      }
+    }
+    return count;
+  };
   const left = source.filter((note) => ornament(note, sourceBar, beatsPerBar, phraseStart));
   const right = target.filter((note) => ornament(note, targetBar, beatsPerBar, phraseStart));
-  const used = new Set();
-  let total = 0;
-  for (const note of left) {
-    const sig = quant(beatInBar(finite(note.start), beatsPerBar));
-    const index = right.findIndex((candidate, i) =>
-      !used.has(i) && Number(candidate.pitch) === Number(note.pitch)
-      && Math.abs(quant(beatInBar(finite(candidate.start), beatsPerBar)) - sig) < 1e-6);
-    if (index >= 0) {
-      used.add(index);
-      total += 1;
-    }
-  }
-  return { total, sourceCount: left.length, targetCount: right.length };
+  const anchor = (note, bar) => CYMBALS.has(Number(note.pitch))
+    && !isProtected(note) && window(note, bar)
+    && Math.abs(beatInBar(finite(note.start), beatsPerBar)
+      - Math.round(beatInBar(finite(note.start), beatsPerBar))) <= 0.14;
+  const sharedAnchors = countShared(
+    source.filter((note) => anchor(note, sourceBar)),
+    target.filter((note) => anchor(note, targetBar)),
+  );
+  const sharedOrnaments = countShared(left, right);
+  return {
+    total: sharedAnchors + sharedOrnaments,
+    sharedAnchors, sharedOrnaments,
+    sourceCount: left.length, targetCount: right.length,
+  };
 }
 
 /**
@@ -125,6 +148,7 @@ export function createJazzStructuralMotifCandidates(song) {
     perBar.set(bar, all.filter((note) => barIndex(finite(note.start), beatsPerBar) === bar));
   }
   const seen = new Set();
+  search:
   for (const { source, target } of relatedSectionPairs(song)) {
     const sources = barsWithin(source, beatsPerBar)
       .filter((bar) => !protectedBar(song, bar, beatsPerBar, all));
@@ -137,8 +161,12 @@ export function createJazzStructuralMotifCandidates(song) {
         const sourceNotes = perBar.get(sourceBar) ?? [];
         for (const phraseStart of [0, 2]) {
           const old = matches(sourceNotes, targetNotes, sourceBar, targetBar, beatsPerBar, phraseStart);
-          if (old.sourceCount < 2 || old.targetCount < 2 || old.total < 1
-            || old.total === old.sourceCount) continue;
+          // A Jazz motif contains its invariant ride quarter pulse plus a
+          // developed hat/ride offbeat. Prior overlap of two arbitrary ghost
+          // notes is not required: the timekeeper already supplies the anchor.
+          if (old.sourceCount < 1 || old.targetCount < 1
+            || old.sharedAnchors < 1
+            || old.sharedOrnaments === old.sourceCount) continue;
 
           const sourceOrnaments = sourceNotes.filter((note) =>
             ornament(note, sourceBar, beatsPerBar, phraseStart));
@@ -147,7 +175,7 @@ export function createJazzStructuralMotifCandidates(song) {
           for (const origin of sourceOrnaments) {
             const originPosition = beatInBar(finite(origin.start), beatsPerBar);
             for (const targetNote of targetOrnaments) {
-              if (Number(origin.pitch) !== Number(targetNote.pitch)) continue;
+              if (cymbalFamily(origin) !== cymbalFamily(targetNote)) continue;
               const targetPosition = beatInBar(finite(targetNote.start), beatsPerBar);
               const originalCell = quant(targetPosition);
               const sourceCell = quant(originPosition);
@@ -161,7 +189,7 @@ export function createJazzStructuralMotifCandidates(song) {
               if (Math.abs(shift) > MAX_SHIFT_BEATS + 1e-8) continue;
               const revisedStart = round(targetBar * beatsPerBar + proposedLocal);
               if (targetNotes.some((note) => note !== targetNote
-                && Number(note.pitch) === Number(targetNote.pitch)
+                && cymbalFamily(note) === cymbalFamily(targetNote)
                 && Math.abs(finite(note.start) - revisedStart) < 0.145)) continue;
 
               const replacement = { ...targetNote, start: revisedStart };
@@ -169,7 +197,9 @@ export function createJazzStructuralMotifCandidates(song) {
                 note === targetNote ? replacement : note);
               const next = matches(sourceNotes, newTarget,
                 sourceBar, targetBar, beatsPerBar, phraseStart);
-              if (next.total <= old.total || next.total < 2) continue;
+              if (next.sharedOrnaments <= old.sharedOrnaments
+                || next.sharedOrnaments < 1
+                || next.total <= old.total || next.total < 2) continue;
               // This is a phrase echo, never a one-for-one wholesale copied
               // drum bar or a newly-created immediate mechanical repeat.
               const nextFingerprint = barFingerprint(newTarget, targetBar, beatsPerBar);
@@ -189,11 +219,15 @@ export function createJazzStructuralMotifCandidates(song) {
                 song: candidate, sourceBar, targetBar, phraseStart,
                 sourceRhythmHits: old.sourceCount, targetRhythmHits: old.targetCount,
                 beforeMatches: old.total, afterMatches: next.total,
-                motifGain: next.total - old.total,
+                beforeOrnamentMatches: old.sharedOrnaments,
+                afterOrnamentMatches: next.sharedOrnaments,
+                sharedRideAnchors: old.sharedAnchors,
+                motifGain: next.sharedOrnaments - old.sharedOrnaments,
                 changedNotes: 1, shiftBeats: round(shift),
                 positionBefore: round(finite(targetNote.start)),
                 positionAfter: revisedStart,
               });
+              if (candidates.length >= MAX_RAW_PROPOSALS) break search;
             }
           }
         }
