@@ -1,3 +1,9 @@
+import {
+  jazzGrooveRecallLinks,
+  jazzGrooveMemorySourceForBar,
+  proposeJazzHatCellMemory,
+} from "./jazz-groove-phrase-memory.js";
+
 const BASE_GRID_STEPS = 16;
 
 function finite(value, fallback = 0) {
@@ -813,6 +819,15 @@ export function createGrooveDNA(input = {}, {
   const tripletAmount = clamp(input?.tripletAmount ?? 0, 0, 1);
   const normalizedSections = normalizeStructure(structure ?? input?.structure, bars, beatsPerBar);
   const barPlans = [];
+  const jazzPhraseMemoryEnabled = genre === "jazz"
+    && input?.jazzGroovePhraseMemory === true
+    && !input?.secondaryGenre
+    && beatsPerBar === 4 && gridSteps === 16;
+  const jazzPhraseMemoryLinks = jazzPhraseMemoryEnabled
+    ? jazzGrooveRecallLinks(normalizedSections, input?.memoryMap ?? [])
+    : new Map();
+  const jazzPhraseMemorySections = new Set();
+  const jazzPhraseMemoryEvents = [];
 
   for (let bar = 0; bar < bars; bar += 1) {
     const section = sectionForBar(normalizedSections, bar);
@@ -884,6 +899,44 @@ export function createGrooveDNA(input = {}, {
         lockedSteps,
         protectedSteps,
       );
+      let finalSteps = variedSteps;
+      let phraseMemory = null;
+      if (jazzPhraseMemoryEnabled && lane === "hat"
+        && !jazzPhraseMemorySections.has(String(section.id))) {
+        const recall = jazzGrooveMemorySourceForBar(
+          bar, section, normalizedSections, jazzPhraseMemoryLinks,
+        );
+        const sourceSteps = recall ? barPlans[recall.sourceBar]?.hat?.steps : null;
+        if (sourceSteps?.length) {
+          const proposal = proposeJazzHatCellMemory({
+            sourceSteps,
+            targetSteps: variedSteps,
+            requiredSteps: lockedSteps,
+            optionalSteps,
+            protectedSteps,
+            gridSteps,
+          });
+          if (proposal) {
+            finalSteps = proposal.steps;
+            phraseMemory = Object.freeze({
+              mode: "jazz-phrase-return",
+              kind: proposal.kind,
+              sourceBar: recall.sourceBar,
+              targetBar: bar,
+              sourceSectionId: recall.originSectionId,
+              targetSectionId: recall.returnSectionId,
+              cellStartStep: proposal.cellStartStep,
+              mismatchBefore: proposal.mismatchBefore,
+              mismatchAfter: proposal.mismatchAfter,
+              mismatchReduction: proposal.mismatchReduction,
+              stepsAdded: proposal.stepsAdded,
+              stepsRemoved: proposal.stepsRemoved,
+            });
+            jazzPhraseMemoryEvents.push(phraseMemory);
+            jazzPhraseMemorySections.add(String(section.id));
+          }
+        }
+      }
       lanePlans[lane] = Object.freeze({
         requiredSteps: Object.freeze(requiredSteps),
         optionalSteps: Object.freeze(optionalSteps),
@@ -891,9 +944,10 @@ export function createGrooveDNA(input = {}, {
         baseSteps: Object.freeze(baseSteps),
         probabilitySteps: Object.freeze(probabilitySteps),
         densitySteps: Object.freeze(densitySteps),
-        steps: Object.freeze(variedSteps),
+        steps: Object.freeze(finalSteps),
+        ...(phraseMemory ? { phraseMemory } : {}),
         events: humanizeSteps(
-          variedSteps,
+          finalSteps,
           grammar.humanization,
           `${seed}:${genre}:${bar}:${lane}:humanize`,
           beatsPerStep,
@@ -1001,6 +1055,14 @@ export function createGrooveDNA(input = {}, {
     humanization: grammar.humanization,
     sections: Object.freeze(normalizedSections),
     bars: Object.freeze(barPlans),
+    ...(jazzPhraseMemoryEnabled ? {
+      jazzPhraseMemory: Object.freeze({
+        enabled: true,
+        maxChangedBarsPerSection: 1,
+        changedBars: jazzPhraseMemoryEvents.length,
+        events: Object.freeze(jazzPhraseMemoryEvents),
+      }),
+    } : {}),
   });
 }
 
