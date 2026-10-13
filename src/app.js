@@ -5998,7 +5998,7 @@ export class PreviewPlayer {
     const nodes = new Set([source, filter, gain]);
     source.buffer = this.noiseBufferForKit(kit);
     const isHat = [42, 44, 46].includes(event.pitch);
-    const isCymbal = [49, 51, 52, 55, 57, 59].includes(event.pitch);
+    const isCymbal = character.kind === "cymbal";
     const isBackbeat = ["snare", "clap", "rim"].includes(character.kind);
     const output = this.createDrumOutput(
       event,
