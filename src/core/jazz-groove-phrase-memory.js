@@ -42,14 +42,14 @@ export function jazzGrooveRecallLinks(structure = [], memoryMap = []) {
 }
 
 /**
- * Plan one recognizable two-beat hat phrase response without changing the
- * four quarter-note timekeeping anchors. The entire bar is never replayed:
- * kick, snare, percussion, and the other half of the hat bar are independent.
+ * Plan one recognizable two-beat optional hat/percussion phrase response.
+ * The Jazz quarter-note timekeeper remains locked; only one supporting lane
+ * and one short phrase are developed. No complete bar is copied.
  *
  * Prefer moving a single optional hit. A deliberate one-note rest/addition
  * is a fallback when no one-for-one swap is possible.
  */
-export function proposeJazzHatCellMemory({
+export function proposeJazzGrooveCellMemory({
   sourceSteps = [], targetSteps = [], requiredSteps = [],
   optionalSteps = [], protectedSteps = [], gridSteps = 16,
 } = {}) {
@@ -60,7 +60,7 @@ export function proposeJazzHatCellMemory({
     !required.has(step) && !protectedSet.has(step)));
   const before = uniqueSorted(targetSteps);
   const source = uniqueSorted(sourceSteps);
-  if (!source.length || !before.length) return null;
+  if (!source.length && !before.length) return null;
 
   const candidates = [];
   for (const [start, end] of [[0, 8], [8, 16]]) {
@@ -127,6 +127,9 @@ export function proposeJazzHatCellMemory({
     || finite(a.sourceStep, 99) - finite(b.sourceStep, 99));
   return candidates[0] ?? null;
 }
+
+// Backwards-compatible name for the first calibrated hat-only phase.
+export const proposeJazzHatCellMemory = proposeJazzGrooveCellMemory;
 
 /**
  * Resolve the earlier source bar at a matching offset in a return section.
