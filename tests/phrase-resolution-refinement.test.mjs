@@ -348,16 +348,29 @@ test("contour-aware cadence selects a smooth in-scale chord tone instead of crea
   );
 });
 
-test("cadence candidates preserve protected motif-memory and transition anchors", () => {
+test("protected motif anchors keep their pitch while eligible held cadence remains available", () => {
   for (const flag of ["motifMemoryCore", "ensembleCadenceRole", "transitionHandoffRole",
     "motifHandoffRole", "finalAssemblyRole"]) {
     const source = sourceSong();
+    // Give one section ending enough room for the existing duration-only
+    // cadence repair, without authorizing a motif repitch or new note.
+    track(source, "melody").notes.find((entry) => entry.id === "m1").start = 6;
     for (const ending of ["m1", "m3", "m5"]) {
       const note = track(source, "melody").notes.find((entry) => entry.id === ending);
       note[flag] = flag === "motifMemoryCore" ? true : "locked";
     }
     const before = structuredClone(source);
-    assert.deepEqual(createPhraseResolutionCandidates(source), [], flag);
+    const candidates = createPhraseResolutionCandidates(source);
+    assert.ok(candidates.some((candidate) => candidate.id === "held-cadence"
+      && candidate.durationEdits > 0), `${flag}: valid held-note repair must remain available`);
+    for (const candidate of candidates) {
+      const original = track(source, "melody").notes;
+      const changed = track(candidate.song, "melody").notes;
+      assert.deepEqual(changed.map((note) => note.id), original.map((note) => note.id));
+      assert.deepEqual(changed.map((note) => note.start), original.map((note) => note.start));
+      assert.deepEqual(changed.map((note) => note.pitch), original.map((note) => note.pitch),
+        `${flag}: protected pitches must not move`);
+    }
     assert.deepEqual(source, before);
   }
 });
