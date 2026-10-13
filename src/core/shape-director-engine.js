@@ -5,6 +5,7 @@ import { hash32 } from "./deterministic-rng.js";
 import { cloneValue } from "./clone-value.js";
 import { roleRegisterWindow } from "./role-register-policy.js";
 import { createChorusHookDevelopmentCandidates } from "./chorus-hook-development.js";
+import { createMelodyQuestionAnswerCandidate } from "./melody-question-answer.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -352,6 +353,34 @@ function hookReturnShapeProposal(song, intent) {
 }
 
 /**
+ * A complementary answer-phrase specialist. Returning-chorus hook restoration
+ * takes priority; if none is safe, Catchier may resolve one unanswered rising
+ * melodic question. Never override selection scope or pitch-preservation locks.
+ */
+function answerPhraseShapeProposal(song, intent) {
+  const selection = intent.selection;
+  if (intent.direction?.id !== "catchier"
+    || !(selection.target === "section"
+      || (selection.target === "track" && selection.trackId === "melody"))
+    || intent.preserve.includes("melody") || intent.preserve.includes("harmony")) return null;
+
+  const proposal = createMelodyQuestionAnswerCandidate(song, { sectionId: selection.sectionId });
+  if (!proposal || proposal.changedNotes !== 1) return null;
+  const note = sourceTracks(song).find((track) => track.id === "melody")
+    ?.notes?.[proposal.changedNoteIndex];
+  if (!note) return null;
+
+  return {
+    song: proposal.song,
+    mutation: {
+      changedIds: [`melody:${noteIdentity(note, proposal.changedNoteIndex)}`],
+      inserted: 0,
+      deleted: 0,
+    },
+  };
+}
+
+/**
  * Generate one non-destructive local Shape candidate. The input song is never
  * mutated; the returned transaction owns both Before and After snapshots so UI
  * audition can switch instantly without writing to history until Accept.
@@ -377,7 +406,8 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
   const beforeDigest = outsideScopeDigest(sourceSong, intent.selection);
   const beforeScope = scopeSnapshot(sourceSong, intent.selection);
-  const hookProposal = hookReturnShapeProposal(sourceSong, intent);
+  const hookProposal = hookReturnShapeProposal(sourceSong, intent)
+    ?? answerPhraseShapeProposal(sourceSong, intent);
   const shaped = hookProposal?.song ?? candidate;
   const mutation = hookProposal?.mutation
     ?? applyDirection(candidate, intent, eligible, `${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}`);
