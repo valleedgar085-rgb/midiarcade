@@ -1376,6 +1376,9 @@ export function normalizeConfig(input = {}) {
     chordExtensions: unit(input.chordExtensions, profile.chordExtensions),
     melodicRange: clamp(Math.round(finite(input.melodicRange, DEFAULT_CONFIG.melodicRange)), 5, 36),
     drumFills: unit(input.drumFills, DEFAULT_CONFIG.drumFills),
+    // Pure opt-in: never modify the default Jazz, other genres, or fusions.
+    ...(genre === "jazz" && !secondaryGenre && input.jazzGroovePhraseMemory === true
+      ? { jazzGroovePhraseMemory: true } : {}),
     tripletAmount: unit(input.tripletAmount, profile.tripletChance),
     rollAmount: unit(input.rollAmount, profile.snareRollChance),
     registerSpread: unit(input.registerSpread, DEFAULT_CONFIG.registerSpread),
@@ -4286,6 +4289,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     complexity: config.complexity,
     variation: config.variation,
     tripletAmount: config.tripletAmount,
+    ...(config.jazzGroovePhraseMemory === true ? { jazzGroovePhraseMemory: true } : {}),
+    ...(config.secondaryGenre ? { secondaryGenre: config.secondaryGenre } : {}),
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
   const bars = [];
@@ -4368,6 +4373,12 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         grammarId: grooveDNA.grammarId,
         characterId: grooveDNA.characterId,
         sectionRole: grooveDNA.bars?.[bar]?.sectionRole ?? null,
+        // The supporting response may belong to the hat OR percussion lane.
+        // Keep the originating Groove DNA event visible at its actual return bar.
+        ...((grooveDNA.bars?.[bar]?.hat?.phraseMemory
+          ?? grooveDNA.bars?.[bar]?.percussion?.phraseMemory)
+          ? { phraseMemory: grooveDNA.bars[bar].hat?.phraseMemory
+            ?? grooveDNA.bars[bar].percussion?.phraseMemory } : {}),
       },
       bassPulses,
       chordPulses,
@@ -4385,6 +4396,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       characterId: grooveDNA.characterId,
       philosophy: grooveDNA.philosophy,
       pipeline: [...grooveDNA.pipeline],
+      ...(grooveDNA.jazzPhraseMemory
+        ? { jazzPhraseMemory: grooveDNA.jazzPhraseMemory } : {}),
     },
     phraseBars: clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
     subdivision: grooveDNA.beatsPerStep,
