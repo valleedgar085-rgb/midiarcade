@@ -4,6 +4,7 @@ import { clampMidiVelocity, MIDI_NOTE_VELOCITY_MAX } from "./note-contract.js";
 import { hash32 } from "./deterministic-rng.js";
 import { cloneValue } from "./clone-value.js";
 import { roleRegisterWindow } from "./role-register-policy.js";
+import { createChorusHookDevelopmentCandidates } from "./chorus-hook-development.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -315,6 +316,42 @@ function validateCandidate(sourceSong, candidate, intent, beforeDigest) {
 }
 
 /**
+ * Use the existing, critic-improving hook proposal rather than adding density
+ * when Catchier targets a weak returning melody chorus. This is explicitly
+ * opt-in via Shape's Before/After workflow, never automatic song generation.
+ *
+ * Other directions, note selections, protected pitch locks and songs without
+ * a safe proposal continue through the unchanged Shape implementation.
+ */
+function hookReturnShapeProposal(song, intent) {
+  const selection = intent.selection;
+  if (intent.direction?.id !== "catchier"
+    || !(selection.target === "section"
+      || (selection.target === "track" && selection.trackId === "melody"))
+    || intent.preserve.includes("melody") || intent.preserve.includes("harmony")) return null;
+
+  const proposal = createChorusHookDevelopmentCandidates(song).find((entry) =>
+    String(entry.targetSectionId) === selection.sectionId
+      && entry.changedNotes === 1 && entry.localScoreDelta >= 0.035);
+  if (!proposal) return null;
+
+  const before = sourceTracks(song).find((track) => track.id === "melody")?.notes;
+  const after = sourceTracks(proposal.song).find((track) => track.id === "melody")?.notes;
+  if (!Array.isArray(before) || !Array.isArray(after) || before.length !== after.length) return null;
+  const changed = before.flatMap((note, index) => (
+    eventPitch(note) !== eventPitch(after[index]) ? [{ note, index }] : []
+  ));
+  if (changed.length !== 1) return null;
+
+  // An existing note changes pitch; no tracks, note times, rhythms or velocities
+  // are changed. Scope validation still runs in createShapeCandidate.
+  return {
+    song: proposal.song,
+    mutation: { changedIds: [`melody:${noteIdentity(changed[0].note, changed[0].index)}`], inserted: 0, deleted: 0 },
+  };
+}
+
+/**
  * Generate one non-destructive local Shape candidate. The input song is never
  * mutated; the returned transaction owns both Before and After snapshots so UI
  * audition can switch instantly without writing to history until Accept.
@@ -340,15 +377,18 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
   const beforeDigest = outsideScopeDigest(sourceSong, intent.selection);
   const beforeScope = scopeSnapshot(sourceSong, intent.selection);
-  const mutation = applyDirection(candidate, intent, eligible, `${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}`);
-  const afterScope = scopeSnapshot(candidate, intent.selection);
+  const hookProposal = hookReturnShapeProposal(sourceSong, intent);
+  const shaped = hookProposal?.song ?? candidate;
+  const mutation = hookProposal?.mutation
+    ?? applyDirection(candidate, intent, eligible, `${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}`);
+  const afterScope = scopeSnapshot(shaped, intent.selection);
   const changed = JSON.stringify(beforeScope) !== JSON.stringify(afterScope);
   if (!changed) return { status: "rejected", error: "no-musical-change", intent };
 
-  const validation = validateCandidate(sourceSong, candidate, intent, beforeDigest);
+  const validation = validateCandidate(sourceSong, shaped, intent, beforeDigest);
   if (!validation.valid) return { status: "rejected", error: validation.error, intent };
 
-  candidate.shapeRevision = {
+  shaped.shapeRevision = {
     version: 1,
     parentSongId: sourceSong.id ?? null,
     sectionId: intent.selection.sectionId,
@@ -364,7 +404,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
     id: `shape-${hash32(`${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}:${intent.selection.sectionId}:${intent.direction.id}:${intent.size.id}`).toString(16)}`,
     intent,
     before: cloneValue(sourceSong),
-    after: candidate,
+    after: shaped,
     summary: {
       changedNoteCount: mutation.changedIds.length,
       insertedNoteCount: mutation.inserted,
