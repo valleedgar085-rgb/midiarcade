@@ -1019,20 +1019,19 @@
 
 
 
-/* Direct Create control deck: compact so the protected HTML budget remains intact. */
+/* Direct Create deck; keeps the protected HTML budget intact. */
 #tab-create>.home-command{display:none!important}
-#tab-create .create-console{gap:10px}
-#tab-create .create-performance-deck{grid-column:1/-1;width:100%;margin:0;padding:14px;border:1.5px solid rgba(90,216,221,.46);border-radius:18px;background:linear-gradient(145deg,rgba(49,90,103,.17),rgba(11,13,22,.94));box-shadow:0 15px 32px rgba(0,0,0,.25)}
-#tab-create .create-performance-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:10px}
+#tab-create .create-console{grid-template-columns:1fr;gap:9px;border:0;background:none}
+#tab-create .create-console>.create-showcase-slot,#tab-create .create-console>#preGenSection{grid-column:1/-1;grid-row:auto}
+#tab-create .create-performance-deck{grid-column:1/-1;margin:0;padding:12px;border:1.5px solid #427983;border-radius:18px;background:linear-gradient(135deg,#19252d,#10121c)}
+#tab-create .create-performance-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
 #tab-create .create-performance-heading h2{font-size:1.3rem}
 #tab-create .create-performance-heading p:not(.eyebrow),#tab-create .create-deck-state{font-size:.7rem;color:var(--text-2)}
-#tab-create .create-performance-deck .create-live-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px;margin:0!important;padding:0!important;border:0!important;background:none!important;box-shadow:none!important}
-#tab-create .create-live-controls>.create-stage-heading{grid-column:1/-1;padding:5px 0 1px;border-top:1px solid rgba(255,255,255,.1)}
-#tab-create .create-live-controls>.create-stage-heading:first-child{border:0}
-#tab-create .create-performance-deck .create-live-control,#tab-create .create-performance-deck .create-live-select{display:flex!important;flex-direction:column;justify-content:space-between;gap:8px;grid-column:auto!important;min-height:88px;padding:11px;border:1.5px solid rgba(145,177,193,.32);border-radius:13px;background:rgba(255,255,255,.035)}
+#tab-create .create-performance-deck .create-live-controls{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:8px;margin:0!important;padding:0!important;border:0!important;background:none!important}
+#tab-create .create-live-controls>.create-stage-heading{grid-column:1/-1}
+#tab-create .create-performance-deck .create-live-control,#tab-create .create-performance-deck .create-live-select{display:flex!important;flex-direction:column;justify-content:space-between;gap:8px;grid-column:auto!important;min-height:88px;padding:11px;border:1.5px solid #405765;border-radius:13px;background:#ffffff08}
 #tab-create .create-performance-deck .create-live-control>span{display:flex!important;justify-content:space-between}
-#tab-create .create-performance-deck .create-live-control:focus-within{border-color:#7ee6e8;box-shadow:0 0 0 2px rgba(126,230,232,.18)}
-#tab-create #heroPanel.song-showcase{border:1.5px solid rgba(140,168,233,.45)!important;border-radius:20px!important}
+#tab-create .create-performance-deck .create-live-control:focus-within{border-color:#7ee6e8}
+#tab-create #heroPanel.song-showcase{border:1.5px solid #536a8d!important;border-radius:20px!important}
 #preGenSection .generator-scope{display:none}
-@media(max-width:650px){#tab-create .create-performance-deck{padding:10px}#tab-create .create-performance-deck .create-live-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}#tab-create .create-performance-heading p:not(.eyebrow),#tab-create .create-deck-state{display:none}}
-@media(prefers-reduced-motion:reduce){#tab-create .create-performance-deck *{transition:none!important}}
+@media(max-width:650px){#tab-create .create-performance-deck .create-live-controls{grid-template-columns:repeat(2,minmax(0,1fr))!important}#tab-create .create-deck-state{display:none}}
