@@ -90,6 +90,33 @@ test("one existing Jazz offbeat ornament can echo an earlier phrase without copy
   assert.deepEqual(audit.changedMutations, ["timing"]);
 });
 
+test("Jazz ride anchors permit a new offbeat echo without pre-existing copied ornament notes", () => {
+  const song = fixture();
+  for (const note of song.tracks[0].notes) {
+    if (note.pitch === 42 && note.start >= 16) note.start += 0.25;
+  }
+  const options = createJazzStructuralMotifCandidates(song);
+  assert.ok(options.length > 0, "shared ride anchors are a genuine phrase context");
+  assert.ok(options.some((candidate) => candidate.beforeOrnamentMatches === 0
+    && candidate.afterOrnamentMatches === 1 && candidate.sharedRideAnchors >= 1));
+});
+
+test("Jazz hat-family motifs retain the target's open/closed cymbal color", () => {
+  const song = fixture();
+  for (const note of song.tracks[0].notes) {
+    if (note.pitch === 42 && note.start >= 16
+      && Math.abs((note.start % 4) - 1.75) < 0.01) note.pitch = 44;
+  }
+  const options = createJazzStructuralMotifCandidates(song);
+  assert.ok(options.length > 0, "closed/foot-hat contour must remain transferable");
+  const candidate = options[0];
+  assert.deepEqual(noteTopology(candidate.song), noteTopology(song));
+  const changedIndex = song.tracks[0].notes.findIndex((note, i) =>
+    note.start !== candidate.song.tracks[0].notes[i].start);
+  assert.equal(song.tracks[0].notes[changedIndex].pitch, 44);
+  assert.equal(candidate.song.tracks[0].notes[changedIndex].pitch, 44);
+});
+
 test("reject full-bar copying, protected fills, unrelated genres and missing section memory", () => {
   const source = fixture();
   const noDevelopment = structuredClone(source);
