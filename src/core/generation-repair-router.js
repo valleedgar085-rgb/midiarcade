@@ -46,12 +46,14 @@ const STRICT_MUTATION_QUALITY_STAGES = Object.freeze(new Set([
   "melodySectionDevelopmentRefinement",
   "jazzDrumExpressionRefinement",
   "jazzPhraseReturnRefinement",
+  "jazzStructuralMotifRefinement",
 ]));
 
 const QUALITY_STAGE_MUTATIONS = Object.freeze({
   melodySectionDevelopmentRefinement: Object.freeze(["duration", "harmony"]),
   jazzDrumExpressionRefinement: Object.freeze(["velocity"]),
   jazzPhraseReturnRefinement: Object.freeze(["velocity"]),
+  jazzStructuralMotifRefinement: Object.freeze(["timing"]),
 });
 
 const QUALITY_STAGE_OWNERS = Object.freeze({
@@ -73,6 +75,7 @@ const QUALITY_STAGE_OWNERS = Object.freeze({
   genreIdentityRefinement: ["groove", "ensemble"],
   jazzDrumExpressionRefinement: ["ensemble"],
   jazzPhraseReturnRefinement: ["ensemble"],
+  jazzStructuralMotifRefinement: ["groove"],
   transitionFxRefinement: [],
 });
 
