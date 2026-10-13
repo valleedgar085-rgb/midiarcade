@@ -113,8 +113,11 @@ test("project storage round-trips explicitly and refuses damaged stored records"
   const loaded = await library.load("project-a");
   assert.deepEqual(loaded.payload.song, SONG);
   records.get("project-a").payload.song.tracks[0].notes[0].pitch = 39;
+  records.get("project-a").savedAt = null;
   await assert.rejects(() => library.load("project-a"), /integrity/);
-  assert.equal((await library.list()).find((p) => p.id === "project-a").valid, false);
+  const damaged = (await library.list()).find((p) => p.id === "project-a");
+  assert.equal(damaged.valid, false, "bad records remain visible and quarantined");
+  assert.equal(damaged.savedAt, "1970-01-01T00:00:00.000Z", "invalid timestamps must not crash the library view");
   await library.remove("project-a");
   assert.equal((await library.list()).length, 1);
   await assert.rejects(() => library.load("project-a"), /not found/);
