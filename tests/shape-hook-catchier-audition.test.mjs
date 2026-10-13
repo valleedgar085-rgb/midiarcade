@@ -91,7 +91,8 @@ test("Pitch locks keep the original Catchier behavior without repitching melody"
       size: "reshape", direction: "catchier", preserve,
     }, { seed: "locked" });
     assert.equal(output.status, "candidate");
-    assert.ok(output.summary.insertedNoteCount > 0, "keeps the legacy expressive Catchier path");
+    assert.equal(output.summary.insertedNoteCount > 0, !preserve.includes("rhythm"),
+      "original insertion behavior respects the rhythm lock");
     for (const note of melody(song)) {
       assert.equal(
         melody(output.after).find((entry) => entry.id === note.id)?.pitch,
@@ -113,7 +114,7 @@ test("Selected notes, original chorus and uncalibrated genres do not trigger hoo
     }, { seed: "legacy" });
     if (output.status === "candidate") {
       assert.equal(
-        melody(output.after).filter((entry, i) => entry.pitch !== melody(song)[i]?.pitch).length,
+        melody(song).filter((entry) => melody(output.after).find((actual) => actual.id === entry.id)?.pitch !== entry.pitch).length,
         0, "not an authorized return-hook repitch",
       );
     } else {
