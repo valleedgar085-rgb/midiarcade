@@ -51,7 +51,20 @@ test("opt-in Jazz memory changes real drums only in the declared return bar, wit
     const changedBars = Array.from({ length: 16 }, (_, bar) => bar)
       .filter((bar) => {
         const changed = JSON.stringify(notesInBar(candidate, bar)) !== JSON.stringify(notesInBar(baseline, bar));
-        if (changed) assert.ok(targetBars.has(bar), `${seed}: unplanned drum edit at bar ${bar}`);
+        if (changed && !targetBars.has(bar)) {
+          console.info("JAZZ_GROOVE_MEMORY_UNPLANNED_BAR", JSON.stringify({
+            seed, bar, targetBars: [...targetBars],
+            baseline: notesInBar(baseline, bar).map((note) => ({
+              pitch: note.pitch, start: note.start, velocity: note.velocity,
+              grooveSource: note.grooveSource, rhythmicFeature: note.rhythmicFeature,
+            })),
+            candidate: notesInBar(candidate, bar).map((note) => ({
+              pitch: note.pitch, start: note.start, velocity: note.velocity,
+              grooveSource: note.grooveSource, rhythmicFeature: note.rhythmicFeature,
+            })),
+          }));
+          assert.fail(`${seed}: unplanned drum edit at bar ${bar}`);
+        }
         return changed;
       });
     assert.equal(changedBars.length, memory.changedBars,
