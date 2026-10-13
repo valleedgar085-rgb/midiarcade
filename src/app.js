@@ -369,7 +369,7 @@ function applyControlDescriptions(root = document) {
     control.dataset.helpTitle = help[0];
     control.dataset.helpText = help[1];
     control.setAttribute("aria-description", help[1]);
-    if (!control.getAttribute?.("title")) control.setAttribute("title", `${help[0]} — ${help[1]}`);
+    if (!control.getAttribute?.("title")) control.setAttribute("title", `${help[0]} â€” ${help[1]}`);
   }
 }
 
@@ -385,7 +385,7 @@ function renderWorkflow() {
   $("#workflowProgress").textContent = `STEP ${step} OF 4`;
   $("#workflowCoachTitle").textContent = copy.title;
   $("#workflowCoachText").textContent = copy.text;
-  $("#workflowAction").innerHTML = `${copy.action} <span>→</span>`;
+  $("#workflowAction").innerHTML = `${copy.action} <span>â†’</span>`;
   $$('[data-workflow-step]').forEach((button) => {
     const buttonStep = Number(button.dataset.workflowStep);
     button.classList.toggle("is-active", buttonStep === step);
@@ -421,19 +421,19 @@ function renderCreativeThread() {
   document.body.style.setProperty("--focus-color", meta.color);
   $("#creativeThread").style.setProperty("--thread-color", meta.color);
   $("#threadSongName").textContent = deriveTitle();
-  $("#threadSongMeta").textContent = `${bars} bars · ${notes} MIDI notes`;
+  $("#threadSongMeta").textContent = `${bars} bars Â· ${notes} MIDI notes`;
   $("#threadSectionName").textContent = section?.name || "Full song";
   $("#threadSectionMeta").textContent = section
-    ? `Bars ${section.start + 1}–${section.start + section.bars} · piano roll open`
-    : `${normalizeSections().length} sections · choose from the map`;
+    ? `Bars ${section.start + 1}â€“${section.start + section.bars} Â· piano roll open`
+    : `${normalizeSections().length} sections Â· choose from the map`;
   $("#threadSectionButton").classList.toggle("has-focus", Boolean(section));
   $("#threadTrackName").textContent = meta.name;
-  $("#threadTrackMeta").textContent = `${meta.role} · shared focus`;
-  $("#transportContext").textContent = `${section?.name || "Full song"} · ${meta.name} focus`;
+  $("#threadTrackMeta").textContent = `${meta.role} Â· shared focus`;
+  $("#transportContext").textContent = `${section?.name || "Full song"} Â· ${meta.name} focus`;
   $("#threadRelationship").textContent = focusRelationship(trackId, section);
   $("#threadActionButton").innerHTML = section
-    ? `Edit ${section.name} <span>↘</span>`
-    : `Choose a section <span>↘</span>`;
+    ? `Edit ${section.name} <span>â†˜</span>`
+    : `Choose a section <span>â†˜</span>`;
   if (!player?.playing) $("#threadLiveSection").textContent = section ? `${section.name} ready from bar ${section.start + 1}` : "Ready to listen";
 }
 
@@ -464,7 +464,7 @@ function updateCreativeThreadPlayback(position, duration, { view = playbackViewF
     });
   }
   $("#threadLiveSection").textContent = player?.playing && playingSection
-    ? `${playingSection.name} · bar ${Math.floor(beat / beatsPerBar) + 1}`
+    ? `${playingSection.name} Â· bar ${Math.floor(beat / beatsPerBar) + 1}`
     : editorSection()
       ? `${editorSection().name} ready from bar ${editorSection().start + 1}`
       : "Ready to listen";
@@ -647,7 +647,7 @@ function rhythmAmountLabel(value) {
           : amount <= 80
             ? "SPICY"
             : "BOLD";
-  return `${amount}% · ${feel}`;
+  return `${amount}% Â· ${feel}`;
 }
 
 function applyGenreDefaultsToControls(id = selectedGenreId(), { includeMode = true } = {}) {
@@ -730,7 +730,7 @@ function syncAutoRangeControl(input, key = autoKeyForRange(input)) {
   if (button) {
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", String(active));
-    button.textContent = active ? "AUTO ✓" : "AUTO";
+    button.textContent = active ? "AUTO âœ“" : "AUTO";
   }
   const output = input.closest("label")?.querySelector("output");
   if (active && output) output.textContent = "AUTO";
@@ -1360,17 +1360,17 @@ function renderSectionEditor(message = "") {
   const partnerTrack = songTracks().find((candidate, index) => trackId(candidate, index) === partnerId);
   const partnerEntries = editorEntries(partnerTrack, section);
   container.style.setProperty("--editor-color", meta.color);
-  $("#sectionEditorTitle").textContent = `${section.name} · ${shapeDirectorState().target === "section" ? "All instruments" : meta.name}`;
-  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · Changes affect ${shapeDirectorState().target === "section" ? "all instruments in this section" : shapeDirectorState().target === "notes" ? "selected notes only" : "only this instrument here"}`;
-  $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
-  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
+  $("#sectionEditorTitle").textContent = `${section.name} Â· ${shapeDirectorState().target === "section" ? "All instruments" : meta.name}`;
+  $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}â€“${section.start + section.bars} Â· Changes affect ${shapeDirectorState().target === "section" ? "all instruments in this section" : shapeDirectorState().target === "notes" ? "selected notes only" : "only this instrument here"}`;
+  $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} Â· ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
+  $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" Â· ")} Â· edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
   const relationship = analyzeSectionRelationship(
     entries.map(({ note }) => note),
     partnerEntries.map(({ note }) => note),
   );
   const relationshipLabel = partnerId
-    ? `${TRACK_META[state.editorTrack]?.name || "Track"} ↔ ${TRACK_META[partnerId]?.name || partnerId}`
+    ? `${TRACK_META[state.editorTrack]?.name || "Track"} â†” ${TRACK_META[partnerId]?.name || partnerId}`
     : "Instrument";
   $("#editorRelationshipSummary").innerHTML = `
     <span><small>RELATIONSHIP</small><strong>${relationshipLabel}</strong></span>
@@ -1435,13 +1435,13 @@ function renderSectionEditor(message = "") {
   const selectedVelocity = selected.length
     ? Math.round(selected.reduce((sum, entry) => sum + noteVelocity(entry.note), 0) / selected.length)
     : 100;
-  $("#editorVelocityValue").textContent = selected.length ? formatMidiVelocity(selectedVelocity) : "—";
+  $("#editorVelocityValue").textContent = selected.length ? formatMidiVelocity(selectedVelocity) : "â€”";
   $("#editorVelocityControl").value = selectedVelocity;
   $("#editorGridControl").value = String(state.editorGrid);
   $("#editorZoomControl").value = state.editorZoom;
   $("#editorStatus").textContent = message || (entries.length
-    ? `${meta.name} · tap to select; double-tap to draw.`
-      : `Empty ${meta.name} · double-tap to draw.`);
+    ? `${meta.name} Â· tap to select; double-tap to draw.`
+      : `Empty ${meta.name} Â· double-tap to draw.`);
   renderSectionVariationLab(section);
   $$('[data-editor-action]', container).forEach((button) => {
     const tonalAction = ["octave-down", "pitch-down", "pitch-up", "octave-up"].includes(button.dataset.editorAction);
@@ -1470,7 +1470,7 @@ function renderSectionVariationLab(section = editorSection()) {
   const directionNames = ["Space", "Lift", "Contrast"];
   lab.innerHTML = variations?.length
     ? `
-      <div class="variation-lab-heading"><small>VARIATION · THIS SECTION</small><strong>Compare section ideas</strong><p>Audition ${section.name}, then keep a choice.</p></div>
+      <div class="variation-lab-heading"><small>VARIATION Â· THIS SECTION</small><strong>Compare section ideas</strong><p>Audition ${section.name}, then keep a choice.</p></div>
       <div class="variation-actions variation-comparison" role="radiogroup" aria-label="Section variation choices">
         <button type="button" data-section-variation="0" class="${active === 0 ? "is-active" : ""}" role="radio" aria-checked="${active === 0}"><b>ORIGINAL</b><small>Current arrangement</small></button>
         ${variations.map((option, index) => {
@@ -1478,7 +1478,7 @@ function renderSectionVariationLab(section = editorSection()) {
             return noteStart(note) >= sectionRange.start && noteStart(note) < sectionRange.end;
           }).length, 0);
           const delta = count - baseNoteCount;
-          return `<button type="button" data-section-variation="${index + 1}" class="${active === index + 1 ? "is-active" : ""}" role="radio" aria-checked="${active === index + 1}"><b>${String.fromCharCode(65 + index)} · ${directionNames[index]}</b><small>${delta === 0 ? "Balanced note count" : `${delta > 0 ? "+" : ""}${delta} section notes`}</small></button>`;
+          return `<button type="button" data-section-variation="${index + 1}" class="${active === index + 1 ? "is-active" : ""}" role="radio" aria-checked="${active === index + 1}"><b>${String.fromCharCode(65 + index)} Â· ${directionNames[index]}</b><small>${delta === 0 ? "Balanced note count" : `${delta > 0 ? "+" : ""}${delta} section notes`}</small></button>`;
         }).join("")}
       </div>
       <div class="variation-commit-actions">
@@ -1486,7 +1486,7 @@ function renderSectionVariationLab(section = editorSection()) {
         <button class="variation-keep" type="button" data-section-variation-keep>Keep ${active ? `Option ${String.fromCharCode(64 + active)}` : "original"}</button>
       </div>`
     : `
-      <div><small>VARIATION · THIS SECTION</small><strong>Try another idea</strong><p>Three ideas for this section.</p></div>
+      <div><small>VARIATION Â· THIS SECTION</small><strong>Try another idea</strong><p>Three ideas for this section.</p></div>
       <button class="variation-explore" type="button" data-section-variation-explore>Explore 3 variations</button>`;
 }
 
@@ -1643,7 +1643,7 @@ function refreshSongIdea(song) {
       trackId: id,
       program,
       name: id === "drums"
-        ? `${oneShotKit.name} · ${oneShotKit.oneShots.kick} / ${oneShotKit.oneShots.snare}`
+        ? `${oneShotKit.name} Â· ${oneShotKit.oneShots.kick} / ${oneShotKit.oneShots.snare}`
         : previousPalette.get(`${id}:${program}`) || fallbackProgramName(id, program),
     };
   });
@@ -1914,7 +1914,7 @@ function renderTempoPocket() {
   const tempo = readNumber("#tempoControl", range.default);
   const position = tempoPocket(tempo, range);
   const status = $("#tempoPocketStatus");
-  $("#genreTempoRange").textContent = `${Math.round(range.min)}–${Math.round(range.max)} BPM`;
+  $("#genreTempoRange").textContent = `${Math.round(range.min)}â€“${Math.round(range.max)} BPM`;
   $("#genreGuidance").textContent = GENRE_GUIDANCE[id] || "A genre-aware balance of groove, harmony and arrangement.";
   status.classList.remove("in-pocket", "outside-pocket");
   status.classList.add(position === "in" ? "in-pocket" : "outside-pocket");
@@ -1955,14 +1955,14 @@ function renderIdeaInspector() {
   const palette = Array.isArray(idea.soundPalette)
     ? idea.soundPalette.map((entry) => typeof entry === "string" ? entry : entry?.name || entry?.label).filter(Boolean)
     : listText(idea.soundPalette, ["Editable General MIDI palette"]);
-  const fingerprint = formatSeed(songSeed(song)).match(/.{1,2}/g)?.join("·") || "00·00·00";
+  const fingerprint = formatSeed(songSeed(song)).match(/.{1,2}/g)?.join("Â·") || "00Â·00Â·00";
 
   const scoreDetails = song?.meta?.scoreDetails;
   const scoreBadge = $("#dnaScoreBadge");
   if (scoreBadge) {
     const scoreVal = scoreDetails?.totalScore ?? 94;
     const tier = qualityTier(scoreVal);
-    scoreBadge.textContent = `✦ ${tier.label} · ${scoreVal}/100`;
+    scoreBadge.textContent = `âœ¦ ${tier.label} Â· ${scoreVal}/100`;
     const scoreNames = {
       harmonic: "Harmony",
       groove: "Groove",
@@ -1994,22 +1994,22 @@ function renderIdeaInspector() {
               `Lower-band balance: ${scoreDetails.balance.balanceScore}`,
             ]
           : []))
-      .join(" · ");
+      .join(" Â· ");
   }
 
   $("#dnaFingerprint").textContent = fingerprint;
   $("#dnaGenre").textContent = label;
-  $("#dnaTempoDetail").textContent = `${bpm} BPM · ${fit.toLowerCase()} · usual ${Math.round(range.min)}–${Math.round(range.max)}`;
-  $("#dnaHarmony").textContent = progression.slice(0, 8).join(" → ");
-  $("#dnaGroove").textContent = `${String(rhythmIdentity.label || idea.grooveLabel || rhythmFeatures[0] || "Genre-aware pocket")} · ${phraseShape}`;
-  $("#dnaHalfTime").textContent = `${idea.halfTime ? "Half-time feel" : "Full-time pulse"} · ${timingPocket} · ${motifBars}-bar motif`;
-  $("#dnaRhythmCounts").textContent = `${triplets} triplet ${triplets === 1 ? "hit" : "hits"} · ${rolls} snare-roll ${rolls === 1 ? "hit" : "hits"}`;
-  $("#dnaRhythmFeatures").textContent = rhythmFeatures.slice(0, 3).join(" · ");
+  $("#dnaTempoDetail").textContent = `${bpm} BPM Â· ${fit.toLowerCase()} Â· usual ${Math.round(range.min)}â€“${Math.round(range.max)}`;
+  $("#dnaHarmony").textContent = progression.slice(0, 8).join(" â†’ ");
+  $("#dnaGroove").textContent = `${String(rhythmIdentity.label || idea.grooveLabel || rhythmFeatures[0] || "Genre-aware pocket")} Â· ${phraseShape}`;
+  $("#dnaHalfTime").textContent = `${idea.halfTime ? "Half-time feel" : "Full-time pulse"} Â· ${timingPocket} Â· ${motifBars}-bar motif`;
+  $("#dnaRhythmCounts").textContent = `${triplets} triplet ${triplets === 1 ? "hit" : "hits"} Â· ${rolls} snare-roll ${rolls === 1 ? "hit" : "hits"}`;
+  $("#dnaRhythmFeatures").textContent = rhythmFeatures.slice(0, 3).join(" Â· ");
   const narrative = song?.songBlueprint?.narrative?.label;
   const phase9 = song?.producerPass?.status;
-  const phase39 = song?.generationInterlock?.phase === 39 ? " · Phase 39 connected" : "";
-  $("#dnaArc").textContent = `${narrative ? `${narrative} · ` : ""}${sectionArc.slice(0, 8).join(" → ")}${phase9 ? ` · Phase 9 ${phase9}` : ""}${phase39}`;
-  $("#dnaPalette").textContent = palette.slice(0, 5).join(" · ");
+  const phase39 = song?.generationInterlock?.phase === 39 ? " Â· Phase 39 connected" : "";
+  $("#dnaArc").textContent = `${narrative ? `${narrative} Â· ` : ""}${sectionArc.slice(0, 8).join(" â†’ ")}${phase9 ? ` Â· Phase 9 ${phase9}` : ""}${phase39}`;
+  $("#dnaPalette").textContent = palette.slice(0, 5).join(" Â· ");
 }
 
 function renderSongShowcase() {
@@ -2096,7 +2096,7 @@ function renderSongVariationTray() {
     const detail = $("small", button);
     if (title) title.textContent = element ? `${element.symbol || ""} ${element.label}`.trim() : (direction?.label ?? `Version ${index + 1}`);
     const meterText = meter ? `${meter.label} ${Number(meter.value).toLocaleString()} ${meter.unit}` : "Elemental producer pass";
-    if (detail) detail.textContent = score > 0 ? `${meterText} · Q${score}` : meterText;
+    if (detail) detail.textContent = score > 0 ? `${meterText} Â· Q${score}` : meterText;
     button.title = element?.description ?? direction?.description ?? "Switch to this full-song interpretation";
   });
 }
@@ -2121,7 +2121,7 @@ export function selectSongVariation(index) {
   const element = variation.variationSet?.element;
   const direction = element?.label ?? variation.variationSet?.direction?.label ?? `Version ${safeIndex + 1}`;
   const reading = element?.meter;
-  showToast(`${element?.symbol ? `${element.symbol} ` : ""}${direction} selected${reading ? ` · ${reading.label} ${reading.value} ${reading.unit}` : ""}.`);
+  showToast(`${element?.symbol ? `${element.symbol} ` : ""}${direction} selected${reading ? ` Â· ${reading.label} ${reading.value} ${reading.unit}` : ""}.`);
   return true;
 }
 
@@ -2173,7 +2173,7 @@ function renderSummary() {
     idea.halfTime ? "HALF-TIME" : String(rhythmFeatures[0] || "GROOVE").toUpperCase(),
     triplets ? `${triplets} TRIPLET ${triplets === 1 ? "HIT" : "HITS"}` : null,
     rolls ? `${rolls} ROLL ${rolls === 1 ? "HIT" : "HITS"}` : null,
-  ].filter(Boolean).slice(0, 2).join(" · ");
+  ].filter(Boolean).slice(0, 2).join(" Â· ");
 
   $("#songTitle").textContent = title;
   $("#transportTitle").textContent = title;
@@ -2184,7 +2184,7 @@ function renderSummary() {
     staircase: "stepping phrases",
     sparseEcho: "spacious echo phrases",
   }[idea.rhythmIdentity?.phraseShape] || "developing phrases";
-  $("#songSummary").textContent = `${generatedGenreLabel} · ${String(idea.rhythmIdentity?.label || idea.grooveLabel || recipe.tags[2]).toLowerCase()} · ${phraseShape} · fully editable MIDI`;
+  $("#songSummary").textContent = `${generatedGenreLabel} Â· ${String(idea.rhythmIdentity?.label || idea.grooveLabel || recipe.tags[2]).toLowerCase()} Â· ${phraseShape} Â· fully editable MIDI`;
   $("#factGenre").textContent = generatedGenreLabel.toUpperCase();
   $("#factKey").textContent = `${key} ${modeLabel}`.toUpperCase();
   $("#factTempo").textContent = `${Math.round(bpm)} BPM`;
@@ -2192,7 +2192,7 @@ function renderSummary() {
   $("#factDuration").textContent = duration;
   $("#factRhythm").textContent = rhythmFact;
   if ($("#compactCreateTitle")) $("#compactCreateTitle").textContent = title;
-  if ($("#compactCreateMeta")) $("#compactCreateMeta").textContent = `${generatedGenreLabel} · ${key} ${modeLabel} · ${Math.round(bpm)} BPM`;
+  if ($("#compactCreateMeta")) $("#compactCreateMeta").textContent = `${generatedGenreLabel} Â· ${key} ${modeLabel} Â· ${Math.round(bpm)} BPM`;
   $("#totalTime").textContent = duration;
   $("#seedLabel").textContent = `SEED ${formatSeed(seed)}`;
   $("#dnaValue").textContent = String(82 + (hashNumber(seed) % 14));
@@ -2277,7 +2277,7 @@ function renderArrangementInsights(sections, bars) {
       <polyline points="${polyline}" vector-effect="non-scaling-stroke"></polyline>
       ${points.map((point) => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="1.1"></circle>`).join("")}
     </svg>
-    <span class="energy-arc-caption">${points.map(({ section, energy }) => `${escapeHtml(section.name)} ${Math.round(energy * 100)}%`).join(" · ")}</span>`;
+    <span class="energy-arc-caption">${points.map(({ section, energy }) => `${escapeHtml(section.name)} ${Math.round(energy * 100)}%`).join(" Â· ")}</span>`;
 
   const harmony = Array.isArray(state.song?.harmony) ? state.song.harmony : [];
   const totalBeats = Math.max(1, bars * Number(state.song?.meta?.beatsPerBar ?? 4));
@@ -2287,7 +2287,7 @@ function renderArrangementInsights(sections, bars) {
       const duration = Number(event.duration ?? event.durationBeats ?? 4);
       const symbol = event.symbol || event.roman || event.chord?.symbol || event.chord?.roman || "I";
       const roman = event.roman || event.chord?.roman || "";
-      const notes = Array.isArray(event.notes) ? event.notes.join(" · ") : (Array.isArray(event.chord?.notes) ? event.chord.notes.join(" · ") : symbol);
+      const notes = Array.isArray(event.notes) ? event.notes.join(" Â· ") : (Array.isArray(event.chord?.notes) ? event.chord.notes.join(" Â· ") : symbol);
       return `<span style="--harmony-left:${(start / totalBeats * 100).toFixed(3)}%;--harmony-width:${(duration / totalBeats * 100).toFixed(3)}%" title="${escapeHtml(notes)}"><b>${escapeHtml(symbol)}</b><small>${escapeHtml(roman)}</small></span>`;
     }).join("")
   }</div>`;
@@ -2312,12 +2312,12 @@ function renderTimeline() {
     const noteCount = sectionNotes(section).length;
     const sectionIdAttr = escapeHtml(section.id);
     const sectionNameText = escapeHtml(section.name);
-    return `<button class="section-chip${active}${playing}" data-section="${sectionIdAttr}" type="button" draggable="true" style="grid-column:${section.start + 1} / span ${section.bars};--section-border:${(0.12 + energy * 0.18).toFixed(2)};--section-fill:${(0.025 + energy * 0.045).toFixed(3)}" title="Focus ${sectionNameText}. Drag to reorder." aria-label="${sectionNameText}, ${section.bars} bars, ${noteCount} notes. Drag or press Alt plus an arrow key to reorder."><span>${sectionNameText}</span><small>${section.bars} bars · ${noteCount} notes</small></button>`;
+    return `<button class="section-chip${active}${playing}" data-section="${sectionIdAttr}" type="button" draggable="true" style="grid-column:${section.start + 1} / span ${section.bars};--section-border:${(0.12 + energy * 0.18).toFixed(2)};--section-fill:${(0.025 + energy * 0.045).toFixed(3)}" title="Focus ${sectionNameText}. Drag to reorder." aria-label="${sectionNameText}, ${section.bars} bars, ${noteCount} notes. Drag or press Alt plus an arrow key to reorder."><span>${sectionNameText}</span><small>${section.bars} bars Â· ${noteCount} notes</small></button>`;
   }).join("");
 
   const rows = tracks.map((track, index) => {
     const id = trackId(track, index);
-    const meta = TRACK_META[id] || { name: track.name || id, icon: "•", color: "#ae8cff" };
+    const meta = TRACK_META[id] || { name: track.name || id, icon: "â€¢", color: "#ae8cff" };
     const notes = trackNotes(track);
     const escapedTrackId = escapeHtml(id);
     const escapedMetaName = escapeHtml(meta.name);
@@ -2472,7 +2472,7 @@ function blueprintCompositionSelection(section = editorSection()) {
 function blueprintCompositionLabel(transaction, section = editorSection()) {
   const selection = transaction?.selection;
   if (selection?.target === "section-track") {
-    return `${section?.name ?? "Section"} · ${TRACK_META[selection.trackId]?.name ?? selection.trackId}`;
+    return `${section?.name ?? "Section"} Â· ${TRACK_META[selection.trackId]?.name ?? selection.trackId}`;
   }
   return section?.name ?? "Selected section";
 }
@@ -2593,7 +2593,7 @@ function renderShapeDirector(section = editorSection()) {
   }
   if (target) target.value = director.target;
   if (size) size.value = director.size;
-  if (trackName) trackName.textContent = section.name + " · " + (director.target === "section" ? "All instruments" : TRACK_META[state.editorTrack]?.name || state.editorTrack);
+  if (trackName) trackName.textContent = section.name + " Â· " + (director.target === "section" ? "All instruments" : TRACK_META[state.editorTrack]?.name || state.editorTrack);
   if (noteCount) noteCount.textContent = String(state.editorSelection?.size || 0) + " selected notes";
   const notesOption = target?.querySelector?.('option[value="notes"]');
   if (notesOption) notesOption.disabled = !(state.editorSelection?.size > 0);
@@ -2618,17 +2618,17 @@ function renderShapeDirector(section = editorSection()) {
   if (director.transaction.compositionCandidate) {
     const correction = director.transaction.selfCorrection;
     const scores = director.transaction.validation?.judge?.candidate?.scores ?? {};
-    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " · New idea";
+    $("#shapeDirectorCandidateTitle").textContent = blueprintCompositionLabel(director.transaction, section) + " Â· New idea";
     $("#shapeDirectorCandidateMeta").textContent = [
       `${correction?.attemptCount ?? 1} pass${(correction?.attemptCount ?? 1) === 1 ? "" : "es"}`,
-      `harmony ${scores.harmony ?? "—"}`,
-      `groove ${scores.groove ?? "—"}`,
-      `register ${scores.register ?? "—"}`,
-      `phrase ${scores.phrase ?? "—"}`,
-    ].join(" · ");
+      `harmony ${scores.harmony ?? "â€”"}`,
+      `groove ${scores.groove ?? "â€”"}`,
+      `register ${scores.register ?? "â€”"}`,
+      `phrase ${scores.phrase ?? "â€”"}`,
+    ].join(" Â· ");
   } else {
-    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
-    $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
+    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " Â· " + director.transaction.intent.size.label;
+    $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped Â· " + summary.insertedNoteCount + " added Â· " + summary.deletedNoteCount + " removed Â· " + summary.scopeNoteCount + " notes in scope";
   }
   $$('[data-shape-audition]', panel).forEach((button) => {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
@@ -2698,7 +2698,7 @@ async function prepareBlueprintCompositionCandidate() {
   const operation = armGenerationSafetyTimer();
   showGenerationActivity("COMPOSING + CHECKING HARMONY AND GROOVE", {
     kind: "similar",
-    threadCopy: "Director → Composer → Judge",
+    threadCopy: "Director â†’ Composer â†’ Judge",
   });
 
   try {
@@ -2815,7 +2815,7 @@ function renderSectionShaper(message = "") {
   content.hidden = !section;
   shaper.classList.toggle("has-selection", Boolean(section));
   if (!section) {
-    if (summary) summary.textContent = `${normalizeSections().length} sections · click a block to shape it`;
+    if (summary) summary.textContent = `${normalizeSections().length} sections Â· click a block to shape it`;
     return;
   }
 
@@ -2826,10 +2826,10 @@ function renderSectionShaper(message = "") {
     : 0;
   const energyLabel = averageVelocity >= 98 ? "high-impact"
     : averageVelocity <= 72 ? "restrained" : "balanced";
-  $("#sectionShaperName").textContent = section.name + " · " + TRACK_META[state.editorTrack].name;
-  $("#sectionShaperMeta").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · ${entries.length} notes · ${energyLabel}`;
+  $("#sectionShaperName").textContent = section.name + " Â· " + TRACK_META[state.editorTrack].name;
+  $("#sectionShaperMeta").textContent = `Bars ${section.start + 1}â€“${section.start + section.bars} Â· ${entries.length} notes Â· ${energyLabel}`;
   $("#sectionShaperStatus").textContent = message || "Auto follows the song.";
-  if (summary) summary.textContent = `${section.name} selected · ${section.bars} bars · ${energyLabel}`;
+  if (summary) summary.textContent = `${section.name} selected Â· ${section.bars} bars Â· ${energyLabel}`;
   $$("[data-section-macro]", shaper).forEach((control) => {
     control.value = values[control.dataset.sectionMacro] || "auto";
   });
@@ -3005,11 +3005,11 @@ function patchOptions(id, selectedProgram) {
     programs = [selected, ...programs.filter((program) => program !== selected)];
   }
   const auto = isTrackProgramAuto(id);
-  const autoOption = `<option value="auto" ${auto ? "selected" : ""}>AUTO · Element decides</option>`;
+  const autoOption = `<option value="auto" ${auto ? "selected" : ""}>AUTO Â· Element decides</option>`;
   const manualOptions = programs.map((program) => {
     const profilePick = profileChoices.includes(program);
     const name = programName(id, program);
-    return `<option value="${program}" ${!auto && program === Number(selectedProgram) ? "selected" : ""}>${profilePick ? "✦ " : ""}${name}</option>`;
+    return `<option value="${program}" ${!auto && program === Number(selectedProgram) ? "selected" : ""}>${profilePick ? "âœ¦ " : ""}${name}</option>`;
   }).join("");
   return `${autoOption}${manualOptions}`;
 }
@@ -3020,7 +3020,7 @@ function renderAttitudeStrip(message = "") {
   const attitude = state.trackSettings[id]?.attitude || "neutral";
   $("#attitudeStrip").style.setProperty("--attitude-color", meta.color);
   $("#attitudeTargetName").textContent = meta.name;
-  $("#attitudeTargetState").textContent = `· ${ATTITUDE_LABELS[attitude] || ATTITUDE_LABELS.neutral}`;
+  $("#attitudeTargetState").textContent = `Â· ${ATTITUDE_LABELS[attitude] || ATTITUDE_LABELS.neutral}`;
   $("#attitudeStatus").textContent = message || `${meta.name} is targeted. Choose an attitude to rewrite only this part.`;
   $$("[data-attitude]", $("#attitudeStrip")).forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.attitude === attitude));
@@ -3045,7 +3045,7 @@ function renderMixOverview() {
     : Math.max(0, TRACK_ORDER.length - state.muted.size);
   $("#mixOverview").style.setProperty("--mix-focus-color", meta.color);
   $("#mixFocusName").textContent = meta.name;
-  $("#mixFocusSound").textContent = `${programName(id, settings.program)} · ${ATTITUDE_LABELS[settings.attitude] || "Neutral"}`;
+  $("#mixFocusSound").textContent = `${programName(id, settings.program)} Â· ${ATTITUDE_LABELS[settings.attitude] || "Neutral"}`;
   $("#mixAudibleCount").textContent = `${audible} / ${TRACK_ORDER.length}`;
   $("#mixLockedCount").textContent = String(state.locked.size);
 
@@ -3063,7 +3063,7 @@ function renderMixOverview() {
   mixTab?.classList.toggle("has-solo", soloIds.length > 0);
   mobileMix?.classList.toggle("has-solo", soloIds.length > 0);
   mixTab?.setAttribute("aria-label", soloIds.length
-    ? `Mix — Solo active on ${soloNames.join(", ")}`
+    ? `Mix â€” Solo active on ${soloNames.join(", ")}`
     : "Mix");
   renderSmartMixConsole();
 }
@@ -3138,7 +3138,7 @@ export async function applyTrackAttitude(attitude) {
     settings.attitude = attitude;
   }
   renderTrackRack();
-  renderAttitudeStrip(`${ATTITUDE_LABELS[attitude]} is reshaping ${TRACK_META[id].name.toLowerCase()}…`);
+  renderAttitudeStrip(`${ATTITUDE_LABELS[attitude]} is reshaping ${TRACK_META[id].name.toLowerCase()}â€¦`);
   $("#attitudeStrip").setAttribute("aria-busy", "true");
   try {
     await regenerateTrack(id, { historySnapshot, attitude });
@@ -3174,7 +3174,7 @@ export function openPianoRoll(id = "melody") {
   const modal = $("#pianoRollModal");
   if (!modal) return;
   const meta = TRACK_META[id] || { name: id };
-  $("#pianoRollTitle").textContent = `Piano Roll — ${meta.name}`;
+  $("#pianoRollTitle").textContent = `Piano Roll â€” ${meta.name}`;
   bindPianoRollInteractions();
   renderPianoRollGrid();
   try {
@@ -3401,7 +3401,7 @@ function renderTrackRack() {
       <div class="track-card-header">
         <div class="track-identity">
           <span class="track-icon" aria-hidden="true">${meta.icon}</span>
-          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName} · ${isTrackProgramAuto(id) ? "AUTO SOUND" : profilePick ? "STYLE PICK" : "CUSTOM SOUND"}</small></span>
+          <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} Â· ${trackNotes(track).length} notes</small><small class="track-voice">${soundName} Â· ${isTrackProgramAuto(id) ? "AUTO SOUND" : profilePick ? "STYLE PICK" : "CUSTOM SOUND"}</small></span>
         </div>
         <div class="track-primary-actions" aria-label="${meta.name} quick controls">
         <button class="track-toggle" data-action="mute" type="button" aria-label="Mute ${meta.name}" aria-pressed="${muted}" title="Mute">M</button>
@@ -3410,18 +3410,18 @@ function renderTrackRack() {
       </div>
       <div class="track-expression-grid mix-primary-balance" aria-label="${meta.name} musical balance">
         <label class="track-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">How loud this instrument sits in preview and export controllers</small></label>
-        <label class="track-control"><span>IMPACT <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity impact" /><small class="parameter-note">Soft ↔ strong note attack; MIDI velocity remains bounded</small></label>
-        <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Short ↔ connected articulation used by preview and MIDI handoff</small></label>
+        <label class="track-control"><span>IMPACT <output>${formatVelocityScale(settings.velocity)}</output></span><input data-control="velocity" type="range" min="0.5" max="1.5" step="0.01" value="${settings.velocity}" aria-label="${meta.name} velocity impact" /><small class="parameter-note">Soft â†” strong note attack; MIDI velocity remains bounded</small></label>
+        <label class="track-control"><span>NOTE LENGTH <output>${formatGate(settings.gate)}</output></span><input data-control="gate" type="range" min="0.25" max="1.5" step="0.01" value="${settings.gate}" aria-label="${meta.name} note length" /><small class="parameter-note">Short â†” connected articulation used by preview and MIDI handoff</small></label>
       </div>
       <details class="track-expression track-shaping">
-        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound · pattern · pan · tone</small></span><i aria-hidden="true">+</i></summary>
+        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound Â· pattern Â· pan Â· tone</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
           <label class="track-patch"><span><b>SOUND</b><em>${isTrackProgramAuto(id) ? "AUTO" : profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
           <div class="track-secondary-actions">
-            <button class="track-toggle target-toggle" data-action="target" type="button" aria-label="Target ${meta.name} character" aria-pressed="${targeted}" title="Select for Character Shaper">◎ Character</button>
-            <button class="track-toggle" data-action="lock" type="button" aria-label="Preserve ${meta.name} in similar ideas" aria-pressed="${locked}" title="Preserve in similar ideas">${locked ? "◆ Preserved" : "◇ Preserve"}</button>
-            <button class="track-toggle" data-action="reroll" type="button" aria-label="Regenerate ${meta.name}" aria-pressed="false" title="Regenerate only this instrument">↻ Rewrite part</button>
-            <button class="track-toggle" data-action="pianoroll" type="button" aria-label="Open Piano Roll for ${meta.name}" title="Open visual note editor">✎ Piano Roll</button>
+            <button class="track-toggle target-toggle" data-action="target" type="button" aria-label="Target ${meta.name} character" aria-pressed="${targeted}" title="Select for Character Shaper">â—Ž Character</button>
+            <button class="track-toggle" data-action="lock" type="button" aria-label="Preserve ${meta.name} in similar ideas" aria-pressed="${locked}" title="Preserve in similar ideas">${locked ? "â—† Preserved" : "â—‡ Preserve"}</button>
+            <button class="track-toggle" data-action="reroll" type="button" aria-label="Regenerate ${meta.name}" aria-pressed="false" title="Regenerate only this instrument">â†» Rewrite part</button>
+            <button class="track-toggle" data-action="pianoroll" type="button" aria-label="Open Piano Roll for ${meta.name}" title="Open visual note editor">âœŽ Piano Roll</button>
           </div>
           <div class="track-control-groups">
             <section class="track-control-group pattern-group" aria-label="${meta.name} pattern controls">
@@ -3464,7 +3464,7 @@ function renderTrackRack() {
               <label class="track-control"><span>RELEASE TAIL <output>${Math.round(Math.min(settings.release ?? 0.25, releaseMax) * 1000)}ms</output></span>
                 <input data-control="release" type="range" min="0.05" max="${releaseMax}" step="0.05" value="${Math.min(settings.release ?? 0.25, releaseMax)}" aria-label="${meta.name} release tail" /><small class="parameter-note">Pad and lead tails are capped to prevent overlap</small>
               </label>
-              <label class="track-control"><span>DETUNE <output>${settings.detune ?? 0}¢</output></span>
+              <label class="track-control"><span>DETUNE <output>${settings.detune ?? 0}Â¢</output></span>
                 <input data-control="detune" type="range" min="-25" max="25" step="1" value="${settings.detune ?? 0}" aria-label="${meta.name} detune" />
               </label>
             </div>
@@ -3594,11 +3594,11 @@ function renderFinishWorkspace() {
   ));
   const finishSectionNames = normalizeSections().map((section) => section.name || section.id).filter(Boolean);
   $("#finishFacts").innerHTML = [
-    `TRACKS · ${finishTrackNames.map(escapeHtml).join(" · ")}`,
-    `SECTIONS · ${finishSectionNames.map(escapeHtml).join(" → ")}`,
-    `${escapeHtml(songKey())} ${escapeHtml(songMode().replace(/([a-z])([A-Z])/g, "$1 $2"))} · ${Math.round(songBpm())} BPM · ${songBars()} bars`,
-    "PERFORMANCE · velocity + articulation + CC expression",
-    "HANDOFF · Type-1 multitrack MIDI with section markers",
+    `TRACKS Â· ${finishTrackNames.map(escapeHtml).join(" Â· ")}`,
+    `SECTIONS Â· ${finishSectionNames.map(escapeHtml).join(" â†’ ")}`,
+    `${escapeHtml(songKey())} ${escapeHtml(songMode().replace(/([a-z])([A-Z])/g, "$1 $2"))} Â· ${Math.round(songBpm())} BPM Â· ${songBars()} bars`,
+    "PERFORMANCE Â· velocity + articulation + CC expression",
+    "HANDOFF Â· Type-1 multitrack MIDI with section markers",
   ].map((fact) => `<span>${fact}</span>`).join("");
   renderExportSetup();
 }
@@ -3623,9 +3623,9 @@ function renderExportSetup() {
   const trackNames = trackIds.map((id) => TRACK_META[id]?.name ?? id);
   const timingLabel = setup.timing === "tight" ? "clean 1/16 grid" : "original groove and human feel";
   const isDefaultHandoff = profile.id === "full" && setup.timing === "performance";
-  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default · Full song" : profile.id === "selected" ? selectedName + " · focused export" : profile.label + " · focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} · ${timingLabel} · ${trackNames.join(" + ")}</span>`;
+  summary.innerHTML = `<strong>${isDefaultHandoff ? "DAW-ready default Â· Full song" : profile.id === "selected" ? selectedName + " Â· focused export" : profile.label + " Â· focused export"}</strong><span>${trackCount} MIDI track${trackCount === 1 ? "" : "s"} Â· ${timingLabel} Â· ${trackNames.join(" + ")}</span>`;
   if ($("#exportTrackCount")) {
-    $("#exportTrackCount").textContent = `${trackCount} ${trackCount === 1 ? "MIDI TRACK" : "MIDI TRACKS"} · ${setup.timing === "tight" ? "TIGHT" : "GROOVE"}`;
+    $("#exportTrackCount").textContent = `${trackCount} ${trackCount === 1 ? "MIDI TRACK" : "MIDI TRACKS"} Â· ${setup.timing === "tight" ? "TIGHT" : "GROOVE"}`;
   }
 }
 
@@ -3749,7 +3749,7 @@ function renderGenerationProgress(kind, elapsedMs) {
   const progress = generationLiveStageState ? generationLiveStageState(kind, elapsedMs, generationProgressReport) : { ...generationStageState(kind, 0), completedStageIds: [] };
   const wash = $("#generationWash");
   if (!wash) return;
-  $("#generationStageCount").textContent = `${progress.stage.label} · ${Math.floor(elapsedMs / 1000)}s`;
+  $("#generationStageCount").textContent = `${progress.stage.label} Â· ${Math.floor(elapsedMs / 1000)}s`;
   $("#generationStageCopy").textContent = progress.stage.copy;
   wash.style.setProperty("--generation-progress", `${Math.round(progress.progress * 100)}%`);
   $$("[data-generation-stage]", wash).forEach((element, index) => {
@@ -3853,7 +3853,7 @@ function generationDebuggerDetailText(detail = {}) {
   return entries.slice(0, 6).map(([key, value]) => {
     const textValue = value && typeof value === "object" ? JSON.stringify(value) : String(value);
     return key + ": " + textValue;
-  }).join(" · ");
+  }).join(" Â· ");
 }
 
 function ensureGenerationDebuggerControls() {
@@ -3943,13 +3943,13 @@ function renderGenerationDebugger() {
 
   setText("#debuggerRunStatus", latest ? String(latest.status ?? "unknown").toUpperCase() : "NO RUN YET");
   setText("#debuggerRunMeta", latest
-    ? String(latest.kind ?? "generation") + " · " + Math.round(Number(latest.durationMs) || 0) + " ms"
+    ? String(latest.kind ?? "generation") + " Â· " + Math.round(Number(latest.durationMs) || 0) + " ms"
     : "Generate a song, then refresh this panel.");
   setText("#debuggerSongSummary", latest
-    ? (summary.title || "Untitled") + " · " + (latest.config?.genre || "unknown genre") + " · " + (latest.config?.bars ?? "?") + " bars"
+    ? (summary.title || "Untitled") + " Â· " + (latest.config?.genre || "unknown genre") + " Â· " + (latest.config?.bars ?? "?") + " bars"
     : "No completed generation has been recorded.");
   setText("#debuggerScoreSummary", latest
-    ? "Producer score " + (summary.score ?? "—") + " · seed " + (latest.config?.seed ?? summary.seed ?? "—")
+    ? "Producer score " + (summary.score ?? "â€”") + " Â· seed " + (latest.config?.seed ?? summary.seed ?? "â€”")
     : "Score and seed will appear after generation.");
   setText("#debuggerHistoryCount", String(runs.length) + " captured run" + (runs.length === 1 ? "" : "s"));
   setText("#debuggerWorkerState", generationExecutor.usingWorker ? "Worker active" : "Fallback / idle");
@@ -4394,7 +4394,7 @@ function reshapeArrangement() {
     return next;
   });
   reshaped.sections = deepClone(reshaped.structure);
-  showToast(`Reshaping toward ${reshaped.structure.map((section) => section.name).join(" → ")}.`);
+  showToast(`Reshaping toward ${reshaped.structure.map((section) => section.name).join(" â†’ ")}.`);
   runGeneration("similar", { sourceSong: reshaped });
 }
 
@@ -5079,7 +5079,7 @@ export class PreviewPlayer {
         }
       }
 
-      // Master output — raised to 0.42 for phone speaker loudness.
+      // Master output â€” raised to 0.42 for phone speaker loudness.
       this.master = this.context.createGain();
       this.master.gain.value = 0.42;
 
@@ -5095,7 +5095,7 @@ export class PreviewPlayer {
       warmth.frequency.value = 135;
       warmth.gain.value = 2.2;
 
-      // Main compressor — tighter knee, lower threshold for punchy mobile playback.
+      // Main compressor â€” tighter knee, lower threshold for punchy mobile playback.
       const compressor = this.context.createDynamicsCompressor();
       compressor.threshold.value = -18;
       compressor.knee.value = 14;
@@ -5103,7 +5103,7 @@ export class PreviewPlayer {
       compressor.attack.value = 0.008;
       compressor.release.value = 0.14;
 
-      // Brick-wall limiter — raised to -1.5 dB for more headroom.
+      // Brick-wall limiter â€” raised to -1.5 dB for more headroom.
       const limiter = this.context.createDynamicsCompressor();
       limiter.threshold.value = -1.5;
       limiter.knee.value = 0;
@@ -5116,7 +5116,7 @@ export class PreviewPlayer {
       this.audioGraphNodes.add(compressor);
       this.audioGraphNodes.add(limiter);
 
-      // Soft-clip waveshaper — reduced drive (1.08) for less harshness on phone.
+      // Soft-clip waveshaper â€” reduced drive (1.08) for less harshness on phone.
       if (this.previewBudget.saturation && typeof this.context.createWaveShaper === "function") {
         const saturation = this.context.createWaveShaper();
         const curve = new Float32Array(4096);
@@ -5132,7 +5132,7 @@ export class PreviewPlayer {
         this.master.connect(highpass).connect(warmth).connect(compressor).connect(limiter).connect(this.context.destination);
       }
 
-      // Reverb bus — extended to 2.2 s with smoother exponential decay (2.2 exponent).
+      // Reverb bus â€” extended to 2.2 s with smoother exponential decay (2.2 exponent).
       if (typeof this.context.createConvolver === "function") {
         this.reverbBus = this.context.createConvolver();
         const length = Math.floor(this.context.sampleRate * this.previewBudget.reverbSeconds);
@@ -5157,7 +5157,7 @@ export class PreviewPlayer {
         this.audioGraphNodes.add(this.reverbReturn);
       }
 
-      // Delay bus — reduced feedback (0.18) and return (0.12) to avoid mud on mobile.
+      // Delay bus â€” reduced feedback (0.18) and return (0.12) to avoid mud on mobile.
       if (typeof this.context.createDelay === "function") {
         this.delayBus = this.context.createDelay(1);
         this.delayBus.delayTime.value = 0.285;
@@ -5998,7 +5998,7 @@ export class PreviewPlayer {
     const nodes = new Set([source, filter, gain]);
     source.buffer = this.noiseBufferForKit(kit);
     const isHat = [42, 44, 46].includes(event.pitch);
-    const isCymbal = [49, 51, 52, 55, 57, 59].includes(event.pitch);
+    const isCymbal = character.kind === "cymbal";
     const isBackbeat = ["snare", "clap", "rim"].includes(character.kind);
     const output = this.createDrumOutput(
       event,

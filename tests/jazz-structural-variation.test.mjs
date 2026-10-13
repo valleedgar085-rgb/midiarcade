@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { previewDrumCharacter, bundledDrumSamplePath, drumSampleForPitch } from "../src/core/preview-drums.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -150,4 +151,23 @@ test("GM ride bell uses cymbal preview, never a snare sample", () => {
     assert.equal(bundledDrumSamplePath(id, 53), null);
     assert.equal(drumSampleForPitch(new Map([[`${id}:snare`, {}]]), id, 53), null);
   }
+});
+
+
+test("actual preview scheduler routes ride bell through cymbal filtering without a snare oscillator", () => {
+  const source = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
+  const start = source.indexOf("    const source = context.createBufferSource();", source.indexOf("    const tomFrequencies ="));
+  const stop = source.indexOf("\n  restartLoopPlayback()", start);
+  const body = source.slice(start, stop).replace(/\n  }\s*$/, "");
+  const scheduled = new Function("context", "event", "character", "kit", "voice", "mixGain", "when", "clamp", body);
+  const filters = [];
+  const node = () => ({ connect() { return this; }, start() {}, stop() {} });
+  const context = { createBufferSource: node, createGain: () => ({ ...node(), gain: {} }),
+    createBiquadFilter: () => { const filter = { ...node(), frequency: {}, Q: {} }; filters.push(filter); return filter; },
+    createOscillator: () => assert.fail("bell must not create the snare body oscillator") };
+  const receiver = { noiseBufferForKit() {}, createDrumOutput: node, shapeDrumGain() {}, registerScheduledVoice() {} };
+  const character = previewDrumCharacter({ cymbalFilter: 6000, cymbalDecay: 0.5 }, 53, 90);
+  scheduled.call(receiver, context, { pitch: 53 }, character, {}, {}, 1, 0, (v, lo, hi) => Math.min(hi, Math.max(lo, v)));
+  assert.equal(filters.length, 1); assert.equal(filters[0].type, "highpass");
+  assert.equal(filters[0].frequency.value, character.filterFrequency);
 });
