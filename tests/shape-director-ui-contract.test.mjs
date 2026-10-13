@@ -28,12 +28,14 @@ test("Shape Director runtime remains candidate-first and history-safe", () => {
   assert.match(app, /function discardShapeDirectorCandidate[\s\S]*?transaction\.before/);
 });
 
-test("Shape puts suggestions and comparison before optional controls", () => {
+test("Shape keeps audition options grouped and makes direct note editing prominent", () => {
   assert.match(html, /id="shapeDirectorDirections"[\s\S]*?id="shapeDirectorCandidate"[\s\S]*?class="shape-change-options"/);
   assert.match(html, /<details class="shape-change-options">[\s\S]*?id="shapeDirectorTarget"[\s\S]*?id="shapeDirectorSize"/);
   assert.match(html, /<details class="shape-new-idea">[\s\S]*?id="shapeDirectorCompose"/);
   assert.match(html, /id="shapeDirectorTitle">2\. Shape this part/);
-  assert.match(html, /id="shapeNoteDetail">[\s\S]*?3\. Edit notes/);
+  assert.match(html, /id="shapeNoteDetail">[\s\S]*?Piano roll · Edit notes/);
+  const editor = html.slice(html.indexOf('id="sectionEditor"'), html.indexOf('id="tab-mix"'));
+  assert.ok(editor.indexOf('id="shapeNoteDetail"') < editor.indexOf('id="editorShapeTools"'), "focused direct note editor comes before optional audition tools");
 });
 
 test("Shape Director is touch friendly and landscape aware", () => {
