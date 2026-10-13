@@ -61,6 +61,7 @@ import {
 } from "./core/preview-audio.js";
 import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "./ui/value-formatters.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
+import { createDirectionStatus } from "./ui/create-direction-status.js";
 import {
   applyGenerationPreferences as applySessionGenerationPreferences,
   captureGenerationPreferences,
@@ -731,6 +732,10 @@ function syncAutoRangeControl(input, key = autoKeyForRange(input)) {
   if (button) {
     button.classList.toggle("is-active", active);
     button.setAttribute("aria-pressed", String(active));
+    const controlName = input.getAttribute("aria-label") || key;
+    button.setAttribute("aria-label", active
+      ? `Switch ${controlName} to manual control`
+      : `Let MIDI Arcade choose ${controlName} automatically`);
     button.textContent = active ? "AUTO ✓" : "AUTO";
   }
   const output = input.closest("label")?.querySelector("output");
@@ -995,6 +1000,18 @@ function renderGenerationIntent() {
     || current.autoControls !== appliedGenerationSettings.autoControls
   ));
   const copy = generationIntentCopy(staged);
+  const direction = createDirectionStatus({
+    hasSong: Boolean(state.song),
+    sameGenre: Boolean(state.song && selectedGenreId() === songGenreId()),
+    staged,
+  });
+  const deckBadge = $(".create-deck-state");
+  if (deckBadge) {
+    deckBadge.textContent = direction.label;
+    deckBadge.dataset.state = direction.state;
+  }
+  const deckHint = $(".create-deck-hint");
+  if (deckHint) deckHint.textContent = direction.hint;
   panel.classList.toggle("is-staged", staged);
   $("#generationIntentLabel").textContent = copy.label;
   $("#generationIntentTitle").textContent = copy.title;
@@ -6433,9 +6450,11 @@ function toggleFullscreen() {
 
   $("#tempoControl").addEventListener("change", () => {
     if (state.song && selectedGenreId() === songGenreId()) {
-      commitTempoToSong(readNumber("#tempoControl", 112));
+      const nextTempo = readNumber("#tempoControl", 112);
+      commitTempoToSong(nextTempo);
       renderSummary();
       if (player.playing) player.restart();
+      showToast(`Tempo is now ${Math.round(nextTempo)} BPM in the current song. Other controls remain staged.`);
     } else if (state.song) {
       showToast("That tempo is staged for the next genre-aware generation; the current idea stays unchanged.");
     }
