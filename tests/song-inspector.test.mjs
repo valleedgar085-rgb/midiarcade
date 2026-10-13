@@ -36,7 +36,9 @@ test("Inspector labels section-role ideas as suggestions when no critic is avail
 test("Inspector keeps a bounded display, including empty limit", () => {
   const selection = { song: {}, section: { name: "Chorus" }, target: "notes" };
   assert.equal(songInspectorSuggestions({ ...selection, limit: 0 }).length, 0);
-  assert.equal(songInspectorSuggestions({ ...selection, limit: 99 }).length, 3);
+  const expanded = songInspectorSuggestions({ ...selection, limit: 99 });
+  assert.ok(expanded.length >= 1 && expanded.length <= 3, "only supported non-fallback ideas may be shown");
+  assert.ok(expanded.every((idea) => idea.evidence !== "FALLBACK"));
   assert.ok(songInspectorSuggestions(selection).length <= 2);
 });
 
