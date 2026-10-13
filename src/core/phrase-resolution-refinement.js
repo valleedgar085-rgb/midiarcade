@@ -111,6 +111,9 @@ function nearestChordPitch(sourcePitch, chord, tonic, preferTonic = false, {
   for (let candidate = Math.max(0, original - 12);
     candidate <= Math.min(127, original + 12); candidate += 1) {
     if (!classes.includes(mod(candidate, 12))) continue;
+    // A resolution should not rewrite the recognizability of the phrase.
+    // Keep local pitch edits within a perfect fourth in either direction.
+    if (Math.abs(candidate - original) > 5) continue;
     // Never create a bigger melodic leap than the existing phrase, with a
     // seven-semitone allowance for an ordinary expressive phrase.
     if (previous !== null && Math.abs(candidate - previous) > leapBudget + 1e-6) continue;
