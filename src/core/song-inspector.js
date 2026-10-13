@@ -67,7 +67,7 @@ export function songInspectorSuggestions({ song = {}, section = {}, target = "tr
           : entry.signals.includes("element")
             ? "CREATIVE PERSONALITY"
             : "SELECTED SCOPE",
-    })));
+    }));
   // A concrete weak return is more actionable than general section/style
   // advice. Keep other ranked ideas in their existing order without duplicates.
   return Object.freeze((hook
