@@ -40,11 +40,15 @@ test("Create presentation can be imported without browser globals", async () => 
   }
 });
 
-test("generation essentials move from Now Playing into Song Direction without duplicating controls", () => {
-  assert.match(presentation, /querySelector\("#preGenSection \.generation-actions-bar"\)/);
-  assert.match(presentation, /className = "direction-essentials-heading section-heading"/);
-  assert.match(presentation, /creatorMain\.insertBefore\(controls, shapeControls\)/);
+test("Create controls sit immediately below the song showcase, with the original IDs intact", () => {
+  assert.match(presentation, /className = "create-performance-deck panel"/);
+  assert.match(presentation, /slot\.insertAdjacentElement\("afterend", deck\)/);
+  assert.match(presentation, /deck\.append\(controls\)/);
   assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
+  assert.match(presentation, /"variationControl", "evolutionControl"/);
+  assert.match(presentation, /"swingControl", "humanizeControl"/);
+  assert.match(css, /#tab-create > \.home-command \{ display: none !important; \}/);
+  assert.match(css, /#tab-create \.create-performance-deck/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "barsControl", "grooveControl"]) {
     assert.doesNotMatch(presentation, new RegExp(`id=["']${id}["']`), `${id} must be moved, not recreated`);
   }
