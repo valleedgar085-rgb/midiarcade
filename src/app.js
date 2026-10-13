@@ -3480,6 +3480,11 @@ function bindTrackRackInteractions(rack) {
 function renderTrackRack() {
   const tracksById = new Map(songTracks().map((track, index) => [trackId(track, index), track]));
   const rack = $("#trackRack");
+  // Rerendering Mute/Solo or a live mix value must not close an instrument's
+  // already-expanded controls. Disclosure is visual state, not music state.
+  const expandedIds = new Set([...rack.querySelectorAll(".track-card")]
+    .filter((card) => card.querySelector("details.track-shaping")?.open)
+    .map((card) => card.dataset.track));
   rack.innerHTML = TRACK_ORDER.map((id) => {
     const track = tracksById.get(id) || { id, program: state.trackSettings[id].program, notes: [] };
     const meta = TRACK_META[id];
@@ -3493,15 +3498,15 @@ function renderTrackRack() {
     const panAmount = Math.round(Math.abs(settings.pan) * 100);
     const panLabel = Math.abs(settings.pan) < 0.01 ? "C" : `${settings.pan < 0 ? "L" : "R"}${panAmount}`;
     const releaseMax = id === "pad" ? 1.25 : ["melody", "counterpoint"].includes(id) ? 0.65 : 2;
-    return `<article class="track-card${muted ? " is-muted" : ""}${solo ? " is-solo" : ""}${targeted ? " is-attitude-target" : ""}" data-track="${id}" style="--track-color:${meta.color}" tabindex="0" aria-label="${meta.name} mixer channel; click to select" ${targeted ? 'aria-current="true"' : ""}>
+    return `<article class="track-card${muted ? " is-muted" : ""}${solo ? " is-solo" : ""}${targeted ? " is-attitude-target" : ""}" data-track="${id}" style="--track-color:${meta.color}" tabindex="0" aria-label="${meta.name} mixer channel; press Enter to select" ${targeted ? 'aria-current="true"' : ""}>
       <div class="track-card-header">
         <div class="track-identity">
           <span class="track-icon" aria-hidden="true">${meta.icon}</span>
           <span><strong class="track-name">${meta.name}</strong><small class="track-role">${meta.role} · ${trackNotes(track).length} notes</small><small class="track-voice">${soundName} · ${isTrackProgramAuto(id) ? "AUTO SOUND" : profilePick ? "STYLE PICK" : "CUSTOM SOUND"}</small></span>
         </div>
         <div class="track-primary-actions" aria-label="${meta.name} quick controls">
-        <button class="track-toggle" data-action="mute" type="button" aria-label="Mute ${meta.name}" aria-pressed="${muted}" title="Mute">M</button>
-        <button class="track-toggle" data-action="solo" type="button" aria-label="Solo ${meta.name}" aria-pressed="${solo}" title="Solo">S</button>
+        <button class="track-toggle" data-action="mute" type="button" aria-label="Mute ${meta.name}" aria-pressed="${muted}" title="Toggle mute">Mute</button>
+        <button class="track-toggle" data-action="solo" type="button" aria-label="Solo ${meta.name}" aria-pressed="${solo}" title="Toggle solo">Solo</button>
         </div>
       </div>
       <div class="track-expression-grid mix-primary-balance" aria-label="${meta.name} musical balance">
@@ -3569,6 +3574,10 @@ function renderTrackRack() {
       </details>
     </article>`;
   }).join("");
+  for (const card of rack.querySelectorAll(".track-card")) {
+    const details = card.querySelector("details.track-shaping");
+    if (details && expandedIds.has(card.dataset.track)) details.open = true;
+  }
 
   bindTrackRackInteractions(rack);
   decorateAutoRangeControls(rack);

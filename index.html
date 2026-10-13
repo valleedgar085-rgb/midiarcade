@@ -784,7 +784,7 @@
               <div>
                 <p class="eyebrow">THE BAND</p>
                 <h2 id="tracksTitle">Balance the band</h2>
-                <p class="section-description">Keep level, mute and solo close. Open Shape instrument only when you want deeper sound or performance controls.</p>
+                <p class="section-description">Balance each instrument with Level, Pan, Mute and Solo.</p>
               </div>
               <button class="small-button" id="randomizeMixButton" type="button">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
@@ -799,6 +799,9 @@
               <button class="mix-listen-button" id="mixPlayButton" type="button"><span aria-hidden="true"></span><b>Listen</b></button>
             </div>
             <aside class="mix-solo-alert" id="mixSoloAlert" hidden><b>SOLO ACTIVE</b><span id="mixSoloAlertText">Only one instrument is audible.</span><button id="clearSoloButton" type="button">Hear full band</button></aside>
+            <div class="track-rack" id="trackRack"></div>
+            <details class="mix-studio-tools">
+              <summary><strong>Advanced mix</strong><small>Smart Mix · Character Shaper</small></summary>
             <section class="smart-mix-console" id="smartMixConsole" aria-labelledby="smartMixTitle">
               <div class="smart-mix-heading">
                 <span class="smart-mix-signal" aria-hidden="true"><i></i><i></i><i></i></span>
@@ -814,7 +817,7 @@
                   <em id="mixHeadroomStatus">4 dB room</em>
                 </div>
               </div>
-              <p class="smart-mix-note" id="smartMixNote" role="status" aria-live="polite">Bass is featured automatically; kick-triggered space keeps the low end moving.</p>
+              <p class="smart-mix-note" id="smartMixNote" role="status" aria-live="polite">Automatic spotlight is ready.</p>
             </section>
             <section class="attitude-strip" id="attitudeStrip" aria-labelledby="attitudeTitle">
               <div class="attitude-target">
@@ -822,7 +825,7 @@
                 <span>
                   <small id="attitudeTitle">CHARACTER SHAPER</small>
                   <strong><span id="attitudeTargetName">Drums</span> <em id="attitudeTargetState">Neutral</em></strong>
-                  <span id="attitudeStatus" role="status" aria-live="polite">Select a track, then reshape only its personality.</span>
+                  <span id="attitudeStatus" role="status" aria-live="polite">Choose a track to shape.</span>
                 </span>
               </div>
               <div class="attitude-actions" role="toolbar" aria-label="Track character">
@@ -833,7 +836,7 @@
                 <button class="attitude-button neutral" data-attitude="neutral" type="button" aria-pressed="true"><span aria-hidden="true">&#8634;</span><b>RESET</b><small>neutral</small></button>
               </div>
             </section>
-            <div class="track-rack" id="trackRack"></div>
+            </details>
           </section>
         </div>
 
