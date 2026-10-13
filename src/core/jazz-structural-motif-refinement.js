@@ -76,6 +76,12 @@ function barsWithin(section, beatsPerBar) {
   const last = Math.ceil(sectionEnd(section, beatsPerBar) / beatsPerBar - 1e-6) - 1;
   return Array.from({ length: Math.max(0, last - first + 1) }, (_, i) => first + i);
 }
+function barFingerprint(notes, bar, beatsPerBar) {
+  // Structural voice/rhythm identity (ignore harmless velocity/jitter).
+  return notes.map((note) =>
+    `${Math.round(finite(note.pitch))}@${round(quant(beatInBar(finite(note.start), beatsPerBar)), 4)}`
+  ).sort().join("|");
+}
 function ornament(note, bar, beatsPerBar, phraseStart) {
   if (!CYMBALS.has(Number(note?.pitch)) || isProtected(note)) return false;
   const local = finite(note.start) - bar * beatsPerBar;
@@ -164,6 +170,12 @@ export function createJazzStructuralMotifCandidates(song) {
               const next = matches(sourceNotes, newTarget,
                 sourceBar, targetBar, beatsPerBar, phraseStart);
               if (next.total <= old.total || next.total < 2) continue;
+              // This is a phrase echo, never a one-for-one wholesale copied
+              // drum bar or a newly-created immediate mechanical repeat.
+              const nextFingerprint = barFingerprint(newTarget, targetBar, beatsPerBar);
+              if (nextFingerprint === barFingerprint(sourceNotes, sourceBar, beatsPerBar)) continue;
+              if ([targetBar - 1, targetBar + 1].some((bar) =>
+                nextFingerprint === barFingerprint(perBar.get(bar) ?? [], bar, beatsPerBar))) continue;
 
               const key = [sourceBar, targetBar, phraseStart,
                 round(finite(targetNote.start)), revisedStart, Number(targetNote.pitch)].join(":");
