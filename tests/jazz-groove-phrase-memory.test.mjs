@@ -121,6 +121,9 @@ test("opt-in Jazz return modifies at most one two-beat hat cell per return secti
       assert.ok(["hat", "percussion"].includes(event.lane));
       assert.equal(event.sourceBar, 1 + (event.targetBar - 9));
       assert.ok(event.mismatchAfter < event.mismatchBefore);
+      assert.equal(event.kind, "one-for-one-development", "full-song admission must preserve drum note count");
+      assert.equal(event.stepsAdded, 1);
+      assert.equal(event.stepsRemoved, 1);
       assert.ok(event.stepsAdded + event.stepsRemoved <= 2);
     }
     results.push({
@@ -129,8 +132,9 @@ test("opt-in Jazz return modifies at most one two-beat hat cell per return secti
     });
   }
   console.info("JAZZ_GROOVE_DNA_RECALL_FIXTURES", JSON.stringify(results));
-  assert.ok(results.some((item) => item.changed > 0),
-    "at least one real deterministic Jazz DNA seed must develop a returning phrase");
+  // These 12-bar fixtures predominantly propose rests or pickups, which are
+  // research-only until downstream note-count safety is established. The
+  // integrated 16-bar quality-lab seeds below cover admitted substitutions.
 });
 
 test("Jazz DNA phrase-memory stays opt-in; non-Jazz and fusion return byte-equivalent plans", () => {
