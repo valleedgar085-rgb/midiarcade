@@ -680,7 +680,7 @@
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
                   <p class="eyebrow">EDITING ONLY THIS PART</p>
-                  <h3 id="sectionEditorTitle">Edit notes precisely</h3>
+                  <h3 id="sectionEditorTitle" aria-live="polite" aria-atomic="true">Edit notes precisely</h3>
                   <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
                 </div>
                 <div class="editor-header-actions">
@@ -690,9 +690,8 @@
               </header>
               <label class="editor-section-switch">Section <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
-              <div id="editorShapeTools"></div>
               <details class="shape-note-detail" id="shapeNoteDetail">
-                <summary><strong>3. Edit notes</strong><small>Optional · change note length, timing, pitch, or strength</small></summary>
+                <summary><strong>Piano roll · Edit notes</strong><small>Section and instrument selected above · Undo restores direct note edits</small></summary>
                 <p class="shape-note-help">Tap notes to select them, or use Select all for this part. Selected notes light up. Note edits apply immediately; Undo restores the previous version.</p>
               <div class="piano-roll-shell" id="pianoRollShell">
                 <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
@@ -775,6 +774,7 @@
               </div>
               <p class="editor-status" id="editorStatus" role="status" aria-live="polite">Choose a section, then select notes to edit.</p>
               </details>
+              <div id="editorShapeTools" aria-label="Non-destructive musical suggestions"></div>
             </section>
           </section>
         </div>
