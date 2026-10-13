@@ -104,16 +104,18 @@ test("mixer values explain level, velocity, and note length in musical units", (
 });
 
 
-test("A4 keeps musical balance controls primary and deeper sound design disclosed", () => {
+test("A4 keeps Level and Pan primary and preserves deeper sound design controls", () => {
   const rack = appSource.match(/function renderTrackRack\(\)[\s\S]*?const MOBILE_WORKSPACE_BUTTONS/)?.[0] ?? "";
-  assert.match(rack, /class="track-expression-grid mix-primary-balance"/);
-  assert.match(rack, />LEVEL <output>/);
-  assert.match(rack, />IMPACT <output>/);
-  assert.match(rack, />NOTE LENGTH <output>/);
-  assert.ok(rack.indexOf('data-control="velocity"') < rack.indexOf('<details class="track-expression track-shaping">'));
-  assert.ok(rack.indexOf('data-control="gate"') < rack.indexOf('<details class="track-expression track-shaping">'));
-  assert.equal((rack.match(/data-control="velocity"/g) || []).length, 1);
-  assert.equal((rack.match(/data-control="gate"/g) || []).length, 1);
+  const main = rack.match(/class="track-expression-grid mix-primary-balance"[^>]*>([\s\S]*?)<\/div>/)?.[1] ?? "";
+  const advanced = rack.slice(rack.indexOf('<details class="track-expression track-shaping">'));
+  assert.match(main, />LEVEL <output>/);
+  assert.match(main, />PAN <output>/);
+  assert.doesNotMatch(main, /data-control="(?:velocity|gate)"/);
+  assert.match(advanced, />IMPACT <output>/);
+  assert.match(advanced, />NOTE LENGTH <output>/);
+  for (const control of ["volume", "pan", "velocity", "gate"]) {
+    assert.equal((rack.match(new RegExp(`data-control="${control}"`, "g")) || []).length, 1, `${control} remains connected exactly once`);
+  }
   assert.match(rack, /AUTO SOUND/);
   assert.match(rack, /STYLE PICK/);
   assert.match(rack, /CUSTOM SOUND/);
@@ -502,7 +504,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.doesNotMatch(appSource.slice(appSource.indexOf("export async function exportSongNative"), appSource.indexOf("function triggerBrowserDownload")), /requestPermissions|publicStorage/, "cache exports must remain permission-free on Android");
   assert.match(htmlSource, /6 SOUND-READY MIDI TRACKS/);
   assert.match(htmlSource, /id="exportProfileControl"[\s\S]*?id="exportTimingControl"/, "Finish must expose track-package and timing choices");
-  assert.match(appSource, /data-control="velocity"[\s\S]*?data-control="gate"[\s\S]*?data-control="pan"[\s\S]*?data-control="reverb"[\s\S]*?data-control="cutoff"[\s\S]*?data-control="resonance"/, "every generated track must expose performance and sound-ready export controls");
+  assert.match(appSource, /data-control="volume"[\s\S]*?data-control="pan"[\s\S]*?data-control="velocity"[\s\S]*?data-control="gate"[\s\S]*?data-control="reverb"[\s\S]*?data-control="cutoff"[\s\S]*?data-control="resonance"/, "every generated track must expose performance and sound-ready export controls");
   assert.match(cssSource, /@media \(max-width: 840px\)[\s\S]*?\.attitude-strip\s*\{\s*grid-template-columns:\s*1fr;/, "attitude controls must stack before the tablet-width clipping range");
 });
 
