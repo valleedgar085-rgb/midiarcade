@@ -136,10 +136,10 @@ test("app project loading is explicitly authorized and does not change startup a
   assert.match(app, /if \(previous\) pushHistory\(previous\)/);
   assert.match(app, /state\.history = previousHistory/);
   assert.match(app, /projectLibraryActionAllowed\(\)/);
-  assert.match(panel, /id="projectLibraryPanel"/);
+  assert.match(panel, /panel\.id = "projectLibraryPanel"/);
   assert.match(panel, /id="projectLibrarySave"/);
   assert.match(panel, /id="projectLibraryList"/);
-  assert.match(panel, /id="menuItemProjects"/);
+  assert.match(panel, /shortcut\.id = "menuItemProjects"/);
   assert.doesNotMatch(html, /id="projectLibrarySave"/, "new library buttons must not affect protected initial DOM budget");
   assert.match(session, /song: null,/);
   assert.match(session, /Reopening the studio intentionally starts with an empty plate/);
