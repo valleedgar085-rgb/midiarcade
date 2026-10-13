@@ -60,30 +60,69 @@ function landingScore(note, chord, tonic, beatsPerBar, genre, sectionEnd) {
   );
 }
 
-function nearestPitchForClass(sourcePitch, pitchClass) {
-  const source = clamp(Math.round(finite(sourcePitch, 60)), 0, 127);
-  const sourceOctave = Math.floor(source / 12);
-  const candidates = [];
-  for (let octave = sourceOctave - 2; octave <= sourceOctave + 2; octave += 1) {
-    const pitch = octave * 12 + pitchClass;
-    if (pitch >= 0 && pitch <= 127) candidates.push(pitch);
-  }
-  return candidates.sort((left, right) => (
-    Math.abs(left - source) - Math.abs(right - source)
-    || left - right
-  ))[0] ?? source;
+// Cadence candidates may be accepted by the production quality pipeline, so
+// prefer a diatonic, contour-safe landing over a closer but awkward jump.
+function scaleClasses(song) {
+  const key = Number(song?.meta?.keyPc);
+  const intervals = song?.meta?.scaleIntervals;
+  if (!Number.isFinite(key) || !Array.isArray(intervals) || !intervals.length
+    || intervals.some((step) => !Number.isFinite(Number(step)))) return null;
+  return new Set(intervals.map((step) => mod(key + Number(step), 12)));
 }
 
-function nearestChordPitch(sourcePitch, chord, tonic, preferTonic = false) {
-  const tones = [...chordToneSet(chord)];
-  if (!tones.length) return Math.round(finite(sourcePitch, 60));
-  if (preferTonic && tones.includes(tonic)) return nearestPitchForClass(sourcePitch, tonic);
-  return tones
-    .map((pitchClass) => nearestPitchForClass(sourcePitch, pitchClass))
-    .sort((left, right) => (
-      Math.abs(left - sourcePitch) - Math.abs(right - sourcePitch)
-      || left - right
-    ))[0];
+function protectedLanding(note) {
+  return Boolean(note?.motifMemoryCore || note?.ensembleCadenceRole
+    || note?.transitionHandoffRole || note?.motifHandoffRole
+    || note?.finalAssemblyRole || note?.phraseRole === "turnaround"
+    || ["motif-core", "memory-landing", "cadential-landing", "motif-recall-anchor"]
+      .includes(String(note?.phraseIntentRole))
+    || ["motif-core", "memory-landing", "cadential-landing", "motif-recall-anchor"]
+      .includes(String(note?.sectionDevelopmentRole)));
+}
+
+function precedingSectionPitch(song, section, currentNote) {
+  const melody = (song?.tracks ?? []).find((track) => track?.id === "melody");
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const start = Number.isFinite(Number(section?.startBeat))
+    ? Number(section.startBeat) : finite(section?.startBar, 0) * beatsPerBar;
+  const currentStart = Number(currentNote?.start);
+  if (!Number.isFinite(currentStart)) return null;
+  const preceding = (melody?.notes ?? [])
+    .filter((note) => Number.isFinite(Number(note?.start))
+      && Number.isFinite(Number(note?.pitch))
+      && Number(note.start) >= start - 1e-6
+      && Number(note.start) < currentStart - 1e-6)
+    .sort((left, right) => Number(left.start) - Number(right.start)
+      || Number(left.pitch) - Number(right.pitch)).at(-1);
+  return preceding ? Number(preceding.pitch) : null;
+}
+
+function nearestChordPitch(sourcePitch, chord, tonic, preferTonic = false, {
+  scale = null, previousPitch = null,
+} = {}) {
+  const original = Math.round(finite(sourcePitch, 60));
+  const tones = [...chordToneSet(chord)]
+    .filter((pitchClass) => !scale || scale.has(pitchClass));
+  if (!tones.length) return original;
+  const classes = preferTonic && tones.includes(tonic) ? [tonic] : tones;
+  const previous = Number.isFinite(previousPitch) ? previousPitch : null;
+  const leapBudget = previous === null ? Infinity : Math.max(7, Math.abs(original - previous));
+  const choices = [];
+  for (let candidate = Math.max(0, original - 12);
+    candidate <= Math.min(127, original + 12); candidate += 1) {
+    if (!classes.includes(mod(candidate, 12))) continue;
+    // A resolution should not rewrite the recognizability of the phrase.
+    // Keep local pitch edits within a perfect fourth in either direction.
+    if (Math.abs(candidate - original) > 5) continue;
+    // Never create a bigger melodic leap than the existing phrase, with a
+    // seven-semitone allowance for an ordinary expressive phrase.
+    if (previous !== null && Math.abs(candidate - previous) > leapBudget + 1e-6) continue;
+    choices.push(candidate);
+  }
+  return choices.sort((left, right) =>
+    Math.abs(left - original) - Math.abs(right - original)
+    || (previous === null ? 0 : Math.abs(left - previous) - Math.abs(right - previous))
+    || left - right)[0] ?? original;
 }
 
 function sectionLandingEntries(song) {
@@ -173,7 +212,14 @@ function refineLandingCandidate(song, limit, { hold = false, payoff = false } = 
       && entry.isFinal
       && chordToneSet(entry.chord).has(entry.tonic)
     );
-    const desiredPitch = nearestChordPitch(finite(note.pitch), entry.chord, entry.tonic, preferTonic);
+    // Protected motif and transition pitches remain locked. A section-ending
+    // cadence may still receive a bounded hold through the existing release
+    // gate; blocking all duration-only edits regresses verified Trap seeds.
+    const desiredPitch = protectedLanding(note) ? finite(note.pitch)
+      : nearestChordPitch(finite(note.pitch), entry.chord, entry.tonic, preferTonic, {
+        scale: scaleClasses(candidate),
+        previousPitch: precedingSectionPitch(candidate, entry.section, note),
+      });
     let changed = false;
     if (desiredPitch !== note.pitch) {
       note.pitch = desiredPitch;
