@@ -4,7 +4,9 @@ export function installProjectLibraryPanel(root, {
 } = {}) {
   const doc = root?.ownerDocument ?? root;
   const host = doc?.querySelector?.("#tab-finish .finish-copy");
-  if (!host || doc.getElementById("projectLibraryPanel")) return null;
+  if (!host || typeof doc.getElementById !== "function"
+    || typeof doc.createElement !== "function" || typeof host.append !== "function"
+    || doc.getElementById("projectLibraryPanel")) return null;
 
   const style = doc.createElement("style");
   style.id = "projectLibraryStyles";
