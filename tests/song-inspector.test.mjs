@@ -53,7 +53,7 @@ test("Inspector lives inside Shape and routes actions through the existing Befor
   assert.match(app, /button\.dataset\.shapeDirection = idea\.directionId/);
   assert.match(app, /button\.disabled = blocked/);
   assert.match(app, /inspector\.replaceChildren\(\.\.\.cards\)/);
-  assert.match(app, /const direction = event\.target\.closest\?\.\('\[data-shape-direction\]'\)\?\.dataset\.shapeDirection;[\s\S]*?prepareShapeDirectorCandidate\(direction\)/);
+  assert.match(app, /const direction = event\.target\.closest\?\.\("\[data-shape-direction\]"\)\?\.dataset\.shapeDirection;[\s\S]*?prepareShapeDirectorCandidate\(direction\)/);
   assert.match(app, /createShapeCandidate\(state\.song, intent/);
   assert.match(app, /if \(event\.target\.closest\?\.\("\[data-shape-accept\]"\)\)/);
   assert.match(css, /\.shape-inspector-card button\{min-height:44px/);
