@@ -151,3 +151,100 @@
   color: var(--shape-text) !important; border-color: var(--shape-accent) !important;
   background: #1c3935 !important; box-shadow: inset 0 -3px var(--shape-accent), 0 0 14px #58c9bb22 !important;
 }
+
+/* UI/UX Pro Max Phase 2 · keep song / instrument selection visible and
+   put direct note editing before optional Shape Director auditions. */
+#tab-arrange .section-editor.is-open .editor-header {
+  border-left: 4px solid var(--editor-color, var(--shape-accent)) !important;
+  box-shadow: 0 5px 18px rgba(0,0,0,.22) !important;
+}
+#tab-arrange .section-editor.is-open #sectionEditorTitle {
+  font-size: clamp(1.15rem, 4.8vw, 1.65rem) !important;
+  overflow-wrap: anywhere;
+}
+#tab-arrange .editor-section-switch {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #517a83 !important;
+  border-radius: 12px;
+  background: #15252e !important;
+  color: #edf8f6 !important;
+}
+#tab-arrange .editor-section-switch select {
+  flex: 1 1 160px;
+  min-width: 0;
+  max-width: 100%;
+}
+#tab-arrange .editor-track-tabs {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scroll-padding-inline: 12px;
+}
+#tab-arrange .editor-track-tab[aria-selected="true"] {
+  color: #f4fffb !important;
+  border: 2px solid var(--editor-color, var(--shape-accent)) !important;
+  box-shadow: inset 0 -3px var(--editor-color, var(--shape-accent)), 0 0 0 1px #fff2 !important;
+}
+#tab-arrange .editor-track-tab:focus-visible,
+#tab-arrange .editor-section-switch select:focus-visible,
+#tab-arrange .section-editor button:focus-visible {
+  outline: 3px solid #a4f5e8 !important;
+  outline-offset: 2px;
+}
+#tab-arrange .shape-note-detail[open] {
+  border: 1.5px solid #628b8c !important;
+  background: #101b22 !important;
+}
+#tab-arrange .shape-note-detail > summary {
+  min-height: 48px !important;
+}
+#tab-arrange .shape-note-detail .piano-roll-shell {
+  width: 100%;
+  min-height: 300px !important;
+  border: 1px solid #59787f !important;
+  border-radius: 12px;
+}
+#tab-arrange .piano-roll-viewport {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#tab-arrange .piano-roll-viewport:focus-visible,
+#tab-arrange .piano-note:focus-visible {
+  outline: 3px solid #a4f5e8 !important;
+  outline-offset: -2px;
+}
+#tab-arrange .editor-header-actions :is(button, a) {
+  min-height: 48px !important;
+}
+#tab-arrange #editorShapeTools {
+  margin-top: 12px;
+  border-top: 1px solid #45656b;
+  padding-top: 12px;
+}
+#tab-arrange .shape-director-panel {
+  border-color: #557b84 !important;
+}
+@media (max-width: 600px) {
+  #tab-arrange .editor-section-switch { gap: 8px; }
+  #tab-arrange .editor-track-tab { flex: 0 0 auto; min-height: 48px !important; }
+  #tab-arrange .shape-note-detail .piano-roll-shell { min-height: 280px !important; }
+  #tab-arrange .editor-header-actions button { min-height: 48px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-arrange .section-editor,
+  #tab-arrange .editor-track-tab,
+  #tab-arrange .piano-note { transition-duration: .01ms !important; }
+}
+@media (forced-colors: active) {
+  #tab-arrange .shape-note-detail[open],
+  #tab-arrange .editor-track-tab[aria-selected="true"] {
+    border: 2px solid Highlight !important;
+  }
+}

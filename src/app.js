@@ -1352,6 +1352,23 @@ function bindSectionEditorInteractions(container) {
     else state.editorSelection.add(id);
     renderUiRegions("editor");
   });
+  // Roving tab focus preserves keyboard access without changing the existing
+  // track-selection transaction or note-editing authority.
+  container.addEventListener("keydown", (event) => {
+    const currentTab = event.target.closest?.("[data-editor-track]");
+    if (!currentTab || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const tabs = [...container.querySelectorAll("[data-editor-track]")];
+    const currentIndex = tabs.indexOf(currentTab);
+    if (currentIndex < 0 || !tabs.length) return;
+    const nextIndex = event.key === "Home" ? 0
+      : event.key === "End" ? tabs.length - 1
+        : (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    const nextId = tabs[nextIndex]?.dataset.editorTrack;
+    if (!nextId) return;
+    event.preventDefault();
+    if (nextId !== currentTab.dataset.editorTrack) tabs[nextIndex].click();
+    container.querySelector(`[data-editor-track="${nextId}"]`)?.focus();
+  });
   container.addEventListener("dblclick", (event) => {
     if (event.target.closest?.("[data-editor-note]")) event.stopPropagation();
   }, true);
@@ -1409,7 +1426,7 @@ function renderSectionEditor(message = "") {
     const trackObject = songTracks().find((candidate, index) => trackId(candidate, index) === id);
     const count = editorEntries(trackObject, section).length;
     const trackMeta = TRACK_META[id];
-    return `<button class="editor-track-tab" type="button" role="tab" data-editor-track="${id}" aria-selected="${id === state.editorTrack}" style="--tab-color:${trackMeta.color}"><i></i>${trackMeta.name}<small>${count}</small></button>`;
+    return `<button class="editor-track-tab" type="button" role="tab" data-editor-track="${id}" aria-selected="${id === state.editorTrack}" tabindex="${id === state.editorTrack ? 0 : -1}" aria-label="Edit ${trackMeta.name} notes" style="--tab-color:${trackMeta.color}"><i></i>${trackMeta.name}<small>${count}</small></button>`;
   }).join("");
 
   $("#pianoKeyboard").innerHTML = rows.map((pitch) => {
@@ -3043,6 +3060,9 @@ export function focusSongSection(sectionId, track = state.editorTrack, { openEdi
     state.selectedTrack = track;
   }
   state.sectionEditorOpen = Boolean(openEditor);
+  // Opening a section clip reveals the existing note grid immediately.
+  // This changes only disclosure state; note edits still require user input.
+  if (openEditor && $("#shapeNoteDetail")) $("#shapeNoteDetail").open = true;
   state.editorSelection.clear();
   renderTimeline();
   renderTrackRack();

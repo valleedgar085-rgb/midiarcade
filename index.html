@@ -680,8 +680,8 @@
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
                   <p class="eyebrow">EDITING ONLY THIS PART</p>
-                  <h3 id="sectionEditorTitle">Edit notes precisely</h3>
-                  <p id="sectionEditorSubtitle">Every edit writes directly into the exported MIDI.</p>
+                  <h3 id="sectionEditorTitle" aria-live="polite" aria-atomic="true">Edit notes precisely</h3>
+                  <p id="sectionEditorSubtitle">Note edits affect the saved performance.</p>
                 </div>
                 <div class="editor-header-actions">
                   <button class="editor-play-button" id="editorPlayButton" type="button">Listen from here</button>
@@ -690,10 +690,9 @@
               </header>
               <label class="editor-section-switch">Section <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
-              <div id="editorShapeTools"></div>
               <details class="shape-note-detail" id="shapeNoteDetail">
-                <summary><strong>3. Edit notes</strong><small>Optional · change note length, timing, pitch, or strength</small></summary>
-                <p class="shape-note-help">Tap notes to select them, or use Select all for this part. Selected notes light up. Note edits apply immediately; Undo restores the previous version.</p>
+                <summary><strong>Piano roll · Edit notes</strong><small>Tap notes · Undo restores edits</small></summary>
+                <p class="shape-note-help">Tap notes or use Select all. Edits apply immediately; Undo restores them.</p>
               <div class="piano-roll-shell" id="pianoRollShell">
                 <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
                 <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
@@ -770,11 +769,12 @@
                 </div>
               </details>
               <div class="editor-zoom-row">
-                <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Click notes to select - Shift-click adds - Double-click empty space to draw</small></span>
+                <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Tap to select · Double-click empty space to draw · Double-tap on mobile</small></span>
                 <label>ZOOM <input id="editorZoomControl" type="range" min="44" max="100" value="64" aria-label="Piano roll zoom level" /></label>
               </div>
               <p class="editor-status" id="editorStatus" role="status" aria-live="polite">Choose a section, then select notes to edit.</p>
               </details>
+              <div id="editorShapeTools"></div>
             </section>
           </section>
         </div>
