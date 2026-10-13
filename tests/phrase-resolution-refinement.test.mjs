@@ -376,3 +376,19 @@ test("cadence cannot repitch into chord tones excluded by an authoritative scale
   }
   assert.deepEqual(source, before);
 });
+
+test("cadence correction never jumps an octave just to satisfy a chord", () => {
+  const song = sourceSong();
+  song.structure = [{ id: "verse", name: "verse", startBeat: 0, endBeat: 8 }];
+  song.harmony = [{ start: 0, duration: 8, tones: [0] }];
+  track(song, "melody").notes = [
+    { id: "previous", start: 6, pitch: 71, duration: 0.25, velocity: 88 },
+    { id: "landing", start: 7, pitch: 62, duration: 0.25, velocity: 90 },
+  ];
+  const before = structuredClone(song);
+  for (const candidate of createPhraseResolutionCandidates(song)) {
+    const updated = track(candidate.song, "melody").notes.at(-1);
+    assert.equal(updated.pitch, 62, "nearby C5 creates a worse leap; distant C6 is too large an edit");
+  }
+  assert.deepEqual(song, before);
+});
