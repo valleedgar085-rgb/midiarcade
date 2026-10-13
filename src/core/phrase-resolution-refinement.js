@@ -170,7 +170,6 @@ function selectedEntries(song, limit, hold, payoff) {
       const tones = chordToneSet(entry.chord);
       if (!tones.size) return false;
       const note = entry.landing.note;
-      if (protectedLanding(note)) return false;
       const pitchClass = mod(note.pitch, 12);
       const genre = song?.genre ?? song?.meta?.genre;
       const desiredDuration = phraseResolutionDesiredDuration(genre, entry.beatsPerBar);
@@ -213,10 +212,14 @@ function refineLandingCandidate(song, limit, { hold = false, payoff = false } = 
       && entry.isFinal
       && chordToneSet(entry.chord).has(entry.tonic)
     );
-    const desiredPitch = nearestChordPitch(finite(note.pitch), entry.chord, entry.tonic, preferTonic, {
-      scale: scaleClasses(candidate),
-      previousPitch: precedingSectionPitch(candidate, entry.section, note),
-    });
+    // Protected motif and transition pitches remain locked. A section-ending
+    // cadence may still receive a bounded hold through the existing release
+    // gate; blocking all duration-only edits regresses verified Trap seeds.
+    const desiredPitch = protectedLanding(note) ? finite(note.pitch)
+      : nearestChordPitch(finite(note.pitch), entry.chord, entry.tonic, preferTonic, {
+        scale: scaleClasses(candidate),
+        previousPitch: precedingSectionPitch(candidate, entry.section, note),
+      });
     let changed = false;
     if (desiredPitch !== note.pitch) {
       note.pitch = desiredPitch;
