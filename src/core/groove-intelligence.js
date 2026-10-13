@@ -916,7 +916,12 @@ export function createGrooveDNA(input = {}, {
             protectedSteps,
             gridSteps,
           });
-          if (proposal) {
+          // Full-song admission is topology-preserving: a one-for-one substitution
+          // leaves the drum-note count stable for downstream seeded orchestration
+          // and humanization. Rest/pickup plans stay research-only until they can
+          // prove no collateral changes beyond the selected return bar.
+          if (proposal?.kind === "one-for-one-development"
+            && proposal.stepsAdded === 1 && proposal.stepsRemoved === 1) {
             finalSteps = proposal.steps;
             phraseMemory = Object.freeze({
               mode: "jazz-phrase-return",
