@@ -3486,10 +3486,10 @@ function renderTrackRack() {
       </div>
       <div class="track-expression-grid mix-primary-balance" aria-label="${meta.name} musical balance">
         <label class="track-control"><span>LEVEL <output>${formatLevel(settings.volume)}</output></span><input data-control="volume" type="range" min="0" max="1" step="0.01" value="${settings.volume}" aria-label="${meta.name} level" /><small class="parameter-note">How loud this instrument sits in preview and export controllers</small></label>
-                <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /><small class="parameter-note">Stereo placement; the note performance itself stays unchanged</small></label>
+        <label class="track-control"><span>PAN <output>${panLabel}</output></span><input data-control="pan" type="range" min="-1" max="1" step="0.01" value="${settings.pan}" aria-label="${meta.name} pan" /><small class="parameter-note">Stereo placement; the note performance itself stays unchanged</small></label>
       </div>
       <details class="track-expression track-shaping">
-        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound · pattern · pan · tone</small></span><i aria-hidden="true">+</i></summary>
+        <summary><span><b>MORE INSTRUMENT CONTROL</b><small>Sound · pattern · notes · tone</small></span><i aria-hidden="true">+</i></summary>
         <div class="track-shaping-body">
           <label class="track-patch"><span><b>SOUND</b><em>${isTrackProgramAuto(id) ? "AUTO" : profilePick ? "STYLE PICK" : "CUSTOM"}</em></span><select data-control="program" aria-label="${meta.name} sound">${patchOptions(id, settings.program)}</select></label>
           <div class="track-secondary-actions">
