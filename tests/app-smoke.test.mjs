@@ -1275,3 +1275,15 @@ test("piano roll grid rendering escapes pitch labels and cell titles against XSS
     "piano roll cell titles must escape pitch labels using escapeHtml",
   );
 });
+
+test("studio menu closes and restores focus when Escape is pressed", () => {
+  assert.match(
+    appSource,
+    /if\s*\(\s*event\.key\s*===\s*"Escape"\s*&&\s*menuDropdown\.getAttribute\("aria-hidden"\)\s*===\s*"false"\s*\)\s*\{[\s\S]*?menuDropdown\.setAttribute\("aria-hidden",\s*"true"\);[\s\S]*?menuBtn\.focus\(\);/,
+    "Studio menu must close and focus menuBtn on Escape key press",
+  );
+});
+
+test("guide dialog close button carries descriptive aria-label", () => {
+  assert.match(htmlSource, /id="closeDialog"[^>]*aria-label="Close guide"/);
+});
