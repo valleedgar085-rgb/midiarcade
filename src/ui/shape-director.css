@@ -98,3 +98,19 @@
 #tab-arrange .shape-blueprint-compose{background:linear-gradient(135deg,rgba(43,192,210,.1),rgba(230,50,70,.055));border-color:rgba(43,192,210,.28);color:var(--solar-ink)}
 #tab-arrange .shape-blueprint-compose small{color:#168b9b}
 @media(max-width:680px){#tab-arrange .shape-blueprint-compose{min-height:48px}}
+
+
+/* Song Inspector stays within the existing Shape CSS budget. */
+.shape-inspector{margin:9px 0;padding:11px;border:1px solid #3b7e85;border-radius:13px;background:#16202a}
+.shape-inspector header{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.shape-inspector small{font-size:10px;color:#74d9da}
+.shape-inspector p{font-size:11px;color:#c7d2da}
+.shape-inspector-insights{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.shape-inspector-card{display:grid;gap:8px;min-width:0;padding:10px;border:1px solid #45616d;border-radius:11px}
+.shape-inspector-card>div{display:grid;gap:4px}
+.shape-inspector-card strong{font-size:12px}
+.shape-inspector-card button{min-height:44px;padding:9px;color:white;background:#19404a;border:1px solid #5796a0;border-radius:9px}
+.shape-inspector-card button:disabled{opacity:.55}
+.shape-inspector-card button:focus-visible{outline:2px solid #a2ffff}
+@media(max-width:650px){.shape-inspector-insights{grid-template-columns:1fr}}
+@media(forced-colors:active){.shape-inspector,.shape-inspector-card,.shape-inspector-card button{border:1px solid CanvasText}}
