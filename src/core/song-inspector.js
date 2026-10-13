@@ -48,10 +48,13 @@ function chorusHookInsight(song, section) {
   });
 }
 
-export function songInspectorSuggestions({ song = {}, section = {}, target = "track", elementId = null, limit = 2 } = {}) {
+export function songInspectorSuggestions({ song = {}, section = {}, target = "track", trackId = null, elementId = null, limit = 2 } = {}) {
   const ranked = rankShapeSuggestions({ song, section, target, elementId, limit: 3 });
   const displayLimit = Math.max(0, Math.min(3, Number(limit) || 0));
-  const hook = displayLimit ? chorusHookInsight(song, section) : null;
+  // A melody-hook action cannot repair a drum, bass, chord or pad-only edit.
+  // Require a whole-section scope or an explicitly selected melody lane.
+  const melodyScope = target === "section" || (trackId === "melody" && (target === "track" || target === "notes"));
+  const hook = displayLimit && melodyScope ? chorusHookInsight(song, section) : null;
   const suggestions = ranked
     .filter((entry) => entry.signals.some((signal) => signal !== "fallback"))
     .slice(0, displayLimit)
