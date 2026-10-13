@@ -700,6 +700,7 @@ function transposeKey(delta) {
 const AUTO_GENERATION_RANGE_IDS = new Set([
   "tempoControl", "energyControl", "complexityControl", "swingControl", "humanizeControl",
   "tripletControl", "rollControl", "variationControl", "evolutionControl", "surpriseControl",
+  "syncopationControl", "drumFillsControl",
 ]);
 const AUTO_TRACK_RANGE_KEYS = new Set([
   "volume", "density", "variation", "octave", "velocity", "gate", "pan", "reverb", "cutoff", "resonance",
@@ -940,8 +941,14 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     groove,
     energy: generationValue("energyControl", 68) / 100,
     complexity,
-    syncopation: clamp(profileNumber(profile.syncopation, grooveSettings.syncopation) * (0.72 + grooveSettings.syncopation * 0.55), 0, 1),
-    drumFills: clamp(profileNumber(profile.arrangement?.fillFrequency, grooveSettings.drumFills) * (0.72 + grooveSettings.drumFills * 0.55), 0, 1),
+    // New performance macros default to the exact established genre calculation.
+    // Explicit manual input is authoritative only when the producer disables Auto.
+    syncopation: state.autoControls.has("syncopationControl")
+      ? clamp(profileNumber(profile.syncopation, grooveSettings.syncopation) * (0.72 + grooveSettings.syncopation * 0.55), 0, 1)
+      : clamp(readNumber("#syncopationControl", 50) / 100, 0, 1),
+    drumFills: state.autoControls.has("drumFillsControl")
+      ? clamp(profileNumber(profile.arrangement?.fillFrequency, grooveSettings.drumFills) * (0.72 + grooveSettings.drumFills * 0.55), 0, 1)
+      : clamp(readNumber("#drumFillsControl", 50) / 100, 0, 1),
     chordExtensions: clamp(profileNumber(profile.chordExtensions, 0.4) * (0.58 + complexity * 0.78), 0, 1),
     harmonicRhythm: clamp(profileNumber(profile.harmonicRhythm, 0.34) * (0.68 + complexity * 0.62), 0, 1),
     swing: generationValue("swingControl", 14) / 100,
@@ -966,6 +973,7 @@ const GENERATION_SETTING_IDS = [
   "genreControl", "keyControl", "modeControl", "tempoControl", "barsControl", "grooveControl", "creativeRangeControl", "chordPathControl",
   "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl",
   "variationControl", "evolutionControl", "trapIntroModeControl", "surpriseControl",
+  "syncopationControl", "drumFillsControl",
 ];
 let appliedGenerationSettings = null;
 
@@ -1846,6 +1854,8 @@ function syncControlsFromSong() {
     chordPath: "chordPathControl",
     energy: "energyControl",
     complexity: "complexityControl",
+    syncopation: "syncopationControl",
+    drumFills: "drumFillsControl",
     swing: "swingControl",
     humanize: "humanizeControl",
     variation: "variationControl",
@@ -3684,6 +3694,8 @@ function updateRangeDisplays() {
     ["#tempoControl", "#tempoValue", (value) => `${value} BPM`],
     ["#energyControl", "#energyValue", String],
     ["#complexityControl", "#complexityValue", String],
+    ["#syncopationControl", "#syncopationValue", (value) => `${value}%`],
+    ["#drumFillsControl", "#drumFillsValue", (value) => `${value}%`],
     ["#swingControl", "#swingValue", (value) => `${value}%`],
     ["#humanizeControl", "#humanizeValue", (value) => `${value}%`],
     ["#tripletControl", "#tripletValue", rhythmAmountLabel],
@@ -6395,7 +6407,7 @@ function toggleFullscreen() {
   }
 }
 
-  const liveRangeIds = ["tempoControl", "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl", "variationControl", "evolutionControl", "surpriseControl"];
+  const liveRangeIds = ["tempoControl", "energyControl", "complexityControl", "swingControl", "humanizeControl", "tripletControl", "rollControl", "variationControl", "evolutionControl", "surpriseControl", "syncopationControl", "drumFillsControl"];
   for (const id of liveRangeIds) {
     $(`#${id}`)?.addEventListener("input", () => {
       updateRangeDisplays();
@@ -6406,6 +6418,7 @@ function toggleFullscreen() {
   const macroLabels = {
     energyControl: "Energy", complexityControl: "Complexity", swingControl: "Swing",
     humanizeControl: "Humanize", tripletControl: "Triplets", rollControl: "Snare Rolls",
+    syncopationControl: "Syncopation", drumFillsControl: "Drum Fills",
     variationControl: "Variation", evolutionControl: "Evolution", surpriseControl: "Surprise",
   };
   for (const [id, label] of Object.entries(macroLabels)) {
@@ -6692,6 +6705,8 @@ function toggleFullscreen() {
     $("#evolutionControl").value = 58;
     $("#trapIntroModeControl").value = "short";
     $("#surpriseControl").value = 28;
+    $("#syncopationControl").value = 50;
+    $("#drumFillsControl").value = 50;
     updateRangeDisplays();
     decorateAutoRangeControls();
     renderGenerationIntent();
