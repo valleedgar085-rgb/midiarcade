@@ -9,6 +9,7 @@ import {
   jazzGrooveRecallLinks,
   jazzGrooveMemorySourceForBar,
   proposeJazzHatCellMemory,
+  proposeJazzGrooveCellMemory,
   JAZZ_GROOVE_PHRASE_MEMORY_LIMITS,
 } from "../src/core/jazz-groove-phrase-memory.js";
 import {
@@ -54,6 +55,19 @@ test("Jazz phrase-memory planner preserves mandatory quarter ride and never copi
   assert.ok(proposal.changedSteps <= JAZZ_GROOVE_PHRASE_MEMORY_LIMITS.maxHatStepChangesPerBar);
 });
 
+test("empty-source Jazz percussion cell can deliberately leave a rest without adding density", () => {
+  const proposal = proposeJazzGrooveCellMemory({
+    sourceSteps: [], targetSteps: [13],
+    requiredSteps: [], optionalSteps: [5, 13, 15],
+    protectedSteps: [2, 10],
+  });
+  assert.ok(proposal);
+  assert.equal(proposal.kind, "phrase-rest");
+  assert.equal(proposal.stepsAdded, 0);
+  assert.equal(proposal.stepsRemoved, 1);
+  assert.deepEqual(proposal.steps, []);
+});
+
 test("return-section mapping respects explicit memory, earlier origin, and protected boundaries", () => {
   const links = jazzGrooveRecallLinks(sections);
   assert.equal(links.get("verse-2").id, "verse-1");
@@ -85,18 +99,26 @@ test("opt-in Jazz return modifies at most one two-beat hat cell per return secti
     assert.ok(first.jazzPhraseMemory.events.length <= 1);
     // Upstream Groove DNA is the only timing author: no kick/snare/percussion edits.
     for (let bar = 0; bar < 12; bar += 1) {
-      for (const lane of ["kick", "snare", "percussion"]) {
+      for (const lane of ["kick", "snare"]) {
         assert.deepEqual(steps(first, bar, lane), steps(before, bar, lane),
           `${seed} ${bar} ${lane}`);
       }
       for (const required of [0, 4, 8, 12]) assert.ok(steps(first, bar, "hat").includes(required));
-      const changes = symmetric(steps(first, bar, "hat"), steps(before, bar, "hat"));
-      assert.ok(changes <= 2, "one optional hat-cell change per bar");
-      if (changes) assert.ok([9, 10].includes(bar), "section boundaries must be untouched");
-      // Event timing is recomputed by Groove DNA itself, after the final step selection.
-      assert.equal(first.bars[bar].hat.events.length, first.bars[bar].hat.steps.length);
+      const changesByLane = ["hat", "percussion"].map((lane) =>
+        symmetric(steps(first, bar, lane), steps(before, bar, lane)));
+      assert.ok(changesByLane.reduce((sum, count) => sum + count, 0) <= 2,
+        "at most one bounded supporting Jazz lane may change");
+      if (changesByLane.some(Boolean)) {
+        assert.ok([9, 10].includes(bar), "section boundaries must be untouched");
+        assert.equal(changesByLane.filter(Boolean).length, 1);
+      }
+      // Event timing is recomputed by Groove DNA itself after step selection.
+      for (const lane of ["hat", "percussion"]) {
+        assert.equal(first.bars[bar][lane].events.length, first.bars[bar][lane].steps.length);
+      }
     }
     for (const event of first.jazzPhraseMemory.events) {
+      assert.ok(["hat", "percussion"].includes(event.lane));
       assert.equal(event.sourceBar, 1 + (event.targetBar - 9));
       assert.ok(event.mismatchAfter < event.mismatchBefore);
       assert.ok(event.stepsAdded + event.stepsRemoved <= 2);
@@ -174,6 +196,7 @@ test("real Jazz generation preserves baseline off by default and exposes authore
     rows.push({
       seed, changedBars: memory.changedBars,
       mode: memory.events[0]?.kind ?? "none",
+      lane: memory.events[0]?.lane ?? null,
       beforeGroove: beforeCritic.subscores.groove,
       afterGroove: afterCritic.subscores.groove,
       beforeVariety: beforeCritic.subscores.drumVariety,
