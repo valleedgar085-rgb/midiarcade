@@ -3480,6 +3480,11 @@ function bindTrackRackInteractions(rack) {
 function renderTrackRack() {
   const tracksById = new Map(songTracks().map((track, index) => [trackId(track, index), track]));
   const rack = $("#trackRack");
+  // Rerendering Mute/Solo or a live mix value must not close an instrument's
+  // already-expanded controls. Disclosure is visual state, not music state.
+  const expandedIds = new Set([...rack.querySelectorAll(".track-card")]
+    .filter((card) => card.querySelector("details.track-shaping")?.open)
+    .map((card) => card.dataset.track));
   rack.innerHTML = TRACK_ORDER.map((id) => {
     const track = tracksById.get(id) || { id, program: state.trackSettings[id].program, notes: [] };
     const meta = TRACK_META[id];
@@ -3569,6 +3574,10 @@ function renderTrackRack() {
       </details>
     </article>`;
   }).join("");
+  for (const card of rack.querySelectorAll(".track-card")) {
+    const details = card.querySelector("details.track-shaping");
+    if (details && expandedIds.has(card.dataset.track)) details.open = true;
+  }
 
   bindTrackRackInteractions(rack);
   decorateAutoRangeControls(rack);
