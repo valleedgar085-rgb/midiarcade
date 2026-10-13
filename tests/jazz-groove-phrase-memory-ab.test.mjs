@@ -106,5 +106,7 @@ test("opt-in Jazz memory changes real drums only in the declared return bar, wit
       scoreBefore: beforeCritic.score, scoreAfter: afterCritic.score,
     });
   }
+  assert.ok(measurements.some((row) => row.planChangedBars > 0),
+    "at least one fixed real Jazz seed must produce a bounded one-for-one development");
   console.info("JAZZ_GROOVE_MEMORY_FULL_SONG_AB", JSON.stringify(measurements));
 });
