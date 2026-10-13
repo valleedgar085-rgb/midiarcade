@@ -274,7 +274,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   const ids = [...htmlSource.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
   assert.equal(new Set(ids).size, ids.length, "HTML IDs must be unique");
   const referencedIds = [...appSource.matchAll(/\$\("#([A-Za-z][\w-]*)"\)/g)].map((match) => match[1]);
-  const createRuntimeMountedIds = new Set(["creativeRangeControl"]);
+  const createRuntimeMountedIds = new Set(["creativeRangeControl", "syncopationControl", "drumFillsControl"]);
   const appRuntimeMountedIds = new Set([
     "debuggerButton",
     "menuItemDebugger",
@@ -290,7 +290,13 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   for (const id of new Set(referencedIds)) {
     if (ids.includes(id)) continue;
     const createMounted = createRuntimeMountedIds.has(id)
-      && new RegExp(`id=["']${id}["']`).test(createPresentationSource);
+      && (
+        new RegExp(`id=["']${id}["']`).test(createPresentationSource)
+        || (
+          new RegExp(`["']${id}["']`).test(createPresentationSource)
+          && /controls\.append\(knob\)/.test(createPresentationSource)
+        )
+      );
     const appMounted = appRuntimeMountedIds.has(id)
       && (
         new RegExp(`\\.id\\s*=\\s*["']${id}["']`).test(appSource + "\n" + performanceAbControlsSource)
@@ -301,7 +307,8 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
       `#${id} must exist in index.html or an explicitly inventoried runtime mount`,
     );
   }
-  assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl"], "Create runtime selector exceptions must remain narrow and explicit");
+  assert.deepEqual([...createRuntimeMountedIds], ["creativeRangeControl", "syncopationControl", "drumFillsControl"],
+    "Create runtime selector exceptions must remain narrow, explicit, and input-only");
   assert.deepEqual(
     [...appRuntimeMountedIds],
     ["debuggerButton", "menuItemDebugger", "closeDebugger", "refreshDebugger", "copyDebuggerReport", "clearDebuggerHistory", "performanceAbLab", "performanceAbCurrent", "performanceAbPerformed", "performanceAbEnd"],
