@@ -1149,3 +1149,38 @@
   #tab-create .create-performance-deck .create-live-control,
   #tab-create .create-performance-deck .create-live-select { transition: none; }
 }
+
+
+/* Keep Create knob geometry intact even when a premium theme provides
+   full-bleed/stacked overrides for the older embedded control strip. */
+#tab-create .create-performance-deck .create-live-controls {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0,1fr)) !important;
+  border: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#tab-create .create-performance-deck .create-live-control,
+#tab-create .create-performance-deck .create-live-select {
+  display: flex !important;
+  grid-column: auto !important;
+}
+#tab-create .create-performance-deck .create-live-control > span {
+  display: flex !important;
+}
+#tab-create #heroPanel.song-showcase {
+  border: 1.5px solid rgba(142,166,231,.45) !important;
+  border-radius: 20px !important;
+}
+@media (max-width: 900px) {
+  #tab-create .create-performance-deck .create-live-controls {
+    grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  }
+}
+@media (max-width: 650px) {
+  #tab-create .create-performance-deck .create-live-controls {
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  }
+}
