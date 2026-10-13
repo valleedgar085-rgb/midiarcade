@@ -277,6 +277,10 @@ export function createSpecialistDirectorPlan(song) {
     complexity: song?.settings?.complexity ?? song?.meta?.complexity ?? 0.58,
     variation: song?.settings?.variation ?? song?.meta?.variation ?? 0.48,
     tripletAmount: song?.settings?.tripletAmount ?? 0,
+    ...(song?.settings?.jazzGroovePhraseMemory === true
+      ? { jazzGroovePhraseMemory: true } : {}),
+    ...(song?.settings?.secondaryGenre
+      ? { secondaryGenre: song.settings.secondaryGenre } : {}),
   }, { structure: song?.structure ?? song?.sections ?? [] });
   const specialists = SPECIALIST_MUSICIAN_ORDER.map((id) => {
     const definition = specialistMusicianDefinition(id);
