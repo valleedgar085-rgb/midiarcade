@@ -39,6 +39,13 @@ test("opt-in Jazz memory changes real drums only in the declared return bar, wit
     assert.equal(memory.events.length, memory.changedBars, seed);
     assert.ok(memory.events.length <= 1, seed);
     const targetBars = new Set(memory.events.map((event) => event.targetBar));
+    for (const event of memory.events) {
+      assert.deepEqual(
+        candidate.grooveConductor.bars[event.targetBar].grooveDNA.phraseMemory,
+        event,
+        `${seed}: source-authored hat/percussion memory must be visible in the bar plan`,
+      );
+    }
 
     // The new phrase must be reflected in the musical output, not only in plans.
     const changedBars = Array.from({ length: 16 }, (_, bar) => bar)
