@@ -321,3 +321,138 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* UI/UX Pro Max Phase 4 — consistent mobile tab focus and DAW export clarity. */
+#tabNavShell .tab-btn:focus-visible,
+#tab-finish :is(button,select):focus-visible {
+  outline: 3px solid #a4f5e8 !important;
+  outline-offset: 2px;
+}
+#tab-finish .finish-panel {
+  align-items: stretch !important;
+  gap: 14px !important;
+}
+#tab-finish .finish-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 12px;
+}
+#tab-finish .finish-copy h2 {
+  font-size: clamp(1.65rem,5.7vw,2.4rem) !important;
+  line-height: 1.13;
+  letter-spacing: -.025em;
+  margin: 0;
+}
+#tab-finish .finish-copy > p:not(.eyebrow) {
+  font-size: .91rem !important;
+  line-height: 1.55 !important;
+  color: #bfd0d9 !important;
+  margin: 0;
+}
+#tab-finish .export-setup {
+  padding: 16px !important;
+  background: #16232e !important;
+  border: 1.5px solid #567987 !important;
+  border-radius: 15px !important;
+}
+#tab-finish .export-setup-controls {
+  display: grid !important;
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 12px;
+}
+#tab-finish .export-setup-controls label {
+  min-width: 0;
+}
+#tab-finish .export-setup-controls select {
+  display: block;
+  width: 100%;
+  min-height: 48px !important;
+  font-size: .88rem !important;
+}
+#tab-finish .export-profile-summary {
+  border-top: 1px solid rgba(185,232,226,.19);
+  padding-top: 11px;
+  overflow-wrap: anywhere;
+}
+#tab-finish .export-profile-summary .finish-export-help {
+  display: block !important;
+  margin-top: 8px;
+  color: #c8dadd !important;
+  font-size: .82rem !important;
+  line-height: 1.5;
+  font-weight: 500;
+  letter-spacing: normal;
+}
+#tab-finish .finish-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px !important;
+  margin: 0 !important;
+}
+#tab-finish .finish-facts span {
+  font-size: .73rem !important;
+  line-height: 1.45;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+  border: 1px solid #425e6b !important;
+  border-radius: 10px !important;
+}
+#tab-finish .finish-actions {
+  gap: 8px !important;
+}
+#tab-finish .finish-actions .small-button {
+  min-height: 48px !important;
+  font-size: .84rem !important;
+}
+#tab-finish .finish-cover {
+  width: min(100%,320px) !important;
+  max-width: 100%;
+}
+#tab-finish .finish-cover img {
+  border: 1.5px solid #5a8084 !important;
+  border-radius: 17px !important;
+}
+@media (max-width: 760px) {
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn[aria-selected="true"] {
+    background: rgba(46,117,110,.21) !important;
+    color: #d7fff4 !important;
+    border-bottom: 3px solid #69d7c8 !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn[aria-selected="false"] {
+    color: #bfccd4 !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn svg {
+    flex-shrink: 0;
+  }
+  #tab-finish .export-setup-controls {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+}
+@media (max-width: 420px) {
+  #tab-finish .finish-cover {
+    width: min(100%,280px) !important;
+  }
+  #tab-finish .finish-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0,1fr);
+  }
+  #tab-finish .finish-actions .small-button {
+    width: 100%;
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #tab-finish .finish-cover {
+    width: min(100%,220px) !important;
+  }
+  #tab-finish .finish-panel {
+    min-height: 0 !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tabNavShell .tab-btn,
+  #tab-finish .finish-actions button {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
