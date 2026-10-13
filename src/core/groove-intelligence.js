@@ -1,7 +1,7 @@
 import {
   jazzGrooveRecallLinks,
   jazzGrooveMemorySourceForBar,
-  proposeJazzHatCellMemory,
+  proposeJazzGrooveCellMemory,
 } from "./jazz-groove-phrase-memory.js";
 
 const BASE_GRID_STEPS = 16;
@@ -901,14 +901,14 @@ export function createGrooveDNA(input = {}, {
       );
       let finalSteps = variedSteps;
       let phraseMemory = null;
-      if (jazzPhraseMemoryEnabled && lane === "hat"
+      if (jazzPhraseMemoryEnabled && ["hat", "percussion"].includes(lane)
         && !jazzPhraseMemorySections.has(String(section.id))) {
         const recall = jazzGrooveMemorySourceForBar(
           bar, section, normalizedSections, jazzPhraseMemoryLinks,
         );
-        const sourceSteps = recall ? barPlans[recall.sourceBar]?.hat?.steps : null;
-        if (sourceSteps?.length) {
-          const proposal = proposeJazzHatCellMemory({
+        const sourceSteps = recall ? barPlans[recall.sourceBar]?.[lane]?.steps : null;
+        if (Array.isArray(sourceSteps)) {
+          const proposal = proposeJazzGrooveCellMemory({
             sourceSteps,
             targetSteps: variedSteps,
             requiredSteps: lockedSteps,
@@ -920,6 +920,7 @@ export function createGrooveDNA(input = {}, {
             finalSteps = proposal.steps;
             phraseMemory = Object.freeze({
               mode: "jazz-phrase-return",
+              lane,
               kind: proposal.kind,
               sourceBar: recall.sourceBar,
               targetBar: bar,
