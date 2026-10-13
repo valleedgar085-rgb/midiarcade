@@ -4,6 +4,7 @@ import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta.url), "utf8");
+const globalCss = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const contract = fs.readFileSync(new URL("../src/ui/create-control-contract.js", import.meta.url), "utf8");
 const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
@@ -47,8 +48,8 @@ test("Create controls sit immediately below the song showcase, with the original
   assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
   assert.match(presentation, /"variationControl", "evolutionControl"/);
   assert.match(presentation, /"swingControl", "humanizeControl"/);
-  assert.match(css, /#tab-create > \.home-command \{ display: none !important; \}/);
-  assert.match(css, /#tab-create \.create-performance-deck/);
+  assert.match(globalCss, /#tab-create > \.home-command \{ display: none !important; \}/);
+  assert.match(globalCss, /#tab-create \.create-performance-deck/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "barsControl", "grooveControl"]) {
     assert.doesNotMatch(presentation, new RegExp(`id=["']${id}["']`), `${id} must be moved, not recreated`);
   }
