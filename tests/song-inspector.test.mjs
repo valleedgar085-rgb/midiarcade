@@ -95,7 +95,7 @@ function returningChorusFixture({ weak = true } = {}) {
 test("Song Inspector prioritizes the measured chorus-hook gap without touching the song", () => {
   const song = returningChorusFixture();
   const before = structuredClone(song);
-  const selection = { song, section: song.structure[2], target: "track" };
+  const selection = { song, section: song.structure[2], target: "track", trackId: "melody" };
   const ideas = songInspectorSuggestions(selection);
   assert.equal(ideas[0].directionId, "catchier");
   assert.equal(ideas[0].evidence, "CHORUS HOOK RETURN");
@@ -130,4 +130,20 @@ test("Song Inspector ignores unavailable hook evidence instead of claiming weakn
   song.tracks = [];
   const ideas = songInspectorSuggestions({ song, section: song.structure[2] });
   assert.ok(ideas.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+});
+
+test("Song Inspector scopes hook guidance to melody or the complete section", () => {
+  const song = returningChorusFixture();
+  const chorus = song.structure[2];
+  const bass = songInspectorSuggestions({ song, section: chorus, target: "track", trackId: "bass" });
+  const drums = songInspectorSuggestions({ song, section: chorus, target: "notes", trackId: "drums" });
+  const songSection = songInspectorSuggestions({ song, section: chorus, target: "section" });
+  assert.ok(bass.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.ok(drums.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.equal(songSection[0].evidence, "CHORUS HOOK RETURN");
+});
+
+test("Inspector receives the actual selected track instead of guessing an instrument", () => {
+  const app = source("src/app.js");
+  assert.match(app, /songInspectorSuggestions\\(\\{[\\s\\S]*?target: director\\.target,\\s*trackId: state\\.editorTrack,/);
 });
