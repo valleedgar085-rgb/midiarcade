@@ -54,12 +54,12 @@ const createWorkflowStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-workflow.css'), 'utf8'),
   transformOptions,
 );
+// Merge the scoped Pro Max polish into the last shipped stylesheet so the
+// protected initial HTML budget does not gain another stylesheet link.
 const createKnobDeckStyles = await transform(
-  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-knob-deck.css'), 'utf8'),
-  transformOptions,
-);
-const proMaxPhase1Styles = await transform(
-  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'uiux-pro-max-phase1.css'), 'utf8'),
+  ['create-knob-deck.css', 'uiux-pro-max-phase1.css']
+    .map((name) => fs.readFileSync(path.join(projectRoot, 'src', 'ui', name), 'utf8'))
+    .join('\n'),
   transformOptions,
 );
 const generationExperienceStyles = await transform(
@@ -86,10 +86,6 @@ fs.writeFileSync(
   createKnobDeckStyles.code,
 );
 fs.writeFileSync(
-  path.join(wwwDir, 'uiux-pro-max-phase1.css'),
-  proMaxPhase1Styles.code,
-);
-fs.writeFileSync(
   path.join(wwwDir, 'generation-experience.css'),
   generationExperienceStyles.code,
 );
@@ -114,7 +110,7 @@ fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
   compactIndexSource.replace(
     '</head>',
-    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"><link rel="stylesheet" href="./midnight-studio.css"><link rel="stylesheet" href="./create-knob-deck.css"><link rel="stylesheet" href="./uiux-pro-max-phase1.css"></head>`,
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"><link rel="stylesheet" href="./midnight-studio.css"><link rel="stylesheet" href="./create-knob-deck.css"></head>`,
   ),
 );
 
@@ -157,7 +153,6 @@ if (fs.existsSync(androidPublicDir)) {
   copyRecursiveSync(path.join(wwwDir, 'solar-pop.css'), path.join(androidPublicDir, 'solar-pop.css'));
   copyRecursiveSync(path.join(wwwDir, 'midnight-studio.css'), path.join(androidPublicDir, 'midnight-studio.css'));
   copyRecursiveSync(path.join(wwwDir, 'create-knob-deck.css'), path.join(androidPublicDir, 'create-knob-deck.css'));
-  copyRecursiveSync(path.join(wwwDir, 'uiux-pro-max-phase1.css'), path.join(androidPublicDir, 'uiux-pro-max-phase1.css'));
   copyRecursiveSync(path.join(wwwDir, 'manifest.webmanifest'), path.join(androidPublicDir, 'manifest.webmanifest'));
   copyRecursiveSync(path.join(wwwDir, 'assets'), path.join(androidPublicDir, 'assets'));
   copyRecursiveSync(path.join(wwwDir, 'src'), path.join(androidPublicDir, 'src'));
