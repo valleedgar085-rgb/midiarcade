@@ -13,9 +13,9 @@ const html = source("index.html");
 test("Create shows a direct control deck beneath the song without a second opening card", () => {
   assert.match(presentation, /slot\.insertAdjacentElement\("afterend", deck\)/);
   assert.match(presentation, /deck\.append\(controls\)/);
-  assert.match(css, /#tab-create > \.home-command \{ display: none !important; \}/);
-  assert.match(css, /#tab-create \.create-performance-deck \{/);
-  assert.match(css, /border: 1\.5px solid/);
+  assert.match(css, /#tab-create\s*>\s*\.home-command\s*\{\s*display:\s*none\s*!important/);
+  assert.match(css, /#tab-create\s+\.create-performance-deck\s*\{/);
+  assert.match(css, /border:\s*1\.5px solid/);
   assert.ok(html.indexOf('id="heroPanel"') < html.indexOf('id="preGenSection"'));
 });
 
