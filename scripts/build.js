@@ -54,6 +54,10 @@ const createWorkflowStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-workflow.css'), 'utf8'),
   transformOptions,
 );
+const createKnobDeckStyles = await transform(
+  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-knob-deck.css'), 'utf8'),
+  transformOptions,
+);
 const generationExperienceStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'generation-experience.css'), 'utf8'),
   transformOptions,
@@ -72,6 +76,10 @@ const midnightStudioStyles = await transform(
     .map((name) => fs.readFileSync(path.join(projectRoot, 'src', 'ui', name), 'utf8'))
     .join('\n'),
   transformOptions,
+);
+fs.writeFileSync(
+  path.join(wwwDir, 'create-knob-deck.css'),
+  createKnobDeckStyles.code,
 );
 fs.writeFileSync(
   path.join(wwwDir, 'generation-experience.css'),
@@ -98,7 +106,7 @@ fs.writeFileSync(
   path.join(wwwDir, 'index.html'),
   compactIndexSource.replace(
     '</head>',
-    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"><link rel="stylesheet" href="./midnight-studio.css"></head>`,
+    `<style>${creatorStyles.code}</style><style>${createWorkflowStyles.code}</style><link rel="stylesheet" href="./generation-experience.css"><link rel="stylesheet" href="./shape-director.css"><link rel="stylesheet" href="./solar-pop.css"><link rel="stylesheet" href="./midnight-studio.css"><link rel="stylesheet" href="./create-knob-deck.css"></head>`,
   ),
 );
 
@@ -140,6 +148,7 @@ if (fs.existsSync(androidPublicDir)) {
   copyRecursiveSync(path.join(wwwDir, 'shape-director.css'), path.join(androidPublicDir, 'shape-director.css'));
   copyRecursiveSync(path.join(wwwDir, 'solar-pop.css'), path.join(androidPublicDir, 'solar-pop.css'));
   copyRecursiveSync(path.join(wwwDir, 'midnight-studio.css'), path.join(androidPublicDir, 'midnight-studio.css'));
+  copyRecursiveSync(path.join(wwwDir, 'create-knob-deck.css'), path.join(androidPublicDir, 'create-knob-deck.css'));
   copyRecursiveSync(path.join(wwwDir, 'manifest.webmanifest'), path.join(androidPublicDir, 'manifest.webmanifest'));
   copyRecursiveSync(path.join(wwwDir, 'assets'), path.join(androidPublicDir, 'assets'));
   copyRecursiveSync(path.join(wwwDir, 'src'), path.join(androidPublicDir, 'src'));

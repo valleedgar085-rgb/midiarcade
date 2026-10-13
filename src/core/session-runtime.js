@@ -23,6 +23,8 @@ export const GENERATION_PREFERENCE_IDS = Object.freeze([
   "variationControl",
   "evolutionControl",
   "surpriseControl",
+  "syncopationControl",
+  "drumFillsControl",
 ]);
 
 export function sanitizeGenerationPreferences(value) {
@@ -65,6 +67,17 @@ function restoredPreferenceState({
   normalizeMixAssistant = (value) => value,
   defaultToAuto = false,
 } = {}) {
+  // Sessions created before these knobs existed must retain the legacy Auto
+  // calculations. Only an explicit persisted knob preference can mean Manual.
+  const autoControls = sanitizeAutoControls(parsed.autoControls, {
+    trackIds: trackOrder,
+    defaultToAuto,
+  });
+  for (const id of ["syncopationControl", "drumFillsControl"]) {
+    if (!Object.prototype.hasOwnProperty.call(parsed.generationPreferences ?? {}, id)) {
+      autoControls.add(id);
+    }
+  }
   return {
     // Reopening the studio intentionally starts with an empty plate. Persisted
     // preferences are restored independently from any legacy song payload.
@@ -76,10 +89,7 @@ function restoredPreferenceState({
     muted: new Set(Array.isArray(parsed.muted) ? parsed.muted.filter((id) => trackOrder.includes(id)) : []),
     solo: new Set(Array.isArray(parsed.solo) ? parsed.solo.filter((id) => trackOrder.includes(id)) : []),
     locked: new Set(Array.isArray(parsed.locked) ? parsed.locked.filter((id) => trackOrder.includes(id)) : []),
-    autoControls: sanitizeAutoControls(parsed.autoControls, {
-      trackIds: trackOrder,
-      defaultToAuto,
-    }),
+    autoControls,
     selectedTrack: trackOrder.includes(parsed.selectedTrack) ? parsed.selectedTrack : (trackOrder[0] ?? "drums"),
     guidedMode: parsed.guidedMode !== false,
     recipeIndex: boundedIndex(parsed.recipeIndex, recipeCount),

@@ -9,6 +9,8 @@ export const AUTO_GENERATION_RANGE_IDS = Object.freeze([
   "variationControl",
   "evolutionControl",
   "surpriseControl",
+  "syncopationControl",
+  "drumFillsControl",
 ]);
 
 export const AUTO_SELECT_IDS = Object.freeze([

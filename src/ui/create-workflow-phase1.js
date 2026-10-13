@@ -68,44 +68,50 @@ function mountCreativeRangeControl(rootDocument, createPanel) {
   return true;
 }
 
+function mountPerformanceKnobs(rootDocument, createPanel) {
+  const controls = createPanel.querySelector(".create-live-controls");
+  if (!controls || controls.querySelector("#syncopationControl") || typeof rootDocument?.createElement !== "function") return;
+  const knobs = [
+    ["syncopationControl", "syncopationValue", "SYNCOPATION", "Straight to playful offbeat movement", 50],
+    ["drumFillsControl", "drumFillsValue", "DRUM FILLS", "Sparse to active phrase-ending fills", 50],
+  ];
+  for (const [id, outputId, label, hint, value] of knobs) {
+    const knob = rootDocument.createElement("label");
+    knob.className = "create-live-control create-expression-knob";
+    knob.innerHTML = `<span><b>${label}</b><output id="${outputId}">${value}%</output></span>
+      <input id="${id}" type="range" min="0" max="100" value="${value}" aria-label="${label.toLowerCase()} percentage" />
+      <small>${hint} · Auto preserves your genre's original behavior</small>`;
+    controls.append(knob);
+  }
+}
+
 function moveGenerationEssentials(rootDocument, createPanel) {
   const controls = createPanel.querySelector(".create-live-controls");
-  const creatorMain = createPanel.querySelector(".creator-main-controls");
-  const shapeControls = creatorMain?.querySelector(".shape-controls");
-  if (!controls || !creatorMain || !shapeControls || creatorMain.querySelector(".direction-essentials-heading")) return;
-  if (typeof rootDocument?.createElement !== "function") return;
-
+  const slot = createPanel.querySelector(".create-showcase-slot");
+  if (!controls || !slot || createPanel.querySelector(".create-performance-deck") || typeof rootDocument?.createElement !== "function") return;
+  const deck = rootDocument.createElement("section");
+  deck.className = "create-performance-deck panel";
+  deck.setAttribute("aria-labelledby", "directionEssentialsTitle");
+  deck.innerHTML = `<div class="create-performance-heading">
+    <div><p class="eyebrow">YOUR SOUND, YOUR CONTROL</p>
+      <h2 id="directionEssentialsTitle">Shape the next take</h2>
+      <p>Adjust the feel, movement and dynamics. Changes are staged until you generate.</p>
+    </div><span class="create-deck-state">AUTO OR MANUAL</span>
+  </div>`;
   controls.setAttribute("aria-label", "Generation essentials");
-  const notes = controls.querySelectorAll(".create-live-control small");
-  if (notes[0]) notes[0].textContent = "Speed of the next composition; Auto remains genre-aware";
-  if (notes[1]) notes[1].textContent = "Controls intensity, impact and section lift";
-  if (notes[2]) notes[2].textContent = "Controls harmonic and rhythmic detail without changing genre";
-
+  controls.setAttribute("aria-labelledby", "directionEssentialsTitle");
   const selectLabels = controls.querySelectorAll(".create-live-select > span");
   if (selectLabels[0]) selectLabels[0].textContent = "ARRANGEMENT LENGTH";
-  if (selectLabels[1]) selectLabels[1].textContent = "TIMING POCKET";
-
-  const heading = rootDocument.createElement("div");
-  heading.className = "direction-essentials-heading section-heading";
-  heading.innerHTML = `
-    <div>
-      <p class="eyebrow">ESSENTIAL DIRECTION</p>
-      <h3 id="directionEssentialsTitle">Song frame, feel &amp; structure</h3>
-      <p class="section-description">Set the genre world, pace and pocket here. The song playing above remains your untouched reference until you press Generate.</p>
-    </div>
-  `;
-  controls.setAttribute("aria-labelledby", "directionEssentialsTitle");
-  creatorMain.insertBefore(heading, shapeControls);
-  creatorMain.insertBefore(controls, shapeControls);
+  if (selectLabels[1]) selectLabels[1].textContent = "GROOVE FEEL";
+  deck.append(controls);
+  // Follow the song card directly: no tutorial, recipe or promotional card in between.
+  slot.insertAdjacentElement("afterend", deck);
 }
 
 function organizePrimaryDirection(rootDocument, createPanel) {
   const genre = createPanel.querySelector(".genre-direction");
   const controls = createPanel.querySelector(".create-live-controls");
-  const generationActions = createPanel.querySelector(".generation-actions-bar");
-  if (!genre || !controls || !generationActions || controls.querySelector('[data-create-stage="feel"]')) return;
-  if (typeof rootDocument?.createElement !== "function") return;
-
+  if (!genre || !controls || controls.querySelector('[data-create-stage="feel"]') || typeof rootDocument?.createElement !== "function") return;
   const heading = (id, label, copy) => {
     const element = rootDocument.createElement("div");
     element.className = "direction-essentials-heading section-heading create-stage-heading";
@@ -113,23 +119,21 @@ function organizePrimaryDirection(rootDocument, createPanel) {
     element.innerHTML = `<div><p class="eyebrow">${label}</p><h3>${copy}</h3></div>`;
     return element;
   };
-
   genre.insertAdjacentElement("afterbegin", heading("song", "SONG", "Choose the musical world"));
-
-  const feelControls = ["tempoControl", "energyControl", "complexityControl", "grooveControl"]
-    .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
-    .filter(Boolean);
-  const structureControls = ["barsControl"]
-    .map((id) => controls.querySelector(`#${id}`)?.closest?.("label"))
-    .filter(Boolean);
-
+  const find = (id) => createPanel.querySelector(`#${id}`)?.closest?.("label");
+  const rhythmDetails = createPanel.querySelector(".advanced-controls .details-content");
+  // Move existing live engine controls rather than cloning IDs or inventing a
+  // parallel set of values. Hidden advanced settings retain their own controls.
+  const core = ["tempoControl", "energyControl", "complexityControl", "variationControl", "evolutionControl"].map(find).filter(Boolean);
+  const feel = ["swingControl", "humanizeControl", "syncopationControl", "drumFillsControl"].map(find).filter(Boolean);
+  const form = ["grooveControl", "barsControl"].map(find).filter(Boolean);
   controls.append(
-    heading("feel", "FEEL", "Set pace, energy, detail and pocket"),
-    ...feelControls,
-    heading("structure", "STRUCTURE", "Choose how much room the song gets"),
-    ...structureControls,
+    heading("feel", "CREATIVE FLOW", "Tempo · impact · detail · development"), ...core,
+    heading("rhythm", "RHYTHM & DYNAMICS", "Pocket, timing and drum conversation"), ...feel,
+    heading("structure", "SONG SHAPE", "Groove and arrangement length"), ...form,
   );
-
+  // The advanced drawer now contains only genuinely secondary options.
+  if (rhythmDetails) rhythmDetails.dataset.primaryKnobsMoved = "true";
 }
 
 function consolidateAdvancedDirection(rootDocument, createPanel) {
@@ -274,6 +278,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
 
   mountCreativeRangeControl(rootDocument, createPanel);
   upgradeStaticCreateCopy(rootDocument, createPanel);
+  mountPerformanceKnobs(rootDocument, createPanel);
   moveGenerationEssentials(rootDocument, createPanel);
   organizePrimaryDirection(rootDocument, createPanel);
   consolidateAdvancedDirection(rootDocument, createPanel);

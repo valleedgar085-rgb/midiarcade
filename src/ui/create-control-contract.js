@@ -14,6 +14,8 @@ export const CREATE_CONTROL_CONTRACT = Object.freeze({
   tempoControl: entry("Tempo", "Sets the speed of the next generation in BPM. Manual tempo overrides Auto until you return it to Auto.", "essentials", "input"),
   energyControl: entry("Energy", "Controls intensity, hit strength, rhythmic activity and how strongly sections lift.", "essentials", "input"),
   complexityControl: entry("Complexity", "Controls harmonic richness, phrase detail and how busy the arrangement is allowed to become.", "essentials", "input"),
+  syncopationControl: entry("Syncopation", "Manual mode sets the offbeat rhythm emphasis for the next generated song; Auto keeps the genre's original rhythmic behavior.", "essentials", "input"),
+  drumFillsControl: entry("Drum fills", "Manual mode sets the amount of phrase-ending drum embellishment in the next song; Auto preserves the existing genre-specific fill pattern.", "essentials", "input"),
   barsControl: entry("Song length", "Chooses the arrangement length. Auto lets Producer Brain pick an appropriate form length.", "essentials"),
   grooveControl: entry("Groove feel", "Chooses the timing pocket for the next generation: straight, laid back, shuffled, syncopated or Auto.", "essentials"),
   creativeRangeControl: entry("Creative range", "Chooses how far Creative Genome may steer the next idea. Default preserves existing behavior; Familiar, Fresh and Wild opt into progressively wider deterministic strategy choices while quality gates stay authoritative.", "direction"),
