@@ -4,7 +4,7 @@ import test from "node:test";
 
 const html = fs.readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const css = fs.readFileSync(new URL("../src/ui/create-workflow.css", import.meta.url), "utf8");
-const globalCss = fs.readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+const globalCss = fs.readFileSync(new URL("../src/ui/create-knob-deck.css", import.meta.url), "utf8");
 const presentation = fs.readFileSync(new URL("../src/ui/create-workflow-phase1.js", import.meta.url), "utf8");
 const contract = fs.readFileSync(new URL("../src/ui/create-control-contract.js", import.meta.url), "utf8");
 const progress = fs.readFileSync(new URL("../src/ui/generation-progress.js", import.meta.url), "utf8");
