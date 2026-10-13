@@ -1017,3 +1017,135 @@
   }
 }
 
+
+
+/* Create studio: song first, controls immediately underneath.
+   The opening instruction block duplicated the header and pushed controls
+   below the fold. Keep its historic DOM nodes for safe runtime compatibility. */
+#tab-create > .home-command { display: none !important; }
+#tab-create { --create-gap: 10px; gap: var(--create-gap); }
+#tab-create .create-console { gap: 10px; }
+#tab-create .create-performance-deck {
+  grid-column: 1 / -1;
+  width: 100%;
+  margin: 0;
+  padding: clamp(13px, 2.2vw, 22px);
+  border: 1.5px solid rgba(80, 218, 224, .34);
+  border-radius: 20px;
+  background: linear-gradient(150deg, rgba(26, 56, 68, .23), rgba(12, 14, 24, .95) 45%, rgba(90, 75, 148, .11));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.065), 0 16px 40px rgba(0,0,0,.22);
+}
+#tab-create .create-performance-heading {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 8px; padding: 0 2px 12px;
+}
+#tab-create .create-performance-heading h2 {
+  margin: 3px 0 2px; font-size: clamp(1.2rem, 2vw, 1.65rem);
+  font-family: var(--font-display, system-ui);
+}
+#tab-create .create-performance-heading p:not(.eyebrow) {
+  color: var(--text-2); font-size: .73rem; line-height: 1.4;
+}
+#tab-create .create-deck-state {
+  padding: 6px 10px; border: 1px solid rgba(80, 218, 224, .28);
+  border-radius: 999px; font: 750 .58rem var(--font-data, monospace);
+  letter-spacing: .08em; color: var(--text-2);
+}
+#tab-create .create-performance-deck .create-live-controls {
+  margin: 0; padding: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+#tab-create .create-live-controls > .create-stage-heading {
+  grid-column: 1 / -1; margin: 5px 0 0; padding: 7px 2px 1px;
+  border-top: 1px solid rgba(255,255,255,.09);
+}
+#tab-create .create-live-controls > .create-stage-heading:first-child {
+  margin-top: 0; padding-top: 0; border-top: 0;
+}
+#tab-create .create-live-controls > .create-stage-heading h3 {
+  margin-top: 2px; font-size: .94rem;
+}
+#tab-create .create-live-controls > .create-stage-heading .eyebrow {
+  margin: 0; font-size: .56rem; letter-spacing: .14em;
+  color: rgba(110, 223, 224, .9);
+}
+#tab-create .create-performance-deck .create-live-control,
+#tab-create .create-performance-deck .create-live-select {
+  grid-column: auto;
+  min-width: 0; min-height: 104px;
+  display: flex; flex-direction: column; justify-content: space-between;
+  gap: 8px; margin: 0; padding: 13px;
+  border: 1.5px solid rgba(160, 174, 204, .22); border-radius: 15px;
+  background: linear-gradient(155deg, rgba(255,255,255,.06), rgba(255,255,255,.013));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  transition: border-color .18s ease, background-color .18s ease, box-shadow .18s ease;
+}
+#tab-create .create-performance-deck .create-live-control:first-child { grid-column: auto; }
+#tab-create .create-performance-deck .create-live-control:focus-within,
+#tab-create .create-performance-deck .create-live-select:focus-within {
+  border-color: rgba(91,225,229,.8);
+  box-shadow: 0 0 0 2px rgba(91,225,229,.14);
+}
+#tab-create .create-performance-deck .create-live-control > span,
+#tab-create .create-performance-deck .create-live-select > span {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px; font-weight: 780; letter-spacing: .045em;
+}
+#tab-create .create-performance-deck .create-live-control > span output {
+  color: #88edeb; font-size: .76rem; font-variant-numeric: tabular-nums;
+}
+#tab-create .create-performance-deck .create-live-control small {
+  display: block; color: var(--text-3); font-size: .64rem; line-height: 1.3;
+}
+#tab-create .create-performance-deck input[type="range"] {
+  width: 100%; min-height: 28px; cursor: pointer;
+  accent-color: #60d9de; touch-action: pan-y;
+}
+#tab-create .create-performance-deck input[type="range"]:disabled {
+  opacity: .42; cursor: not-allowed;
+}
+#tab-create .create-performance-deck select {
+  max-width: 100%; min-height: 42px; border-radius: 10px;
+}
+#tab-create .song-showcase,
+#preGenSection,
+#tab-create .dna-integrated-card,
+#preGenSection .genre-direction,
+#preGenSection .phase1-advanced-direction {
+  border-width: 1.5px;
+}
+#tab-create .song-showcase { border-color: rgba(142, 166, 231, .43); }
+#preGenSection { border-color: rgba(99, 198, 209, .27); }
+#preGenSection .generator-scope { display: none; }
+#preGenSection .creator-heading { margin-bottom: 10px; }
+#preGenSection .genre-direction { border-color: rgba(142, 166, 231, .35); }
+#tab-create .create-performance-deck [data-auto-key] { min-height: 31px; }
+
+@media (max-width: 900px) {
+  #tab-create .create-performance-deck .create-live-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 650px) {
+  #tab-create .create-performance-deck { padding: 12px; border-radius: 16px; }
+  #tab-create .create-performance-heading { padding-bottom: 8px; }
+  #tab-create .create-performance-deck .create-live-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
+  }
+  #tab-create .create-performance-deck .create-live-control,
+  #tab-create .create-performance-deck .create-live-select {
+    grid-column: auto; min-height: 92px; padding: 11px; border-radius: 13px;
+  }
+  #tab-create .create-performance-deck .create-live-control:first-child {
+    grid-column: auto; min-height: 92px;
+  }
+  #tab-create .create-performance-deck .create-live-control small { display: none; }
+  #tab-create .create-performance-heading p:not(.eyebrow) { font-size: .69rem; }
+  #tab-create .create-deck-state { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-create .create-performance-deck .create-live-control,
+  #tab-create .create-performance-deck .create-live-select { transition: none; }
+}
