@@ -49,6 +49,7 @@ import {
 import { applyTransitionFxRefinement } from "./transition-fx-refinement.js";
 import { applyJazzDrumExpressionRefinement } from "./jazz-drum-expression.js";
 import { applyJazzPhraseReturnRefinement } from "./jazz-phrase-return-refinement.js";
+import { applyJazzStructuralMotifRefinement } from "./jazz-structural-motif-refinement.js";
 import { applyCounterpointResponseRefinement } from "./counterpoint-response-refinement.js";
 
 const REGISTER_HEALTH_ATTEMPT_CEILING = 82;
@@ -1484,6 +1485,22 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     // Genre identity is the final note-writing stage. Transition FX runs after it
     // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
+    // A true rhythmic ornament motif echo is limited to ONE existing cymbal
+    // subnote within a related-section two-beat phrase. Never on by default.
+    ...(config.jazzStructuralMotifRefinement === true ? [{
+      id: "jazzStructuralMotifRefinement",
+      run: (current) => {
+        const result = applyJazzStructuralMotifRefinement(current, config, evaluate, release);
+        if (result.diagnostics?.accepted) {
+          const evaluation = evaluate(result.song);
+          result.song.meta = acceptedMetadata(
+            result.song, evaluation, release(result.song, evaluation),
+            "jazzStructuralMotifRefinement", result.diagnostics,
+          );
+        }
+        return result;
+      },
+    }] : []),
     // Related-section accent echo is velocity-only, explicitly opt-in, and
     // omitted from the normal pipeline to preserve the previous Jazz rollback.
     ...(config.jazzPhraseReturnRefinement === true ? [{
@@ -1534,6 +1551,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
     jazzDrumExpressionDiagnostics: diagnostics.jazzDrumExpressionRefinement,
     jazzPhraseReturnDiagnostics: diagnostics.jazzPhraseReturnRefinement,
+    jazzStructuralMotifDiagnostics: diagnostics.jazzStructuralMotifRefinement,
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
     melodyPhraseDiagnostics: diagnostics.melodyPhraseRefinement,
@@ -1563,6 +1581,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
     ["jazzDrumExpressionRefinement", processed.jazzDrumExpressionDiagnostics],
     ["jazzPhraseReturnRefinement", processed.jazzPhraseReturnDiagnostics],
+    ["jazzStructuralMotifRefinement", processed.jazzStructuralMotifDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
     ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],
