@@ -78,6 +78,7 @@ test("opt-in Jazz return modifies at most one two-beat hat cell per return secti
     const first = groove(seed, true);
     const second = groove(seed, true);
     assert.deepEqual(first, second);
+    assert.equal(validateGrooveDNA(first).passed, true, "Groove DNA must still satisfy its protected-space contract");
     assert.equal(before.jazzPhraseMemory, undefined, "default DNA output stays unchanged");
     assert.ok(first.jazzPhraseMemory.enabled);
     assert.ok(first.jazzPhraseMemory.changedBars <= 1);
