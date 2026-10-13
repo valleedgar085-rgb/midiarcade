@@ -95,8 +95,8 @@ function moveGenerationEssentials(rootDocument, createPanel) {
   deck.innerHTML = `<div class="create-performance-heading">
     <div><p class="eyebrow">YOUR SOUND, YOUR CONTROL</p>
       <h2 id="directionEssentialsTitle">Shape the next take</h2>
-      <p>Adjust the feel, movement and dynamics. Changes are staged until you generate.</p>
-    </div><span class="create-deck-state">AUTO OR MANUAL</span>
+      <p class="create-deck-hint">Tune your next song. Manual Tempo may update current playback.</p>
+    </div><span class="create-deck-state" role="status" aria-live="polite">DIRECTION READY</span>
   </div>`;
   controls.setAttribute("aria-label", "Generation essentials");
   controls.setAttribute("aria-labelledby", "directionEssentialsTitle");

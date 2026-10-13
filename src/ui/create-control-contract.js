@@ -11,7 +11,7 @@ export const CREATE_CONTROL_CONTRACT = Object.freeze({
   artistModeButton: entry("Advanced controls", "Reveals deeper direction controls without changing any value by itself.", "direction", "click"),
   genreControl: entry("Genre", "Sets the composition grammar: tempo pocket, rhythm vocabulary, harmony behavior, arrangement rules and instrument palette.", "direction"),
   secondaryGenreControl: entry("Fusion partner", "Blends a second genre into the primary writing rules while keeping one coherent song identity.", "direction"),
-  tempoControl: entry("Tempo", "Sets the speed of the next generation in BPM. Manual tempo overrides Auto until you return it to Auto.", "essentials", "input"),
+  tempoControl: entry("Tempo", "Sets the next song's speed in BPM; manual adjustment also changes current-song playback immediately when the selected genre matches. Auto remains seed-controlled.", "essentials", "input"),
   energyControl: entry("Energy", "Controls intensity, hit strength, rhythmic activity and how strongly sections lift.", "essentials", "input"),
   complexityControl: entry("Complexity", "Controls harmonic richness, phrase detail and how busy the arrangement is allowed to become.", "essentials", "input"),
   syncopationControl: entry("Syncopation", "Manual mode sets the offbeat rhythm emphasis for the next generated song; Auto keeps the genre's original rhythmic behavior.", "essentials", "input"),
