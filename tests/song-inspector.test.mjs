@@ -145,5 +145,5 @@ test("Song Inspector scopes hook guidance to melody or the complete section", ()
 
 test("Inspector receives the actual selected track instead of guessing an instrument", () => {
   const app = source("src/app.js");
-  assert.match(app, /songInspectorSuggestions\\(\\{[\\s\\S]*?target: director\\.target,\\s*trackId: state\\.editorTrack,/);
+  assert.match(app, /songInspectorSuggestions\(\{[\s\S]*?target: director\.target,\s*trackId: state\.editorTrack,/);
 });
