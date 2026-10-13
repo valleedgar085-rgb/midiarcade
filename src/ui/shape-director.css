@@ -113,3 +113,4 @@
 .shape-inspector-card button:disabled{opacity:.55}
 .shape-inspector-card button:focus-visible{outline:2px solid #a2ffff}
 @media(max-width:650px){.shape-inspector-insights{grid-template-columns:1fr}}
+@media(forced-colors:active){.shape-inspector,.shape-inspector-card,.shape-inspector-card button{border:1px solid CanvasText}}
