@@ -48,7 +48,7 @@ test("Inspector lives inside Shape and routes actions through the existing Befor
   assert.ok(inspectorStart > html.indexOf('id="shapeDirectorPanel"'));
   assert.ok(inspectorStart < html.indexOf('id="shapeDirectorDirections"'));
   assert.match(html, /id="shapeInspectorInsights" role="list"/);
-  assert.match(html, /Nothing changes until you accept a preview/);
+  assert.match(html, /Preview first\. Save to keep it\./);
   assert.match(app, /songInspectorSuggestions\(\{/);
   assert.match(app, /button\.dataset\.shapeDirection = idea\.directionId/);
   assert.match(app, /button\.disabled = blocked/);
