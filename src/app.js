@@ -78,6 +78,7 @@ import {
   transposeScaleStep,
 } from "./ui/shape-logic.js";
 import { SHAPE_QUICK_DIRECTIONS, createShapeIntent, rankShapeSuggestions } from "./core/shape-director-policy.js";
+import { songInspectorSuggestions } from "./core/song-inspector.js";
 import { auditionShapeCandidate, createShapeCandidate } from "./core/shape-director-engine.js";
 import { executeArrangementCommand } from "./ui/arrangement-logic.js";
 import { coverArtworkDataUrl, coverArtworkFinish, createCoverArtworkSvg } from "./cover-art.js";
@@ -2586,6 +2587,54 @@ function renderShapeDirector(section = editorSection()) {
     target: director.target,
     elementId: state.song?.variationSet?.element?.id,
   });
+  // Song Inspector is advice over the currently selected canonical song and
+  // section. It never creates a competing authority or changes the music.
+  const inspector = $("#shapeInspectorInsights");
+  if (inspector) {
+    const scope = $("#shapeInspectorScope");
+    if (scope) scope.textContent = section.name + (director.target === "section"
+      ? " · Full section" : " · " + (TRACK_META[state.editorTrack]?.name || state.editorTrack));
+    const blocked = Boolean(
+      director.transaction || state.sectionVariations || state.isGenerating
+      || (director.target === "notes" && !(state.editorSelection?.size > 0))
+    );
+    const ideas = songInspectorSuggestions({
+      song: state.song,
+      section,
+      target: director.target,
+      elementId: state.song?.variationSet?.element?.id,
+    });
+    const doc = inspector.ownerDocument ?? document;
+    const cards = ideas.map((idea) => {
+      const card = doc.createElement("article");
+      card.className = "shape-inspector-card";
+      card.setAttribute("role", "listitem");
+      const copy = doc.createElement("div");
+      const evidence = doc.createElement("small");
+      evidence.textContent = idea.evidence;
+      const heading = doc.createElement("strong");
+      heading.textContent = idea.title;
+      const explanation = doc.createElement("p");
+      explanation.textContent = idea.explanation;
+      copy.append(evidence, heading, explanation);
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.dataset.shapeDirection = idea.directionId;
+      button.textContent = idea.action;
+      button.disabled = blocked;
+      button.setAttribute("aria-disabled", String(blocked));
+      button.title = blocked
+        ? "Finish or discard the current audition, or select notes, before previewing another change."
+        : "Stage a local Before/After candidate. The original song stays authoritative.";
+      card.append(copy, button);
+      return card;
+    });
+    inspector.replaceChildren(...cards);
+    const inspectorStatus = $("#shapeInspectorStatus");
+    if (inspectorStatus) inspectorStatus.textContent = blocked
+      ? "Finish the current comparison or complete the selection to try another suggestion."
+      : "Preview a suggestion to hear Before and After. Save only if it sounds better.";
+  }
   if (directions) {
     const rankedIds = new Set(recommendations.map((entry) => entry.directionId));
     for (const entry of recommendations) {
