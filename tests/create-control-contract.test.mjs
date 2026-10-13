@@ -30,6 +30,8 @@ const EXPECTED_CREATE_IDS = [
   "tempoControl",
   "energyControl",
   "complexityControl",
+  "syncopationControl",
+  "drumFillsControl",
   "barsControl",
   "grooveControl",
   "creativeRangeControl",
@@ -63,13 +65,15 @@ const EXPECTED_SELECTOR_KEYS = [
   "fine-tune-toggle",
 ];
 
-const RUNTIME_CREATE_IDS = ["creativeRangeControl"];
+const RUNTIME_CREATE_IDS = ["creativeRangeControl", "syncopationControl", "drumFillsControl"];
 const STATIC_CREATE_IDS = EXPECTED_CREATE_IDS.filter((id) => !RUNTIME_CREATE_IDS.includes(id));
 
 const RANGE_IDS = [
   "tempoControl",
   "energyControl",
   "complexityControl",
+  "syncopationControl",
+  "drumFillsControl",
   "swingControl",
   "humanizeControl",
   "tripletControl",
@@ -126,7 +130,12 @@ test("Create control contract covers every first-class Create control exactly on
   }
   for (const id of RUNTIME_CREATE_IDS) {
     assert.equal((createHtml.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 0, `${id} must stay out of protected initial HTML`);
-    assert.equal((createPresentation.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 1, `${id} must be mounted exactly once by Create presentation`);
+    if (id === "creativeRangeControl") {
+      assert.equal((createPresentation.match(new RegExp(`id=["']${id}["']`, "g")) || []).length, 1);
+    } else {
+      assert.match(createPresentation, new RegExp(`["']${id}["']`));
+      assert.match(createPresentation, /controls\.append\(knob\)/);
+    }
   }
 });
 
@@ -160,7 +169,8 @@ test("every interactive Create element is contract-covered so new controls fail 
   assert.equal(summaryTags.length, 5, "all five Create disclosures must be covered");
   assert.equal(workflowStepTags.length + summaryTags.length, CREATE_SELECTOR_CONTRACT.length, "selector contract must cover every non-ID structural interactive");
   assert.equal(interactiveTags.length, STATIC_CREATE_IDS.length + CREATE_SELECTOR_CONTRACT.length + variationTags.length, "adding any static Create interactive requires an explicit contract entry");
-  assert.deepEqual(RUNTIME_CREATE_IDS, ["creativeRangeControl"], "runtime-mounted Create controls must remain an explicit, narrow exception");
+  assert.deepEqual(RUNTIME_CREATE_IDS, ["creativeRangeControl", "syncopationControl", "drumFillsControl"],
+    "runtime Create controls must be explicitly contracted and excluded from initial HTML");
 });
 
 test("every Create contract entry has producer-facing copy and a wiring expectation", () => {
