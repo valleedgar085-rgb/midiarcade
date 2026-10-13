@@ -44,10 +44,11 @@ test("Mobile touch/navigation polish remains workspace-scoped and supports acces
   assert.match(css, /max-width:\s*340px/);
 });
 
-test("Build ships Pro Max CSS for the website and the Android APK without modifying engine assets", () => {
-  assert.match(build, /src', 'ui', 'uiux-pro-max-phase1\.css'/);
-  assert.match(build, /proMaxPhase1Styles\.code/);
-  assert.match(build, /href="\.\/uiux-pro-max-phase1\.css"/);
-  assert.match(build, /androidPublicDir, 'uiux-pro-max-phase1\.css'/);
+test("Build bundles scoped Pro Max styles into the existing last CSS asset for web and Android", () => {
+  assert.match(build, /'create-knob-deck\.css', 'uiux-pro-max-phase1\.css'/);
+  assert.match(build, /createKnobDeckStyles\.code/);
+  assert.match(build, /path\.join\(wwwDir, 'create-knob-deck\.css'\)/);
+  assert.match(build, /androidPublicDir, 'create-knob-deck\.css'/);
+  assert.doesNotMatch(build, /href="\.\/uiux-pro-max-phase1\.css"/);
   assert.match(build, /entryPoints:\s*\{/);
 });
