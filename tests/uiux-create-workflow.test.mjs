@@ -48,7 +48,7 @@ test("Create controls sit immediately below the song showcase, with the original
   assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
   assert.match(presentation, /"variationControl", "evolutionControl"/);
   assert.match(presentation, /"swingControl", "humanizeControl"/);
-  assert.match(globalCss, /#tab-create > \.home-command \{ display: none !important; \}/);
+  assert.match(globalCss, /#tab-create\s*>\s*\.home-command\s*\{\s*display:\s*none\s*!important/);
   assert.match(globalCss, /#tab-create \.create-performance-deck/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "barsControl", "grooveControl"]) {
     assert.doesNotMatch(presentation, new RegExp(`id=["']${id}["']`), `${id} must be moved, not recreated`);
@@ -59,8 +59,8 @@ test("Create controls sit immediately below the song showcase, with the original
 test("A2 organizes Create around Song, Feel, Structure, and Generate without duplicating controls", () => {
   assert.match(presentation, /function organizePrimaryDirection/);
   assert.match(presentation, /heading\("song", "SONG"/);
-  assert.match(presentation, /heading\("feel", "FEEL"/);
-  assert.match(presentation, /heading\("structure", "STRUCTURE"/);
+  assert.match(presentation, /heading\("feel", "CREATIVE FLOW"/);
+  assert.match(presentation, /heading\("structure", "SONG SHAPE"/);
   assert.doesNotMatch(presentation, /heading\("generate"/);
   for (const id of ["tempoControl", "energyControl", "complexityControl", "grooveControl", "barsControl"]) {
     assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${id} must remain a single authoritative control`);
@@ -68,7 +68,7 @@ test("A2 organizes Create around Song, Feel, Structure, and Generate without dup
   }
   assert.match(presentation, /SONG/);
   assert.match(presentation, /FEEL/);
-  assert.match(presentation, /STRUCTURE/);
+  assert.match(presentation, /SONG SHAPE/);
   assert.doesNotMatch(presentation, /4 · GENERATE/);
 });
 
