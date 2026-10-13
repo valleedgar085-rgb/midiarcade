@@ -317,3 +317,62 @@ test("phrase-resolution reports no cadence opportunity as a true no-op", () => {
   assert.equal(processed.phraseResolutionDiagnostics.candidatesEvaluated, 0);
   assert.deepEqual(processed.phraseResolutionDiagnostics.candidateIds, []);
 });
+
+test("contour-aware cadence selects a smooth in-scale chord tone instead of creating a larger leap", () => {
+  const source = sourceSong();
+  source.genre = "pop";
+  source.meta.genre = "pop";
+  source.meta.scaleIntervals = [0, 2, 3, 5, 7, 8, 10]; // C natural minor
+  source.structure = [{ id: "hook", name: "chorus", startBeat: 0, endBeat: 8 }];
+  source.harmony = [{ start: 0, duration: 8, tones: [0, 3, 7] }];
+  track(source, "melody").notes = [
+    { id: "lead-in", start: 5.5, pitch: 55, duration: 0.3, velocity: 82 },
+    { id: "cadence", start: 7.0, pitch: 62, duration: 0.25, velocity: 85 },
+  ];
+  const unchanged = structuredClone(source);
+  const candidates = createPhraseResolutionCandidates(source);
+  const first = candidates.find((candidate) => candidate.id === "chord-cadence");
+  assert.ok(first, "a weak, unprotected cadence should have a valid candidate");
+  const melody = track(first.song, "melody").notes;
+  assert.equal(melody[0].pitch, 55);
+  assert.equal(melody[1].pitch, 60, "resolve to C rather than E-flat (a larger leap)");
+  assert.ok(Math.abs(melody[1].pitch - melody[0].pitch) <= 7);
+  assert.deepEqual(melody.map((note) => note.start), [5.5, 7]);
+  assert.ok(melody.every((note) => source.meta.scaleIntervals.includes(note.pitch % 12)));
+  assert.deepEqual(source, unchanged);
+  assert.deepEqual(
+    createPhraseResolutionCandidates(source).map(({ id, changedNotes, localScoreDelta }) =>
+      [id, changedNotes, localScoreDelta]),
+    candidates.map(({ id, changedNotes, localScoreDelta }) =>
+      [id, changedNotes, localScoreDelta]),
+  );
+});
+
+test("cadence candidates preserve protected motif-memory and transition anchors", () => {
+  for (const flag of ["motifMemoryCore", "ensembleCadenceRole", "transitionHandoffRole",
+    "motifHandoffRole", "finalAssemblyRole"]) {
+    const source = sourceSong();
+    for (const ending of ["m1", "m3", "m5"]) {
+      const note = track(source, "melody").notes.find((entry) => entry.id === ending);
+      note[flag] = flag === "motifMemoryCore" ? true : "locked";
+    }
+    const before = structuredClone(source);
+    assert.deepEqual(createPhraseResolutionCandidates(source), [], flag);
+    assert.deepEqual(source, before);
+  }
+});
+
+test("cadence cannot repitch into chord tones excluded by an authoritative scale", () => {
+  const source = sourceSong();
+  source.meta.scaleIntervals = [0, 2, 3, 5, 7, 8, 10];
+  source.harmony = [{ start: 0, duration: 24, tones: [1, 6, 9] }];
+  const before = structuredClone(source);
+  for (const candidate of createPhraseResolutionCandidates(source)) {
+    assert.deepEqual(
+      track(candidate.song, "melody").notes.map((note) => note.pitch),
+      track(source, "melody").notes.map((note) => note.pitch),
+      "held notes may change duration, but forbidden chord tones must never be inserted",
+    );
+  }
+  assert.deepEqual(source, before);
+});
