@@ -7,7 +7,7 @@ import { decodePersistedSession, GENERATION_PREFERENCE_IDS } from "../src/core/s
 const source = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const presentation = source("src/ui/create-workflow-phase1.js");
 const app = source("src/app.js");
-const css = source("src/ui/create-workflow.css");
+const css = source("styles.css");
 const html = source("index.html");
 
 test("Create shows a direct control deck beneath the song without a second opening card", () => {
