@@ -1,3 +1,4 @@
+import { applyJazzStructuralVariationRefinement } from "./jazz-structural-variation.js";
 import {
   createSongFingerprint,
   evaluateCandidateBalance,
@@ -1481,9 +1482,23 @@ export function applySongOutputQualityPipeline(song, config = {}, {
         return result;
       },
     },
-    // Genre identity is the final note-writing stage. Transition FX runs after it
-    // because it is automation-only and cannot rewrite pitch, rhythm, or phrasing.
+    // Default note-writing ends here. Explicit Jazz candidates below retain
+    // their own strict bounds; transition FX remains automation-only.
     { id: "genreIdentityRefinement", run: (current) => applyGenreIdentityRefinement(current, config, evaluate, release) },
+    // Existing ride hits may answer on the bell; every timestamp is preserved.
+    // Explicit opt-in only, independent of the rolled-back Jazz memory rewrite.
+    ...(config.jazzStructuralVariationRefinement === true ? [{
+      id: "jazzStructuralVariationRefinement",
+      run: (current) => {
+        const result = applyJazzStructuralVariationRefinement(current, config, evaluate, release);
+        if (result.diagnostics?.accepted) {
+          const evaluation = evaluate(result.song);
+          result.song.meta = acceptedMetadata(result.song, evaluation,
+            release(result.song, evaluation), "jazzStructuralVariationRefinement", result.diagnostics);
+        }
+        return result;
+      },
+    }] : []),
     // Related-section accent echo is velocity-only, explicitly opt-in, and
     // omitted from the normal pipeline to preserve the previous Jazz rollback.
     ...(config.jazzPhraseReturnRefinement === true ? [{
@@ -1534,6 +1549,7 @@ export function applySongOutputQualityPipeline(song, config = {}, {
     genreIdentityDiagnostics: diagnostics.genreIdentityRefinement,
     jazzDrumExpressionDiagnostics: diagnostics.jazzDrumExpressionRefinement,
     jazzPhraseReturnDiagnostics: diagnostics.jazzPhraseReturnRefinement,
+    jazzStructuralVariationDiagnostics: diagnostics.jazzStructuralVariationRefinement,
     fusionPerformanceDiagnostics: diagnostics.fusionPerformanceRefinement,
     melodyContinuityDiagnostics: diagnostics.melodyContinuityRefinement,
     melodyPhraseDiagnostics: diagnostics.melodyPhraseRefinement,
@@ -1563,6 +1579,7 @@ export function applyResultOutputQualityPipeline(result, config = {}, evaluators
     ["genreIdentityRefinement", processed.genreIdentityDiagnostics],
     ["jazzDrumExpressionRefinement", processed.jazzDrumExpressionDiagnostics],
     ["jazzPhraseReturnRefinement", processed.jazzPhraseReturnDiagnostics],
+    ["jazzStructuralVariationRefinement", processed.jazzStructuralVariationDiagnostics],
     ["fusionPerformanceRefinement", processed.fusionPerformanceDiagnostics],
     ["melodyContinuityRefinement", processed.melodyContinuityDiagnostics],
     ["melodyPhraseRefinement", processed.melodyPhraseDiagnostics],

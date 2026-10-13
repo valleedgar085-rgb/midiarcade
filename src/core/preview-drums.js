@@ -2,7 +2,7 @@ import { clamp } from "../utils.js";
 
 const TOM_PITCHES = new Set([41, 43, 45, 47, 48, 50]);
 const HAT_PITCHES = new Set([42, 44, 46]);
-const CYMBAL_PITCHES = new Set([49, 51, 52, 55, 57, 59]);
+const CYMBAL_PITCHES = new Set([49, 51, 52, 53, 55, 57, 59]);
 
 const BUNDLED_DRUM_SAMPLES = Object.freeze({
   "basement-knock": Object.freeze({
@@ -126,14 +126,14 @@ export function previewDrumCharacter(preview, pitch, velocity, variationSeed = 0
   const variation = signedVariation(pitch, variationSeed);
   const decayScale = clamp(0.82 + (velocityNorm * 0.24) + (variation * 0.035), 0.78, 1.1);
   const baseFilter = kind === "cymbal"
-    ? preview.cymbalFilter
+    ? preview.cymbalFilter * (pitch === 53 ? 1.16 : 1)
     : kind === "hat" || kind === "open-hat"
       ? preview.hatFilter
       : kind === "rim"
         ? preview.snareFilter * 1.35
         : preview.snareFilter;
   const baseDuration = kind === "cymbal"
-    ? preview.cymbalDecay
+    ? preview.cymbalDecay * (pitch === 53 ? 0.65 : 1)
     : kind === "open-hat"
       ? preview.openHatDecay
       : kind === "hat"
