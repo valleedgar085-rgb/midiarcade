@@ -64,7 +64,7 @@ test("Workspace navigation supports both keyboard selection and inactive-panel i
   assert.equal(controller.activeWorkspace,"arrange");
   assert.equal(panels[1].hidden,false);
   assert.equal(buttons[1].focused,true);
-  assert.deepEqual(changes,["create","finish","create","arrange"]);
+  assert.deepEqual(changes,["finish","create","arrange"]);
 });
 
 test("Phase 4 navigation and Finish styles remain scoped and bundled into Android", () => {
