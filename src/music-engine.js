@@ -4291,7 +4291,6 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     tripletAmount: config.tripletAmount,
     ...(config.jazzGroovePhraseMemory === true ? { jazzGroovePhraseMemory: true } : {}),
     ...(config.secondaryGenre ? { secondaryGenre: config.secondaryGenre } : {}),
-    ...(motifs?.memoryMap?.length ? { memoryMap: motifs.memoryMap } : {}),
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
   const bars = [];
