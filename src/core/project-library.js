@@ -154,9 +154,10 @@ export function createProjectLibrary({ indexedDBProvider = () => globalThis.inde
       const db = await database();
       const records = await requestResult(db.transaction(STORE, "readonly").objectStore(STORE).getAll());
       return records.map((entry) => ({
-        id: entry.id,
-        name: entry.name,
-        savedAt: entry.savedAt,
+        id: typeof entry?.id === "string" ? entry.id : "",
+        name: typeof entry?.name === "string" && entry.name.trim() ? entry.name : "Damaged project",
+        savedAt: typeof entry?.savedAt === "string" && Number.isFinite(Date.parse(entry.savedAt))
+          ? entry.savedAt : "1970-01-01T00:00:00.000Z",
         valid: validateProjectRecord(entry),
       })).sort((a, b) => b.savedAt.localeCompare(a.savedAt)).slice(0, MAX_PROJECTS);
     },
