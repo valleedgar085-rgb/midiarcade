@@ -1,0 +1,137 @@
+/* UI/UX Pro Max Phase 1: presentation-only, scoped to the existing workspaces.
+   Music controls, ids, event handlers, and generation semantics are unchanged. */
+:root {
+  --studio-focus-ring: #a0f5e8;
+  --studio-card-outline: #597786;
+  --studio-field-outline: #506d79;
+  --studio-readable-muted: #c2d0d5;
+}
+
+/* CREATE: retain the real controls and two-up phone layout; make labels legible. */
+#tab-create .create-performance-deck {
+  border-color: var(--studio-card-outline) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 8px 24px rgba(0,0,0,.13);
+}
+#tab-create .create-performance-heading h2 {
+  font-size: clamp(1.25rem, 4.5vw, 1.55rem);
+  font-weight: 800;
+  line-height: 1.24;
+}
+#tab-create .create-performance-heading .create-deck-hint,
+#tab-create .create-performance-deck .create-deck-state {
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--studio-readable-muted);
+}
+#tab-create .create-performance-deck .create-live-control,
+#tab-create .create-performance-deck .create-live-select {
+  border-color: var(--studio-field-outline);
+  padding: 12px;
+  gap: 9px;
+}
+#tab-create .create-performance-deck .create-live-control > span,
+#tab-create .create-performance-deck .create-live-select > span {
+  font-size: .84rem;
+  font-weight: 730;
+  line-height: 1.4;
+  letter-spacing: .015em;
+}
+#tab-create .create-performance-deck .create-live-control output {
+  color: #b2eee5;
+  font-size: .88rem;
+  font-variant-numeric: tabular-nums;
+}
+#tab-create .create-performance-deck .create-live-control small {
+  font-size: .78rem !important;
+  line-height: 1.45;
+  color: var(--studio-readable-muted) !important;
+}
+#tab-create .create-performance-deck .create-live-controls {
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 10px !important;
+}
+#tab-create .create-performance-deck .create-live-control input[type="range"],
+#tab-create .create-performance-deck .create-live-select select,
+#tab-create .create-performance-deck .auto-control-button {
+  min-height: 48px;
+}
+#tab-create .create-performance-deck :is(button,select,input):focus-visible,
+#tab-mix .track-card :is(button,select,input):focus-visible {
+  outline: 3px solid var(--studio-focus-ring) !important;
+  outline-offset: 2px;
+}
+
+/* MIX: two primary controls per channel. Impact and note length remain
+   operable in the existing details drawer, using their original bindings. */
+#tab-mix .track-card {
+  border: 1.5px solid var(--studio-card-outline) !important;
+}
+#tab-mix .track-card .mix-primary-balance {
+  display: grid !important;
+  grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  gap: 12px !important;
+}
+#tab-mix .track-card .mix-primary-balance .track-control {
+  min-width: 0;
+  margin: 0;
+}
+#tab-mix .track-card .mix-primary-balance input[type="range"] {
+  min-height: 48px;
+  width: 100%;
+}
+#tab-mix .track-card .track-primary-actions .track-toggle,
+#tab-mix .track-card .track-shaping > summary {
+  min-height: 48px;
+}
+#tab-mix .track-card .track-shaping > summary {
+  border-top: 1px solid rgba(175,218,216,.18);
+}
+
+/* Navigation: same layout and tap area for all four workspace tabs. */
+@media (max-width: 760px) {
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell {
+    height: calc(72px + env(safe-area-inset-bottom,0px)) !important;
+    padding-bottom: env(safe-area-inset-bottom,0px) !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-nav,
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn {
+    height: 72px !important;
+    min-height: 72px !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn {
+    font-size: .78rem !important;
+    gap: 6px !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn span {
+    font-size: .78rem !important;
+    line-height: 1.15;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn svg {
+    width: 22px !important;
+    height: 22px !important;
+  }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn:focus-visible {
+    outline: 3px solid var(--studio-focus-ring) !important;
+    outline-offset: -4px;
+  }
+  body:has(.tab-panel.is-active) main#top#top {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom,0px)) !important;
+  }
+  #tab-arrange .section-editor.is-open {
+    bottom: calc(72px + env(safe-area-inset-bottom,0px)) !important;
+  }
+}
+@media (max-width: 340px) {
+  #tab-create .create-performance-deck .create-live-controls,
+  #tab-mix .track-card .mix-primary-balance {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-create .create-performance-deck *,
+  #tab-mix .track-card *,
+  #tabNavShell .tab-btn {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

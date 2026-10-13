@@ -54,8 +54,12 @@ const createWorkflowStyles = await transform(
   fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-workflow.css'), 'utf8'),
   transformOptions,
 );
+// Merge the scoped Pro Max polish into the last shipped stylesheet so the
+// protected initial HTML budget does not gain another stylesheet link.
 const createKnobDeckStyles = await transform(
-  fs.readFileSync(path.join(projectRoot, 'src', 'ui', 'create-knob-deck.css'), 'utf8'),
+  ['create-knob-deck.css', 'uiux-pro-max-phase1.css']
+    .map((name) => fs.readFileSync(path.join(projectRoot, 'src', 'ui', name), 'utf8'))
+    .join('\n'),
   transformOptions,
 );
 const generationExperienceStyles = await transform(
