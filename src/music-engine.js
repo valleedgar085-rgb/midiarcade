@@ -4373,8 +4373,12 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         grammarId: grooveDNA.grammarId,
         characterId: grooveDNA.characterId,
         sectionRole: grooveDNA.bars?.[bar]?.sectionRole ?? null,
-        ...(grooveDNA.bars?.[bar]?.hat?.phraseMemory
-          ? { phraseMemory: grooveDNA.bars[bar].hat.phraseMemory } : {}),
+        // The supporting response may belong to the hat OR percussion lane.
+        // Keep the originating Groove DNA event visible at its actual return bar.
+        ...((grooveDNA.bars?.[bar]?.hat?.phraseMemory
+          ?? grooveDNA.bars?.[bar]?.percussion?.phraseMemory)
+          ? { phraseMemory: grooveDNA.bars[bar].hat?.phraseMemory
+            ?? grooveDNA.bars[bar].percussion?.phraseMemory } : {}),
       },
       bassPulses,
       chordPulses,
