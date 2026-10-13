@@ -102,6 +102,10 @@
     font-size: .78rem !important;
     gap: 6px !important;
   }
+  body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn span {
+    font-size: .78rem !important;
+    line-height: 1.15;
+  }
   body:has(.tab-panel.is-active) #tabNavShell#tabNavShell .tab-btn svg {
     width: 22px !important;
     height: 22px !important;
@@ -117,7 +121,7 @@
     bottom: calc(72px + env(safe-area-inset-bottom,0px)) !important;
   }
 }
-@media (max-width: 380px) {
+@media (max-width: 340px) {
   #tab-create .create-performance-deck .create-live-controls,
   #tab-mix .track-card .mix-primary-balance {
     grid-template-columns: minmax(0,1fr) !important;
