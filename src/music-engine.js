@@ -4373,6 +4373,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
         grammarId: grooveDNA.grammarId,
         characterId: grooveDNA.characterId,
         sectionRole: grooveDNA.bars?.[bar]?.sectionRole ?? null,
+        ...(grooveDNA.bars?.[bar]?.hat?.phraseMemory
+          ? { phraseMemory: grooveDNA.bars[bar].hat.phraseMemory } : {}),
       },
       bassPulses,
       chordPulses,
@@ -4390,6 +4392,8 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
       characterId: grooveDNA.characterId,
       philosophy: grooveDNA.philosophy,
       pipeline: [...grooveDNA.pipeline],
+      ...(grooveDNA.jazzPhraseMemory
+        ? { jazzPhraseMemory: grooveDNA.jazzPhraseMemory } : {}),
     },
     phraseBars: clamp(Math.round(finite(rhythmIdentity.phraseCycle, 2)), 2, config.professionalUpgrade ? 8 : 4),
     subdivision: grooveDNA.beatsPerStep,
