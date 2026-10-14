@@ -3,6 +3,7 @@ import test from "node:test";
 import { generateNew } from "../src/music-engine.js";
 import { createShapeCandidate, rejectShapeCandidate } from "../src/core/shape-director-engine.js";
 import { evaluateChorusHookRecurrence } from "../src/core/chorus-hook-recurrence.js";
+import { measureVerseVocalPocket } from "../src/core/verse-vocal-pocket.js";
 
 const CASES = Object.freeze([
   { genre: "rap", tempo: 91 },
@@ -80,9 +81,27 @@ test("real seeded Rap/Hip-Hop/Trap/Drill arrangements preserve vocal pocket duri
       + JSON.stringify(song.structure?.map((s) => [s.id, s.name])));
 
     const reportBefore = evaluateChorusHookRecurrence(song);
-    const perGenre = { genre, verseCount: verses.length, melodyPreviews: 0, counterpointPreviews: 0 };
+    const perGenre = { genre, verseCount: verses.length, melodyPreviews: 0, counterpointPreviews: 0, measuredPockets: [] };
 
     for (const section of verses) {
+      const observed = measureVerseVocalPocket(song, section);
+      if (observed) {
+        assert.deepEqual(measureVerseVocalPocket(song, section), observed,
+          "measured MIDI activity must be deterministic");
+        assert.ok(observed.jointRestFraction >= 0 && observed.jointRestFraction <= 1);
+        assert.ok(observed.overlapFraction >= 0 && observed.overlapFraction <= 1);
+        assert.ok(Math.abs(
+          observed.jointRestFraction + observed.leadActivityFraction
+          + observed.counterpointActivityFraction - observed.overlapFraction - 1
+        ) <= 0.002, "merged MIDI durations must reconcile without double counting");
+        perGenre.measuredPockets.push({
+          section: section.id,
+          rest: observed.jointRestFraction,
+          overlap: observed.overlapFraction,
+          crowdedLead: observed.crowdedLead,
+          crowdedCounterpoint: observed.crowdedCounterpoint,
+        });
+      }
       const originalRest = leadRestFraction(song, section);
       const baselineReport = reportBefore.verses.find((entry) =>
         String(entry.sectionId) === String(section.id));
