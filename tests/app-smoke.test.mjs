@@ -367,7 +367,7 @@ test("static UI selectors and accessibility hooks stay wired to real markup", ()
   assert.match(cssSource, /PHASE 14: ARRANGEMENT WORKSPACE[\s\S]*?\.arrange-workflow/, "Phase 14 must expose the guided arrangement workspace");
   assert.match(htmlSource, /class="shape-stage"[\s\S]*?id="sectionShaper"/, "Shape must prioritize its arrangement canvas and contextual section shaper");
   assert.match(htmlSource, /data-section-macro="energy"[\s\S]*?data-section-macro="pocket"/, "the section shaper must expose Auto-aware musical macros");
-  assert.match(htmlSource, /class="section-edit-primary"[\s\S]*?data-section-action="edit"/, "Shape must promote note editing as one clear optional precision action");
+  assert.match(htmlSource, /class="shape-open-editor"[\s\S]*?data-section-action="edit"/, "Shape must promote note editing as one clear optional precision action");
   assert.match(cssSource, /PHASE 73: SHAPE WORKSPACE CLARITY[\s\S]*?\.shaper-group-heading[\s\S]*?\.section-edit-primary/, "Shape must provide a readable grouped control hierarchy");
   assert.match(htmlSource, /class="editor-toolbar"[\s\S]*?class="editor-advanced-tools"[\s\S]*?data-editor-action="delete"/, "the note editor must keep essential and advanced actions in a progressive hierarchy");
   assert.match(cssSource, /PHASE 74: FOCUSED NOTE EDITOR[\s\S]*?\.editor-advanced-tools-body/, "the focused note editor must have responsive progressive-disclosure styling");
