@@ -50,7 +50,7 @@ test("Inspector lives inside Shape and routes actions through the existing Befor
   assert.ok(inspectorStart > html.indexOf('id="shapeDirectorPanel"'));
   assert.ok(inspectorStart < html.indexOf('id="shapeDirectorDirections"'));
   assert.match(html, /id="shapeInspectorInsights" role="list"/);
-  assert.match(html, /Preview first\. Save to keep it\./);
+  assert.match(html, /Preview before saving\. Your original is safe\./);
   assert.match(app, /songInspectorSuggestions\(\{/);
   assert.match(app, /button\.dataset\.shapeDirection = idea\.directionId/);
   assert.match(app, /button\.disabled = blocked/);
@@ -100,7 +100,7 @@ test("Song Inspector prioritizes the measured chorus-hook gap without touching t
   assert.equal(ideas[0].directionId, "catchier");
   assert.equal(ideas[0].evidence, "CHORUS HOOK RETURN");
   assert.match(ideas[0].explanation, /opening-hook similarity.*shared note attacks/i);
-  assert.equal(ideas[0].action, "Preview Catchier");
+  assert.equal(ideas[0].action, "Preview Catchier Hook");
   assert.equal(ideas.filter((idea) => idea.directionId === "catchier").length, 1);
   assert.ok(ideas.length <= 2);
   assert.ok(Object.isFrozen(ideas));
