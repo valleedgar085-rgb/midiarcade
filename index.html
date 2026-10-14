@@ -576,6 +576,19 @@
                     <p>Tap any instrument clip to work on just that part. Swipe the map sideways to see later song sections.</p>
                   </details>
                 </div>
+                <div class="shape-part-picker" role="group" aria-label="Quickly choose a part">
+                  <label>SECTION
+                    <select id="shapeSectionPicker" aria-label="Section to shape">
+                      <option value="">Choose section</option>
+                    </select>
+                  </label>
+                  <label>INSTRUMENT
+                    <select id="shapeTrackPicker" aria-label="Instrument to shape">
+                      <option value="melody">Melody</option>
+                    </select>
+                  </label>
+                  <button type="button" id="shapePickPartButton">Open Part Studio <span aria-hidden="true">→</span></button>
+                </div>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes" aria-label="Song energy and harmony">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Song energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
