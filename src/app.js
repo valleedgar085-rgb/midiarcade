@@ -2345,8 +2345,16 @@ function renderArrangementInsights(sections, bars) {
 function renderShapePartPicker(sections) {
   const sectionSelect = $("#shapeSectionPicker");
   const trackSelect = $("#shapeTrackPicker");
-  const submit = $("#shapePickPartButton");
-  if (!sectionSelect || !trackSelect || !submit) return;
+  const buttonMount = $("#shapePickerActionMount");
+  if (!sectionSelect || !trackSelect || !buttonMount) return;
+  let submit = buttonMount.querySelector("button");
+  if (!submit) {
+    submit = buttonMount.ownerDocument.createElement("button");
+    submit.id = "shapePickPartButton";
+    submit.type = "button";
+    submit.textContent = "Open Part Studio →";
+    buttonMount.append(submit);
+  }
   const previousSection = sectionSelect.value;
   sectionSelect.innerHTML = '<option value="">Choose section</option>'
     + sections.map((section) =>
