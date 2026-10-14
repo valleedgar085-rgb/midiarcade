@@ -540,137 +540,178 @@
               <button id="threadActionButton" type="button">Focus the song map</button>
             </div>
           </section>
-          <section class="panel arrangement-panel shape-canvas" aria-labelledby="arrangementTitle">
-            <div class="section-heading">
-              <div>
-                <p class="eyebrow">SHAPE</p>
-                <h2 id="arrangementTitle">Shape your sound</h2>
-                <p class="section-description">Choose a part, pick a change, and compare the sound before saving.</p>
+
+          <section class="panel arrangement-panel shape-canvas shape-studio-v2" aria-labelledby="arrangementTitle">
+            <header class="shape-studio-hero">
+              <div class="shape-hero-lockup">
+                <span class="shape-hero-icon" aria-hidden="true">
+                  <svg viewBox="0 0 48 48" fill="none"><path d="M4 26h7l5-14 9 25 7-19 5 8h7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><circle cx="40" cy="12" r="3" fill="currentColor"/></svg>
+                </span>
+                <div>
+                  <p class="shape-kicker">MIDI ARCADE / CREATIVE WORKSPACE</p>
+                  <h2 id="arrangementTitle">Shape Studio</h2>
+                  <p class="section-description">Choose an instrument clip, change its feel, then listen before you save.</p>
+                </div>
               </div>
-              <div class="arrangement-tools">
-                <button class="small-button" id="reorderButton" type="button">
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M4 6h.01M8 12h12M4 12h.01M8 18h12M4 18h.01"/></svg>
-                  Rearrange song
-                </button>
-              </div>
-            </div>
+              <button class="shape-reorder" id="reorderButton" type="button" aria-label="Reorder song sections">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                Arrange song
+              </button>
+            </header>
             <div class="arrange-workflow" id="arrangeWorkflow" aria-label="Arrangement workflow">
               <span data-arrange-step="map"><b>1</b><em><small>SONG MAP</small><strong>Choose a part</strong></em></span>
-              <span data-arrange-step="section"><b>2</b><em><small>SECTION SHAPE</small><strong id="arrangeSectionStep">Shape its feel</strong></em></span>
-              <span data-arrange-step="notes"><b>3</b><em><small>NOTE DETAIL</small><strong id="arrangeNoteStep">Edit notes if needed</strong></em></span>
+              <span data-arrange-step="section"><b>2</b><em><small>PART STUDIO</small><strong id="arrangeSectionStep">Change its feel</strong></em></span>
+              <span data-arrange-step="notes"><b>3</b><em><small>PIANO ROLL</small><strong id="arrangeNoteStep">Edit notes if needed</strong></em></span>
             </div>
             <div class="shape-stage">
-              <div class="shape-map-column">
-                <div class="shape-map-toolbar">
-                  <span><i></i><strong>1 · Choose a part</strong><small id="shapeMapSummary">Select a section to begin</small></span>
-                  <span class="shape-map-legend"><i></i> Energy · activity</span>
+              <div class="shape-map-column" id="shapeMapWorkspace">
+                <div class="shape-workspace-heading shape-map-toolbar">
+                  <span class="shape-workspace-number" aria-hidden="true">01</span>
+                  <span class="shape-workspace-name">
+                    <strong>1 · Choose a part</strong>
+                    <small id="shapeMapSummary">Select a colored clip from your song</small>
+                  </span>
+                  <details class="shape-map-detail">
+                    <summary>Map help</summary>
+                    <p>Tap any instrument clip to work on just that part. Swipe the map sideways to see later song sections.</p>
+                  </details>
                 </div>
-                <details class="shape-map-detail" open><summary>How to choose a part</summary><p>Tap an instrument clip in the song map. Swipe sideways to reach later sections.</p></details>
-                <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
-                  <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
+                <div class="arrangement-insight-lanes" id="arrangementInsightLanes" aria-label="Song energy and harmony">
+                  <div class="energy-arc-lane" id="energyArcLane" aria-label="Song energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
                 </div>
-                <div class="timeline-shell">
+                <div class="timeline-shell shape-song-timeline">
                   <div class="timeline-ruler" id="timelineRuler" aria-hidden="true"></div>
                   <div class="timeline" id="timeline" aria-label="Song arrangement timeline"></div>
                   <div class="timeline-playhead-track" aria-hidden="true">
                     <div class="playhead" id="playhead"><i></i></div>
                   </div>
                 </div>
+                <p class="shape-map-footnote">One clip = one instrument in one song section. Select a different clip any time.</p>
               </div>
-              <aside class="section-shaper" id="sectionShaper" aria-labelledby="sectionShaperTitle">
-                <div class="section-shaper-empty" id="sectionShaperEmpty">
-                  <span class="section-shaper-orbit" aria-hidden="true"><i></i><i></i></span>
-                  <small>SELECTED PART</small>
-                  <h3 id="sectionShaperTitle">Choose a section</h3>
-                  <p>Tap an instrument’s colored clip in the map. Its section and instrument will stay visible while you work.</p>
+              <aside class="section-shaper shape-part-workspace" id="sectionShaper" aria-labelledby="sectionShaperTitle">
+                <div class="section-shaper-empty shape-part-empty" id="sectionShaperEmpty">
+                  <div class="shape-empty-art" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+                  <span class="shape-empty-step">02 / PART STUDIO</span>
+                  <h3 id="sectionShaperTitle">Choose a clip to begin</h3>
+                  <p>Pick any instrument in the song map. Its controls will appear here without changing the rest of your song.</p>
                 </div>
-                <div class="section-shaper-content" id="sectionShaperContent" hidden>
-                  <header>
-                    <span><small>SELECTED PART</small><h3 id="sectionShaperName">Verse</h3></span>
-                    <button id="sectionShaperPlay" type="button" aria-label="Play selected section" title="Play selected section">▶</button>
+                <div class="section-shaper-content shape-part-content" id="sectionShaperContent" hidden>
+                  <header class="shape-focus-card">
+                    <div class="shape-focus-heading">
+                      <small>02 / YOU'RE EDITING</small>
+                      <h3 id="sectionShaperName">Verse · Melody</h3>
+                      <p id="sectionShaperMeta">Bars 1–8 · selected instrument</p>
+                    </div>
+                    <div class="shape-focus-actions">
+                      <button id="sectionShaperPlay" class="shape-listen-current" type="button" aria-label="Play selected section" title="Play selected section">
+                        <span aria-hidden="true">▶</span> Play part
+                      </button>
+                      <button class="shape-open-editor" type="button" data-section-action="edit">
+                        <span aria-hidden="true">♩</span> Edit notes
+                        <span class="shape-button-arrow" aria-hidden="true">→</span>
+                      </button>
+                    </div>
                   </header>
-                  <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
-                  <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PRECISE EDITING</small><strong>Open Piano Roll</strong></span>
-                    <b aria-hidden="true">→</b>
-                  </button>
-                  <details class="shape-extra-feel"><summary>Adjust section feel <small>These edits apply immediately. Undo restores the previous version.</small></summary>
-                  <div class="shaper-group-heading">
-                    <span><small>SECTION FEEL</small><strong>Shape this moment</strong></span>
-                    <em>Auto keeps the original musical intent</em>
-                  </div>
-                  <div class="section-macro-grid" aria-label="Section shape controls">
-                    <label style="--shape-tone:#fb7185"><span>ENERGY <small>Impact and dynamics</small></span><select data-section-macro="energy" aria-label="Section energy"><option value="auto">Auto · follow arc</option><option value="low">Restrained</option><option value="balanced">Balanced</option><option value="high">Lifted</option></select></label>
-                    <label style="--shape-tone:#fbbf24"><span>BARS <small>Section duration</small></span><select data-section-bars aria-label="Section length"><option value="2">2 Bars · quick</option><option value="4">4 Bars · focused</option><option value="8">8 Bars · full</option><option value="16">16 Bars · extended</option></select></label>
-                    <label style="--shape-tone:#22d3ee"><span>DENSITY <small>Space between ideas</small></span><select data-section-macro="density" aria-label="Section density"><option value="auto">Auto · arranged</option><option value="sparse">Spacious</option><option value="balanced">Balanced</option><option value="rich">Active</option></select></label>
-                    <label style="--shape-tone:#c084fc"><span>TENSION <small>Register and urgency</small></span><select data-section-macro="tension" aria-label="Section tension"><option value="auto">Auto · follow story</option><option value="open">Open</option><option value="balanced">Balanced</option><option value="charged">Charged</option></select></label>
-                    <label style="--shape-tone:#34d399"><span>POCKET <small>Timing character</small></span><select data-section-macro="pocket" aria-label="Section pocket"><option value="auto">Auto · genre pocket</option><option value="relaxed">Relaxed</option><option value="tight">Tight</option><option value="pushed">Pushed</option></select></label>
-                  </div>
-                  </details>
 
                   <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
-
                     <div class="shape-director-heading">
-                      <span><small>QUICK CHANGES</small><strong id="shapeDirectorTitle">2 · Choose a change</strong></span>
+                      <span><small>SHAPE THE SOUND</small><strong id="shapeDirectorTitle">2 · Choose a change</strong></span>
                     </div>
-                    <span class="shape-director-current"><small>YOU ARE WORKING ON</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
-                    <section class="shape-inspector" id="shapeInspector" aria-label="Song Inspector">
-                      <header><strong>Suggested for this part</strong><small id="shapeInspectorScope">Selected part</small></header>
-                      <div id="shapeInspectorInsights" role="list" class="shape-inspector-insights"></div>
-                      <p id="shapeInspectorStatus">Preview before saving. Your original is safe.</p>
-                    </section>
-                    <p class="shape-directions-help">Tap a change below. Listen to the original and preview before deciding.</p>
+                    <span class="shape-director-current">
+                      <small>SELECTED PART</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em>
+                    </span>
+                    <p class="shape-directions-help">What should sound different? Choose one change to hear a safe preview.</p>
                     <div class="shape-director-directions" id="shapeDirectorDirections" role="group" aria-label="Choose a musical change"></div>
                     <div class="shape-director-candidate" id="shapeDirectorCandidate" hidden>
                       <span><small>3 · LISTEN AND COMPARE</small><strong id="shapeDirectorCandidateTitle">Better Groove · Small</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
-                      <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Before and After audition"></div>
+                      <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Original and preview comparison"></div>
                       <div class="shape-director-commit">
                         <button type="button" data-shape-discard>Keep Original</button>
                         <button class="is-primary" type="button" data-shape-accept>Use This Change</button>
                       </div>
                     </div>
-                    <details class="shape-change-options"><summary>Change settings <small>Choose what and how much to change</small></summary>
-                    <div class="shape-director-scope">
-                      <label><span>APPLY TO</span><small>Choose a section, instrument, or notes</small>
-                        <select id="shapeDirectorTarget" aria-label="Shape target scope">
-                          <option value="section">Whole section (all instruments)</option>
-                          <option value="track">Selected instrument only</option>
-                          <option value="notes">Selected notes only</option>
-                        </select>
-                      </label>
-                      <label><span>CHANGE STRENGTH</span><small>Start small; you can always preview</small>
-                        <select id="shapeDirectorSize" aria-label="Shape change size">
-                          <option value="touchUp">Small · gentle edit</option>
-                          <option value="reshape">Medium · noticeable edit</option>
-                          <option value="transform">Large · strong edit</option>
-                        </select>
-                      </label>
-                    </div>
-                    <details class="shape-director-locks">
-                      <summary><span>Keep these unchanged</span><small>OPTIONAL</small></summary>
-                      <div>
-                        <label><input type="checkbox" data-shape-preserve="melody" /> Melody</label>
-                        <label><input type="checkbox" data-shape-preserve="harmony" /> Harmony</label>
-                        <label><input type="checkbox" data-shape-preserve="rhythm" /> Rhythm</label>
-                        <label><input type="checkbox" data-shape-preserve="instrument" /> Instrument</label>
+                    <details class="shape-inspector shape-advice-panel" id="shapeInspector" aria-label="Song Inspector">
+                      <summary><span><strong>Why these changes?</strong><small>See suggestions based on your song</small></span></summary>
+                      <header><strong>Suggested for this part</strong><small id="shapeInspectorScope">Selected part</small></header>
+                      <div id="shapeInspectorInsights" role="list" class="shape-inspector-insights"></div>
+                      <p id="shapeInspectorStatus">Preview before saving. Your original is safe.</p>
+                    </details>
+                    <details class="shape-change-options">
+                      <summary><span><strong>Change settings</strong><small>Strength, editing scope, and protection</small></span></summary>
+                      <div class="shape-director-scope">
+                        <label><span>APPLY TO</span><small>Choose a section, instrument, or notes</small>
+                          <select id="shapeDirectorTarget" aria-label="Shape target scope">
+                            <option value="section">Whole section (all instruments)</option>
+                            <option value="track">Selected instrument only</option>
+                            <option value="notes">Selected notes only</option>
+                          </select>
+                        </label>
+                        <label><span>CHANGE STRENGTH</span><small>Preview before you save</small>
+                          <select id="shapeDirectorSize" aria-label="Shape change size">
+                            <option value="touchUp">Small · gentle edit</option>
+                            <option value="reshape">Medium · noticeable edit</option>
+                            <option value="transform">Large · strong edit</option>
+                          </select>
+                        </label>
                       </div>
+                      <details class="shape-director-locks">
+                        <summary><span>Keep these unchanged</span><small>OPTIONAL</small></summary>
+                        <div>
+                          <label><input type="checkbox" data-shape-preserve="melody" /> Melody</label>
+                          <label><input type="checkbox" data-shape-preserve="harmony" /> Harmony</label>
+                          <label><input type="checkbox" data-shape-preserve="rhythm" /> Rhythm</label>
+                          <label><input type="checkbox" data-shape-preserve="instrument" /> Instrument</label>
+                        </div>
+                      </details>
                     </details>
-                    </details>
-                    <details class="shape-new-idea"><summary>Generate a different part <small>Preview a fresh variation before using it</small></summary>
-                    <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
-                      <span><small>NEW IDEA</small><strong id="shapeDirectorComposeLabel">Generate another part</strong></span>
-                      <b aria-hidden="true">↻</b>
-                    </a>
-                    </details>
-
-                    <details class="shape-help"><summary aria-label="How to use Shape">? Quick guide</summary><p>Select an instrument clip (such as Intro · Bass). Choose a direction, compare Before / After, then Save or Keep original. Note tools affect selected notes; Select all targets the part. Shorter / Longer changes duration; Align to grid or Loosen timing changes placement. Choose Whole section to affect every instrument.</p></details>
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
-                  <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>Whole-section tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
-                    <div class="section-quick-actions" aria-label="Section actions"><button type="button" data-section-action="queue-jump">Queue Next Part</button><button type="button" data-section-action="simplify">Make Space</button><button type="button" data-section-action="build">Build Energy</button><button type="button" data-section-action="variations">Try Alternatives</button><button type="button" data-section-action="duplicate">Duplicate section</button></div>
-                    <div class="section-order-actions" aria-label="Move selected section"><button type="button" data-section-action="earlier">← Move Earlier</button><button type="button" data-section-action="later">Move Later →</button></div>
-                  </div></details>
+
+                  <div class="shape-advanced-rack">
+                    <details class="shape-extra-feel">
+                      <summary><span><strong>Fine-tune section feel</strong><small>Energy, density, length, tension and timing</small></span></summary>
+                      <p class="shape-immediate-warning">These controls edit the song immediately. Use Undo to reverse them.</p>
+                      <div class="shaper-group-heading">
+                        <span><small>SECTION FEEL</small><strong>Adjust this moment</strong></span>
+                        <em>Auto follows the original musical intent</em>
+                      </div>
+                      <div class="section-macro-grid" aria-label="Section shape controls">
+                        <label style="--shape-tone:#fb7185"><span>ENERGY <small>Impact</small></span><select data-section-macro="energy" aria-label="Section energy"><option value="auto">Auto · follow arc</option><option value="low">Restrained</option><option value="balanced">Balanced</option><option value="high">Lifted</option></select></label>
+                        <label style="--shape-tone:#fbbf24"><span>BARS <small>Duration</small></span><select data-section-bars aria-label="Section length"><option value="2">2 Bars · quick</option><option value="4">4 Bars · focused</option><option value="8">8 Bars · full</option><option value="16">16 Bars · extended</option></select></label>
+                        <label style="--shape-tone:#22d3ee"><span>DENSITY <small>Note activity</small></span><select data-section-macro="density" aria-label="Section density"><option value="auto">Auto · arranged</option><option value="sparse">Spacious</option><option value="balanced">Balanced</option><option value="rich">Active</option></select></label>
+                        <label style="--shape-tone:#c084fc"><span>TENSION <small>Urgency</small></span><select data-section-macro="tension" aria-label="Section tension"><option value="auto">Auto · follow story</option><option value="open">Open</option><option value="balanced">Balanced</option><option value="charged">Charged</option></select></label>
+                        <label style="--shape-tone:#34d399"><span>POCKET <small>Timing feel</small></span><select data-section-macro="pocket" aria-label="Section pocket"><option value="auto">Auto · genre pocket</option><option value="relaxed">Relaxed</option><option value="tight">Tight</option><option value="pushed">Pushed</option></select></label>
+                      </div>
+                    </details>
+                    <details class="shape-new-idea">
+                      <summary><span><strong>Generate a new take</strong><small>A completely different musical idea</small></span></summary>
+                      <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
+                        <span><small>ALTERNATIVE IDEA</small><strong id="shapeDirectorComposeLabel">Generate another part</strong></span>
+                        <b aria-hidden="true">↻</b>
+                      </a>
+                    </details>
+                    <details class="section-actions-menu">
+                      <summary><span><strong>Arrange this section</strong><small>Move, copy, build, or simplify</small></span></summary>
+                      <div class="section-actions-menu-body">
+                        <div class="section-quick-actions" aria-label="Section actions">
+                          <button type="button" data-section-action="queue-jump">Queue Next Part</button>
+                          <button type="button" data-section-action="simplify">Make Space</button>
+                          <button type="button" data-section-action="build">Build Energy</button>
+                          <button type="button" data-section-action="variations">Try Alternatives</button>
+                          <button type="button" data-section-action="duplicate">Duplicate Section</button>
+                        </div>
+                        <div class="section-order-actions" aria-label="Move selected section">
+                          <button type="button" data-section-action="earlier">← Move Earlier</button>
+                          <button type="button" data-section-action="later">Move Later →</button>
+                        </div>
+                      </div>
+                    </details>
+                    <details class="shape-help">
+                      <summary aria-label="How to use Shape">? Quick guide</summary>
+                      <p>Select a colored instrument clip in the song map. Choose a musical change, compare Original and Preview, then keep what you prefer. To edit individual notes, open Piano Roll. Advanced section controls apply immediately and can be undone.</p>
+                    </details>
+                  </div>
                   <p class="section-shaper-status" id="sectionShaperStatus" role="status">Auto is following the composition engine.</p>
                 </div>
               </aside>
