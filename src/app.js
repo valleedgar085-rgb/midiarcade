@@ -2261,8 +2261,10 @@ function bindTimelineInteractions(timeline) {
   timeline.addEventListener("click", (event) => {
     const clip = event.target.closest?.("[data-section]");
     if (!clip) return;
+    // The song map selects a part for Part Studio. Precise Piano Roll
+    // opens only when the user explicitly selects Edit notes.
     focusSongSection(clip.dataset.section, clip.dataset.editorTrack, {
-      openEditor: Boolean(clip.dataset.editorTrack),
+      openEditor: false,
       scroll: true,
     });
   });
@@ -2338,6 +2340,49 @@ function renderArrangementInsights(sections, bars) {
   }</div>`;
 }
 
+// A predictable shortcut for phone users who cannot easily tap a tiny clip.
+// Selection alone does not mutate notes, start audio or open the Piano Roll.
+function renderShapePartPicker(sections) {
+  const sectionSelect = $("#shapeSectionPicker");
+  const trackSelect = $("#shapeTrackPicker");
+  const buttonMount = $("#shapePickerActionMount");
+  if (!sectionSelect || !trackSelect || !buttonMount) return;
+  let submit = buttonMount.querySelector("button");
+  if (!submit) {
+    submit = buttonMount.ownerDocument.createElement("button");
+    submit.id = "shapePickPartButton";
+    submit.type = "button";
+    submit.textContent = "Open Part Studio →";
+    buttonMount.append(submit);
+  }
+  const previousSection = sectionSelect.value;
+  sectionSelect.innerHTML = '<option value="">Choose section</option>'
+    + sections.map((section) =>
+      '<option value="' + escapeHtml(section.id) + '">'
+      + escapeHtml(section.name) + ' · bars ' + (section.start + 1)
+      + '–' + (section.start + section.bars) + '</option>').join("");
+  const sectionId = sections.some((section) => section.id === state.focusedSection)
+    ? state.focusedSection
+    : sections.some((section) => section.id === previousSection)
+      ? previousSection : "";
+  sectionSelect.value = sectionId;
+  trackSelect.innerHTML = TRACK_ORDER.map((id) =>
+    '<option value="' + id + '">' + escapeHtml(TRACK_META[id]?.name || id)
+    + '</option>').join("");
+  trackSelect.value = TRACK_ORDER.includes(state.editorTrack) ? state.editorTrack : "melody";
+  submit.disabled = sections.length === 0 || state.isGenerating;
+  if (submit.dataset.bound) return;
+  submit.dataset.bound = "true";
+  submit.addEventListener("click", () => {
+    if (!sectionSelect.value) {
+      showToast("Choose a section first, then open Part Studio.");
+      sectionSelect.focus();
+      return;
+    }
+    focusSongSection(sectionSelect.value, trackSelect.value, { openEditor: false, scroll: true });
+  });
+}
+
 function renderTimeline() {
   const sections = normalizeSections();
   const bars = songBars();
@@ -2396,6 +2441,7 @@ function renderTimeline() {
   bindTimelineInteractions(timeline);
   renderArrangementInsights(sections, bars);
   renderSectionShaper();
+  renderShapePartPicker(sections);
   renderMobileSectionJump();
 }
 
@@ -2566,6 +2612,31 @@ function clearShapeDirectorCandidate({ restore = true, rerender = true } = {}) {
   }
 }
 
+// Shape's UI labels are plain language; direction IDs and music rules are unchanged.
+const SHAPE_ACTION_HINTS = Object.freeze({
+  moreBounce: "Tighten the feel",
+  harder: "Add impact",
+  simpler: "Fewer ideas",
+  busier: "Fill the gaps",
+  moreEmotional: "Bring out emotion",
+  moreSpace: "Leave breathing room",
+  catchier: "Make the lead memorable",
+  darker: "Lower the color",
+  brighter: "Lift the color",
+  buildUp: "Grow toward the next part",
+  calmDown: "Reduce intensity",
+});
+
+function setShapeActionCopy(button, direction) {
+  const heading = document.createElement("strong");
+  heading.textContent = direction.label;
+  const hint = document.createElement("small");
+  hint.textContent = SHAPE_ACTION_HINTS[direction.id] || "Preview this change";
+  hint.setAttribute("aria-hidden", "true");
+  button.replaceChildren(heading, hint);
+  button.setAttribute("aria-label", direction.label + ". " + hint.textContent);
+}
+
 function renderShapeDirector(section = editorSection()) {
   const panel = $("#shapeDirectorPanel");
   if (!panel) return;
@@ -2588,7 +2659,7 @@ function renderShapeDirector(section = editorSection()) {
     composeButton.disabled = composeDisabled;
     composeButton.setAttribute?.("aria-disabled", String(composeDisabled));
     const composeLabel = $("#shapeDirectorComposeLabel");
-    if (composeLabel) composeLabel.textContent = notesOnly ? "Recompose section / instrument instead" : "Try a new part";
+    if (composeLabel) composeLabel.textContent = notesOnly ? "Select an instrument first" : "Generate another part";
     composeButton.title = notesOnly
       ? "Select an instrument to try a new part."
       : "Preview a new part before accepting.";
@@ -2619,6 +2690,7 @@ function renderShapeDirector(section = editorSection()) {
       song: state.song,
       section,
       target: director.target,
+      trackId: state.editorTrack,
       elementId: state.song?.variationSet?.element?.id,
     });
     const doc = inspector.ownerDocument ?? document;
@@ -2649,15 +2721,15 @@ function renderShapeDirector(section = editorSection()) {
     inspector.replaceChildren(...cards);
     const inspectorStatus = $("#shapeInspectorStatus");
     if (inspectorStatus) inspectorStatus.textContent = blocked
-      ? "Finish the current comparison or complete the selection to try another suggestion."
-      : "Preview a suggestion to hear Before and After. Save only if it sounds better.";
+      ? "Finish this preview or choose notes before trying another change."
+      : "Compare Original and Preview. Use the change only if you prefer it.";
   }
   if (directions) {
     const rankedIds = new Set(recommendations.map((entry) => entry.directionId));
     for (const entry of recommendations) {
       const button = directions.querySelector('[data-shape-direction="' + entry.directionId + '"]');
       if (!button) continue;
-      button.textContent = entry.direction.label;
+      setShapeActionCopy(button, entry.direction);
       button.dataset.shapeRank = String(entry.rank);
       button.title = entry.reason;
       button.hidden = false;
@@ -2667,7 +2739,7 @@ function renderShapeDirector(section = editorSection()) {
       if (rankedIds.has(entry.id)) continue;
       const button = directions.querySelector('[data-shape-direction="' + entry.id + '"]');
       if (!button) continue;
-      button.textContent = entry.label;
+      setShapeActionCopy(button, entry);
       delete button.dataset.shapeRank;
       button.removeAttribute("title");
       button.hidden = panel.dataset.shapeMore !== "true";
@@ -2676,13 +2748,13 @@ function renderShapeDirector(section = editorSection()) {
     const moreButton = directions.querySelector("[data-shape-more]");
     if (moreButton) {
       const expanded = panel.dataset.shapeMore === "true";
-      moreButton.textContent = expanded ? "Fewer directions" : "More directions";
+      moreButton.textContent = expanded ? "Show fewer changes" : "See all changes";
       moreButton.setAttribute("aria-expanded", String(expanded));
       directions.append(moreButton);
     }
   }
   if (auditionControls && !auditionControls.childElementCount) {
-    auditionControls.innerHTML = '<button type="button" data-shape-audition="before">Before</button><button type="button" data-shape-audition="after">After</button>';
+    auditionControls.innerHTML = '<button type="button" data-shape-audition="before">Original</button><button type="button" data-shape-audition="after">Preview</button>';
   }
   if (target) target.value = director.target;
   if (size) size.value = director.size;
@@ -2700,10 +2772,10 @@ function renderShapeDirector(section = editorSection()) {
     if (candidate) candidate.hidden = true;
     const topSuggestion = recommendations[0];
     if (status) status.textContent = director.target === "notes" && !(state.editorSelection?.size > 0)
-      ? "Select notes first."
+      ? "Choose notes in Piano Roll first."
       : topSuggestion
-        ? "Choose a suggestion above, then listen to Before and After."
-        : "Choose a suggestion above to preview a change.";
+        ? "Tap a change above, then compare Original and Preview."
+        : "Choose a change above to hear a preview.";
     return;
   }
   const summary = director.transaction.summary;
@@ -2727,8 +2799,8 @@ function renderShapeDirector(section = editorSection()) {
     button.classList.toggle("is-active", button.dataset.shapeAudition === director.audition);
   });
   if (status) status.textContent = director.audition === "after"
-    ? "You are hearing the preview. Save this change to keep it, or Keep original."
-    : "You are hearing the original. Tap After to hear the change.";
+    ? "Playing the preview. Use This Change to save, or Keep Original."
+    : "Playing the original. Tap Preview to compare the change.";
 }
 
 function prepareShapeDirectorCandidate(direction) {
@@ -2766,7 +2838,7 @@ function prepareShapeDirectorCandidate(direction) {
   director.transaction = transaction;
   director.audition = "before";
   renderShapeDirector(section);
-  showToast(transaction.intent.direction.label + " candidate ready. Compare Before and After before committing.");
+  showToast(transaction.intent.direction.label + " is ready. Compare Original and Preview before saving.");
   return true;
 }
 
