@@ -48,7 +48,7 @@ test("Inspector lives inside Shape and routes actions through the existing Befor
   const css = source("src/ui/shape-director.css");
   const inspectorStart = html.indexOf('id="shapeInspector"');
   assert.ok(inspectorStart > html.indexOf('id="shapeDirectorPanel"'));
-  assert.ok(inspectorStart < html.indexOf('id="shapeDirectorDirections"'));
+  assert.ok(inspectorStart > html.indexOf('id="shapeDirectorCandidate"'), "inspector stays in optional expanded advice after the main audition");
   assert.match(html, /id="shapeInspectorInsights" role="list"/);
   assert.match(html, /Preview before saving\. Your original is safe\./);
   assert.match(app, /songInspectorSuggestions\(\{/);
