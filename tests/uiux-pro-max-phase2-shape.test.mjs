@@ -20,13 +20,13 @@ test("Shape reveals the original piano roll ahead of optional auditions", () => 
   assert.match(html, /id="sectionEditorTitle" aria-live="polite"/);
 });
 
-test("Selecting an instrument clip opens the existing note editor, not a new editing authority", () => {
+test("Selecting a clip opens Part Studio first; only Edit notes opens the same piano roll authority", () => {
   const focus = app.match(/export function focusSongSection\([\s\S]*?\n}\n/)?.[0] ?? "";
   const timeline = app.match(/function bindTimelineInteractions\([\s\S]*?\n}\n/)?.[0] ?? app;
   assert.match(focus, /state\.sectionEditorOpen = Boolean\(openEditor\)/);
   assert.match(focus, /if \(openEditor && \$\("#shapeNoteDetail"\)\) \$\("#shapeNoteDetail"\)\.open = true/);
   assert.match(focus, /renderSectionEditor\(\)/);
-  assert.match(timeline, /openEditor: Boolean\(clip\.dataset\.editorTrack\)/);
+  assert.match(timeline, /openEditor: false/);
   assert.match(app, /\(open \? \$\("#editorShapeTools"\) : \$\("#sectionShaperContent"\)\)\?\.append\(panel\)/);
 });
 
@@ -43,12 +43,12 @@ test("Shape instrument tabs support keyboard roving focus and announce the selec
 });
 
 test("Shape visual improvements remain scoped and ship through the existing stylesheet", () => {
-  assert.match(css, /UI\/UX Pro Max Phase 2/);
+  assert.match(css, /Shape Studio v2 - fresh mobile-first workspace design/);
   assert.match(css, /\.editor-track-tab\[aria-selected="true"\]/);
-  assert.match(css, /\.shape-note-detail\[open\]/);
+  assert.match(css, /\.shape-note-detail/);
   assert.match(css, /min-height:\s*48px/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.match(css, /forced-colors:\s*active/);
+  assert.match(css, /prefers-reduced-motion:reduce/);
+  assert.match(css, /forced-colors:active/);
   assert.match(build, /'midnight-studio\.css', 'shape-workspace\.css'/);
   assert.match(build, /androidPublicDir, 'midnight-studio\.css'/);
 });
