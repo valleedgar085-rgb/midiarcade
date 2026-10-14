@@ -68,7 +68,7 @@ test("Song Inspector prioritizes real MIDI space for the selected melodic lane",
     assert.equal(ideas[0].evidence, "VERSE MIDI SPACE");
     assert.match(ideas[0].explanation, /both silent for 25%.*overlap for 25%/);
     assert.match(ideas[0].explanation, /not a vocal recording/);
-    assert.equal(ideas[0].action, "Preview More Space");
+    assert.equal(ideas[0].action, "Preview Make Space");
     assert.ok(ideas.length <= 2);
     assert.equal(ideas.filter((idea) => idea.directionId === "moreSpace").length, 1);
     assert.ok(Object.isFrozen(ideas) && Object.isFrozen(ideas[0]));
