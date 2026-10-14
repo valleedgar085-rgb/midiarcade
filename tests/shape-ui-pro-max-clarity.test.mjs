@@ -26,9 +26,9 @@ test("Shape keeps simple musical labels and the unchanged rewrite budgets", () =
 test("new map, part studio and piano roll are three distinct preserved workspaces", () => {
   assert.match(shape, /id="arrangementTitle">Shape Studio/);
   assert.match(shape, /id="shapeMapWorkspace"/);
-  assert.match(shape, /class="shape-part-content" id="sectionShaperContent" hidden/);
+  assert.match(shape, /class="section-shaper-content shape-part-content" id="sectionShaperContent" hidden/);
   assert.match(shape, /class="shape-open-editor" type="button" data-section-action="edit"/);
-  assert.match(shape, /class="shape-song-timeline"/);
+  assert.match(shape, /class="timeline-shell shape-song-timeline"/);
   assert.match(shape, /id="timeline"/);
   assert.match(shape, /id="sectionEditor"/);
   const timeline = shape.indexOf('id="timeline"');
