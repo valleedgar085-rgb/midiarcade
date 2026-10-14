@@ -1,441 +1,451 @@
-/* Shape workspace: keep layout and typography together, after the shared theme. */
+/* Shape Studio v2 - fresh mobile-first workspace design.
+   The music engine, audio synthesis and other tabs are not styled here. */
 #tab-arrange {
-  --shape-accent: hsl(172 51% 57%);
-  --shape-text: hsl(170 30% 94%);
-  --shape-muted: hsl(190 16% 73%);
+  --shape-bg: #0a151d;
+  --shape-surface: #12232d;
+  --shape-elevated: #1b313b;
+  --shape-border: #3a606b;
+  --shape-ink: #f3fafb;
+  --shape-secondary: #b8d0d8;
+  --shape-accent: #68e2cc;
+  --shape-warm: #f5ba76;
+  --shape-ring: #abf7e7;
+  --shape-gap: 16px;
+  max-width: 1500px !important;
+  width: 100% !important;
+  padding-inline: clamp(8px, 2vw, 24px);
+  color: var(--shape-ink);
 }
-/* The editor header is the sole active-selection summary. */
-#tab-arrange > .shape-focus-bar,
-#tab-arrange .arrange-workflow,
-#tab-arrange .shape-map-legend,
-#tab-arrange .arrangement-insight-lanes,
-#tab-arrange.has-section-focus #sectionShaper,
-#tab-arrange.has-section-focus .shape-director-current {
-  display: none !important;
+#tab-arrange *, #tab-arrange *::before, #tab-arrange *::after {box-sizing:border-box}
+#tab-arrange :is(button,select,a,summary,input) {touch-action:manipulation}
+#tab-arrange :is(button,a,select,summary,input):focus-visible {
+  outline:3px solid var(--shape-ring) !important;
+  outline-offset:3px !important;
 }
-#tab-arrange .shape-stage { grid-template-columns: minmax(0, 1fr) !important; }
-#tab-arrange .arrangement-panel > .section-heading h2 {
-  font-family: var(--font-display, 'Outfit Variable', sans-serif);
-  font-size: clamp(30px, 5vw, 40px) !important;
-  font-weight: 800 !important;
-  letter-spacing: -.035em !important;
-  color: var(--shape-text) !important;
+#tab-arrange :is(button,summary,a) { -webkit-tap-highlight-color: rgba(104,226,204,.18); }
+#tab-arrange :is(button,select) { min-height:44px; }
+#tab-arrange :is(button,select)[disabled], #tab-arrange [aria-disabled="true"] {opacity:.5}
+#tab-arrange [hidden] {display:none !important}
+
+/* The formerly duplicated context thread is retained for state bindings,
+   but the new workspace has one selection summary, inside Part Studio. */
+#tab-arrange > .shape-focus-bar, #tab-arrange .arrange-workflow {display:none !important}
+#tab-arrange .shape-canvas {
+  width:100% !important; max-width:none !important; min-width:0 !important;
+  padding:clamp(12px,2vw,24px) !important;
+  border:1px solid #385661 !important; border-radius:26px !important;
+  background:linear-gradient(155deg,#0c1c28 0%,#0b1821 52%,#0b1924 100%) !important;
+  box-shadow:0 24px 50px rgba(0,0,0,.25) !important;
 }
-#tab-arrange .section-description,
-#tab-arrange .shape-directions-help,
-#tab-arrange .shape-note-help,
+#tab-arrange .shape-studio-hero {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:16px; padding:6px 4px 20px; margin:0 0 18px;
+  border-bottom:1px solid #36525e;
+}
+#tab-arrange .shape-hero-lockup {display:flex; align-items:center; gap:15px; min-width:0}
+#tab-arrange .shape-hero-icon {
+  flex:0 0 62px; height:62px; border-radius:19px; display:grid;
+  place-items:center; color:#91f5dd; border:1px solid #4b8b8c;
+  background:linear-gradient(145deg,#254c50,#19313b);
+  box-shadow:inset 0 1px rgba(255,255,255,.15);
+}
+#tab-arrange .shape-hero-icon svg {width:36px;height:36px}
+#tab-arrange .shape-kicker {
+  margin:0 0 5px !important; font:800 10px/1.3 var(--font-mono,monospace);
+  letter-spacing:.14em; color:var(--shape-warm) !important;
+}
+#tab-arrange #arrangementTitle {
+  margin:0 !important; font:800 clamp(26px,3.8vw,39px)/1.05 var(--font-display,sans-serif) !important;
+  letter-spacing:-.045em; color:var(--shape-ink) !important;
+}
+#tab-arrange .shape-studio-hero .section-description {
+  margin:8px 0 0 !important; max-width:620px;
+  font:450 14px/1.5 var(--font-body,sans-serif) !important;
+  color:var(--shape-secondary) !important;
+}
+#tab-arrange .shape-reorder {
+  display:inline-flex; align-items:center; justify-content:center;
+  gap:9px; flex:0 0 auto; min-height:47px !important; padding:10px 13px !important;
+  color:#eafcf9 !important; background:#172d37 !important;
+  border:1px solid #56848c !important; border-radius:13px !important;
+  font:750 13px/1.25 var(--font-body,sans-serif) !important;
+}
+#tab-arrange .shape-reorder svg {width:19px;height:19px}
+#tab-arrange .shape-stage {
+  display:grid !important; align-items:start; width:100% !important;
+  grid-template-columns:minmax(0,1.35fr) minmax(360px,.86fr) !important;
+  gap:clamp(12px,1.7vw,22px) !important;
+  min-width:0 !important;
+}
+
+/* 01 - Music map, the single place for choosing where edits apply. */
+#tab-arrange .shape-map-column,
+#tab-arrange .section-shaper {
+  position:relative !important; inset:auto !important; margin:0 !important;
+  width:100% !important; max-width:none !important; min-width:0 !important;
+  border:1.5px solid #41616d !important; border-radius:20px !important;
+  background:var(--shape-surface) !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.07),0 14px 26px rgba(0,0,0,.1) !important;
+}
+#tab-arrange .shape-map-column {padding:clamp(13px,1.6vw,20px) !important; overflow:hidden}
+#tab-arrange .shape-workspace-heading {
+  display:flex !important; align-items:center; gap:12px;
+  margin:0 0 15px !important; padding:0 0 15px !important;
+  border-bottom:1px solid #385a65;
+}
+#tab-arrange .shape-workspace-number {
+  display:grid; place-items:center; width:43px;height:43px;flex:0 0 43px;
+  font:850 15px/1 var(--font-mono,monospace); color:#10262a;
+  border-radius:13px; background:var(--shape-accent);
+}
+#tab-arrange .shape-workspace-name {display:grid;gap:4px;min-width:0; flex:1}
+#tab-arrange .shape-workspace-heading strong {
+  font:800 clamp(18px,2vw,23px)/1.15 var(--font-display,sans-serif) !important;
+  color:#f1faff !important; letter-spacing:-.025em;
+}
+#tab-arrange #shapeMapSummary {
+  font:500 12px/1.4 var(--font-body,sans-serif) !important;
+  color:var(--shape-secondary) !important;
+}
+#tab-arrange .shape-map-detail {
+  flex:0 0 auto; align-self:center; padding:0 !important;
+  background:transparent !important;border:0 !important;
+}
+#tab-arrange .shape-map-detail>summary {
+  display:inline-flex;align-items:center;min-height:44px !important;
+  padding:8px 10px; font:750 12px/1.3 var(--font-body,sans-serif) !important;
+  color:#c9f5ed !important; border-radius:9px;
+  border:1px solid #416770;cursor:pointer;list-style:none;
+}
+#tab-arrange .shape-map-detail>summary::-webkit-details-marker {display:none}
 #tab-arrange .shape-map-detail p {
-  font-size: 15px !important;
-  line-height: 1.6 !important;
-  color: var(--shape-muted) !important;
-  margin: 6px 0 12px;
+  position:absolute;left:16px;right:16px;top:76px;z-index:6;
+  padding:12px !important;border:1px solid #588d90;border-radius:12px;
+  background:#1b333c !important;color:#e8fcf7 !important;
+  font:500 13px/1.5 var(--font-body,sans-serif) !important;
+  box-shadow:0 12px 24px rgba(0,0,0,.3);
 }
-#tab-arrange .shape-map-toolbar strong,
-#tab-arrange #shapeDirectorTitle,
-#tab-arrange .shape-note-detail > summary strong {
-  font-family: 'Outfit Variable', sans-serif;
-  font-size: 24px !important;
-  font-weight: 750 !important;
-  letter-spacing: -.02em !important;
-  color: var(--shape-text) !important;
-  text-transform: none !important;
+#tab-arrange .shape-map-column .arrangement-insight-lanes {display:none !important}
+#tab-arrange .shape-song-timeline {
+  display:block; width:100%; min-width:0; overflow-x:auto !important;
+  overscroll-behavior-x:contain;
+  border-radius:14px !important; border:1px solid #41616d !important;
+  background:#0a1720 !important; padding:8px 0 !important;
+  scrollbar-width:thin; scrollbar-color:#508e92 transparent;
 }
-#tab-arrange .shape-map-toolbar small { font-size: 13px !important; color: var(--shape-muted) !important; }
-#tab-arrange .shape-map-detail > summary { min-height: 32px; font-size: 14px; font-weight: 600; }
-#tab-arrange .shape-map-column:has(.shape-map-detail[open]) .timeline { min-width: 960px !important; }
-#tab-arrange .shape-map-column .timeline-track-label {
-  position: sticky; left: 0; z-index: 3;
-  width: 100px !important; min-width: 100px; box-sizing: border-box;
-  font-size: 12px !important; letter-spacing: 0 !important;
-  white-space: nowrap; word-break: normal !important; color: var(--shape-text) !important;
-  background: #142029 !important;
+#tab-arrange .shape-song-timeline .timeline { min-width:710px !important; }
+#tab-arrange .shape-song-timeline .timeline-track-label {
+  position:sticky;left:0;z-index:4; width:98px;min-width:98px;
+  background:#132934 !important; color:#f1faf9 !important; font-size:12px !important;
+  white-space:nowrap !important; overflow:hidden;text-overflow:ellipsis;
 }
-#tab-arrange .shape-map-column .section-chip span { font-size: 16px !important; font-weight: 750; }
-#tab-arrange .shape-map-column .section-chip small { font-size: 12px !important; }
-#tab-arrange .section-editor.is-open {
-  position: relative !important; inset: auto !important; overflow: visible !important;
-  z-index: 2 !important; margin: 20px 0 !important; padding: 16px !important;
-  border: 1px solid #58c9bb55 !important; border-radius: 18px !important;
-  background: #10171c !important; box-shadow: 0 0 24px #58c9bb0a !important;
+#tab-arrange .shape-song-timeline .section-chip {
+  border-radius:7px; min-height:37px !important;
 }
-#tab-arrange .section-editor.is-open .editor-header {
-  position: sticky !important; top: var(--topbar-h, 68px) !important;
-  margin: 0 -16px 16px !important; padding: 14px 16px !important;
-  border-bottom: 1px solid #58c9bb77 !important; z-index: 8 !important;
-  background: #10171c !important; gap: 12px !important;
+#tab-arrange .shape-song-timeline .section-chip:focus-visible {outline-offset:-2px !important}
+#tab-arrange .shape-map-footnote {
+  margin:12px 2px 0 !important; color:#a9cad1 !important;
+  font:450 12px/1.5 var(--font-body,sans-serif) !important;
 }
-#tab-arrange .editor-focus-orbit { display: none !important; }
-#tab-arrange .editor-header h3 {
-  font-family: 'Outfit Variable', sans-serif; font-size: 26px !important;
-  font-weight: 800 !important; line-height: 1.15; color: var(--shape-text) !important;
+
+/* 02 - Selected part. Never mix a direct-edit slider with an audition action. */
+#tab-arrange .shape-part-workspace {padding:14px !important;}
+#tab-arrange .shape-part-empty {
+  display:grid;justify-items:center;text-align:center;gap:9px;
+  padding:33px 15px !important;min-height:280px;
 }
-#tab-arrange .editor-header p { color: var(--shape-muted) !important; font-size: 13px !important; line-height: 1.5; }
-#tab-arrange .editor-header .eyebrow { color: var(--shape-accent) !important; font-size: 11px !important; font-weight: 750; }
-#tab-arrange .editor-section-switch { font-size: 14px !important; font-weight: 650; letter-spacing: 0 !important; }
-#tab-arrange .editor-track-tabs { gap: 8px !important; padding: 10px 0 16px !important; }
-#tab-arrange .editor-track-tab {
-  min-height: 48px !important; font-size: 15px !important; font-weight: 650 !important;
-  padding: 10px 16px !important; color: var(--shape-muted) !important;
+#tab-arrange .shape-part-empty[hidden]{display:none !important}
+#tab-arrange .shape-empty-art {display:flex;align-items:center;gap:7px;height:50px;margin-bottom:8px}
+#tab-arrange .shape-empty-art span {width:7px;height:18px;border-radius:99px;background:#5ab9b3}
+#tab-arrange .shape-empty-art span:nth-child(2),
+#tab-arrange .shape-empty-art span:nth-child(4) {height:36px;background:#9beadd}
+#tab-arrange .shape-empty-art span:nth-child(3){height:47px;background:#f7bf7c}
+#tab-arrange .shape-empty-step {
+  font:800 11px/1.3 var(--font-mono,monospace);letter-spacing:.1em;color:var(--shape-warm);
 }
-#tab-arrange .editor-track-tab small { display: none; }
-#tab-arrange .editor-track-tab[aria-selected=true] {
-  color: var(--shape-text) !important; border-color: var(--shape-accent) !important;
-  background: #1c3935 !important; box-shadow: 0 0 14px #58c9bb22 !important;
+#tab-arrange .shape-part-empty h3 {margin:0;color:#f6fffc !important;font-size:22px !important;}
+#tab-arrange .shape-part-empty p {max-width:320px;margin:0 !important;color:var(--shape-secondary) !important;line-height:1.55 !important;}
+#tab-arrange .shape-part-content {display:grid;gap:14px}
+#tab-arrange .shape-focus-card {
+  position:relative !important;display:flex !important;flex-direction:column;
+  align-items:stretch !important;gap:12px;
+  padding:16px !important;border:1px solid #5f8d90 !important;border-radius:15px;
+  background:linear-gradient(145deg,#204044 0%,#18333d 100%) !important;
 }
+#tab-arrange .shape-focus-heading>small {
+  font:800 10px/1.3 var(--font-mono,monospace) !important;
+  color:var(--shape-warm) !important;letter-spacing:.13em;
+}
+#tab-arrange #sectionShaperName {
+  margin:4px 0 3px !important;letter-spacing:-.03em;
+  font:800 22px/1.18 var(--font-display,sans-serif) !important;
+  color:#f5fffc !important;
+}
+#tab-arrange #sectionShaperMeta {
+  font:520 12px/1.4 var(--font-body,sans-serif) !important;
+  color:#c5e0e3 !important;margin:0 !important;
+}
+#tab-arrange .shape-focus-actions {display:grid;grid-template-columns:.85fr 1.15fr;gap:9px}
+#tab-arrange .shape-focus-actions button {
+  min-width:0 !important;min-height:49px !important;
+  border-radius:12px !important;padding:10px 12px !important;
+  display:inline-flex !important;align-items:center;justify-content:center;gap:8px;
+  font:780 13px/1.15 var(--font-body,sans-serif) !important;
+}
+#tab-arrange .shape-listen-current {
+  background:#152d35 !important;color:#e4fff8 !important;
+  border:1px solid #65949a !important;width:100% !important;
+}
+#tab-arrange .shape-open-editor {
+  border:1px solid #e3b77b !important;color:#201b0f !important;
+  background:linear-gradient(135deg,#ffd69b,#f1b468) !important;
+}
+#tab-arrange .shape-button-arrow {margin-left:auto; font-size:18px;font-weight:800}
 #tab-arrange .shape-director-panel {
-  display: flex !important; flex-direction: column; gap: 12px;
-  padding: 16px !important; background: #142027 !important;
+  display:flex !important;flex-direction:column;gap:12px !important;
+  margin:0 !important;padding:15px !important;
+  border:1.5px solid #466c77 !important;border-radius:15px !important;
+  background:#101e28 !important;box-shadow:none !important;
 }
 #tab-arrange .shape-director-panel::before,
-#tab-arrange .shape-director-scope::before,
 #tab-arrange .shape-director-directions::before,
-#tab-arrange .shape-director-candidate::before { display: none !important; }
-#tab-arrange .shape-director-directions { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-#tab-arrange .shape-director-directions button {
-  min-height: 56px !important; font-size: 16px !important; font-weight: 700 !important;
-  text-transform: none !important; letter-spacing: 0 !important;
-  border: 1px solid #58c9bb66 !important; background: #1b3534 !important; color: var(--shape-text) !important;
-}
-#tab-arrange .shape-director-directions .shape-more-directions {
-  grid-column: 1 / -1; min-height: 40px !important; font-size: 13px !important;
-  background: transparent !important; border-color: #34464d !important; color: var(--shape-muted) !important;
-}
-#tab-arrange .shape-director-scope { display: grid !important; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
-#tab-arrange .shape-director-scope label { display: grid; gap: 6px; }
-#tab-arrange .shape-director-scope label > small { font-size: 13px; color: var(--shape-muted); }
-#tab-arrange .shape-director-scope select,
-#tab-arrange .editor-section-switch select { min-height: 48px !important; font-size: 15px !important; }
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-note-detail, .shape-extra-feel) {
-  border: 1px solid #34464d; border-radius: 12px; padding: 14px; background: #10171c;
-}
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-note-detail, .shape-extra-feel) > summary {
-  cursor: pointer; min-height: 40px; color: var(--shape-text); font-size: 16px; font-weight: 700;
-}
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-note-detail, .shape-extra-feel) > summary small {
-  display: block; font-size: 13px; font-weight: 400; line-height: 1.5;
-  color: var(--shape-muted); margin-top: 5px;
-}
-#tab-arrange .shape-note-detail { margin-top: 18px; }
-#tab-arrange .shape-director-status { color: var(--shape-muted) !important; font-size: 14px !important; line-height: 1.6; }
-#tab-arrange .shape-director-commit button { min-height: 48px; font-size: 15px; font-weight: 700; }
-#tab-arrange .shape-help { font-size: 14px; padding: 12px; }
-#tab-arrange .editor-toolbar { gap: 12px !important; }
-#tab-arrange .editor-musical-guide,
-#tab-arrange .editor-relationship-summary { display: none !important; }
-#tab-arrange .editor-advanced-tools[open] .editor-musical-guide,
-#tab-arrange .editor-advanced-tools[open] .editor-relationship-summary { display: flex !important; }
-@media (max-width: 600px) {
-  #tab-arrange .shape-director-directions,
-  #tab-arrange .shape-director-scope { grid-template-columns: 1fr !important; }
-  #tab-arrange .editor-header { flex-wrap: wrap; }
-  #tab-arrange .editor-header-actions { width: 100%; display: flex; gap: 8px; }
-  #tab-arrange .editor-header-actions button { flex: 1; min-height: 44px; font-size: 13px !important; }
-}
-#tab-arrange .shape-director-directions { padding-top: 0 !important; gap: 10px !important; }
-#tab-arrange .shape-director-directions button.is-selected {
-  border-color: var(--shape-accent) !important; background: #24534b !important;
-  box-shadow: 0 0 14px #58c9bb20 !important;
-}
-#tab-arrange .shape-director-heading small { color: var(--shape-accent) !important; }
-#tab-arrange .shape-director-scope label > span { font-size: 13px !important; letter-spacing: 0 !important; }
-#tab-arrange .shape-director-candidate strong { font-size: 19px !important; line-height: 1.3; }
-#tab-arrange .shape-director-ab button { min-height: 48px !important; font-size: 15px !important; }
-/* Element recommendations already feed the main three suggestions. */
-#tab-arrange #shapeElementSuggestions { display: none !important; }
-#tab-arrange .shape-director-scope select {
-  appearance: auto !important; -webkit-appearance: auto !important;
-  padding: 10px 12px !important; border: 1px solid #47756e !important;
-  background: #14232b !important; border-radius: 10px;
-}
-#tab-arrange .editor-track-tabs button[aria-selected="true"] {
-  color: var(--shape-text) !important; border-color: var(--shape-accent) !important;
-  background: #1c3935 !important; box-shadow: inset 0 -3px var(--shape-accent), 0 0 14px #58c9bb22 !important;
-}
-
-/* UI/UX Pro Max Phase 2 · keep song / instrument selection visible and
-   put direct note editing before optional Shape Director auditions. */
-#tab-arrange .section-editor.is-open .editor-header {
-  border-left: 4px solid var(--editor-color, var(--shape-accent)) !important;
-  box-shadow: 0 5px 18px rgba(0,0,0,.22) !important;
-}
-#tab-arrange .section-editor.is-open #sectionEditorTitle {
-  font-size: clamp(1.15rem, 4.8vw, 1.65rem) !important;
-  overflow-wrap: anywhere;
-}
-#tab-arrange .editor-section-switch {
-  display: flex !important;
-  align-items: center !important;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #517a83 !important;
-  border-radius: 12px;
-  background: #15252e !important;
-  color: #edf8f6 !important;
-}
-#tab-arrange .editor-section-switch select {
-  flex: 1 1 160px;
-  min-width: 0;
-  max-width: 100%;
-}
-#tab-arrange .editor-track-tabs {
-  display: flex !important;
-  flex-wrap: nowrap !important;
-  overflow-x: auto !important;
-  overscroll-behavior-x: contain;
-  scrollbar-width: thin;
-  scroll-padding-inline: 12px;
-}
-#tab-arrange .editor-track-tab[aria-selected="true"] {
-  color: #f4fffb !important;
-  border: 2px solid var(--editor-color, var(--shape-accent)) !important;
-  box-shadow: inset 0 -3px var(--editor-color, var(--shape-accent)), 0 0 0 1px #fff2 !important;
-}
-#tab-arrange .editor-track-tab:focus-visible,
-#tab-arrange .editor-section-switch select:focus-visible,
-#tab-arrange .section-editor button:focus-visible {
-  outline: 3px solid #a4f5e8 !important;
-  outline-offset: 2px;
-}
-#tab-arrange .shape-note-detail[open] {
-  border: 1.5px solid #628b8c !important;
-  background: #101b22 !important;
-}
-#tab-arrange .shape-note-detail > summary {
-  min-height: 48px !important;
-}
-#tab-arrange .shape-note-detail .piano-roll-shell {
-  width: 100%;
-  min-height: 300px !important;
-  border: 1px solid #59787f !important;
-  border-radius: 12px;
-}
-#tab-arrange .piano-roll-viewport {
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-#tab-arrange .piano-roll-viewport:focus-visible,
-#tab-arrange .piano-note:focus-visible {
-  outline: 3px solid #a4f5e8 !important;
-  outline-offset: -2px;
-}
-#tab-arrange .editor-header-actions :is(button, a) {
-  min-height: 48px !important;
-}
-#tab-arrange #editorShapeTools {
-  margin-top: 12px;
-  border-top: 1px solid #45656b;
-  padding-top: 12px;
-}
-#tab-arrange .shape-director-panel {
-  border-color: #557b84 !important;
-}
-@media (max-width: 600px) {
-  #tab-arrange .editor-section-switch { gap: 8px; }
-  #tab-arrange .editor-track-tab { flex: 0 0 auto; min-height: 48px !important; }
-  #tab-arrange .shape-note-detail .piano-roll-shell { min-height: 280px !important; }
-  #tab-arrange .editor-header-actions button { min-height: 48px !important; }
-}
-@media (prefers-reduced-motion: reduce) {
-  #tab-arrange .section-editor,
-  #tab-arrange .editor-track-tab,
-  #tab-arrange .piano-note { transition-duration: .01ms !important; }
-}
-@media (forced-colors: active) {
-  #tab-arrange .shape-note-detail[open],
-  #tab-arrange .editor-track-tab[aria-selected="true"] {
-    border: 2px solid Highlight !important;
-  }
-}
-
-
-/* UI/UX Pro Max: Shape-only clarity pass. Keeps existing musical actions and
-   uses the current Midnight Studio palette without changing other tabs. */
-#tab-arrange .shape-director-panel {
-  gap: 14px !important;
-  padding: clamp(14px, 2.4vw, 22px) !important;
-  border: 1.5px solid #548d90 !important;
-  border-radius: 19px !important;
-  background: linear-gradient(145deg, #172b31 0%, #111c25 100%) !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .2), inset 0 1px rgba(217, 255, 250, .06) !important;
-}
-#tab-arrange .shape-director-heading {
-  margin-bottom: 0 !important;
-  border-bottom: 1px solid #47616a;
-  padding-bottom: 12px;
-}
-#tab-arrange .shape-director-heading small {
-  color: #9febdf !important;
-  font-size: 11px !important;
-  letter-spacing: .09em !important;
-}
-#tab-arrange .shape-director-heading strong { color: #f0fffc !important; }
-#tab-arrange .shape-inspector {
-  margin: 0 !important;
-  padding: 12px 14px !important;
-  border: 1px solid #415f6a !important;
-  border-radius: 14px !important;
-  background: #13232b !important;
-}
-#tab-arrange .shape-inspector header { align-items: center; gap: 10px; }
-#tab-arrange .shape-inspector header > strong {
-  font-size: 15px !important;
-  font-weight: 750 !important;
-  color: #ecfffc !important;
-}
-#tab-arrange .shape-inspector #shapeInspectorScope {
-  font-size: 12px !important; color: #a1d2d5 !important;
-}
-#tab-arrange .shape-inspector-insights { gap: 9px !important; }
-#tab-arrange .shape-inspector-card {
-  background: #172d34 !important;
-  border: 1px solid #466e75 !important;
-  padding: 12px !important; gap: 10px !important;
-}
-#tab-arrange .shape-inspector-card strong { font-size: 14px !important; line-height: 1.35 !important; }
-#tab-arrange .shape-inspector-card p,
-#tab-arrange #shapeInspectorStatus {
-  font-size: 13px !important; line-height: 1.5 !important;
-  color: #bcd4d8 !important;
-}
-#tab-arrange .shape-inspector-card button {
-  min-height: 48px !important;
-  font-size: 14px !important;
-  font-weight: 750 !important;
-  border: 1.5px solid #4ba9a3 !important;
-  background: #234e50 !important;
-  color: #f4fffe !important;
-}
+#tab-arrange .shape-director-candidate::before,
+#tab-arrange .shape-director-scope::before {display:none !important}
+#tab-arrange .shape-director-heading {margin:0!important;padding:0 0 10px;border-bottom:1px solid #355660}
+#tab-arrange .shape-director-heading small {font:800 10px/1.35 var(--font-mono,monospace) !important; color:var(--shape-warm) !important}
+#tab-arrange #shapeDirectorTitle {font:800 21px/1.2 var(--font-display,sans-serif) !important;color:#f5fffb !important}
+#tab-arrange .shape-director-current {display:none !important}
 #tab-arrange .shape-directions-help {
-  margin: 0 !important; font-size: 14px !important;
-  line-height: 1.45 !important; color: #c4e0e1 !important;
+  margin:0 !important;font:500 13px/1.5 var(--font-body,sans-serif) !important;
+  color:var(--shape-secondary) !important;
 }
 #tab-arrange .shape-director-directions {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  margin: 0 !important; padding: 0 !important;
-  gap: 10px !important;
+  display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:9px !important;margin:0 !important;padding:0 !important;
 }
-#tab-arrange .shape-director-directions > button[data-shape-direction] {
-  display: flex !important; flex-direction: column !important;
-  align-items: flex-start !important; justify-content: center !important;
-  gap: 6px !important;
-  min-height: 78px !important; padding: 13px 14px !important;
-  border: 1.5px solid #527980 !important;
-  border-radius: 14px !important;
-  background: linear-gradient(160deg, #1f3a42, #1a3039) !important;
-  text-align: left !important;
-  white-space: normal !important;
-  color: #effffb !important;
-  box-shadow: inset 0 1px rgba(255, 255, 255, .06) !important;
-  transition: background-color .16s ease, border-color .16s ease, transform .16s ease !important;
+#tab-arrange .shape-director-directions button[data-shape-direction] {
+  display:flex !important;flex-direction:column;align-items:flex-start;justify-content:center;
+  width:100% !important;min-width:0 !important;min-height:71px !important;
+  white-space:normal !important;text-align:left !important;
+  padding:12px !important;gap:5px !important;
+  border:1.5px solid #4a717b !important;border-radius:13px !important;
+  color:#f5fffc !important;background:#1d3540 !important;
+  box-shadow:inset 0 1px rgba(255,255,255,.05) !important;
+  transition:background-color .14s ease,border-color .14s ease,transform .14s ease;
 }
-#tab-arrange .shape-director-directions > button[data-shape-direction] strong {
-  display: block; font-size: 16px !important; font-weight: 800 !important;
-  line-height: 1.2 !important; color: #f5fffc !important;
+#tab-arrange .shape-director-directions button[data-shape-direction] strong {
+  display:block;font:780 15px/1.2 var(--font-body,sans-serif) !important;
+  color:#f6fffc !important;white-space:normal;
 }
-#tab-arrange .shape-director-directions > button[data-shape-direction] small {
-  display: block; font-size: 12px !important; font-weight: 550 !important;
-  line-height: 1.4 !important; color: #b3d6d9 !important;
+#tab-arrange .shape-director-directions button[data-shape-direction] small {
+  display:block;font:550 12px/1.3 var(--font-body,sans-serif) !important;
+  color:#bcd6de !important;white-space:normal;
 }
-#tab-arrange .shape-director-directions > button[data-shape-rank] {
-  background: linear-gradient(155deg, #20534f, #183f47) !important;
-  border-color: #60b9ab !important;
+#tab-arrange .shape-director-directions button[data-shape-rank] {
+  border-color:#70c7bd !important; background:#21484b !important;
 }
-#tab-arrange .shape-director-directions > button.is-selected {
-  border: 2px solid #7ee2cf !important;
-  background: #235551 !important;
-  box-shadow: 0 0 0 2px rgba(126, 226, 207, .18) !important;
+#tab-arrange .shape-director-directions button.is-selected {
+  border:2px solid #b8f8e8 !important;background:#285756 !important;
 }
-#tab-arrange .shape-director-directions > button[data-shape-direction]:hover {
-  border-color: #a0f4df !important; transform: translateY(-1px);
-}
-#tab-arrange .shape-director-directions > button[hidden] { display: none !important; }
-#tab-arrange .shape-director-directions > .shape-more-directions {
-  grid-column: 1 / -1 !important;
-  min-height: 48px !important;
-  font-size: 14px !important;
-  font-weight: 750 !important;
-  border: 1px solid #476a72 !important;
-  border-radius: 12px !important;
-  background: #14252d !important; color: #d9f6f0 !important;
+#tab-arrange .shape-director-directions button[hidden] {display:none !important}
+#tab-arrange .shape-director-directions button.shape-more-directions {
+  min-height:44px !important;grid-column:1/-1 !important;
+  border-radius:11px !important;background:transparent !important;
+  border:1px dashed #58898e !important;font-size:13px !important;
+  font-weight:800 !important;color:#b9f0e8 !important;
 }
 #tab-arrange .shape-director-candidate {
-  display: grid !important; grid-template-columns: minmax(0, 1fr) !important;
-  gap: 12px !important;
-  padding: 14px !important;
-  margin: 0 !important;
-  background: linear-gradient(140deg, #183c3b, #152830) !important;
-  border: 1.5px solid #6bb99f !important; border-radius: 15px !important;
+  display:grid !important;grid-template-columns:1fr !important;gap:11px !important;
+  padding:15px !important;margin:4px 0 0 !important;
+  border:1.5px solid #e8b578 !important;border-radius:14px !important;
+  background:linear-gradient(145deg,#303526 0%,#193635 100%) !important;
 }
-#tab-arrange .shape-director-candidate[hidden] { display: none !important; }
-#tab-arrange .shape-director-candidate > span { min-width: 0; }
-#tab-arrange .shape-director-candidate em { color: #c1d8d6 !important; font-size: 12px !important; }
-#tab-arrange .shape-director-ab {
-  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+#tab-arrange .shape-director-candidate[hidden] {display:none!important}
+#tab-arrange .shape-director-candidate>span {min-width:0;display:grid;gap:5px}
+#tab-arrange .shape-director-candidate small {
+  font:800 10px/1.2 var(--font-mono,monospace) !important;
+  letter-spacing:.1em;color:var(--shape-warm) !important;
 }
-#tab-arrange .shape-director-ab button,
-#tab-arrange .shape-director-commit button {
-  min-height: 48px !important;
-  font-size: 15px !important;
-  font-weight: 750 !important;
-  padding: 10px 12px !important;
-  border-radius: 11px !important;
+#tab-arrange .shape-director-candidate strong {font-size:18px!important;color:#fffef9!important}
+#tab-arrange .shape-director-candidate em {font-size:11px!important;line-height:1.5;color:#c9dedb!important}
+#tab-arrange .shape-director-ab,#tab-arrange .shape-director-commit {
+  display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  width:100%;gap:8px !important;margin:0 !important;padding:0 !important;
 }
-#tab-arrange .shape-director-ab button.is-active {
-  background: #235d57 !important; border-color: #8ce6d4 !important;
-  color: #f5fffd !important;
+#tab-arrange .shape-director-ab button,#tab-arrange .shape-director-commit button {
+  min-height:48px !important;font:800 13px/1.25 var(--font-body,sans-serif) !important;
+  border-radius:11px !important;padding:10px !important;
 }
-#tab-arrange .shape-director-commit {
-  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px !important; padding: 0 !important;
+#tab-arrange .shape-director-ab button.is-active {border-color:#a0f1de !important;background:#24574f !important;color:#fff !important}
+#tab-arrange .shape-director-commit button.is-primary {
+  border:1px solid #f9d2a1 !important;background:#f0bd80 !important;color:#1e1c19!important;
 }
-#tab-arrange .shape-director-commit .is-primary {
-  background: #1e7067 !important; border-color: #84ddcc !important;
-  color: #fff !important;
+
+/* All infrequent tools live behind four clearly named, native disclosures. */
+#tab-arrange .shape-advanced-rack {display:grid;gap:8px}
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details) {
+  margin:0 !important;padding:0 !important;
+  border:1px solid #3e616d !important;border-radius:13px !important;
+  background:#162832 !important;overflow:hidden;
 }
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) {
-  border-radius: 13px !important;
-  border: 1px solid #425f68 !important;
-  background: #13232b !important; padding: 11px 13px !important;
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary {
+  min-height:54px !important;padding:12px 14px !important;
+  display:flex !important;align-items:center;justify-content:space-between;
+  cursor:pointer;list-style:none;color:#eefaf8 !important;
+  font:750 14px/1.3 var(--font-body,sans-serif) !important;
 }
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) > summary {
-  min-height: 48px !important;
-  align-content: center !important;
-  font-size: 14px !important;
-  font-weight: 750 !important;
-  color: #e5faf7 !important;
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary::-webkit-details-marker{display:none}
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary>span {
+  display:grid;gap:4px;min-width:0;
 }
-#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) > summary small {
-  font-size: 12px !important; color: #b7d3d8 !important;
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary strong {
+  color:#f3faf9 !important;font-size:14px !important;line-height:1.2;
 }
-#tab-arrange .shape-director-scope { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-#tab-arrange .shape-director-scope select { min-height: 48px !important; }
-#tab-arrange .shape-director-locks label { min-height: 44px !important; font-size: 13px !important; }
-#tab-arrange .section-edit-primary { min-height: 52px !important; }
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary small {
+  display:block;color:#b5ced5 !important;font-size:11px !important;
+  line-height:1.3;letter-spacing:0;
+}
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)>summary::after {
+  content:"+";font:700 22px/1 var(--font-body,sans-serif);color:#8cddd3;
+}
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)[open]>summary::after {content:"−"}
+#tab-arrange :is(.shape-change-options,.shape-advice-panel,.shape-advanced-rack>details)[open]>summary {
+  border-bottom:1px solid #426670;background:#1c3440 !important;
+}
+#tab-arrange .shape-advice-panel header,
+#tab-arrange .shape-advice-panel #shapeInspectorStatus,
+#tab-arrange .shape-advice-panel .shape-inspector-insights,
+#tab-arrange .shape-change-options .shape-director-scope,
+#tab-arrange .shape-change-options .shape-director-locks,
+#tab-arrange .shape-advanced-rack .section-macro-grid,
+#tab-arrange .shape-advanced-rack .shaper-group-heading,
+#tab-arrange .shape-advanced-rack .shape-immediate-warning,
+#tab-arrange .shape-advanced-rack .section-actions-menu-body,
+#tab-arrange .shape-advanced-rack .shape-blueprint-compose,
+#tab-arrange .shape-advanced-rack .shape-help p {margin:11px !important}
+#tab-arrange .shape-inspector-card {padding:12px !important;border-radius:12px;background:#1c3540!important;border:1px solid #527983!important}
+#tab-arrange .shape-inspector-card p {color:#c9dde2!important;line-height:1.5!important;font-size:12px!important}
+#tab-arrange .shape-inspector-card button {
+  min-height:44px!important;border:1px solid #7fcbbe!important;border-radius:10px!important;
+  background:#1c4b4a!important;color:#e9fffb!important;font-weight:750!important;
+}
+#tab-arrange #shapeInspectorStatus {color:#bbd2d8!important;font-size:12px!important}
+#tab-arrange .shape-director-scope {display:grid !important;grid-template-columns:1fr 1fr !important;gap:9px!important;padding:0!important}
+#tab-arrange .shape-director-scope label {min-width:0;padding:10px!important}
+#tab-arrange .shape-director-scope select {width:100%!important;min-height:47px!important;background:#0b1821!important;color:#f5fffa!important}
+#tab-arrange .shape-director-locks {border:0!important}
+#tab-arrange .shape-director-locks summary {padding:8px!important;min-height:44px!important;color:#eef8f6!important}
+#tab-arrange .shape-director-locks label {min-height:44px!important;font-size:12px!important}
+#tab-arrange .shape-director-status,#tab-arrange .section-shaper-status {
+  margin:0 !important;padding:1px 5px !important;
+  color:#b7d1d8!important;font-size:12px!important;line-height:1.5!important;
+}
+#tab-arrange .shape-immediate-warning {
+  font-size:12px!important;color:#ffdfaf!important;line-height:1.5!important;
+}
+#tab-arrange .section-macro-grid {
+  display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important;
+}
+#tab-arrange .section-macro-grid label {min-width:0;padding:10px!important;background:#142934!important;border:1px solid #446b77!important}
+#tab-arrange .section-macro-grid select {width:100%!important;min-height:46px!important;background:#0e1e27!important;color:#f0faf8!important}
+#tab-arrange .shape-blueprint-compose {
+  display:flex!important;min-height:52px!important;width:calc(100% - 22px)!important;
+  border:1px solid #78cabd!important;color:#f4fffb!important;
+}
+#tab-arrange .section-quick-actions {display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:9px!important}
 #tab-arrange .section-quick-actions button,
-#tab-arrange .section-order-actions button,
-#tab-arrange .editor-tool-group button { min-height: 44px !important; }
-#tab-arrange :is(button, select, summary):focus-visible {
-  outline: 3px solid #a1f3e2 !important; outline-offset: 3px !important;
+#tab-arrange .section-order-actions button {min-height:47px!important;font-size:12px!important}
+#tab-arrange .section-order-actions {display:flex!important;gap:8px!important}
+#tab-arrange .shape-help p {font-size:13px!important;line-height:1.55!important;color:#bed3d9!important}
+
+/* Piano Roll is a separate focused workspace rather than a layer covering controls. */
+#tab-arrange.has-section-focus .shape-map-column,
+#tab-arrange.has-section-focus #sectionShaper {display:none!important}
+#tab-arrange.has-section-focus .shape-stage {display:none!important}
+#tab-arrange .section-editor[aria-hidden="true"] {display:none!important}
+#tab-arrange .section-editor.is-open {
+  position:relative!important;inset:auto!important;
+  display:block!important;z-index:2!important;margin:0!important;
+  padding:clamp(12px,2vw,24px)!important;min-width:0;width:100%!important;
+  border:1.5px solid #487985!important;border-radius:20px!important;
+  background:#10202b!important;overflow:visible!important;
 }
-@media (max-width: 740px) {
-  #tab-arrange .shape-director-directions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  #tab-arrange .shape-director-directions > button[data-shape-direction] { min-height: 84px !important; }
-  #tab-arrange .shape-inspector-insights { grid-template-columns: 1fr !important; }
+#tab-arrange .section-editor.is-open .editor-header {
+  display:flex!important;position:sticky!important;
+  top:var(--topbar-h,64px)!important;z-index:12!important;
+  margin:-8px -8px 16px!important;padding:13px!important;
+  flex-wrap:wrap!important;gap:10px!important;
+  background:#1a303b!important;border:1px solid #4a7580!important;
+  border-radius:13px!important;
 }
-@media (max-width: 380px) {
-  #tab-arrange .shape-director-directions { grid-template-columns: minmax(0, 1fr) !important; }
-  #tab-arrange .shape-director-scope { grid-template-columns: minmax(0, 1fr) !important; }
-  #tab-arrange .shape-director-commit { grid-template-columns: minmax(0, 1fr) !important; }
+#tab-arrange .editor-focus-orbit {display:none!important}
+#tab-arrange .editor-header h3 {color:#f3fffb!important;font-size:clamp(21px,2vw,28px)!important}
+#tab-arrange .editor-header p {color:#bbd4d9!important}
+#tab-arrange .editor-header-actions {display:flex!important;gap:8px!important;flex-wrap:wrap!important}
+#tab-arrange .editor-header-actions button {min-height:46px!important}
+#tab-arrange .editor-track-tabs {display:flex!important;gap:8px!important;overflow-x:auto!important;padding-block:10px!important}
+#tab-arrange .editor-track-tab {
+  flex:0 0 auto!important;min-height:48px!important;padding:10px 14px!important;
+  border:1px solid #426d79!important;border-radius:12px!important;
+  background:#182e38!important;color:#e1f2f2!important;
 }
-@media (prefers-reduced-motion: reduce) {
-  #tab-arrange .shape-director-directions > button { transition: none !important; transform: none !important; }
+#tab-arrange .editor-track-tab[aria-selected="true"] {
+  border:2px solid var(--editor-color,var(--shape-accent))!important;
+  color:#f5fffb!important;background:#214342!important;
+  box-shadow:inset 0 -3px var(--editor-color,var(--shape-accent))!important;
 }
-@media (forced-colors: active) {
-  #tab-arrange .shape-director-directions > button[data-shape-direction],
-  #tab-arrange .shape-director-candidate,
-  #tab-arrange .shape-inspector { border: 2px solid CanvasText !important; }
-  #tab-arrange .shape-director-directions > button.is-selected { border: 3px solid Highlight !important; }
+#tab-arrange .shape-note-detail {
+  margin:12px 0!important;border:1px solid #557d87!important;
+  padding:13px!important;border-radius:14px!important;background:#101b25!important;
+}
+#tab-arrange .shape-note-detail>summary {min-height:48px!important;color:#f5fffc!important}
+#tab-arrange .shape-note-detail .piano-roll-shell {min-height:280px!important;max-width:100%!important}
+#tab-arrange .piano-roll-viewport {
+  overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+}
+#tab-arrange .editor-toolbar {gap:12px!important;min-width:0}
+#tab-arrange .editor-tool-group button {min-height:44px!important}
+#tab-arrange #editorShapeTools {
+  margin-top:14px!important;padding-top:14px!important;
+  border-top:1px solid #466e78;
+}
+
+/* Responsive: side-by-side workbench on desktop, natural vertical flow on phone. */
+@media(max-width:1080px){
+  #tab-arrange .shape-stage {grid-template-columns:1fr!important}
+  #tab-arrange .shape-song-timeline .timeline {min-width:780px!important}
+}
+@media(max-width:640px){
+  #tab-arrange {padding-inline:4px}
+  #tab-arrange .shape-canvas {padding:10px!important;border-radius:18px!important}
+  #tab-arrange .shape-studio-hero {flex-wrap:wrap;padding:4px 2px 16px;gap:12px}
+  #tab-arrange .shape-hero-icon {flex-basis:44px;height:44px;border-radius:14px}
+  #tab-arrange .shape-hero-icon svg {width:28px;height:28px}
+  #tab-arrange #arrangementTitle {font-size:28px!important}
+  #tab-arrange .shape-kicker {font-size:9px!important}
+  #tab-arrange .shape-reorder {margin-left:auto}
+  #tab-arrange .shape-workspace-heading {flex-wrap:wrap}
+  #tab-arrange .shape-map-detail {margin-left:auto}
+  #tab-arrange .shape-map-column {padding:12px!important}
+  #tab-arrange .shape-part-workspace {padding:11px!important}
+  #tab-arrange .shape-focus-card {padding:12px!important}
+  #tab-arrange .shape-director-panel {padding:12px!important}
+  #tab-arrange .shape-focus-actions {grid-template-columns:1fr 1.15fr}
+  #tab-arrange .section-editor.is-open .editor-header {position:relative!important;top:auto!important}
+}
+@media(max-width:360px){
+  #tab-arrange .shape-director-directions,
+  #tab-arrange .shape-director-scope,
+  #tab-arrange .shape-director-commit,
+  #tab-arrange .section-macro-grid {grid-template-columns:1fr!important}
+}
+@media(orientation:landscape) and (max-height:520px){
+  #tab-arrange .section-editor.is-open .editor-header {position:relative!important;top:auto!important}
+}
+@media(prefers-reduced-motion:reduce){
+  #tab-arrange :is(button,summary,a) {transition:none!important;animation:none!important}
+}
+@media(forced-colors:active){
+  #tab-arrange :is(.shape-canvas,.shape-map-column,.section-shaper,.shape-director-panel,.shape-director-candidate) {border:2px solid CanvasText!important}
+  #tab-arrange .shape-director-directions button.is-selected {border:3px solid Highlight!important}
 }
