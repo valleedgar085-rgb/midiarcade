@@ -2619,6 +2619,7 @@ function renderShapeDirector(section = editorSection()) {
       song: state.song,
       section,
       target: director.target,
+      trackId: state.editorTrack,
       elementId: state.song?.variationSet?.element?.id,
     });
     const doc = inspector.ownerDocument ?? document;
