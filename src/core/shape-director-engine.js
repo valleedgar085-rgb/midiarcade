@@ -6,6 +6,7 @@ import { cloneValue } from "./clone-value.js";
 import { roleRegisterWindow } from "./role-register-policy.js";
 import { createChorusHookDevelopmentCandidates } from "./chorus-hook-development.js";
 import { createMelodyQuestionAnswerCandidate } from "./melody-question-answer.js";
+import { normalizeGenreId } from "./genre-contract.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -160,6 +161,15 @@ function assignCloneId(note, id) {
   else note.id = id;
 }
 
+// Make Catchier preserve intentional lead rests in vocal-led verses.
+// Choosing Busier remains the user's explicit option for adding notes.
+function preserveRapVerseVocalSpace(song, section) {
+  const genre = normalizeGenreId(song?.meta?.genre ?? song?.genre);
+  if (!["rap", "hipHop", "trap", "drill"].includes(genre)) return false;
+  return [section?.role, section?.name, section?.type, section?.id]
+    .some((value) => /^(?:rap[ -]?verse|verse)(?:\b|[-_0-9])/i.test(String(value ?? "").trim()));
+}
+
 function applyDirection(candidate, intent, eligible, seed) {
   const direction = intent.direction?.id;
   if (!direction) return { changedIds: [], inserted: 0, deleted: 0 };
@@ -171,6 +181,8 @@ function applyDirection(candidate, intent, eligible, seed) {
   let deleted = 0;
   const strength = intent.size.rewriteBudget;
   const rhythmUnlocked = canChangeRhythm(locks);
+  const guardVocalSpace = direction === "catchier"
+    && preserveRapVerseVocalSpace(candidate, eligible.range.section);
 
   const mark = (entry) => changedIds.add(`${entry.trackId}:${entry.id}`);
   const raiseVelocity = (entry, amount) => {
@@ -235,8 +247,11 @@ function applyDirection(candidate, intent, eligible, seed) {
     });
   } else if (direction === "busier" || direction === "catchier") {
     selected.forEach((entry, index) => {
-      raiseVelocity(entry, direction === "catchier" ? 6 : 3);
-      if (!rhythmUnlocked || index % 2 !== 0) return;
+      const protectedLead = guardVocalSpace && ["melody", "counterpoint"].includes(entry.trackId);
+      raiseVelocity(entry, direction === "catchier" ? (protectedLead ? 3 : 6) : 3);
+      // Preserve existing lead-note rests for rap verses, including whole-section
+      // scope. Accompaniment and explicitly chosen Busier remain unchanged.
+      if (!rhythmUnlocked || index % 2 !== 0 || protectedLead) return;
       const copy = cloneValue(entry.note);
       const offset = direction === "catchier" ? 1 : 0.5;
       const start = eventStart(entry.note) + offset;
