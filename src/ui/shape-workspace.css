@@ -25,7 +25,7 @@
 #tab-arrange :is(button,summary,a) { -webkit-tap-highlight-color: rgba(104,226,204,.18); }
 #tab-arrange :is(button,select) { min-height:44px; }
 #tab-arrange :is(button,select)[disabled], #tab-arrange [aria-disabled="true"] {opacity:.5}
-#tab-arrange [hidden] {display:none !important}
+#tab-arrange [hidden][hidden] {display:none !important}
 
 /* The formerly duplicated context thread is retained for state bindings,
    but the new workspace has one selection summary, inside Part Studio. */
