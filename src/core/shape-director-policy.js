@@ -1,19 +1,19 @@
 export const SHAPE_CHANGE_SIZES = Object.freeze({
   touchUp: Object.freeze({
     id: "touchUp",
-    label: "Touch Up",
+    label: "Small",
     description: "Small musical adjustments that preserve the phrase and arrangement identity.",
     rewriteBudget: 0.18,
   }),
   reshape: Object.freeze({
     id: "reshape",
-    label: "Reshape",
+    label: "Medium",
     description: "Meaningful section changes that keep the song recognizable.",
     rewriteBudget: 0.46,
   }),
   transform: Object.freeze({
     id: "transform",
-    label: "Transform",
+    label: "Large",
     description: "Large local rewrites that preserve the selected locks and the surrounding song context.",
     rewriteBudget: 0.78,
   }),
