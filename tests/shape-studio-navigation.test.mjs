@@ -10,7 +10,8 @@ const styles = source("src/ui/shape-workspace.css");
 test("Shape has an explicit, accessible section and instrument picker", () => {
   assert.match(markup, /id="shapeSectionPicker" aria-label="Section to shape"/);
   assert.match(markup, /id="shapeTrackPicker" aria-label="Instrument to shape"/);
-  assert.match(markup, /id="shapePickPartButton">Open Part Studio/);
+  assert.match(markup, /id="shapePickerActionMount"/);
+  assert.match(app, /submit\.id = "shapePickPartButton"/);
   assert.match(markup, /id="shapeMapWorkspace"/);
   assert.match(styles, /\.shape-part-picker/);
   assert.match(styles, /#tab-arrange #shapePickPartButton[\s\S]*?min-height:50px/);
