@@ -148,6 +148,36 @@
   font:450 12px/1.5 var(--font-body,sans-serif) !important;
 }
 
+/* Quick part picker: easier than precise clip tapping on small phones. */
+#tab-arrange .shape-part-picker {
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.8fr);
+  gap:10px;margin:0 0 15px;padding:13px;
+  border:1px solid #416b75;border-radius:14px;background:#1a303a;
+}
+#tab-arrange .shape-part-picker label {
+  display:grid;align-content:start;gap:7px;min-width:0;
+  font:800 10px/1.3 var(--font-mono,monospace);
+  letter-spacing:.1em;color:#f4c995;
+}
+#tab-arrange .shape-part-picker select {
+  width:100%;min-width:0;min-height:47px !important;
+  padding:9px 10px;border:1px solid #5d8990;
+  border-radius:10px;background:#10232d;color:#f4fafb;
+  font:650 13px/1.25 var(--font-body,sans-serif);
+}
+#tab-arrange #shapePickPartButton {
+  grid-column:1/-1;min-height:50px !important;
+  border:1px solid #d0f9eb;border-radius:11px;
+  background:#5ccbb8;color:#0e2226;
+  font:800 15px/1.2 var(--font-body,sans-serif);
+  display:flex;align-items:center;justify-content:center;gap:10px;
+}
+#tab-arrange #shapePickPartButton span{font-size:20px}
+#tab-arrange #shapePickPartButton:disabled {opacity:.5}
+@media(max-width:420px) {
+  #tab-arrange .shape-part-picker{grid-template-columns:1fr}
+}
+
 /* 02 - Selected part. Never mix a direct-edit slider with an audition action. */
 #tab-arrange .shape-part-workspace {padding:14px !important;}
 #tab-arrange .shape-part-empty {
