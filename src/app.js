@@ -2261,8 +2261,10 @@ function bindTimelineInteractions(timeline) {
   timeline.addEventListener("click", (event) => {
     const clip = event.target.closest?.("[data-section]");
     if (!clip) return;
+    // The song map selects a part for Part Studio. Precise Piano Roll
+    // opens only when the user explicitly selects Edit notes.
     focusSongSection(clip.dataset.section, clip.dataset.editorTrack, {
-      openEditor: Boolean(clip.dataset.editorTrack),
+      openEditor: false,
       scroll: true,
     });
   });
@@ -2338,6 +2340,41 @@ function renderArrangementInsights(sections, bars) {
   }</div>`;
 }
 
+// A predictable shortcut for phone users who cannot easily tap a tiny clip.
+// Selection alone does not mutate notes, start audio or open the Piano Roll.
+function renderShapePartPicker(sections) {
+  const sectionSelect = $("#shapeSectionPicker");
+  const trackSelect = $("#shapeTrackPicker");
+  const submit = $("#shapePickPartButton");
+  if (!sectionSelect || !trackSelect || !submit) return;
+  const previousSection = sectionSelect.value;
+  sectionSelect.innerHTML = '<option value="">Choose section</option>'
+    + sections.map((section) =>
+      '<option value="' + escapeHtml(section.id) + '">'
+      + escapeHtml(section.name) + ' · bars ' + (section.start + 1)
+      + '–' + (section.start + section.bars) + '</option>').join("");
+  const sectionId = sections.some((section) => section.id === state.focusedSection)
+    ? state.focusedSection
+    : sections.some((section) => section.id === previousSection)
+      ? previousSection : "";
+  sectionSelect.value = sectionId;
+  trackSelect.innerHTML = TRACK_ORDER.map((id) =>
+    '<option value="' + id + '">' + escapeHtml(TRACK_META[id]?.name || id)
+    + '</option>').join("");
+  trackSelect.value = TRACK_ORDER.includes(state.editorTrack) ? state.editorTrack : "melody";
+  submit.disabled = sections.length === 0 || state.isGenerating;
+  if (submit.dataset.bound) return;
+  submit.dataset.bound = "true";
+  submit.addEventListener("click", () => {
+    if (!sectionSelect.value) {
+      showToast("Choose a section first, then open Part Studio.");
+      sectionSelect.focus();
+      return;
+    }
+    focusSongSection(sectionSelect.value, trackSelect.value, { openEditor: false, scroll: true });
+  });
+}
+
 function renderTimeline() {
   const sections = normalizeSections();
   const bars = songBars();
@@ -2396,6 +2433,7 @@ function renderTimeline() {
   bindTimelineInteractions(timeline);
   renderArrangementInsights(sections, bars);
   renderSectionShaper();
+  renderShapePartPicker(sections);
   renderMobileSectionJump();
 }
 
