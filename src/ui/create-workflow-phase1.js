@@ -136,42 +136,59 @@ function organizePrimaryDirection(rootDocument, createPanel) {
   if (rhythmDetails) rhythmDetails.dataset.primaryKnobsMoved = "true";
 }
 
-function consolidateAdvancedDirection(rootDocument, createPanel) {
+/**
+ * Put every existing producer control on one surface beneath the song card.
+ * Move live nodes (do NOT clone inputs: IDs, event listeners, Auto state, and
+ * session persistence continue to use their original DOM elements).
+ * Avoid nested <details> so Root Key / Mode / Harmonic Path are visible.
+ */
+function consolidateCreateSurface(rootDocument, createPanel) {
+  const deck = createPanel.querySelector(".create-performance-deck");
   const creator = createPanel.querySelector("#preGenSection");
   const creatorGrid = creator?.querySelector(".creator-grid");
   const shapeControls = creator?.querySelector(".shape-controls");
   const recipeControls = creator?.querySelector(".creator-recipe-side");
-  const generationActions = creator?.querySelector(".generation-actions-bar");
-  if (!creator || !creatorGrid || !shapeControls || !recipeControls || !generationActions) return;
-  if (creator.querySelector(".phase1-advanced-direction") || typeof rootDocument?.createElement !== "function") return;
+  if (!deck || !creator || !creatorGrid || !shapeControls || !recipeControls) return false;
+  if (creator.parentElement === deck) return true;
+  if (typeof rootDocument?.createElement !== "function") return false;
 
-  const advanced = rootDocument.createElement("details");
-  advanced.className = "phase1-advanced-direction";
-  advanced.innerHTML = `
-    <summary>
-      <span><small>OPTIONAL PRECISION</small><strong>Advanced direction</strong></span>
-      <span>Key · scale · harmony · recipe · rhythm detail</span>
-    </summary>
-    <div class="phase1-advanced-direction-body"></div>
-  `;
-  const body = advanced.querySelector(".phase1-advanced-direction-body");
-  if (!body) return;
+  const harmony = rootDocument.createElement("section");
+  harmony.className = "create-harmony-inline";
+  harmony.setAttribute("aria-label", "Key, mode and harmonic path");
+  harmony.innerHTML = '<div class="create-inline-heading"><strong>HARMONY</strong><span>Key · mode · chord direction</span></div>';
+  const harmonyBody = shapeControls.querySelector(".shape-controls-body");
+  if (harmonyBody) {
+    while (harmonyBody.firstChild) harmony.append(harmonyBody.firstChild);
+  }
+  shapeControls.replaceWith(harmony);
 
-  const shapeSummary = shapeControls.querySelector("summary strong");
-  if (shapeSummary) shapeSummary.textContent = "Key, scale & harmonic path";
-  const recipeSummary = recipeControls.querySelector(":scope > summary strong");
-  if (recipeSummary) recipeSummary.textContent = "Creative recipe & performance detail";
-
-  body.append(shapeControls, recipeControls);
-  generationActions.insertAdjacentElement("afterend", advanced);
+  const recipe = rootDocument.createElement("section");
+  recipe.className = "create-recipe-inline";
+  recipe.setAttribute("aria-label", "Creative recipe and fine tuning");
+  const recipeCard = recipeControls.querySelector(".recipe-card");
+  const rhythm = recipeControls.querySelector(".advanced-controls .details-content");
+  if (recipeCard) recipe.append(recipeCard);
+  if (rhythm) {
+    const detail = rootDocument.createElement("div");
+    detail.className = "create-fine-tuning-inline";
+    while (rhythm.firstChild) detail.append(rhythm.firstChild);
+    recipe.append(detail);
+  }
+  recipeControls.replaceWith(recipe);
   creatorGrid.classList.add("phase1-essentials-grid");
+
+  // One bordered card owns both quick knobs and the entire direction form.
+  // All selectors scoped to #preGenSection keep working after this move.
+  deck.append(creator);
+  deck.classList.add("create-unified-surface");
+  return true;
 }
 
 function moveOptionalGuide(createPanel) {
   const workflow = createPanel.querySelector("#workflowPanel");
-  const creator = createPanel.querySelector("#preGenSection");
-  if (!workflow || !creator || !creator.parentElement) return;
-  creator.insertAdjacentElement("afterend", workflow);
+  const deck = createPanel.querySelector(".create-performance-deck");
+  if (!workflow || !deck?.parentElement) return;
+  deck.insertAdjacentElement("afterend", workflow);
 }
 
 function upgradeStaticCreateCopy(rootDocument, createPanel) {
@@ -218,7 +235,7 @@ function upgradeStaticCreateCopy(rootDocument, createPanel) {
   const resetText = createPanel.querySelector("#resetControlsButton span");
   if (resetText) resetText.textContent = "Reset direction";
   const advancedText = createPanel.querySelector("#artistModeButton span");
-  if (advancedText) advancedText.textContent = "Show advanced";
+  if (advancedText) advancedText.textContent = "Focus mode";
 
   upgradeWorkflowCopy(createPanel);
 }
@@ -281,7 +298,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   mountPerformanceKnobs(rootDocument, createPanel);
   moveGenerationEssentials(rootDocument, createPanel);
   organizePrimaryDirection(rootDocument, createPanel);
-  consolidateAdvancedDirection(rootDocument, createPanel);
+  consolidateCreateSurface(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);
   setupCreateScrollState(rootDocument, createPanel);
