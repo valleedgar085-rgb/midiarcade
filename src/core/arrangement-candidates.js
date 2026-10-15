@@ -279,7 +279,10 @@ export function createArrangementCandidates(sourceSong, config = {}, {
       const spaceStrategy = performanceSpaceStrategyForFamily(candidate.evolution.family);
       const performance = protectFusionPerformance
         ? protectedFusionPerformance(candidate.song, profile)
-        : applyArrangementPerformance(candidate.song, { profile, spaceStrategy });
+        : applyArrangementPerformance(candidate.song, {
+          profile, spaceStrategy,
+          sectionContrastDynamics: config.sectionContrastDynamics === true,
+        });
       const auditionSong = performance.changed ? performance.song : candidate.song;
       auditionSong.outputQualityEvolution = {
         ...(auditionSong.outputQualityEvolution ?? {}),
