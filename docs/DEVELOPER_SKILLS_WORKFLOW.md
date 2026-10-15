@@ -11,10 +11,20 @@ Coding agents supporting project skills in `.agents/skills/` can use:
 | Random or unmemorable melodies, weak chorus returns, bass/drum clashes, poor section contrast | `midi-composition-review` | [music-composition-skills](https://github.com/jtydhr88/music-composition-skills), specifically `mc-melody`, `mc-development`, `mc-rhythm-section` and `mc-arrangement-arch` |
 | Clicks, pops, crackle, silence, output distortion, Web Audio timing issues | `midi-audio-diagnostics` | [Sonic Skills](https://github.com/kunitoki/sonic-skills) and [Audio Verification](https://github.com/AkshitIreddy/agent-skills/tree/main/skills/audio-verification) |
 | Bugfixes, new development branches, subagent work, regression fixes, PRs/releases | `midi-safe-integration` | [Superpowers](https://github.com/obra/superpowers) |
+| Test failures, Android/build errors, regressions, unexpected UI or audio behavior | `systematic-debugging` | [Superpowers systematic-debugging](https://github.com/obra/superpowers/blob/main/skills/systematic-debugging/SKILL.md) |
+| New features, behavior changes, bug fixes and refactors | `test-driven-development` | [Superpowers test-driven-development](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md) |
 
 The project skill files contain self-contained instructions, so they remain useful if the upstream repository is unavailable. They are **adaptations**, not full vendored copies or claims that upstream plugins were globally installed. Review upstream original docs before applying unfamiliar rules or updating these adapters.
 
 Codex discovers the canonical `.agents/skills/` manifests. Claude Code uses the matching project entry points under `.claude/skills/` and `CLAUDE.md`, which direct it to the same canonical project skills. If an agent does not auto-discover either location, direct it to read the named `SKILL.md` and root `AGENTS.md`. This branch does **not** install third-party skills globally into a developer's home directory.
+
+## How to use the new coding skills
+
+- Encountered a failure? Route first through `systematic-debugging`: reproduce, compare baseline and changed code, prove the hypothesis, and only then edit.
+- Adding/changing working behavior? Route through `test-driven-development`: create a focused test, observe the correct RED failure, make the minimal GREEN edit, then refactor safely.
+- For bug fixes, **both apply in this order**: debug the root cause → write a failing regression → implement → verify.
+- Continue to use `midi-safe-integration` for branch/PR handoffs and isolated parallel agents; its checks are complementary, not replaced. Use `midi-composition-review` and `midi-audio-diagnostics` for domain expertise.
+- Skills are project instructions for compatible coding agents, not guaranteed automatic actions of every chat client. When running them, explicitly identify the skill and report commands and results. No production code, MIDI files, APK features, or runtime libraries are added by this installation.
 
 ## First assignment: melody + vocal pocket audit (read-only)
 

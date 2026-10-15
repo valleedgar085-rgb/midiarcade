@@ -119,7 +119,9 @@ This document defines mandatory engineering guidelines, architectural constraint
 
 ## 9. Developer-Only AI Skill Routing
 
+- For any bug, failing test, CI/build error, app regression, or unexplained behavior, read `.agents/skills/systematic-debugging/SKILL.md` and investigate the root cause **before** applying fixes.
+- For production features, fixes, refactors, or behavior changes, read `.agents/skills/test-driven-development/SKILL.md` and run a correctly failing test **before** the production edit, followed by green tests and full quality verification.
 - For melody identity, hook repetition, section development, genre groove, bass/drum pocket, and rap-vocal space, read `.agents/skills/midi-composition-review/SKILL.md` before proposing an engine change.
 - For clicks, pops, crackling, silence, scheduling, or Web Audio faults, read `.agents/skills/midi-audio-diagnostics/SKILL.md` before editing synthesis or audio envelopes.
 - For concurrent agent tasks, branch integration, debugging, regression prevention, and release claims, read `.agents/skills/midi-safe-integration/SKILL.md`.
-- All three are **developer workflow aids** only. See `docs/DEVELOPER_SKILLS_WORKFLOW.md` for scope, source links, and the read-only first assignment. They do not add runtime features or override any rule above. Require measured evidence and real listening checks for audible changes; no speculative quality claims.
+- All five are **developer workflow aids** only. See `docs/DEVELOPER_SKILLS_WORKFLOW.md` for scope, source links, and the read-only first assignment. They do not add runtime features or override any rule above. Require measured evidence and real listening checks for audible changes; no speculative quality claims.
