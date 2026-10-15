@@ -301,6 +301,10 @@ export function createArrangementCandidates(sourceSong, config = {}, {
             performanceChangedNotes: performance.diagnostics?.changedNotes ?? 0,
             staleMarkersCleared: performance.diagnostics?.staleMarkersCleared ?? 0,
             performanceReason: performance.diagnostics?.reason ?? (performance.changed ? "shaped" : "unchanged"),
+            ...(config.sectionContrastDynamics === true && !protectFusionPerformance ? {
+              sectionContrastDynamicsRequested: true,
+              sectionContrastNotes: performance.diagnostics?.sectionContrastNotes ?? 0,
+            } : {}),
           },
         },
       };
