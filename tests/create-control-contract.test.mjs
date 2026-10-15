@@ -285,7 +285,7 @@ test("contract application wires IDs, selectors and Element buttons through one 
 });
 
 test("Create presentation applies the contract after moving controls into their final layout", () => {
-  const calls = createPresentation.match(/mountCreativeRangeControl\(rootDocument, createPanel\);[\s\S]*?upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateAdvancedDirection\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
+  const calls = createPresentation.match(/mountCreativeRangeControl\(rootDocument, createPanel\);[\s\S]*?upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateCreateSurface\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
   assert.ok(calls, "Create contract must run after all control-moving presentation transforms");
   assert.match(createPresentation, /import \{ applyCreateControlContract \} from "\.\/create-control-contract\.js"/);
 });

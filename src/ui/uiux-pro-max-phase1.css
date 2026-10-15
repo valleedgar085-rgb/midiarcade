@@ -321,3 +321,188 @@
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Unified Create surface: one clear panel instead of a stack of small cards.
+   Overrides older Create styling while preserving all existing control nodes. */
+#tab-create .create-performance-deck.create-unified-surface {
+  width: 100%;
+  max-width: none;
+  padding: clamp(16px, 2.2vw, 24px);
+  border: 1.5px solid #60919c !important;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #18252a, #0d131b 70%) !important;
+}
+#tab-create .create-unified-surface #preGenSection {
+  margin: 12px 0 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-top: 1px solid rgba(151,206,209,.22) !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+#tab-create .create-unified-surface .creator-heading {
+  padding-top: 17px;
+  margin-bottom: 8px;
+}
+#tab-create .create-unified-surface .creator-heading h2 {
+  font-size: clamp(1.05rem, 2vw, 1.28rem);
+}
+#tab-create .create-unified-surface #artistModeButton {
+  display: none !important;
+}
+#tab-create .create-unified-surface .genre-direction,
+#tab-create .create-unified-surface .create-harmony-inline,
+#tab-create .create-unified-surface .create-recipe-inline,
+#tab-create .create-unified-surface .recipe-card,
+#tab-create .create-unified-surface .generation-intent {
+  margin: 0;
+  padding: 12px 0;
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+#tab-create .create-unified-surface .create-harmony-inline,
+#tab-create .create-unified-surface .create-recipe-inline {
+  border-top: 1px solid rgba(151,206,209,.16) !important;
+}
+#tab-create .create-unified-surface .create-inline-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 0 12px;
+}
+#tab-create .create-unified-surface .create-inline-heading strong {
+  font: 800 .88rem var(--font-display);
+  letter-spacing: .06em;
+  color: #c3f4f3;
+}
+#tab-create .create-unified-surface .create-inline-heading span {
+  font-size: .8rem;
+  line-height: 1.5;
+  color: var(--studio-readable-muted);
+}
+#tab-create .create-unified-surface .shape-controls-body,
+#tab-create .create-unified-surface .control-group {
+  display: grid !important;
+  grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  gap: 12px !important;
+  padding: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+#tab-create .create-unified-surface .key-control-wrap,
+#tab-create .create-unified-surface .mode-control-wrap,
+#tab-create .create-unified-surface .control-group > .select-control {
+  min-width: 0;
+  padding: 0;
+}
+#tab-create .create-unified-surface .key-control-wrap select,
+#tab-create .create-unified-surface .mode-control-wrap select,
+#tab-create .create-unified-surface #chordPathControl,
+#tab-create .create-unified-surface #genreControl,
+#tab-create .create-unified-surface #secondaryGenreControl {
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+}
+#tab-create .create-unified-surface .create-live-controls {
+  grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  gap: 0 18px !important;
+}
+#tab-create .create-unified-surface .create-live-control,
+#tab-create .create-unified-surface .create-live-select {
+  min-height: 76px !important;
+  padding: 11px 3px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(151,206,209,.13) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+#tab-create .create-unified-surface .create-live-control > span,
+#tab-create .create-unified-surface .create-live-select > span,
+#tab-create .create-unified-surface .select-control > span {
+  font-size: .91rem;
+  line-height: 1.45;
+}
+#tab-create .create-unified-surface .create-live-control small {
+  display: block;
+  font-size: .77rem !important;
+}
+#tab-create .create-unified-surface .create-stage-heading {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(151,206,209,.2);
+}
+#tab-create .create-unified-surface .create-fine-tuning-inline {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 8px 16px;
+}
+#tab-create .create-unified-surface .create-fine-tuning-inline .mini-range {
+  min-width: 0;
+  min-height: 66px;
+  padding: 9px 2px;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(151,206,209,.13) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+#tab-create .create-unified-surface .recipe-card {
+  display: grid;
+  gap: 4px;
+}
+#tab-create .create-unified-surface .generation-actions-bar {
+  margin-top: 10px;
+  border-top-color: rgba(151,206,209,.24);
+}
+@media (min-width: 800px) {
+  body:has(#tab-create.is-active) .app-shell {
+    max-width: min(1100px, 100%) !important;
+  }
+  #tab-create .create-unified-surface .creator-grid {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+}
+@media (max-width: 760px) {
+  #tab-create .create-unified-surface .create-live-controls {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+  #tab-create .create-unified-surface .control-group {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+}
+@media (max-width: 550px) {
+  #tab-create .create-performance-deck.create-unified-surface {
+    padding: 16px 14px !important;
+  }
+  #tab-create .create-unified-surface .create-performance-heading h2 {
+    font-size: 1.5rem !important;
+  }
+  #tab-create .create-unified-surface .create-live-controls,
+  #tab-create .create-unified-surface .create-fine-tuning-inline {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  #tab-create .create-unified-surface .create-live-control,
+  #tab-create .create-unified-surface .create-live-select {
+    min-height: 68px !important;
+    gap: 5px !important;
+    padding: 9px 0 !important;
+  }
+  #tab-create .create-unified-surface .create-live-control small {
+    display: none;
+  }
+  #tab-create .create-unified-surface .genre-select-control,
+  #tab-create .create-unified-surface .control-group > *,
+  #tab-create .create-unified-surface .mode-control-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  #tab-create .create-unified-surface .create-fine-tuning-inline .mini-range {
+    min-height: 64px !important;
+  }
+}

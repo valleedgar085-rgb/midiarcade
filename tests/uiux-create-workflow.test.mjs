@@ -45,7 +45,7 @@ test("Create controls sit immediately below the song showcase, with the original
   assert.match(presentation, /className = "create-performance-deck panel"/);
   assert.match(presentation, /slot\.insertAdjacentElement\("afterend", deck\)/);
   assert.match(presentation, /deck\.append\(controls\)/);
-  assert.match(presentation, /creator\.insertAdjacentElement\("afterend", workflow\)/);
+  assert.match(presentation, /deck\.insertAdjacentElement\("afterend", workflow\)/);
   assert.match(presentation, /"variationControl", "evolutionControl"/);
   assert.match(presentation, /"swingControl", "humanizeControl"/);
   assert.match(globalCss, /#tab-create\s*>\s*\.home-command\s*\{\s*display:\s*none\s*!important/);
@@ -72,13 +72,22 @@ test("A2 organizes Create around Song, Feel, Structure, and Generate without dup
   assert.doesNotMatch(presentation, /4 · GENERATE/);
 });
 
-test("advanced direction moves optional controls below the primary generation actions", () => {
-  assert.match(presentation, /className = "phase1-advanced-direction"/);
-  assert.match(presentation, /body\.append\(shapeControls, recipeControls\)/);
-  assert.match(presentation, /generationActions\.insertAdjacentElement\("afterend", advanced\)/);
-  assert.match(presentation, /creatorGrid\.classList\.add\("phase1-essentials-grid"\)/);
-  assert.match(css, /#preGenSection \.phase1-advanced-direction-body\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /#preGenSection \.creator-grid\.phase1-essentials-grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
+test("Create opens Key, Mode and Harmonic Path in the one controls panel without an advanced drawer", () => {
+  assert.match(presentation, /function consolidateCreateSurface/);
+  assert.match(presentation, /className = "create-harmony-inline"/);
+  assert.match(presentation, /className = "create-recipe-inline"/);
+  assert.match(presentation, /shapeControls\.insertAdjacentElement\?\.\("afterend", harmony\)/);
+  assert.match(presentation, /recipeControls\.insertAdjacentElement\?\.\("afterend", recipe\)/);
+  assert.match(presentation, /deck\.append\(creator\)/);
+  assert.doesNotMatch(presentation, /className = "phase1-advanced-direction"/);
+  assert.match(presentation, /deck\.classList\.add\("create-unified-surface"\)/);
+  for (const id of ["keyControl", "modeControl", "chordPathControl", "genreControl", "secondaryGenreControl"]) {
+    assert.equal((html.match(new RegExp('id="' + id + '"', "g")) || []).length, 1, id + " must retain one authoritative node");
+  }
+  const refined = fs.readFileSync(new URL("../src/ui/uiux-pro-max-phase1.css", import.meta.url), "utf8");
+  assert.match(refined, /#tab-create \.create-performance-deck\.create-unified-surface/);
+  assert.match(refined, /max-width:\s*min\(1100px, 100%\)/);
+  assert.match(refined, /#chordPathControl/);
 });
 
 test("Create copy explains reference, direction, generation and Elements without ambiguous wording", () => {
@@ -105,7 +114,7 @@ test("every contracted Create control receives intent, event and contextual-help
   for (const eventName of ["focusin", "pointerover", "input", "change", "click"]) {
     assert.match(contract, new RegExp(`"${eventName}"`), `${eventName} must refresh Create control context`);
   }
-  const calls = presentation.match(/upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateAdvancedDirection\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
+  const calls = presentation.match(/upgradeStaticCreateCopy\(rootDocument, createPanel\);[\s\S]*?moveGenerationEssentials\(rootDocument, createPanel\);[\s\S]*?consolidateCreateSurface\(rootDocument, createPanel\);[\s\S]*?moveOptionalGuide\(createPanel\);[\s\S]*?applyCreateControlContract\(rootDocument, createPanel\);/);
   assert.ok(calls, "Create wiring must apply only after the controls reach their final DOM positions");
 });
 
