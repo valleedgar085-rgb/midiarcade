@@ -162,3 +162,65 @@ export function createGenreAwareHookReturnCandidates(song,{
     ||Math.abs(a.changedPitch-a.originalPitch)-Math.abs(b.changedPitch-b.originalPitch)
     ||a.id.localeCompare(b.id)).slice(0,limit);
 }
+
+
+/**
+ * Developer-only explanation of why a particular weak return cannot produce
+ * a one-note V2 candidate. Unlike relaxing protection to chase score, this
+ * counts constraints without cloning or changing any musical event.
+ */
+export function diagnoseGenreHookReturnReadiness(song) {
+  const genre=String(song?.meta?.genre??song?.genre??"");
+  const report=evaluateChorusHookRecurrence(song);
+  const stats={
+    genre, hookStatus:report.status, hookScore:report.score, status:"not-applicable",
+    sourceNotes:0, returnNotes:0, middleNotes:0, protectedNotes:0,
+    shortUnprotectedNotes:0, positionAligned:0, safePitchOptions:0,
+    qualityImprovingOptions:0,
+  };
+  if(!genreSet.has(genre)){stats.status="unsupported-genre";return stats;}
+  const classes=keyAuthority(song);
+  if(!classes){stats.status="missing-scale-authority";return stats;}
+  if(report.status!=="evaluated"||report.score>=66||report.score===null){
+    stats.status="not-weak-evaluable";return stats;
+  }
+  const weak=[...(report.comparisons??[])].filter(c=>c.available&&c.score<0.66)
+    .sort((a,b)=>a.score-b.score||a.sectionId.localeCompare(b.sectionId))[0];
+  if(!weak){stats.status="no-weak-comparison";return stats;}
+  const source=opening(song,weak.sourceSectionId,weak.windowBars);
+  const target=opening(song,weak.sectionId,weak.windowBars);
+  stats.sourceNotes=source.length;stats.returnNotes=target.length;
+  if(source.length<4||target.length<4){stats.status="sparse-hook";return stats;}
+  const sourceStart=sectionStart(song,sectionById(song,weak.sourceSectionId));
+  const targetStart=sectionStart(song,sectionById(song,weak.sectionId));
+  const window=rolePreferredRegisterWindow("melody")??{min:57,max:79};
+  const count=Math.min(source.length,target.length);
+  stats.middleNotes=Math.max(0,count-2);
+  for(let i=1;i<count-1;i++){
+    const note=target[i].note;
+    if(protectedNote(note)){stats.protectedNotes++;continue;}
+    if(finite(note.duration,0)>=0.65)continue;
+    stats.shortUnprotectedNotes++;
+    const aligned=Math.abs((finite(source[i].note.start)-sourceStart)
+      -(finite(note.start)-targetStart));
+    if(!Number.isFinite(aligned)||aligned>0.26)continue;
+    stats.positionAligned++;
+    for(const raw of new Set(intentPitches(source,i,target).map(Math.round))){
+      if(!allowedPitch(source,target,i,raw,classes,window))continue;
+      stats.safePitchOptions++;
+      const candidate=cloneValue(song);
+      const changed=candidate.tracks.find(t=>t.id==="melody")?.notes?.[target[i].index];
+      if(!changed)continue;
+      changed.pitch=raw;
+      const after=evaluateChorusHookRecurrence(candidate);
+      if(after.status==="evaluated"&&after.score>report.score)stats.qualityImprovingOptions++;
+    }
+  }
+  stats.status=stats.middleNotes===stats.protectedNotes?"protected-return"
+    :stats.shortUnprotectedNotes===0?"no-short-unprotected-note"
+      :stats.positionAligned===0?"no-matched-relative-onsets"
+        :stats.safePitchOptions===0?"no-scale-safe-neighbor"
+          :stats.qualityImprovingOptions===0?"one-note-change-cannot-improve-hook-score"
+            :"candidate-possible";
+  return stats;
+}
