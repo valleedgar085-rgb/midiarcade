@@ -1,0 +1,39 @@
+name: Android Preview Pressure and Generation Timing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/audit-preview-pressure-generation.mjs'
+      - 'tests/preview-voice-pressure-audit.test.mjs'
+      - '.github/workflows/preview-pressure-audit.yml'
+      - 'docs/audio-generation-weakspot-audit.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview-pressure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/preview-voice-pressure-audit.test.mjs tests/preview-performance.test.mjs tests/pitched-preview-click-regression.test.mjs
+      - name: Run all-genre voice pressure estimate and generation timing
+        run: node scripts/audit-preview-pressure-generation.mjs --seeds 2 --bars 32 --json "$RUNNER_TEMP/preview-pressure-report.json"
+      - name: Upload complete diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-preview-pressure-generation-audit
+          path: ${{ runner.temp }}/preview-pressure-report.json
+          retention-days: 14
+          if-no-files-found: warn
