@@ -14,7 +14,7 @@ Coding agents supporting project skills in `.agents/skills/` can use:
 
 The project skill files contain self-contained instructions, so they remain useful if the upstream repository is unavailable. They are **adaptations**, not full vendored copies or claims that upstream plugins were globally installed. Review upstream original docs before applying unfamiliar rules or updating these adapters.
 
-If a coding agent does not auto-discover `.agents/skills/`, direct it to read the named `SKILL.md` file along with root `AGENTS.md`. Claude Code installations may additionally use each upstream repository's official plugin/skills instructions; do not assume this branch changed any local user-level skill installation.
+Codex discovers the canonical `.agents/skills/` manifests. Claude Code uses the matching project entry points under `.claude/skills/` and `CLAUDE.md`, which direct it to the same canonical project skills. If an agent does not auto-discover either location, direct it to read the named `SKILL.md` and root `AGENTS.md`. This branch does **not** install third-party skills globally into a developer's home directory.
 
 ## First assignment: melody + vocal pocket audit (read-only)
 
