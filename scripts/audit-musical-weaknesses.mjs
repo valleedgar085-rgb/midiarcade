@@ -19,6 +19,7 @@ import { evaluateMelodyPhraseIntelligence } from "../src/core/melody-phrase-inte
 import { evaluateMelodySectionMemory } from "../src/core/melody-section-memory.js";
 import { evaluateEnsembleCoordinationAuthority } from "../src/core/ensemble-coordination-authority.js";
 import { analyzeTonalIntegrity } from "../src/core/tonal-integrity.js";
+import { evaluateArrangementActivityContrast } from "./lib/arrangement-activity.mjs";
 
 const allGenres = Object.keys(GENRE_PROFILES);
 function flag(name, fallback) {
@@ -63,6 +64,7 @@ for (const genre of genres) {
     const phrase = evaluateMelodyPhraseIntelligence(song);
     const memory = evaluateMelodySectionMemory(song);
     const ensemble = evaluateEnsembleCoordinationAuthority(song);
+    const arrangementActivity = evaluateArrangementActivityContrast(song);
     const tonal = analyzeTonalIntegrity(
       song.tracks ?? [], song.harmony ?? [], song.meta ?? {}, song.structure ?? [],
     );
@@ -111,6 +113,13 @@ for (const genre of genres) {
       ensemble: {
         passed: ensemble.passed, score: ensemble.score, reason: ensemble.reason,
         metrics: ensemble.metrics, weakestSection: ensemble.weakestSection?.sectionId ?? null,
+      },
+      arrangementActivity: {
+        status: arrangementActivity.status,
+        meanActivityContrast: arrangementActivity.meanActivityContrast,
+        leastContrastingTransition: arrangementActivity.leastContrastingTransition,
+        transitions: arrangementActivity.transitions,
+        sections: arrangementActivity.sections,
       },
       tonal: {
         scaleFit: tonal.scaleFit, strongChordFit: tonal.strongChordFit,
@@ -186,6 +195,7 @@ const genresSummary = genres.map((genre) => {
     genre, samples: sampleRows.length,
     lowestMusicalScore: Math.min(...sampleRows.map((item) => item.musicalScore)),
     averageMusicalScore: round(sampleRows.reduce((n, item) => n + item.musicalScore, 0) / sampleRows.length, 1),
+    meanActivityContrast: round(sampleRows.reduce((sum, item) => sum + (item.arrangementActivity.meanActivityContrast ?? 0), 0) / sampleRows.length),
     releaseGateFailures: sampleRows.filter((item) => !item.releasePassed).length,
     weakHookReturns: sampleRows.filter((item) => item.hook.status === "evaluated" && item.hook.passed === false).length,
     hookUnavailableOrIncomplete: sampleRows.filter((item) => item.hook.status !== "evaluated").length,
@@ -216,6 +226,7 @@ for (const item of genresSummary) {
   console.log("MUSIC_CENSUS_GENRE", JSON.stringify({
     genre: item.genre, samples: item.samples,
     averageMusicalScore: item.averageMusicalScore,
+    meanActivityContrast: item.meanActivityContrast,
     releaseGateFailures: item.releaseGateFailures,
     weakHookReturns: item.weakHookReturns,
     hookUnavailableOrIncomplete: item.hookUnavailableOrIncomplete,
