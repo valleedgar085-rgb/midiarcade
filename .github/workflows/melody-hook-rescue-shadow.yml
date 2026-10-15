@@ -1,0 +1,52 @@
+name: Melody Hook Rescue Shadow A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-hook-rescue-shadow.mjs'
+      - 'scripts/lib/hook-rescue-shadow.mjs'
+      - 'tests/hook-rescue-shadow.test.mjs'
+      - '.github/workflows/melody-hook-rescue-shadow.yml'
+      - 'docs/melody-hook-rescue-shadow.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shadow-hook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify hook candidate safety and MIDI export
+        run: node --test tests/hook-rescue-shadow.test.mjs tests/chorus-hook-development.test.mjs tests/chorus-hook-rhythm.test.mjs
+      - name: Audit all 21 genres and historic rap hook cases
+        run: node scripts/benchmark-hook-rescue-shadow.mjs --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-shadow"
+      - name: Upload blind hook-MIDI comparisons and full report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-hook-rescue-shadow-cases
+          path: |
+            ${{ runner.temp }}/hook-shadow/report.json
+            ${{ runner.temp }}/hook-shadow/READ_FIRST.txt
+            ${{ runner.temp }}/hook-shadow/*.mid
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Keep experimental answer key separate
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-hook-rescue-answer-key-OPEN-LAST
+          path: ${{ runner.temp }}/hook-shadow/answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
