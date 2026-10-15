@@ -1,0 +1,55 @@
+name: Section Contrast Blind MIDI A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-section-contrast-ab.mjs'
+      - 'scripts/lib/section-contrast-ab.mjs'
+      - 'tests/section-contrast-ab.test.mjs'
+      - '.github/workflows/section-contrast-ab.yml'
+      - 'docs/section-contrast-ab-listening.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blind-midi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate A-B comparison and opt-in section dynamics
+        run: node --test tests/section-contrast-ab.test.mjs tests/section-contrast-performance.test.mjs
+      - name: Make fixed-seed MIDI A-B comparisons
+        run: node scripts/benchmark-section-contrast-ab.mjs --genres hipHop,pop,rap,popRadio,funk,synthwave --seeds 2 --bars 32 --out "$RUNNER_TEMP/section-ab"
+      - name: Upload blind MIDI pairs and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-blind-section-ab-pairs
+          path: |
+            ${{ runner.temp }}/section-ab/*.mid
+            ${{ runner.temp }}/section-ab/READ_FIRST.txt
+            ${{ runner.temp }}/section-ab/report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload answer key separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-section-ab-answer-key-OPEN-LAST
+          path: ${{ runner.temp }}/section-ab/answer-key.json
+          if-no-files-found: warn
+          retention-days: 14

@@ -132,3 +132,17 @@ test("arrangement audition preserves 3-candidate ceiling with opt-in section dyn
       song.tracks.reduce((sum, t) => sum + t.notes.length, 0));
   }
 });
+
+test("section contrast never clamps extreme existing velocities into a larger edit", () => {
+  const source = songFixture();
+  const chords = source.tracks.find(track => track.id === "chords");
+  chords.notes[0].velocity = 127; // verse note: old clamp could change by -15
+  chords.notes[4].velocity = 40;  // chorus note: old clamp could change by +8
+  const a = applyArrangementPerformance(source, { sectionContrastDynamics: false });
+  const b = applyArrangementPerformance(source, { sectionContrastDynamics: true });
+  assert.equal(b.song.tracks.find(t => t.id === "chords").notes[0].velocity,
+    a.song.tracks.find(t => t.id === "chords").notes[0].velocity);
+  assert.equal(b.song.tracks.find(t => t.id === "chords").notes[4].velocity,
+    a.song.tracks.find(t => t.id === "chords").notes[4].velocity);
+  assert.ok(b.diagnostics.sectionContrastNotes >= 0);
+});

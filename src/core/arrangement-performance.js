@@ -290,8 +290,12 @@ function stageSectionSupportContrast(song) {
           .slice(0, 2);
         for (const note of candidates) {
           const before = noteVelocity(note);
-          if (change < 0 && before < 54 || change > 0 && before > 107) continue;
-          const after = clamp(before + change, 48, 112);
+          // Never turn a small intended accent into a large, audible clamp.
+          // Extremely quiet/loud source events belong to their existing owner.
+          if (before < 48 || before > 112
+              || (change < 0 && before < 55)
+              || (change > 0 && before > 107)) continue;
+          const after = before + change;
           if (Math.abs(after - before) <= 1e-6) continue;
           setNoteVelocity(note, after);
           note.arrangementPerformanceRole = change < 0 ? "verse-support-restraint" : "payoff-support-open";
