@@ -6477,7 +6477,10 @@ function bindGlobalControls() {
     $("#menuItemReset")?.addEventListener("click", () => $("#resetControlsButton")?.click());
     $("#menuItemFullscreen")?.addEventListener("click", toggleFullscreen);
     $("#menuItemExport")?.addEventListener("click", exportSong);
-    $("#menuItemGuide")?.addEventListener("click", () => $("#helpButton")?.click());
+    $("#menuItemGuide")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      $("#helpButton")?.click();
+    });
   }
 
   document.addEventListener("click", (event) => {
