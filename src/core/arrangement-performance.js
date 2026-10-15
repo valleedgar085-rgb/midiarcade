@@ -5,6 +5,7 @@ const SAFE_TRACKS = new Set(["drums", "chords", "counterpoint", "pad"]);
 const PAYOFF_NAMES = new Set(["chorus", "drop", "theme"]);
 const LYRIC_SECTION_NAMES = new Set(["verse", "idea"]);
 const KICK_PITCHES = new Set([35, 36]);
+const SECTION_CONTRAST_SUPPORT_TRACKS = new Set(["chords", "pad"]);
 
 function finite(value, fallback = 0) {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
@@ -246,6 +247,65 @@ function shapeTransition(song, transition, profile, options = {}) {
   return { changedNotes, pickups, arrivals, payoff, vacuumNotes, lyricSpaceNotes, bassKickAccents };
 }
 
+/**
+ * Optional, bounded support-dynamics stage for a verse -> payoff handoff.
+ * Preserve the kick/bass backbone, lead and answer motifs, protected handoff
+ * notes and all event topology. Only pre-existing support velocities change.
+ * No automatic subtraction: repeated/loop-heavy genres can stay restrained.
+ */
+function stageSectionSupportContrast(song) {
+  if (song?.meta?.isFusion === true) return { sectionContrastNotes: 0, sectionContrastSections: 0 };
+  const sections = sectionsOf(song);
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const stagedSections = new Set();
+  let sectionContrastNotes = 0;
+
+  for (let index = 0; index < sections.length - 1; index += 1) {
+    const verse = sections[index];
+    const payoff = sections[index + 1];
+    if (!LYRIC_SECTION_NAMES.has(sectionName(verse)) || !PAYOFF_NAMES.has(sectionName(payoff))) continue;
+
+    for (const [section, change] of [[verse, -7], [payoff, 5]]) {
+      const start = finite(section?.startBeat, finite(section?.startBar, 0) * beatsPerBar);
+      const end = finite(section?.endBeat, start + Math.max(1, finite(section?.bars, 1)) * beatsPerBar);
+      if (!(end - start >= beatsPerBar * 2)) continue;
+      const windowStart = start + beatsPerBar * 0.25;
+      const windowEnd = Math.min(start + (end - start) * 0.5, end - beatsPerBar * 0.75);
+      if (windowEnd <= windowStart) continue;
+
+      const intent = song?.producerIntent?.scenes?.find((scene) =>
+        String(scene.sectionId) === String(section?.id));
+      for (const { track, trackId } of safeTrackEntries(song)) {
+        if (!SECTION_CONTRAST_SUPPORT_TRACKS.has(trackId)) continue;
+        const role = String(intent?.roles?.[trackId] ?? "support");
+        if (["foreground", "answer", "rest"].includes(role)) continue;
+        const candidates = (track.notes ?? []).filter((note) => {
+          const startBeat = noteStart(note);
+          return startBeat >= windowStart - 1e-6 && startBeat < windowEnd - 1e-6
+            && !note.transitionHandoffRole && !note.arrangementPerformanceRole
+            && !note.motifMemoryCore && !note.ensembleCadenceRole
+            && !note.motifHandoffRole && !note.finalAssemblyRole
+            && !note.transitionHandoffId;
+        }).sort((left, right) => noteStart(left) - noteStart(right) || notePitch(left) - notePitch(right))
+          .slice(0, 2);
+        for (const note of candidates) {
+          const before = noteVelocity(note);
+          if (change < 0 && before < 54 || change > 0 && before > 107) continue;
+          const after = clamp(before + change, 48, 112);
+          if (Math.abs(after - before) <= 1e-6) continue;
+          setNoteVelocity(note, after);
+          note.arrangementPerformanceRole = change < 0 ? "verse-support-restraint" : "payoff-support-open";
+          note.arrangementPerformanceSectionId = String(section?.id ?? "");
+          sectionContrastNotes += 1;
+          stagedSections.add(String(section?.id ?? ""));
+        }
+      }
+    }
+  }
+
+  return { sectionContrastNotes, sectionContrastSections: stagedSections.size };
+}
+
 const PROFILES = Object.freeze({
   balanced: Object.freeze({
     id: "balanced",
@@ -283,7 +343,7 @@ const PROFILES = Object.freeze({
  * onset, duration, note count, section order and song length remain untouched.
  * The caller still owns critic/release acceptance of the resulting candidate.
  */
-export function applyArrangementPerformance(sourceSong, { profile = "balanced", spaceStrategy = null } = {}) {
+export function applyArrangementPerformance(sourceSong, { profile = "balanced", spaceStrategy = null, sectionContrastDynamics = false } = {}) {
   const transitions = Array.isArray(sourceSong?.arrangementTransitions)
     ? sourceSong.arrangementTransitions
     : [];
@@ -314,6 +374,8 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced", 
     if (shaped.payoff) payoffTransitions += 1;
   }
 
+  const staged = sectionContrastDynamics === true ? stageSectionSupportContrast(song) : null;
+  changedNotes += staged?.sectionContrastNotes ?? 0;
   const changed = staleMarkersCleared > 0 || changedNotes > 0;
   if (!changed) {
     return Object.freeze({
@@ -335,6 +397,7 @@ export function applyArrangementPerformance(sourceSong, { profile = "balanced", 
     vacuumNotes,
     lyricSpaceNotes,
     bassKickAccents,
+    ...(staged ? { sectionContrastDynamics: true, ...staged } : {}),
     safeTracks: Object.freeze([...SAFE_TRACKS]),
   });
   song.outputQualityEvolution = {
