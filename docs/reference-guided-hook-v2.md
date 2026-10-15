@@ -15,7 +15,7 @@ Previously `scripts/benchmark-hook-rescue-shadow.mjs` handled only the existing 
 The new helper tests **bounded one-note contour recall** in a later chorus. It only acts on weak, evaluable chorus returns; the source motif and all verses remain unchanged. Every proposed note must:
 
 - Match a corresponding **relative onset** to avoid rewriting expressive pickups or syncopation.
-- Fit the authoritative song scale and melody register; require keyPc and scaleIntervals to exist.
+- Fit the authoritative song scale and melody register; require keyPc and scaleIntervals to exist. Raw contour intervals are first projected onto the nearest eligible scale pitches within six semitones; unverified chromatic notes are never accepted.
 - Remain within six semitones of the current note and avoid excessive neighboring melodic leaps.
 - Avoid motif-memory/cadence/transition/handoff/protected notes.
 - Preserve all note counts, starts, durations, velocities, all other tracks and section arrangement.
@@ -46,3 +46,9 @@ The optional reference-aligned comparison sets E minor and 96 BPM for only the f
 ## Skills/method
 
 Applied repository MIDI Composition Review and Safe Integration; upstream mc-melody and mc-development were read for motif identity, phrase/rest restraint and avoiding over-predictable repetition. Parallel repository research tasks executed concurrently through connector tools. No autonomous subagents were dispatched. The sound engine and previously approved playback must remain untouched.
+
+## First empirical iteration and root cause (not a final musical claim)
+
+The first 45-song shadow run of this helper found **zero new qualifying real-song proposals**, despite focused fixture tests passing. The additional diagnostic trace found 13 weak cases hitting `no-scale-safe-neighbor`, with other cases blocked by deliberately protected or unaligned notes. Rather than bypass those protections, the next revision projects *candidate contour targets* onto the actual song scale, then checks exact register/neighbor limits and the independent critic. A second all-genre run must prove whether this helps. If it doesn't, keep the feature draft/off and move the repair earlier into motif planning rather than force final-note edits.
+
+This is intentionally a **root-cause-oriented refactor** and the audio sounds/presets remain untouched.
