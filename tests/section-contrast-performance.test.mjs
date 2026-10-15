@@ -120,8 +120,14 @@ test("arrangement audition preserves 3-candidate ceiling with opt-in section dyn
   assert.ok(candidates.length > 0);
   assert.ok(candidates.length <= MAX_ARRANGEMENT_CANDIDATES);
   for (const candidate of candidates) {
-    assert.equal(candidate.performance.sectionContrastDynamics, true);
-    assert.ok(Number.isInteger(candidate.performance.sectionContrastNotes));
+    const audition = candidate.song.outputQualityEvolution.arrangement.audition;
+    assert.equal(audition.sectionContrastDynamicsRequested, true);
+    assert.ok(Number.isInteger(audition.sectionContrastNotes));
+    // A candidate with no eligible support notes is a valid no-op, not an
+    // invitation to invent filler notes or bypass candidate safety.
+    if (candidate.performance.sectionContrastDynamics) {
+      assert.equal(candidate.performance.sectionContrastNotes, audition.sectionContrastNotes);
+    }
     assert.equal(candidate.song.tracks.reduce((sum, t) => sum + t.notes.length, 0),
       song.tracks.reduce((sum, t) => sum + t.notes.length, 0));
   }
