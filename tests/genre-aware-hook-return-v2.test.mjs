@@ -3,7 +3,7 @@ import test from "node:test";
 import { evaluateChorusHookRecurrence } from "../src/core/chorus-hook-recurrence.js";
 import {
   GENRE_HOOK_RETURN_V2,
-  createGenreAwareHookReturnCandidates,
+  createGenreAwareHookReturnCandidates, diagnoseGenreHookReturnReadiness,
 } from "../src/core/genre-aware-hook-return-v2.js";
 
 const sourcePitches = [64, 67, 69, 71, 72, 74, 76, 74];
@@ -93,4 +93,20 @@ test("genre-aware V2 is intentionally limited, deterministic, and does not add n
       assert.equal(edits(original,candidate.song).length,1);
     }
   }
+});
+
+
+test("root-cause diagnosis identifies protected and unsupported returns without modifying the song", () => {
+  const protectedSong = song("neoSoul",{protected:true});
+  const snapshot = structuredClone(protectedSong);
+  const diagnostic = diagnoseGenreHookReturnReadiness(protectedSong);
+  assert.equal(diagnostic.status,"protected-return");
+  assert.ok(diagnostic.protectedNotes>0);
+  assert.deepEqual(protectedSong,snapshot);
+  const unsupported = diagnoseGenreHookReturnReadiness(song("jazz"));
+  assert.equal(unsupported.status,"unsupported-genre");
+  const baseline = diagnoseGenreHookReturnReadiness(song("neoSoul"));
+  assert.equal(baseline.hookStatus,"evaluated");
+  assert.ok(baseline.middleNotes>=1);
+  assert.ok(baseline.safePitchOptions>=1);
 });
