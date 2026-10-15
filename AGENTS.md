@@ -115,3 +115,11 @@ This document defines mandatory engineering guidelines, architectural constraint
 ### 8.2 Resource & CPU Efficiency
 - All Web Audio nodes, synthesis timers, and rendering loops MUST enter a suspended state when playback pauses or when the document becomes hidden.
 
+---
+
+## 9. Developer-Only AI Skill Routing
+
+- For melody identity, hook repetition, section development, genre groove, bass/drum pocket, and rap-vocal space, read `.agents/skills/midi-composition-review/SKILL.md` before proposing an engine change.
+- For clicks, pops, crackling, silence, scheduling, or Web Audio faults, read `.agents/skills/midi-audio-diagnostics/SKILL.md` before editing synthesis or audio envelopes.
+- For concurrent agent tasks, branch integration, debugging, regression prevention, and release claims, read `.agents/skills/midi-safe-integration/SKILL.md`.
+- All three are **developer workflow aids** only. See `docs/DEVELOPER_SKILLS_WORKFLOW.md` for scope, source links, and the read-only first assignment. They do not add runtime features or override any rule above. Require measured evidence and real listening checks for audible changes; no speculative quality claims.
