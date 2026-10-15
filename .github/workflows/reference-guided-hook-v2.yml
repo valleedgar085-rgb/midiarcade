@@ -1,0 +1,57 @@
+name: Reference Guided Melody Hook V2 Shadow
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/core/genre-aware-hook-return-v2.js'
+      - 'tests/genre-aware-hook-return-v2.test.mjs'
+      - 'scripts/benchmark-hook-rescue-shadow.mjs'
+      - 'docs/reference-guided-hook-v2.md'
+      - '.github/workflows/reference-guided-hook-v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  hook-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test old and new hook authorities
+        run: node --test tests/genre-aware-hook-return-v2.test.mjs tests/chorus-hook-development.test.mjs tests/chorus-hook-rhythm.test.mjs tests/hook-rescue-shadow.test.mjs
+      - name: Shadow test all configured genres and historical rap seeds
+        run: node scripts/benchmark-hook-rescue-shadow.mjs --genre-v2 true --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-v2-all-genres"
+      - name: Reference-guided E minor 96 BPM genre comparison
+        run: node scripts/benchmark-hook-rescue-shadow.mjs --genre-v2 true --reference-96 true --genres hipHop,rap,popRadio,neoSoul,rnbSoul --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-v2-reference-96"
+      - name: Upload new/old safe-candidate comparisons
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-hook-v2-shadow-and-reference-96
+          path: |
+            ${{ runner.temp }}/hook-v2-all-genres/report.json
+            ${{ runner.temp }}/hook-v2-all-genres/*.mid
+            ${{ runner.temp }}/hook-v2-reference-96/report.json
+            ${{ runner.temp }}/hook-v2-reference-96/*.mid
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload blind answer keys separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-hook-v2-answer-keys-OPEN-LAST
+          path: |
+            ${{ runner.temp }}/hook-v2-all-genres/answer-key.json
+            ${{ runner.temp }}/hook-v2-reference-96/answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
