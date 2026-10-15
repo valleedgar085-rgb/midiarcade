@@ -27,11 +27,14 @@ const STAGE_CADENCE_MS = Object.freeze({
   sectionVariations: 500,
 });
 
+// Real composition and validation remain authoritative. This is only the
+// brief visual hold AFTER the actual worker finishes; do not force a 3–4s
+// artificial wait on fast Android devices. Live stage labels still update.
 const MINIMUM_VISIBLE_MS = Object.freeze({
-  new: 3200,
-  similar: 3000,
-  songVariations: 4200,
-  sectionVariations: 2800,
+  new: 850,
+  similar: 850,
+  songVariations: 1200,
+  sectionVariations: 700,
 });
 
 function clamp01(value) {

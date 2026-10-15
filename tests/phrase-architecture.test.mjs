@@ -19,8 +19,8 @@ test("loading producer passes are informative, ordered, steady, and bounded", ()
   assert.deepEqual(stages.map(({ id }) => id), ["blueprint", "harmony", "phrases", "groove", "audition", "master"]);
   assert.match(generationStages("similar")[2].copy, /familiar motif/i);
   assert.match(generationStages("songVariations")[4].copy, /complete candidates/i);
-  assert.ok(generationMinimumVisibleMs("new") >= 3000, "New should remain readable long enough to show Producer Brain work");
-  assert.ok(generationMinimumVisibleMs("songVariations") >= 4000, "three-way elemental generation deserves a longer visible thinking pass");
+  assert.ok(generationMinimumVisibleMs("new") >= 600 && generationMinimumVisibleMs("new") < 1500, "New should not wait artificially after actual composition");
+  assert.ok(generationMinimumVisibleMs("songVariations") >= generationMinimumVisibleMs("new") && generationMinimumVisibleMs("songVariations") < 1600, "variation progress should be legible without an artificial 4-second hold");
   assert.equal(generationStageState("new", -50).stageIndex, 0);
   assert.equal(generationStageState("new", 999999).stageIndex, 5);
   assert.equal(generationStageState("new", 999999).progress, 0.96, "live progress reserves 100% for the completion/fade frame");

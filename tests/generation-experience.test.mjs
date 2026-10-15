@@ -13,10 +13,10 @@ const quality = fs.readFileSync(new URL("../scripts/check-build-quality.js", imp
 const app = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
 const smoke = fs.readFileSync(new URL("./app-smoke.test.mjs", import.meta.url), "utf8");
 
-test("Producer Brain loading uses a readable steady timing contract", () => {
-  assert.ok(generationMinimumVisibleMs("new") >= 3000);
-  assert.ok(generationMinimumVisibleMs("similar") >= 2800);
-  assert.ok(generationMinimumVisibleMs("songVariations") >= 4000);
+test("Producer Brain progress remains readable but does not fake multi-second generation", () => {
+  assert.ok(generationMinimumVisibleMs("new") >= 600 && generationMinimumVisibleMs("new") <= 1200);
+  assert.ok(generationMinimumVisibleMs("similar") >= 600 && generationMinimumVisibleMs("similar") <= 1200);
+  assert.ok(generationMinimumVisibleMs("songVariations") >= 850 && generationMinimumVisibleMs("songVariations") <= 1500);
   const early = generationStageState("new", 160);
   const middle = generationStageState("new", 1600);
   const late = generationStageState("new", 999999);
