@@ -38,6 +38,16 @@ export const SCOPED_COMPOSER_AUTHORITY_KEYS = Object.freeze([
   "grooveConductor",
 ]);
 
+/** Freeze the cloned authority graph, never the accepted source song. */
+function freezeAuthorityGraph(value, seen = new WeakSet()) {
+  if (!value || typeof value !== "object" || seen.has(value)) return value;
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value;
+  seen.add(value);
+  for (const key of Object.keys(value)) freezeAuthorityGraph(value[key], seen);
+  return Object.freeze(value);
+}
+
 export function createCanonicalSongState(song) {
   if (!song || typeof song !== "object") {
     throw new TypeError("createCanonicalSongState requires a song object");
@@ -53,5 +63,5 @@ export function createCanonicalSongState(song) {
     if (song[key] !== undefined) state[key] = cloneValue(song[key]);
   }
 
-  return Object.freeze(state);
+  return freezeAuthorityGraph(state);
 }
