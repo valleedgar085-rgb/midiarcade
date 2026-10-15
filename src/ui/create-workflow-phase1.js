@@ -160,7 +160,8 @@ function consolidateCreateSurface(rootDocument, createPanel) {
   if (harmonyBody) {
     while (harmonyBody.firstChild) harmony.append(harmonyBody.firstChild);
   }
-  shapeControls.replaceWith(harmony);
+  shapeControls.insertAdjacentElement?.("afterend", harmony);
+  shapeControls.remove?.();
 
   const recipe = rootDocument.createElement("section");
   recipe.className = "create-recipe-inline";
@@ -174,7 +175,8 @@ function consolidateCreateSurface(rootDocument, createPanel) {
     while (rhythm.firstChild) detail.append(rhythm.firstChild);
     recipe.append(detail);
   }
-  recipeControls.replaceWith(recipe);
+  recipeControls.insertAdjacentElement?.("afterend", recipe);
+  recipeControls.remove?.();
   creatorGrid.classList.add("phase1-essentials-grid");
 
   // One bordered card owns both quick knobs and the entire direction form.
