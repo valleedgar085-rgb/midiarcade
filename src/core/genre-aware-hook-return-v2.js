@@ -72,6 +72,27 @@ function intentPitches(source,index,target){
     finite(nextTarget.pitch)-outgoing,
   ];
 }
+/**
+ * Translate an interval-contour target onto the actual key/scale *before*
+ * measuring the proposed edit. Do not assume that raw interval arithmetic
+ * lands inside a legal scale or invent any extra MIDI notes.
+ */
+function scaleProjectedPitches(source, index, target, classes, window) {
+  const current=finite(target[index]?.note?.pitch);
+  if(!Number.isInteger(current))return [];
+  const ideals=intentPitches(source,index,target).filter(Number.isFinite);
+  if(!ideals.length)return [];
+  const possible=[];
+  for(let pitch=Math.max(window.min,current-6);pitch<=Math.min(window.max,current+6);pitch++){
+    if(pitch===current||!classes.has(mod12(pitch)))continue;
+    const contourDistance=Math.min(...ideals.map(ideal=>Math.abs(pitch-ideal)));
+    if(contourDistance>3)continue;
+    possible.push({pitch,contourDistance,change:Math.abs(pitch-current)});
+  }
+  return possible.sort((a,b)=>a.contourDistance-b.contourDistance
+    ||a.change-b.change||a.pitch-b.pitch).slice(0,8).map(entry=>entry.pitch);
+}
+
 function allowedPitch(source, target, index, pitch, classes, window) {
   const current=target[index]?.note;
   const prev=target[index-1]?.note;
@@ -131,7 +152,7 @@ export function createGenreAwareHookReturnCandidates(song,{
     const aligned=Math.abs((finite(source[index].note.start)-sourceStart)
       -(finite(note.start)-targetStart));
     if(!Number.isFinite(aligned)||aligned>0.26)continue;
-    for(const candidateRaw of intentPitches(source,index,target)){
+    for(const candidateRaw of scaleProjectedPitches(source,index,target,classes,register)){
       const pitch=Math.round(candidateRaw);
       if(!allowedPitch(source,target,index,pitch,classes,register))continue;
       if(seen.has(index+":"+pitch))continue;
@@ -205,7 +226,7 @@ export function diagnoseGenreHookReturnReadiness(song) {
       -(finite(note.start)-targetStart));
     if(!Number.isFinite(aligned)||aligned>0.26)continue;
     stats.positionAligned++;
-    for(const raw of new Set(intentPitches(source,i,target).map(Math.round))){
+    for(const raw of scaleProjectedPitches(source,i,target,classes,window)){
       if(!allowedPitch(source,target,i,raw,classes,window))continue;
       stats.safePitchOptions++;
       const candidate=cloneValue(song);
