@@ -76,8 +76,8 @@ test("Create opens Key, Mode and Harmonic Path in the one controls panel without
   assert.match(presentation, /function consolidateCreateSurface/);
   assert.match(presentation, /className = "create-harmony-inline"/);
   assert.match(presentation, /className = "create-recipe-inline"/);
-  assert.match(presentation, /shapeControls\.replaceWith\(harmony\)/);
-  assert.match(presentation, /recipeControls\.replaceWith\(recipe\)/);
+  assert.match(presentation, /shapeControls\.insertAdjacentElement\?\.\("afterend", harmony\)/);
+  assert.match(presentation, /recipeControls\.insertAdjacentElement\?\.\("afterend", recipe\)/);
   assert.match(presentation, /deck\.append\(creator\)/);
   assert.doesNotMatch(presentation, /className = "phase1-advanced-direction"/);
   assert.match(presentation, /deck\.classList\.add\("create-unified-surface"\)/);
