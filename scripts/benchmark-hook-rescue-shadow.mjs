@@ -16,7 +16,7 @@ import {
 import { inspectHookMutation, inspectHookExport, blindVariant } from "./lib/hook-rescue-shadow.mjs";
 import {
   GENRE_HOOK_RETURN_V2,
-  createGenreAwareHookReturnCandidates,
+  createGenreAwareHookReturnCandidates, diagnoseGenreHookReturnReadiness,
 } from "../src/core/genre-aware-hook-return-v2.js";
 
 const flag = (name, fallback) => {
@@ -111,7 +111,9 @@ for (const item of choices) {
     baselineHook: initial.score, hookStatus: initial.status, hookPassed: initial.passed,
     baselineCritic: baselineEvaluation.score, baselineRelease: baselineRelease.passed,
     candidateSupport: candidateSupportedGenres.has(item.genre),
-    pitchProposals: 0, rhythmProposals: 0, v2Proposals: 0, auditions: [],
+    pitchProposals: 0, rhythmProposals: 0, v2Proposals: 0,
+    v2Readiness: includeGenreV2 ? diagnoseGenreHookReturnReadiness(song) : null,
+    auditions: [],
     reason: initial.status !== "evaluated" ? initial.reason
       : initial.passed ? "hook-score-passed"
         : candidateSupportedGenres.has(item.genre) ? "requires-candidate-audition"
@@ -205,6 +207,7 @@ for (const item of choices) {
     genre: row.genre, seed: row.seed, status: row.hookStatus,
     hook: row.baselineHook, reason: row.reason, options: row.auditions.length,
     exportedPair: row.listeningCase ?? null,
+    v2Status: row.v2Readiness?.status ?? null,
   }));
 }
 report.totals = { songs: choices.length, weakHooks: weak, unavailableHooks: unknown,
