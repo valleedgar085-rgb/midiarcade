@@ -52,3 +52,18 @@ Applied repository MIDI Composition Review and Safe Integration; upstream mc-mel
 The first 45-song shadow run of this helper found **zero new qualifying real-song proposals**, despite focused fixture tests passing. The additional diagnostic trace found 13 weak cases hitting `no-scale-safe-neighbor`, with other cases blocked by deliberately protected or unaligned notes. Rather than bypass those protections, the next revision projects *candidate contour targets* onto the actual song scale, then checks exact register/neighbor limits and the independent critic. A second all-genre run must prove whether this helps. If it doesn't, keep the feature draft/off and move the repair earlier into motif planning rather than force final-note edits.
 
 This is intentionally a **root-cause-oriented refactor** and the audio sounds/presets remain untouched.
+
+## Second empirical iteration: projected-scale options
+
+[21-genre V2 A/B run](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38805326270) passed. The revised candidate-only helper produced the following outcomes:
+
+| Benchmark | Cases | Weak evaluable returns | Candidate proposals | Independent-guard-qualified proposals | Blind MIDI pairs |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| All configured genres × 2 plus 3 historical rap cases | 45 | 14 | 5 | 5 | 3 |
+| Reference-proximate E minor/96 BPM genres × 2, plus 3 historical rap cases | 13 | 6 | 1 | 1 | 1 |
+
+The historical previous helper generated one qualifying rap candidate on the same 45-song set. **Four additional qualifying candidates were found**, from two Afrobeats songs. This is a measurable feasibility improvement, **not listener-verified catchiness**. The reference-aligned 96 BPM test did not uncover a new safe candidate: it repeats the earlier historical rap case.
+
+Read-only readiness breakdown for weak cases in the general set: 9 cases where a one-note edit did not improve the existing hook score despite scale-safe options, one with no short unprotected note, one with no matched relative onset (alongside the historical rap legacy case), and two unsupported styles (rock and country). These patterns suggest that **realistic hooks often need structural motif planning earlier in the pipeline, not a late one-note edit**. Do not weaken the protected anchors to chase the score.
+
+All 20 focused tests passed; real Android/FL Studio blind listening remains unverified. The feature remains OFF by default and does not alter any approved sound.
