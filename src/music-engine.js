@@ -1350,6 +1350,14 @@ export function normalizeConfig(input = {}) {
     fusionBlend,
     isFusion: Boolean(profile.isFusion),
     professionalUpgrade,
+    // Experimental first-phrase chorus identity guard. No effect on default
+    // generation, short songs, jazz, or fusions. The established composer
+    // and candidate/release authority still own all accepted MIDI notes.
+    ...(!secondaryGenre && input.hookReturnOpeningGuardV1 === true
+      && finite(input.bars, DEFAULT_CONFIG.bars) >= 24
+      && ["neoSoul", "rnbSoul", "popRadio", "afrobeats", "funk", "synthwave",
+        "synthPopRadio", "loFiHipHop", "hipHop", "rap", "pop", "drill"].includes(genre)
+      ? { hookReturnOpeningGuardV1: true } : {}),
     genreLabel: profile.label,
     arrangementProfileId: arrangementProfile.id,
     chordPath,
@@ -6157,7 +6165,17 @@ function generateLead(
     const sectionLength = section.endBeat - section.startBeat;
     for (let repeat = 0; repeat * activeMotif.lengthBeats < sectionLength - 0.01; repeat += 1) {
       const repeatStart = section.startBeat + repeat * activeMotif.lengthBeats;
-      const development = phraseDevelopment(config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint);
+      const prescribedDevelopment = phraseDevelopment(
+        config, section, repeat, repeatStart, activeMotif, counterpoint, rng, songBlueprint,
+      );
+      // The B motif family and its memory source are already preserved on
+      // weak chorus returns. In a developer-only A/B, perform the opening
+      // motif without a different section-level pitch/rhythm transform.
+      // Keep the original RNG draw and all later motif repetitions intact.
+      const preserveChorusOpening = config.hookReturnOpeningGuardV1 === true
+        && !counterpoint && repeat === 0
+        && ["chorus", "drop"].includes(section.name);
+      const development = preserveChorusOpening ? null : prescribedDevelopment;
       for (let eventIndex = 0; eventIndex < activeMotif.events.length; eventIndex += 1) {
         const event = activeMotif.events[eventIndex];
         const progress = eventIndex / Math.max(1, activeMotif.events.length - 1);
