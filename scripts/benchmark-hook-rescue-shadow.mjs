@@ -14,6 +14,10 @@ import {
   createChorusHookDevelopmentCandidates, createChorusHookRhythmCandidates,
 } from "../src/core/chorus-hook-development.js";
 import { inspectHookMutation, inspectHookExport, blindVariant } from "./lib/hook-rescue-shadow.mjs";
+import {
+  GENRE_HOOK_RETURN_V2,
+  createGenreAwareHookReturnCandidates, diagnoseGenreHookReturnReadiness,
+} from "../src/core/genre-aware-hook-return-v2.js";
 
 const flag = (name, fallback) => {
   const index = process.argv.indexOf(name);
@@ -34,7 +38,12 @@ const genres = genreArg ? genreArg.split(",").map(s => s.trim()).filter(Boolean)
 if (!genres.length || genres.some(genre => !(genre in GENRE_PROFILES))) {
   throw Error("Invalid genres. Choose from: " + Object.keys(GENRE_PROFILES).join(", "));
 }
-const candidateSupportedGenres = new Set(["pop", "hipHop", "rap"]);
+const includeGenreV2 = flag("--genre-v2", "false") === "true";
+const referenceTempo = flag("--reference-96", "false") === "true";
+const referenceGenres = new Set(["hipHop", "rap", "popRadio", "neoSoul", "rnbSoul"]);
+const candidateSupportedGenres = new Set([
+  "pop", "hipHop", "rap", ...(includeGenreV2 ? GENRE_HOOK_RETURN_V2 : []),
+]);
 const round = value => Number(Number(value).toFixed(3));
 const choices = [];
 for (const genre of genres) {
@@ -42,7 +51,9 @@ for (const genre of genres) {
     choices.push({
       genre, seed: "census-" + String(index + 1).padStart(2, "0") + "-" + genre,
       config: {
-        genre, key: "E", scale: "minor", bars, energy: 0.68,
+        genre, key: "E", scale: "minor", bars,
+        ...(includeGenreV2 && referenceTempo && referenceGenres.has(genre) ? { bpm: 96 } : {}),
+        energy: 0.68,
         complexity: 0.62, variation: 0.62, evolution: 0.68,
         swing: 0.14, humanize: 0.12,
       },
@@ -68,6 +79,13 @@ const report = {
   version: 1,
   baseline: "existing generated melody",
   scope: "read-only candidate audition, never invoked by default generation",
+  referenceListeningProfile: includeGenreV2 ? {
+    sourceArchive: "previously provided 28-track reference.zip (not shipped)",
+    guide: "E minor, 96 BPM reference-guided working example and restrained verse-to-hook lift",
+    strictTempo96: referenceTempo,
+    warning: "This is a compositional comparison profile, not copyrighted MIDI transcription or proof of improved catchiness.",
+  } : null,
+  genreV2Enabled: includeGenreV2,
   genres, seedsPerGenre: seeds, historicalRapCases: choices.filter(c => c.historical).length,
   cases: [], totals: {}, blindMidiPairs: [],
   limitations: [
@@ -93,7 +111,9 @@ for (const item of choices) {
     baselineHook: initial.score, hookStatus: initial.status, hookPassed: initial.passed,
     baselineCritic: baselineEvaluation.score, baselineRelease: baselineRelease.passed,
     candidateSupport: candidateSupportedGenres.has(item.genre),
-    pitchProposals: 0, rhythmProposals: 0, auditions: [],
+    pitchProposals: 0, rhythmProposals: 0, v2Proposals: 0,
+    v2Readiness: includeGenreV2 ? diagnoseGenreHookReturnReadiness(song) : null,
+    auditions: [],
     reason: initial.status !== "evaluated" ? initial.reason
       : initial.passed ? "hook-score-passed"
         : candidateSupportedGenres.has(item.genre) ? "requires-candidate-audition"
@@ -106,11 +126,15 @@ for (const item of choices) {
       && candidateSupportedGenres.has(item.genre)) {
     const pitch = createChorusHookDevelopmentCandidates(song, { maxCandidates: 3 });
     const rhythm = createChorusHookRhythmCandidates(song, { maxCandidates: 3 });
+    const v2 = includeGenreV2
+      ? createGenreAwareHookReturnCandidates(song, { maxCandidates: 3 }) : [];
     row.pitchProposals = pitch.length;
     row.rhythmProposals = rhythm.length;
-    proposals += pitch.length + rhythm.length;
+    row.v2Proposals = v2.length;
+    proposals += pitch.length + rhythm.length + v2.length;
     for (const { kind, candidates } of [
       { kind: "pitch", candidates: pitch }, { kind: "rhythm", candidates: rhythm },
+      { kind: "pitch", candidates: v2 },
     ]) {
       for (const candidate of candidates) {
         const proof = inspectHookMutation(song, candidate.song, kind);
@@ -135,7 +159,9 @@ for (const item of choices) {
           exported = inspectHookExport(b, a, kind);
         }
         const audit = {
-          id: candidate.id, kind, changedNotes: proof.changedNotes,
+          id: candidate.id, kind,
+          origin: candidate.id.startsWith("genre-hook-v2-") ? "genre-v2" : "legacy",
+          changedNotes: proof.changedNotes,
           beforeHook: initial.score, afterHook: afterHook.score,
           hookDelta: round(afterHook.score - initial.score),
           criticDelta: scoreDelta, floorDelta,
@@ -152,7 +178,7 @@ for (const item of choices) {
         }
       }
     }
-    if (!pitch.length && !rhythm.length) row.reason = "weak-hook-no-safe-proposal";
+    if (!pitch.length && !rhythm.length && !v2.length) row.reason = "weak-hook-no-safe-proposal";
     else if (!best) row.reason = "proposals-did-not-pass-strict-critic-and-export-guards";
     else row.reason = "qualified-shadow-proposal";
   }
@@ -181,6 +207,7 @@ for (const item of choices) {
     genre: row.genre, seed: row.seed, status: row.hookStatus,
     hook: row.baselineHook, reason: row.reason, options: row.auditions.length,
     exportedPair: row.listeningCase ?? null,
+    v2Status: row.v2Readiness?.status ?? null,
   }));
 }
 report.totals = { songs: choices.length, weakHooks: weak, unavailableHooks: unknown,
