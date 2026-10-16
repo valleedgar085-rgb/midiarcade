@@ -35,3 +35,18 @@ Important: An increased offbeat percentage and successful critic gate do not pro
 ## Source and skill routing
 
 Bass Head Groove Director, MIDI Composition Review, MIDI Safe Integration; upstream `mc-rhythm-section` and `mc-style-hiphop` principles as genre-specific guidance. Source/audit/test domains were inspected independently through concurrent repository calls; **no dedicated autonomous subagents were dispatched**.
+
+
+## Measured first real-song result (2026-10-16)
+
+[Successful isolated Bass Head shadow workflow](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38870986153): **18/18 focused tests pass**. Six fixed-seed 32-bar Funk/Neo-Soul songs, **five proposals** across three songs, **five meet existing release, nonbass-track, unchanged kick-lock/overlap and actual encoded-MIDI parity gates**, and **five distinct blind MIDI A/B pairs** were archived.
+
+| Genre/seed | Proposals surviving automation | Added offbeat onsets | Critic score change |
+| --- | --- | --- | --- |
+| Funk seed 02 | Pickup (−0.25 beat) | +1 | 0 |
+| Neo-Soul seed 02 | Answer (+0.25 beat); pickup (−0.25 beat) | +1; +5 | 0; 0 |
+| Neo-Soul seed 03 | Answer; pickup | +2; +2 | 0; 0 |
+
+Funk 01, Funk 03 and Neo-Soul 01 had no bounded, safe candidates. That is a **valid protected baseline**; do not widen edit budgets merely to make all songs receive a change. The other music-quality, tonal and rhythmic workflows must pass independently before code integration. Results are **not audible proof**; the sound engine, UI and normal generation remain unchanged.
+
+[Blind MIDI ZIP archive](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38870986153/artifacts/12032673782) — listen to matched A/B files first. [Answer key (open last)](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38870986153/artifacts/12033497096). Use the same synth presets and matched levels, then select cases where timing actually makes you move. No automatic activation or claim of improved bass punch without listener feedback.
