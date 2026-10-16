@@ -43,3 +43,25 @@ Matched playback procedure: import paired `A.mid`/`B.mid` into FL Studio with id
 - If held-out Funk/Neo-Soul patterns do not yield enough safe trials, report limited coverage rather than lowering safety gates to manufacture candidates.
 
 **Skills used:** MIDI Bass Groove Director; MIDI Composition Review; MIDI Safe Integration; systematic debugging and test-first approach. Independent domain inspections, no separately executed autonomous agents.
+
+## Holdout measurement — 2026-10-16
+
+[Successful Bass Head holdout run](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38946074725) on **12 previously unheard, fixed 32-bar song seeds** (six Funk, six Neo-Soul; seeds 04–09). **24/24 focused tests pass**.
+
+| Holdout measure | Funk | Neo-Soul |
+| --- | ---: | ---: |
+| Independent seeded songs | 6 | 6 |
+| Existing safe generator proposals | 0 | 7 |
+| Preference-eligible auditions | 0 | 3 |
+| Proposals skipped due to prior listener preference | 0 | 4 |
+| Safety- and actual MIDI-parity-qualified A/B pairs | 0 | 3 |
+
+All three qualified Neo-Soul proposals were **+0.25 beat bass answers**, consistent with the earlier preference for that *type of variation*. The selector omitted four Neo-Soul pickup proposals that resembled a twice-rejected style. Funk had **no safe new candidate** under existing guardrails; this does not demonstrate that its basslines are already optimal, merely that this specific bounded procedure has no evidence-backed edit to offer. **No candidate was automatically selected into the production song.**
+
+### New blind listening files
+
+- [Phase 3 blind MIDI A/B ZIP — three matched pairs](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38946074725/artifacts/12066471008)
+- [Diagnostic holdout report](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38946074725/artifacts/12066106462)
+- [Separate answer key — OPEN ONLY AFTER VOTING](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38946074725/artifacts/12066061624)
+
+**Decision remains pending human listening.** Do not confuse passing the release gate, higher offbeat MIDI counts, a non-regressing critic, and verified MIDI parity with demonstrated improvement in rhythmic feel. Maintain default-disabled behavior even after this PR is merged.
