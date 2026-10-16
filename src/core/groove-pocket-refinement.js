@@ -197,3 +197,126 @@ export function createGroovePocketCandidates(sourceSong, config = {}) {
     return true;
   }).slice(0, MAX_GROOVE_POCKET_CANDIDATES);
 }
+
+
+// Developer-only Bass Head candidate generator. The default groove-pocket
+// authority and all existing selection/release contracts remain untouched.
+const BASS_HEAD_BOUNCE_GENRES = new Set(["funk", "neoSoul"]);
+const BASS_HEAD_MAX_CANDIDATES = 2;
+const BASS_HEAD_MAX_SHIFT_BEATS = 0.25;
+const bassHeadProtected = note => Boolean(
+  note?.phraseAnchor || note?.motifMemoryCore || note?.ensembleCadenceRole
+  || note?.motifHandoffRole || note?.transitionHandoffRole || note?.preserveTiming
+  || note?.bassCadenceRole || note?.grooveAuthorityLock
+  || note?.bassRegisterRole === "upper-harmonic"
+);
+const beatPhase = value => ((value % 1) + 1) % 1;
+function harmonyIdentityAt(song, beat) {
+  const harmonies = song?.harmony ?? [];
+  if (!harmonies.length) return null;
+  const chords = harmonies.filter(chord => noteStart(chord) <= beat + 1e-6);
+  const active = chords.at(-1);
+  return active ? [
+    active.id ?? null, active.degree ?? null,
+    active.root ?? active.rootPc ?? null, active.quality ?? active.type ?? null,
+    active.start ?? null,
+  ].join(":") : null;
+}
+function sectionAcceptsBounce(song, section) {
+  if (!section || !/^(verse|chorus|idea|hook)/i.test(String(section.name ?? section.type ?? ""))) return false;
+  const sectionId = String(section.id ?? "");
+  const scene = song?.producerIntent?.scenes?.find(x => String(x.sectionId) === sectionId);
+  if (scene?.roles?.bass === "rest") return false;
+  const lane = song?.orchestrationMatrix
+    ?.find(x => String(x.sectionId) === sectionId)?.lanes?.bass;
+  return finite(lane?.presence, 1) >= 0.42;
+}
+function safeBassShift(song, notes, note, newStart, section, kicks, beatsPerBar) {
+  const oldStart = noteStart(note);
+  if (!Number.isFinite(newStart) || newStart < sectionStart(section) + 0.65
+    || newStart >= sectionEnd(section) - 0.65
+    || Math.abs(newStart - oldStart) > BASS_HEAD_MAX_SHIFT_BEATS + 1e-6
+    || Math.floor((oldStart + 1e-6) / beatsPerBar) !== Math.floor((newStart + 1e-6) / beatsPerBar)
+    || harmonyIdentityAt(song, oldStart) !== harmonyIdentityAt(song, newStart)
+    || kicks.some(kick => Math.abs(noteStart(kick) - newStart) <= 0.075)) return false;
+  const duration = Math.max(0, finite(note.duration, 0));
+  for (const other of notes) {
+    if (other === note) continue;
+    const otherStart = noteStart(other);
+    const otherEnd = otherStart + Math.max(0, finite(other.duration, 0));
+    // This change must not create any extra overlap or unnaturally close
+    // double-attacks when the original notes were intentionally separated.
+    if (newStart < otherEnd + 0.02 && otherStart < newStart + duration + 0.02)
+      return false;
+  }
+  return true;
+}
+function bassHeadOffbeatCount(notes) {
+  return notes.filter(note => {
+    const p = beatPhase(noteStart(note));
+    return p > 0.075 && p < 0.925;
+  }).length;
+}
+function createBassHeadBounceCandidate(sourceSong, direction) {
+  const song = cloneValue(sourceSong);
+  const bass = bassNotes(song), kicks = kickNotes(song);
+  if (!bass.length || !kicks.length) return null;
+  const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
+  const bars = Math.max(1, finite(song?.meta?.bars, finite(song?.bars, 4)));
+  const maxChanges = Math.min(8, Math.max(1, Math.ceil(bars / 2)));
+  const beforeOffbeat = bassHeadOffbeatCount(bass);
+  const candidates=[];
+  for (const note of bass) {
+    const oldStart = noteStart(note);
+    const section = sectionForBeat(song, oldStart);
+    if (!sectionAcceptsBounce(song, section) || bassHeadProtected(note)) continue;
+    const phase = beatPhase(oldStart);
+    if (Math.min(phase, 1 - phase) > 0.075) continue;
+    // Preserve intended kick-locked hits, root accents and established
+    // groove anchors. Only the interior, non-kick on-beat answer may move.
+    if (kicks.some(kick => Math.abs(noteStart(kick) - oldStart) <= 0.075)) continue;
+    const desired = round(oldStart + direction * BASS_HEAD_MAX_SHIFT_BEATS, 4);
+    if (!safeBassShift(song, bass, note, desired, section, kicks, beatsPerBar)) continue;
+    const twoBarGroup = Math.floor(oldStart / (2 * beatsPerBar));
+    candidates.push({note,desired,sectionId:String(section.id ?? ""),twoBarGroup});
+  }
+  // Deterministic: no RNG, a maximum of one changed attack per two bars.
+  const seenGroups = new Set();
+  let changedNotes = 0;
+  for (const candidate of candidates) {
+    if (changedNotes >= maxChanges) break;
+    if (seenGroups.has(candidate.twoBarGroup)) continue;
+    if (!safeBassShift(song,bass,candidate.note,candidate.desired,
+      sectionForBeat(song,noteStart(candidate.note)),kicks,beatsPerBar)) continue;
+    seenGroups.add(candidate.twoBarGroup);
+    setNoteStart(candidate.note,candidate.desired);
+    candidate.note.bassHeadBounceRole = direction > 0 ? "kick-answer" : "pickup";
+    candidate.note.bassHeadBounceSectionId = candidate.sectionId;
+    changedNotes++;
+  }
+  if (!changedNotes) return null;
+  bass.sort((a,b) => noteStart(a)-noteStart(b) || notePitch(a)-notePitch(b));
+  const afterOffbeat = bassHeadOffbeatCount(bass);
+  if (afterOffbeat <= beforeOffbeat) return null;
+  const id = direction > 0 ? "bass-head-answer-quarter" : "bass-head-pickup-quarter";
+  return Object.freeze({
+    id,song,changedNotes,maxShiftBeats:BASS_HEAD_MAX_SHIFT_BEATS,
+    beforeOffbeat,afterOffbeat,offbeatDelta:afterOffbeat-beforeOffbeat,
+    gate:"shadow-only",
+  });
+}
+
+/**
+ * Evaluate only on a fixed-seed shadow branch or by explicit user intent.
+ * Not called from generateNew(), normal postprocessing, or any APK runtime
+ * pathway. Final MIDI export, release critic, and blind listening still decide
+ * whether a musical change can be proposed for production.
+ */
+export function createBassHeadBounceCandidates(sourceSong,config={}) {
+  if (config.bassHeadBounceV1 !== true) return [];
+  const genre=String(sourceSong?.meta?.genre ?? sourceSong?.genre ?? "");
+  if (!BASS_HEAD_BOUNCE_GENRES.has(genre) ||
+    sourceSong?.meta?.secondaryGenre || sourceSong?.secondaryGenre) return [];
+  return [1,-1].map(direction=>createBassHeadBounceCandidate(sourceSong,direction))
+    .filter(Boolean).slice(0,BASS_HEAD_MAX_CANDIDATES);
+}
