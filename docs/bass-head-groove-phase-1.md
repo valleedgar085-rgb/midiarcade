@@ -45,3 +45,23 @@ Preserve all approved synth voices, note register, tonal policy, deterministic s
 - `midi-safe-integration`: isolated branch, tests, CI, no release claim before verified checks.
 - Upstream `mc-rhythm-section` and `mc-style-hiphop`: referenced via installed skill rather than imported as runtime code.
 - Concurrent independent GitHub source reads, **not** separately executing autonomous subagents.
+
+## Empirical findings — 18 songs / nine genres, 32 bars (2026-10-15)
+
+[Dedicated successful run](https://github.com/valleedgar085-rgb/midiarcade/actions/runs/38851350856): **14/14 focused tests pass, no song mutations**; existing release gates passed **18/18**.
+
+| Genre | Sampled bass MIDI notes | Quarter-note offbeats | Bass notes near kick onsets | Existing potential pocket/continuity proposals (songs) |
+| --- | ---: | ---: | ---: | ---: |
+| Trap | 185 | 120 (64.9%) | 108 | 0 / 0 |
+| Hip-Hop | 224 | 134 (59.8%) | 118 | 1 / 1 |
+| Neo-Soul | 124 | 62 (50.0%) | 74 | 1 / 1 |
+| Funk | 84 | 22 (26.2%) | 56 | 0 / 1 |
+| House | 134 | 134 (100%) | 0 | 0 / 0 |
+| Afrobeats | 167 | 100 (59.9%) | 103 | 0 / 0 |
+| Drill | 211 | 142 (67.3%) | 109 | 0 / 0 |
+| Rap | 216 | 137 (63.4%) | 123 | 0 / 0 |
+| R&B | 132 | 71 (53.8%) | 77 | 0 / 0 |
+
+House's 100% offbeat and no near-kick bass supports **an intentional kick/bass call-response groove**, not a missing kick lock. The slightly more onbeat Funk samples suggest a possible next *experimental* bouncy bass option, but **no listener evidence** supports forcing additional offbeats. Bass register/timbre/actual mix bass loudness were not measured. Counts of existing helper candidates do not mean approved fixes; the baseline passed current release gates.
+
+**Prioritize:** A narrowly bounded bass-only Funk/Neo-Soul test on selected interior notes, keeping section boundary attacks, melodic rhythm, drum events and chord changes intact. Verify against seeded MIDI, existing music critic, MIDI export projection and matched-DAW sound. Do **not** turn it on globally based on these ratios.
