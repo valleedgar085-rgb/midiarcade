@@ -1,0 +1,57 @@
+name: Bass Head Bounce Shadow A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/core/groove-pocket-refinement.js'
+      - 'tests/bass-head-bounce-shadow.test.mjs'
+      - 'scripts/benchmark-bass-head-bounce-shadow.mjs'
+      - 'docs/bass-head-bounce-v1.md'
+      - '.github/workflows/bass-head-bounce-shadow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bass-bounce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test guarded bounce and pre-existing groove owners
+        run: node --test tests/bass-head-bounce-shadow.test.mjs tests/groove-pocket-refinement.test.mjs tests/bass-continuity-refinement.test.mjs tests/bass-head-groove-census.test.mjs
+      - name: Run 6 matched seeds in Funk / Neo-Soul without changing normal songs
+        run: node scripts/benchmark-bass-head-bounce-shadow.mjs --seeds 3 --bars 32 --out "$RUNNER_TEMP/bass-head-bounce-report.json" --pack "$RUNNER_TEMP/bass-head-blind" --key "$RUNNER_TEMP/bass-head-answer-key.json"
+      - name: Upload bounded musical and export checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-bounce-audit
+          path: ${{ runner.temp }}/bass-head-bounce-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload blind A-B pairs separately from key
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-blind-midi
+          path: ${{ runner.temp }}/bass-head-blind
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload answer key (open only after listening)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-answer-key-OPEN-LAST
+          path: ${{ runner.temp }}/bass-head-answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
