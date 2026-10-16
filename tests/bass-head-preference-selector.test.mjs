@@ -59,7 +59,7 @@ test("audition planning keeps the original as the authority and avoids repeating
   const neo=planBassHeadAuditions(s,"neoSoul",options);
   assert.equal(neo.defaultActivationAllowed,false);
   assert.equal(neo.baseline,"original");
-  assert.deepEqual(neo.auditions.map(x=>x.id),[answer,"other-unknown"]);
+  assert.deepEqual(neo.auditions.map(x=>x.id),[answer]); // Unknown proposals are not whitelisted.
   assert.equal(neo.auditions[0].tier,"priority-review");
   assert.deepEqual(neo.skipped.map(x=>x.id),[pickup]);
   const funk=planBassHeadAuditions(s,"funk",[{id:pickup},{id:answer}]);
