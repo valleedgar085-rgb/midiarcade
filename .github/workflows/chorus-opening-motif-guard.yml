@@ -1,0 +1,39 @@
+name: Chorus Opening Motif Identity A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/music-engine.js'
+      - 'tests/chorus-opening-motif-guard.test.mjs'
+      - 'scripts/benchmark-hook-opening-guard.mjs'
+      - 'docs/chorus-opening-motif-guard.md'
+      - '.github/workflows/chorus-opening-motif-guard.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  motif-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Fixed-seed unchanged baseline and deterministic opt-in tests
+        run: node --test tests/chorus-opening-motif-guard.test.mjs tests/chorus-hook-recurrence.test.mjs tests/genre-aware-hook-return-v2.test.mjs
+      - name: Run 10-genre matched hook-opening A-B
+        run: node scripts/benchmark-hook-opening-guard.mjs --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-opening-guard.json"
+      - name: Upload A-B critic and MIDI comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-hook-opening-guard-ab
+          path: ${{ runner.temp }}/hook-opening-guard.json
+          retention-days: 14
+          if-no-files-found: warn
