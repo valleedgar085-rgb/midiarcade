@@ -1,0 +1,52 @@
+name: Bass Head Funk Bounce Shadow A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/core/bass-head-bounce-candidates.js'
+      - 'tests/bass-head-bounce-candidates.test.mjs'
+      - 'scripts/benchmark-bass-head-bounce.mjs'
+      - '.github/workflows/bass-head-bounce-shadow.yml'
+      - 'docs/bass-head-bounce-shadow.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bass-bounce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify bounded bass-only candidates and existing groove contracts
+        run: node --test tests/bass-head-bounce-candidates.test.mjs tests/groove-pocket-refinement.test.mjs tests/bass-continuity-refinement.test.mjs
+      - name: Audition fixed-seed Funk and Neo-Soul candidate availability
+        run: node scripts/benchmark-bass-head-bounce.mjs --seeds 3 --out "$RUNNER_TEMP/bass-bounce"
+      - name: Blind paired MIDI files and report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-bounce-shadow
+          path: |
+            ${{ runner.temp }}/bass-bounce/report.json
+            ${{ runner.temp }}/bass-bounce/READ_FIRST.txt
+            ${{ runner.temp }}/bass-bounce/*.mid
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Hidden A/B mapping
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bass-head-bounce-answer-key-OPEN-LAST
+          path: ${{ runner.temp }}/bass-bounce/answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
