@@ -9,12 +9,21 @@ Coding agents supporting project skills in `.agents/skills/` can use:
 | Situation | Project skill | External reference |
 | --- | --- | --- |
 | Random or unmemorable melodies, weak chorus returns, bass/drum clashes, poor section contrast | `midi-composition-review` | [music-composition-skills](https://github.com/jtydhr88/music-composition-skills), specifically `mc-melody`, `mc-development`, `mc-rhythm-section` and `mc-arrangement-arch` |
+| Heavy/bouncy basslines, 808s, kick-and-bass timing, groovy bass movement, dance pocket, low-end clarity | `midi-bass-groove-director` | [mc-rhythm-section](https://github.com/jtydhr88/music-composition-skills/blob/main/plugins/music-composition/skills/mc-rhythm-section/SKILL.md) and [mc-style-hiphop](https://github.com/jtydhr88/music-composition-skills/blob/main/plugins/music-composition/skills/mc-style-hiphop/SKILL.md) |
 | Clicks, pops, crackle, silence, output distortion, Web Audio timing issues | `midi-audio-diagnostics` | [Sonic Skills](https://github.com/kunitoki/sonic-skills) and [Audio Verification](https://github.com/AkshitIreddy/agent-skills/tree/main/skills/audio-verification) |
 | Bugfixes, new development branches, subagent work, regression fixes, PRs/releases | `midi-safe-integration` | [Superpowers](https://github.com/obra/superpowers) |
 
 The project skill files contain self-contained instructions, so they remain useful if the upstream repository is unavailable. They are **adaptations**, not full vendored copies or claims that upstream plugins were globally installed. Review upstream original docs before applying unfamiliar rules or updating these adapters.
 
 Codex discovers the canonical `.agents/skills/` manifests. Claude Code uses the matching project entry points under `.claude/skills/` and `CLAUDE.md`, which direct it to the same canonical project skills. If an agent does not auto-discover either location, direct it to read the named `SKILL.md` and root `AGENTS.md`. This branch does **not** install third-party skills globally into a developer's home directory.
+
+## Bass Head Groove Director: baseline and practice
+
+When bass is the focus, route to the canonical .agents/skills/midi-bass-groove-director/SKILL.md **in addition to** midi-composition-review and midi-safe-integration. The workflow covers kick/bass interlock, danceable offbeats, 808/sub articulation, melodic register, genre-appropriate push/pull, low-end masking and controlled A/B listening.
+
+The desired feel is deep, precisely timed, and jumpy/groovy enough to invite dancing. Start by measuring actual kick and bass note onsets; do **not** automatically increase bass velocity, note density, gain, sub EQ or compressor strength.
+
+A useful first follow-up is a read-only, fixed-seed bass-versus-kick onset/pocket census covering trap, hip-hop, neo-soul, funk, Afrobeats and house, with explicit timing pairs, note length and rests; later make only evidence-based opt-in repairs inside existing groove-pocket or bass-continuity authority. Keep the approved playback patches unchanged.
 
 ## First assignment: melody + vocal pocket audit (read-only)
 
