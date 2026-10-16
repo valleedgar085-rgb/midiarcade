@@ -20,7 +20,7 @@ function fixture(){
         {pitch:47,start:1.5,duration:0.25},
         {pitch:40,start:2.04,duration:0.4},
         {pitch:40,start:8.25,duration:1.25},
-        {pitch:47,start:9.25,duration:0.3},
+        {pitch:47,start:8.5,duration:0.3},
         {pitch:43,start:10,duration:0.5},
       ]},
     ],
