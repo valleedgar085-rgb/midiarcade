@@ -120,6 +120,7 @@ This document defines mandatory engineering guidelines, architectural constraint
 ## 9. Developer-Only AI Skill Routing
 
 - For melody identity, hook repetition, section development, genre groove, bass/drum pocket, and rap-vocal space, read `.agents/skills/midi-composition-review/SKILL.md` before proposing an engine change.
+- For bass-heavy grooves, jumpy/danceable basslines, 808 design, kick/bass pocket timing, low-end clarity, or bass-focused genre work, also read `.agents/skills/midi-bass-groove-director/SKILL.md` before modifying bass composition. Keep the approved sound and current groove/continuity authorities.
 - For clicks, pops, crackling, silence, scheduling, or Web Audio faults, read `.agents/skills/midi-audio-diagnostics/SKILL.md` before editing synthesis or audio envelopes.
 - For concurrent agent tasks, branch integration, debugging, regression prevention, and release claims, read `.agents/skills/midi-safe-integration/SKILL.md`.
 - All three are **developer workflow aids** only. See `docs/DEVELOPER_SKILLS_WORKFLOW.md` for scope, source links, and the read-only first assignment. They do not add runtime features or override any rule above. Require measured evidence and real listening checks for audible changes; no speculative quality claims.
