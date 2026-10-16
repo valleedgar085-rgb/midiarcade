@@ -93,7 +93,15 @@ test("refuses a bounce move that collides with another bass note or crosses a ch
    {start:0,duration:1.125,degree:0},{start:1.125,duration:14.875,degree:4},
  ];
  const altered=createBassHeadBounceCandidates(harmonic,{bassHeadBounceV1:true});
+ // Later answer at 1.25 crosses the chord change at 1.125 and
+ // must be blocked. A pickup at 0.75 stays in the original harmony
+ // and is a valid alternate *direction*; it must not be falsely rejected.
+ assert.ok(altered
+   .filter(c=>c.id==="bass-head-answer-quarter")
+   .every(c=>byId(c.song,"bass")
+     .filter(n=>n.bassHeadBounceRole)
+     .every(n=>n.id!=="b-0-1")));
  assert.ok(altered.every(c=>byId(c.song,"bass")
-   .filter(n=>n.bassHeadBounceRole)
-   .every(n=>n.id!=="b-0-1")));
+   .filter(n=>n.bassHeadBounceRole&&n.id==="b-0-1")
+   .every(n=>n.start<=1)));
 });
