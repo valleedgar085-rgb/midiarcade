@@ -1,0 +1,57 @@
+name: Bass Head True Kick Role A-B-C
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/lib/bass-head-true-kick-candidates.mjs'
+      - 'scripts/benchmark-bass-head-true-kick-roles.mjs'
+      - 'tests/bass-head-true-kick-candidates.test.mjs'
+      - '.github/workflows/bass-head-true-kick-roles.yml'
+      - 'docs/bass-head-true-kick-roles.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kick-role-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test true kick responses, anticipations and protected bass invariants
+        run: node --test tests/bass-head-true-kick-candidates.test.mjs tests/bass-head-timing-context.test.mjs tests/bass-head-bounce-shadow.test.mjs tests/bass-head-preference-selector.test.mjs tests/bass-head-groove-census.test.mjs
+      - name: Run holdout across 16 fixed-seed 32-bar songs and verify MIDI export
+        run: node scripts/benchmark-bass-head-true-kick-roles.mjs --start 10 --seeds 8 --bars 32 --out "$RUNNER_TEMP/bass-kick-roles-report.json" --pack "$RUNNER_TEMP/bass-kick-roles-blind" --key "$RUNNER_TEMP/bass-kick-roles-answer-key.json"
+      - name: Upload detailed context and release comparison report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-true-kick-roles-report
+          path: ${{ runner.temp }}/bass-kick-roles-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload blind matched MIDI pairs/triples without answer key
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-true-kick-roles-blind-midi
+          path: ${{ runner.temp }}/bass-kick-roles-blind
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload concealed mapping separately after listening
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-true-kick-roles-key-OPEN-LAST
+          path: ${{ runner.temp }}/bass-kick-roles-answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
