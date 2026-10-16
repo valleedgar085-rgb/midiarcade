@@ -1,0 +1,58 @@
+name: Bass Head Preference Selector Holdout
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/fixtures/bass-head-listening-round-1.json'
+      - 'scripts/lib/bass-head-preference-selector.mjs'
+      - 'scripts/benchmark-bass-head-preference-selector.mjs'
+      - 'tests/bass-head-preference-selector.test.mjs'
+      - 'docs/bass-head-selector-phase-3.md'
+      - '.github/workflows/bass-head-preference-selector.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preference-holdout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Test blind-answer decoding, source immutability, and all groove invariants
+        run: node --test tests/bass-head-preference-selector.test.mjs tests/bass-head-bounce-shadow.test.mjs tests/bass-head-groove-census.test.mjs tests/groove-pocket-refinement.test.mjs tests/bass-continuity-refinement.test.mjs
+      - name: Compare untouched songs against opt-in preference-prioritized bass candidates
+        run: node scripts/benchmark-bass-head-preference-selector.mjs --start 4 --seeds 6 --bars 32 --out "$RUNNER_TEMP/bass-head-holdout.json" --pack "$RUNNER_TEMP/bass-head-holdout-blind-midi" --key "$RUNNER_TEMP/bass-head-holdout-answer-key.json"
+      - name: Upload exact holdout analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-preference-holdout
+          path: ${{ runner.temp }}/bass-head-holdout.json
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload blind bass A-B MIDI pairs, no answer key
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-phase3-blind-midi
+          path: ${{ runner.temp }}/bass-head-holdout-blind-midi
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Upload sealed answer key after audition
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-phase3-ANSWER-KEY-OPEN-LAST
+          path: ${{ runner.temp }}/bass-head-holdout-answer-key.json
+          if-no-files-found: warn
+          retention-days: 14
