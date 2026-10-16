@@ -67,7 +67,10 @@ test("true after-kick response and before-kick anticipation are DISTINCT candida
    assert.equal(report.status,"measured");
    assert.equal(report.measuredNotes,2);
    assert.ok(report.notes.every(n=>n.proposedKick.role===candidate.movement));
-   assert.ok(report.notes.every(n=>n.originalKick.role!==candidate.movement));
+   assert.ok(report.notes.every(n=>n.originalKick.role===candidate.movement));
+   assert.ok(report.notes.every(n=>
+    Math.abs(n.proposedKick.signedOffsetBeats)<Math.abs(n.originalKick.signedOffsetBeats)),
+    "candidate must tighten, not invert, its relationship to the real kick");
    for(const change of changes){
      const classified=classifyBassKickContext(source,change.start);
      assert.equal(classified.role,candidate.movement);
