@@ -4293,6 +4293,9 @@ function createGrooveConductor(config, structure, style, motifs, rng, route = nu
     ...(config.secondaryGenre ? { secondaryGenre: config.secondaryGenre } : {}),
   }, { structure });
   const genrePhrase = GENRE_RHYTHM_GRAMMARS[config.genre]?.phrase ?? grooveDNA.grammarId;
+  const assignmentMap = new Map(
+    (motifs?.sectionAssignments ?? []).map((entry) => [entry.sectionId, entry]),
+  );
   const bars = [];
   const assignmentMap = new Map();
   for (const entry of motifs?.sectionAssignments ?? []) {
