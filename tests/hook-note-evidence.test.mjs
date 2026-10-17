@@ -73,7 +73,8 @@ test("transposed hook retains contour and intervals with no false identity failu
 
 test("rhythm-only drift remains visible independently of pitch contour", () => {
   const offsets = PITCHES.map((_, i) => i + 0.5);
-  for (let i = 1; i < offsets.length; i++) offsets[i] += i * 0.18;
+  offsets[2] += 0.25;
+  offsets[4] -= 0.125;
   const e = evidence(fixture({ returnNotes: phrase(16, PITCHES, { offsets }) }));
   assert.equal(e.status, "evaluated");
   assert.equal(e.metrics.contour, 1);
