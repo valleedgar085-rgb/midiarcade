@@ -2,7 +2,7 @@ export async function copyGenerationDebuggerReport({ runs, workerActive, toast }
   if (!runs.length) return toast("Generate a song first so the debugger has a run to copy.");
   const payload = JSON.stringify({
     app: "MIDI Arcade",
-    version: "1.2.3",
+    version: "1.2.4",
     capturedAt: new Date().toISOString(),
     workerActive,
     runs,
