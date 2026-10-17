@@ -6,9 +6,12 @@ on:
     paths:
       - 'scripts/audit-hook-lineage.mjs'
       - 'scripts/lib/hook-lineage-audit.mjs'
+      - 'scripts/lib/hook-note-evidence.mjs'
       - 'tests/hook-lineage-audit.test.mjs'
+      - 'tests/hook-note-evidence.test.mjs'
       - '.github/workflows/hook-motif-lineage.yml'
       - 'docs/hook-motif-lineage.md'
+      - 'docs/hook-return-note-evidence-plan-20261017.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,7 +28,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: node --test tests/hook-lineage-audit.test.mjs tests/genre-aware-hook-return-v2.test.mjs
+      - run: node --test tests/hook-lineage-audit.test.mjs tests/hook-note-evidence.test.mjs tests/genre-aware-hook-return-v2.test.mjs
       - name: Run read-only all-genre 32-bar hook source lineage census
         run: node scripts/audit-hook-lineage.mjs --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-lineage.json"
       - name: Upload lineage audit
