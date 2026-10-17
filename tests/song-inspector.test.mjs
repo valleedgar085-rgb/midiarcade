@@ -62,3 +62,88 @@ test("Inspector lives inside Shape and routes actions through the existing Befor
   assert.match(css, /@media\(max-width:650px\)/);
   assert.match(css, /@media\(forced-colors:active\)/);
 });
+
+
+function returningChorusFixture({ weak = true } = {}) {
+  const firstPitches = [60, 62, 65, 64, 67, 65, 69, 67];
+  const weakPitches = [72, 59, 73, 60, 75, 58, 70, 61];
+  const sourceOffsets = [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5];
+  const returnOffsets = weak
+    ? [0.25, 0.75, 2.25, 2.5, 3.75, 5.25, 6.25, 7.25]
+    : sourceOffsets;
+  const notes = [
+    ...sourceOffsets.map((offset, i) => ({
+      start: offset, pitch: firstPitches[i], duration: 0.35, velocity: 84,
+    })),
+    ...returnOffsets.map((offset, i) => ({
+      start: 16 + offset, pitch: weak ? weakPitches[i] : firstPitches[i] + 2,
+      duration: 0.35, velocity: 84,
+    })),
+  ];
+  return {
+    genre: "pop",
+    meta: { beatsPerBar: 4 },
+    structure: [
+      { id: "chorus-1", name: "Chorus", startBeat: 0, endBeat: 8 },
+      { id: "verse-1", name: "Verse", startBeat: 8, endBeat: 16 },
+      { id: "chorus-2", name: "Chorus", startBeat: 16, endBeat: 24 },
+    ],
+    tracks: [{ id: "melody", notes }],
+  };
+}
+
+test("Song Inspector prioritizes the measured chorus-hook gap without touching the song", () => {
+  const song = returningChorusFixture();
+  const before = structuredClone(song);
+  const selection = { song, section: song.structure[2], target: "track", trackId: "melody" };
+  const ideas = songInspectorSuggestions(selection);
+  assert.equal(ideas[0].directionId, "catchier");
+  assert.equal(ideas[0].evidence, "CHORUS HOOK RETURN");
+  assert.match(ideas[0].explanation, /opening-hook similarity.*shared note attacks/i);
+  assert.equal(ideas[0].action, "Preview Catchier");
+  assert.equal(ideas.filter((idea) => idea.directionId === "catchier").length, 1);
+  assert.ok(ideas.length <= 2);
+  assert.ok(Object.isFrozen(ideas));
+  assert.ok(Object.isFrozen(ideas[0]));
+  assert.deepEqual(songInspectorSuggestions(selection), ideas);
+  assert.deepEqual(song, before, "read-only Inspector must preserve MIDI data");
+});
+
+test("Song Inspector does not mislabel a first chorus, verse, or strong return", () => {
+  const weak = returningChorusFixture();
+  const first = songInspectorSuggestions({ song: weak, section: weak.structure[0] });
+  const verse = songInspectorSuggestions({ song: weak, section: weak.structure[1] });
+  assert.ok(first.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.ok(verse.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.deepEqual(
+    songInspectorSuggestions({ song: weak, section: weak.structure[2], limit: 0 }), [],
+  );
+
+  const recognizable = returningChorusFixture({ weak: false });
+  const good = songInspectorSuggestions({ song: recognizable, section: recognizable.structure[2] });
+  assert.ok(good.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.ok(good.every((idea) => SHAPE_QUICK_DIRECTIONS[idea.directionId]));
+});
+
+test("Song Inspector ignores unavailable hook evidence instead of claiming weakness", () => {
+  const song = returningChorusFixture();
+  song.tracks = [];
+  const ideas = songInspectorSuggestions({ song, section: song.structure[2] });
+  assert.ok(ideas.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+});
+
+test("Song Inspector scopes hook guidance to melody or the complete section", () => {
+  const song = returningChorusFixture();
+  const chorus = song.structure[2];
+  const bass = songInspectorSuggestions({ song, section: chorus, target: "track", trackId: "bass" });
+  const drums = songInspectorSuggestions({ song, section: chorus, target: "notes", trackId: "drums" });
+  const songSection = songInspectorSuggestions({ song, section: chorus, target: "section" });
+  assert.ok(bass.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.ok(drums.every((idea) => idea.evidence !== "CHORUS HOOK RETURN"));
+  assert.equal(songSection[0].evidence, "CHORUS HOOK RETURN");
+});
+
+test("Inspector receives the actual selected track instead of guessing an instrument", () => {
+  const app = source("src/app.js");
+  assert.match(app, /songInspectorSuggestions\(\{[\s\S]*?target: director\.target,\s*trackId: state\.editorTrack,/);
+});
