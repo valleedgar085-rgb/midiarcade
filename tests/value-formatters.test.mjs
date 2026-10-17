@@ -49,20 +49,32 @@ test("formatLevel clamps gain to bounds [0, 1] and handles invalid inputs", () =
 
 test("formatVelocityScale formats scale values and feel classifications", () => {
   assert.equal(formatVelocityScale(0.5), "×0.50 · soft");
+  assert.equal(formatVelocityScale(0.8), "×0.80 · soft");
   assert.equal(formatVelocityScale(0.81), "×0.81 · soft");
+  assert.equal(formatVelocityScale(0.819), "×0.82 · soft");
   assert.equal(formatVelocityScale(0.82), "×0.82 · balanced");
   assert.equal(formatVelocityScale(1.0), "×1.00 · balanced");
   assert.equal(formatVelocityScale(1.12), "×1.12 · balanced");
+  assert.equal(formatVelocityScale(1.121), "×1.12 · strong");
   assert.equal(formatVelocityScale(1.13), "×1.13 · strong");
   assert.equal(formatVelocityScale(1.5), "×1.50 · strong");
 });
 
 test("formatVelocityScale clamps scale bounds [0.5, 1.5] and handles invalid inputs", () => {
+  assert.equal(formatVelocityScale(-1.0), "×0.50 · soft");
   assert.equal(formatVelocityScale(0.2), "×0.50 · soft");
+  assert.equal(formatVelocityScale(0.49), "×0.50 · soft");
+  assert.equal(formatVelocityScale(1.51), "×1.50 · strong");
   assert.equal(formatVelocityScale(2.0), "×1.50 · strong");
+  assert.equal(formatVelocityScale(10.0), "×1.50 · strong");
   assert.equal(formatVelocityScale("0.7"), "×0.70 · soft");
+  assert.equal(formatVelocityScale("1.25"), "×1.25 · strong");
+  assert.equal(formatVelocityScale(0), "×1.00 · balanced");
+  assert.equal(formatVelocityScale(null), "×1.00 · balanced");
   assert.equal(formatVelocityScale(undefined), "×1.00 · balanced");
   assert.equal(formatVelocityScale(NaN), "×1.00 · balanced");
+  assert.equal(formatVelocityScale("invalid"), "×1.00 · balanced");
+  assert.equal(formatVelocityScale({}), "×1.00 · balanced");
 });
 
 test("formatMidiVelocity formats velocity integer and feel descriptions", () => {
