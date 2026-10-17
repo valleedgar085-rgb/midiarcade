@@ -31,6 +31,10 @@ jobs:
       - run: node --test tests/hook-lineage-audit.test.mjs tests/hook-note-evidence.test.mjs tests/genre-aware-hook-return-v2.test.mjs
       - name: Run read-only all-genre 32-bar hook source lineage census
         run: node scripts/audit-hook-lineage.mjs --seeds 2 --bars 32 --out "$RUNNER_TEMP/hook-lineage.json"
+      - name: Verify ensemble coordination and MIDI projection parity
+        run: |
+          npm run quality:ensemble
+          node --test tests/midi-export-parity.test.mjs
       - name: Upload lineage audit
         if: always()
         uses: actions/upload-artifact@v4
