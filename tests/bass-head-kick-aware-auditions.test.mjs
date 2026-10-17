@@ -35,8 +35,8 @@ test("label kick-answer cannot misrepresent anticipation of next actual kick",()
  assert.equal(report.roles[0],"anticipation");
 });
 test("actual post-kick response is distinct from pre-kick anticipation",()=>{
- const original=song([2.75,4]);
- const report=inspectBassHeadCandidateRoles(original,move(original,3.25));
+ const original=song([2.5,4]);
+ const report=inspectBassHeadCandidateRoles(original,move(original,2.75));
  assert.equal(report.roles[0],"tighter-response");
  assert.equal(report.counts.anticipation,0);
  assert.equal(report.counts.response,0);
