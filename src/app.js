@@ -16,6 +16,8 @@ import { createAppStore, createInitialAppState } from "./core/app-store.js";
 import { createDefaultAutoControls } from "./core/auto-control-policy.js";
 import { chooseElementProgram } from "./core/elemental-program-policy.js";
 import { createSessionStorage } from "./core/session-storage.js";
+import { createProjectLibrary, makeProjectRecord } from "./core/project-library.js";
+import { installProjectLibraryPanel } from "./ui/project-library-panel.js";
 import { prepareMidiExport, resolveMidiExportProfile } from "./core/export-profile.js";
 import { auditSelectedArrangementHandoff } from "./core/arrangement-handoff-audit.js";
 import { createGenerationRunner } from "./core/generation-runner.js";
@@ -207,6 +209,8 @@ const SESSION_SCHEMA = 2;
 let rejectedPersistedSession = false;
 const appStore = createAppStore(createInitialAppState());
 const state = appStore.getState();
+const projectLibrary = createProjectLibrary();
+let projectSaveSequence = 0;
 const sessionStorage = createSessionStorage({
   key: SESSION_STORAGE_KEY,
   schema: SESSION_SCHEMA,
@@ -7060,6 +7064,86 @@ function resetSessionStateForFreshStart() {
   workspaceController.activate("create");
 }
 
+function projectLibraryActionAllowed() {
+  if (state.isGenerating) throw new Error("Finish generating before saving or opening a project.");
+  if (state.sectionVariations || state.shapeDirector?.transaction) {
+    throw new Error("Finish or discard the current Before/After comparison before saving or opening.");
+  }
+  if (!state.song) throw new Error("Generate a song first.");
+}
+
+async function saveLocalProject(name) {
+  projectLibraryActionAllowed();
+  const snapshot = createHistorySnapshot();
+  if (!snapshot) throw new Error("No song to save.");
+  const id = typeof globalThis.crypto?.randomUUID === "function"
+    ? "project-" + globalThis.crypto.randomUUID()
+    : "project-" + Date.now().toString(36) + "-" + (++projectSaveSequence).toString(36);
+  const record = makeProjectRecord({
+    id,
+    name: name || deriveTitle(snapshot.song),
+    ...snapshot,
+  });
+  await projectLibrary.save(record);
+  return record.id;
+}
+
+async function openLocalProject(id) {
+  projectLibraryActionAllowed();
+  // Verify all data and checksums before stopping the player or changing state.
+  const record = await projectLibrary.load(id);
+  const confirmed = typeof window?.confirm === "function"
+    ? window.confirm(`Open "${record.name}"? Unsaved changes to your current song could be lost. You can Undo immediately after opening.`)
+    : false;
+  if (!confirmed) return false;
+
+  const previous = createHistorySnapshot();
+  const previousHistory = [...state.history];
+  const previousFuture = [...state.future];
+  const payload = record.payload;
+  const newSnapshot = {
+    song: deepClone(payload.song),
+    trackSettings: deepClone(payload.trackSettings),
+    muted: [...payload.muted],
+    solo: [...payload.solo],
+    locked: [...payload.locked],
+    selectedTrack: payload.selectedTrack,
+    focusedSection: null,
+    editorTrack: TRACK_ORDER.includes(payload.selectedTrack) ? payload.selectedTrack : "melody",
+    sectionEditorOpen: false,
+  };
+  try {
+    state.sectionVariations = null;
+    state.shapeDirector = null;
+    state.sectionMacroValues = {};
+    state.coverVariation = 0;
+    applyHistorySnapshot(newSnapshot);
+    if (previous) pushHistory(previous);
+    state.future = [];
+    updateHistoryButtons();
+    captureAppliedGenerationSettings();
+    scheduleSessionSave();
+    return true;
+  } catch (error) {
+    // Bad legacy note structures must not destroy the song being worked on.
+    state.history = previousHistory;
+    state.future = previousFuture;
+    if (previous) applyHistorySnapshot(previous);
+    updateHistoryButtons();
+    throw new Error("Project could not be opened safely; original song was restored.");
+  }
+}
+
+function mountLocalProjectLibrary() {
+  installProjectLibraryPanel(document, {
+    list: () => projectLibrary.list(),
+    save: saveLocalProject,
+    open: openLocalProject,
+    remove: (id) => projectLibrary.remove(id),
+    navigateToFinish: () => workspaceController.activate("finish"),
+  });
+}
+
 function hydrateInitialSong() {
   applyTrackSettingsToSong(state.song);
   syncControlsFromSong();
@@ -7072,6 +7156,7 @@ async function init() {
   initTabNav();
   decorateAutoRangeControls();
   bindGlobalControls();
+  mountLocalProjectLibrary();
   applyGenreDefaultsToControls(selectedGenreId());
   updateRangeDisplays();
   try {
