@@ -23,3 +23,22 @@ The upstream motif and phrase-memory ownership remain correct for the weak retur
 
 ## Rollout
 Developer-only audit first. Do not automatically activate hook rewrites. Inspect any active bass experiments separately.
+
+## Implemented read-only audit
+- `scripts/lib/hook-note-evidence.mjs` collects actual first/returning chorus opening-note events, reusing the existing recurrence comparison's 2- or 4-bar window and 12-note cap. The report retains relative start, MIDI pitch, duration, velocity, and surviving phrase-memory/hook-development tags.
+- `scripts/lib/hook-lineage-audit.mjs` attaches the evidence to existing motif/memory lineage for each returning chorus; it does not introduce a second composer or critic.
+- `scripts/audit-hook-lineage.mjs` ranks the lowest existing similarity dimensions *only for evaluable weak returns*, counts matched/mismatched/absent note tags separately, and verifies the entire song object remains byte-identical after the audit.
+- `tests/hook-note-evidence.test.mjs` covers identical/altered returns, matched/conflicting/absent tags, transposition, rhythm-only drift, four-bar sparse fallback, unavailable evidence, repeatability, and non-mutation. The existing lineage CI workflow now runs those tests.
+
+### Interpretive boundary
+Rendered note metadata cannot prove which internal stage first changed the phrase. The earliest responsible stage remains **unverified** until per-stage snapshots are measured. Numeric hook similarity is not a listening verdict; no generator, Web Audio, exported MIDI, user setting, or critic threshold was changed.
+
+### Developer verification
+```sh
+node --test tests/hook-note-evidence.test.mjs tests/hook-lineage-audit.test.mjs
+node scripts/audit-hook-lineage.mjs --seeds 2 --bars 32 --out tmp/hook-note-evidence.json
+npm run quality
+npm run quality:music
+npm run quality:ensemble
+npm run test:android-release
+```
