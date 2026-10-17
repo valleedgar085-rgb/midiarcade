@@ -6498,6 +6498,15 @@ function bindGlobalControls() {
       menuDropdown.setAttribute("aria-hidden", "true");
       menuBtn.setAttribute("aria-expanded", "false");
     });
+    // Escape should dismiss the menu and return keyboard focus to the button.
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && menuDropdown.getAttribute("aria-hidden") === "false") {
+        event.preventDefault();
+        menuDropdown.setAttribute("aria-hidden", "true");
+        menuBtn.setAttribute("aria-expanded", "false");
+        menuBtn.focus();
+      }
+    });
     $("#menuItemNew")?.addEventListener("click", () => runGeneration("new"));
     $("#menuItemSimilar")?.addEventListener("click", () => runGeneration("songVariations"));
     $("#menuItemReset")?.addEventListener("click", () => $("#resetControlsButton")?.click());
