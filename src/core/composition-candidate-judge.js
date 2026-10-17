@@ -101,15 +101,62 @@ function scopedNotes(song, id, selection = {}) {
   return range ? source.filter((note) => noteInRange(note, range)) : [];
 }
 
-function harmonyAt(song, beat) {
-  let result = song?.harmony?.[0] ?? null;
-  for (const event of song?.harmony ?? []) {
-    const start = finite(event?.start ?? event?.startBeat);
-    const duration = Math.max(0.01, finite(event?.duration ?? event?.durationBeats, 0.25));
-    if (start <= beat + EPSILON) result = event;
-    if (beat >= start - EPSILON && beat < start + duration - EPSILON) return event;
+function getMaxHarmonyDuration(harmony) {
+  if (!harmony || !harmony.length) return 0;
+  if (harmony._maxDuration !== undefined) return harmony._maxDuration;
+  let maxD = 0;
+  for (let i = 0; i < harmony.length; i++) {
+    const d = finite(harmony[i]?.duration ?? harmony[i]?.durationBeats, 0);
+    if (d > maxD) maxD = d;
   }
-  return result;
+  if (!Object.isFrozen(harmony)) {
+    try { Object.defineProperty(harmony, "_maxDuration", { value: maxD, writable: true, configurable: true, enumerable: false }); } catch (_) {}
+  }
+  return maxD;
+}
+
+function harmonyAt(song, beat) {
+  const harmony = Array.isArray(song) ? song : (song?.harmony ?? []);
+  if (!harmony || harmony.length === 0) return harmony?.[0] ?? null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let maxIdx = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + EPSILON) {
+      maxIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (maxIdx === -1) {
+    return harmony[0] ?? null;
+  }
+
+  const maxDuration = getMaxHarmonyDuration(harmony);
+  const cutoff = beat - maxDuration - EPSILON;
+
+  let firstMatch = -1;
+  for (let i = maxIdx; i >= 0; i--) {
+    const event = harmony[i];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start < cutoff) break;
+    const duration = Math.max(0.01, finite(event?.duration ?? event?.durationBeats, 0.25));
+    if (beat >= start - EPSILON && beat < start + duration - EPSILON) {
+      firstMatch = i;
+    }
+  }
+
+  if (firstMatch !== -1) {
+    return harmony[firstMatch];
+  }
+
+  return harmony[maxIdx] ?? null;
 }
 
 function chordClasses(chord) {

@@ -23,16 +23,61 @@ function mod(value, modulus) {
   return ((finite(value) % modulus) + modulus) % modulus;
 }
 
-function harmonyAt(harmony, beat) {
-  let result = harmony?.[0] ?? null;
-  for (const event of harmony ?? []) {
-    if (finite(event?.start) <= beat + 1e-6) result = event;
-    if (
-      beat < finite(event?.start) + finite(event?.duration) - 1e-6
-      && beat >= finite(event?.start) - 1e-6
-    ) return event;
+function getMaxHarmonyDuration(harmony) {
+  if (!harmony || !harmony.length) return 0;
+  if (harmony._maxDuration !== undefined) return harmony._maxDuration;
+  let maxD = 0;
+  for (let i = 0; i < harmony.length; i++) {
+    const d = finite(harmony[i]?.duration ?? harmony[i]?.durationBeats, 0);
+    if (d > maxD) maxD = d;
   }
-  return result;
+  if (!Object.isFrozen(harmony)) {
+    try { Object.defineProperty(harmony, "_maxDuration", { value: maxD, writable: true, configurable: true, enumerable: false }); } catch (_) {}
+  }
+  return maxD;
+}
+
+function harmonyAt(harmony, beat) {
+  if (!harmony || harmony.length === 0) return harmony?.[0] ?? null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let maxIdx = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      maxIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (maxIdx === -1) {
+    return harmony[0] ?? null;
+  }
+
+  const maxDuration = getMaxHarmonyDuration(harmony);
+  const cutoff = beat - maxDuration - 1e-6;
+
+  let firstMatch = -1;
+  for (let i = maxIdx; i >= 0; i--) {
+    const event = harmony[i];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start < cutoff) break;
+    const duration = finite(event?.duration ?? event?.durationBeats, 0);
+    if (beat >= start - 1e-6 && beat < start + duration - 1e-6) {
+      firstMatch = i;
+    }
+  }
+
+  if (firstMatch !== -1) {
+    return harmony[firstMatch];
+  }
+
+  return harmony[maxIdx] ?? null;
 }
 
 function chordToneSet(chord) {

@@ -260,12 +260,62 @@ export function analyzeEnsembleContinuity(song) {
   });
 }
 
+function getMaxHarmonyDuration(harmony) {
+  if (!harmony || !harmony.length) return 0;
+  if (harmony._maxDuration !== undefined) return harmony._maxDuration;
+  let maxD = 0;
+  for (let i = 0; i < harmony.length; i++) {
+    const d = finite(harmony[i]?.duration ?? harmony[i]?.durationBeats, 0);
+    if (d > maxD) maxD = d;
+  }
+  if (!Object.isFrozen(harmony)) {
+    try { Object.defineProperty(harmony, "_maxDuration", { value: maxD, writable: true, configurable: true, enumerable: false }); } catch (_) {}
+  }
+  return maxD;
+}
+
 function harmonyAt(song, beat) {
-  return (song?.harmony ?? []).find((chord) => {
-    const start = finite(chord?.start);
-    const end = start + Math.max(0.05, finite(chord?.duration, 0.25));
-    return beat >= start - 1e-6 && beat < end - 1e-6;
-  }) ?? null;
+  const harmony = Array.isArray(song) ? song : (song?.harmony ?? []);
+  if (!harmony || harmony.length === 0) return null;
+  let low = 0;
+  let high = harmony.length - 1;
+  let maxIdx = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const event = harmony[mid];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start <= beat + 1e-6) {
+      maxIdx = mid;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (maxIdx === -1) {
+    return null;
+  }
+
+  const maxDuration = getMaxHarmonyDuration(harmony);
+  const cutoff = beat - maxDuration - 1e-6;
+
+  let firstMatch = -1;
+  for (let i = maxIdx; i >= 0; i--) {
+    const event = harmony[i];
+    const start = finite(event?.start ?? event?.startBeat, 0);
+    if (start < cutoff) break;
+    const end = start + Math.max(0.05, finite(event?.duration, 0.25));
+    if (beat >= start - 1e-6 && beat < end - 1e-6) {
+      firstMatch = i;
+    }
+  }
+
+  if (firstMatch !== -1) {
+    return harmony[firstMatch];
+  }
+
+  return null;
 }
 
 function registerCenter(song, trackId, section) {
