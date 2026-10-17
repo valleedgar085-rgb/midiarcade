@@ -1,19 +1,19 @@
 export const SHAPE_CHANGE_SIZES = Object.freeze({
   touchUp: Object.freeze({
     id: "touchUp",
-    label: "Touch Up",
+    label: "Small",
     description: "Small musical adjustments that preserve the phrase and arrangement identity.",
     rewriteBudget: 0.18,
   }),
   reshape: Object.freeze({
     id: "reshape",
-    label: "Reshape",
+    label: "Medium",
     description: "Meaningful section changes that keep the song recognizable.",
     rewriteBudget: 0.46,
   }),
   transform: Object.freeze({
     id: "transform",
-    label: "Transform",
+    label: "Large",
     description: "Large local rewrites that preserve the selected locks and the surrounding song context.",
     rewriteBudget: 0.78,
   }),
@@ -29,17 +29,17 @@ export const SHAPE_PRESERVE_LOCKS = Object.freeze([
 ]);
 
 export const SHAPE_QUICK_DIRECTIONS = Object.freeze({
-  moreBounce: Object.freeze({ id: "moreBounce", label: "More Bounce", dimensions: ["groove", "syncopation", "velocityContour"] }),
-  harder: Object.freeze({ id: "harder", label: "Harder", dimensions: ["density", "velocityContour", "register"] }),
-  simpler: Object.freeze({ id: "simpler", label: "Simpler", dimensions: ["density", "repetition", "phraseLength"] }),
-  busier: Object.freeze({ id: "busier", label: "Busier", dimensions: ["density", "variation", "syncopation"] }),
-  moreEmotional: Object.freeze({ id: "moreEmotional", label: "More Emotional", dimensions: ["harmonyMotion", "phraseResolution", "register"] }),
-  moreSpace: Object.freeze({ id: "moreSpace", label: "More Space", dimensions: ["density", "phraseLength", "noteGate"] }),
-  catchier: Object.freeze({ id: "catchier", label: "Catchier", dimensions: ["motif", "repetition", "phraseResolution"] }),
-  darker: Object.freeze({ id: "darker", label: "Darker", dimensions: ["register", "harmonicTension", "density"] }),
-  brighter: Object.freeze({ id: "brighter", label: "Brighter", dimensions: ["register", "chordColor", "melodicLift"] }),
-  buildUp: Object.freeze({ id: "buildUp", label: "Build Up", dimensions: ["energy", "density", "transition"] }),
-  calmDown: Object.freeze({ id: "calmDown", label: "Calm Down", dimensions: ["energy", "density", "register"] }),
+  moreBounce: Object.freeze({ id: "moreBounce", label: "Better Groove", dimensions: ["groove", "syncopation", "velocityContour"] }),
+  harder: Object.freeze({ id: "harder", label: "More Punch", dimensions: ["density", "velocityContour", "register"] }),
+  simpler: Object.freeze({ id: "simpler", label: "Simplify", dimensions: ["density", "repetition", "phraseLength"] }),
+  busier: Object.freeze({ id: "busier", label: "Add Notes", dimensions: ["density", "variation", "syncopation"] }),
+  moreEmotional: Object.freeze({ id: "moreEmotional", label: "More Feeling", dimensions: ["harmonyMotion", "phraseResolution", "register"] }),
+  moreSpace: Object.freeze({ id: "moreSpace", label: "Make Space", dimensions: ["density", "phraseLength", "noteGate"] }),
+  catchier: Object.freeze({ id: "catchier", label: "Catchier Hook", dimensions: ["motif", "repetition", "phraseResolution"] }),
+  darker: Object.freeze({ id: "darker", label: "Deeper Sound", dimensions: ["register", "harmonicTension", "density"] }),
+  brighter: Object.freeze({ id: "brighter", label: "Brighter Sound", dimensions: ["register", "chordColor", "melodicLift"] }),
+  buildUp: Object.freeze({ id: "buildUp", label: "Build Energy", dimensions: ["energy", "density", "transition"] }),
+  calmDown: Object.freeze({ id: "calmDown", label: "Dial It Back", dimensions: ["energy", "density", "register"] }),
 });
 
 const SHAPE_OWNED_CONTROLS = new Set([

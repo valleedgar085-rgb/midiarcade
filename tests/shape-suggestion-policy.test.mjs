@@ -57,7 +57,7 @@ test("A3 adapts the ranked suggestion to payoff and outro section roles", () => 
 
 test("A3 wiring stays advisory and stages the existing Shape transaction path", () => {
   assert.match(app, /rankShapeSuggestions\(\{/);
-  assert.match(html, /Your original stays safe until you save/);
+  assert.match(html, /Your original is safe/);
   assert.match(app, /data-shape-direction/);
   assert.match(app, /prepareShapeDirectorCandidate\(direction\)/);
   assert.match(app, /state\.song\?\.variationSet\?\.element\?\.id/);
