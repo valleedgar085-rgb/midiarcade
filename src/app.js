@@ -3362,6 +3362,9 @@ function bindPianoRollInteractions() {
 
   $("#closePianoRoll")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
   $("#prSaveClose")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) modal.close?.() || modal.removeAttribute("open");
+  });
 
   $("#prToolDraw")?.addEventListener("click", () => {
     pianoRollState.tool = "draw";
