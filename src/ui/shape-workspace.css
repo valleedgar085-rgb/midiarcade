@@ -248,3 +248,194 @@
     border: 2px solid Highlight !important;
   }
 }
+
+
+/* UI/UX Pro Max: Shape-only clarity pass. Keeps existing musical actions and
+   uses the current Midnight Studio palette without changing other tabs. */
+#tab-arrange .shape-director-panel {
+  gap: 14px !important;
+  padding: clamp(14px, 2.4vw, 22px) !important;
+  border: 1.5px solid #548d90 !important;
+  border-radius: 19px !important;
+  background: linear-gradient(145deg, #172b31 0%, #111c25 100%) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .2), inset 0 1px rgba(217, 255, 250, .06) !important;
+}
+#tab-arrange .shape-director-heading {
+  margin-bottom: 0 !important;
+  border-bottom: 1px solid #47616a;
+  padding-bottom: 12px;
+}
+#tab-arrange .shape-director-heading small {
+  color: #9febdf !important;
+  font-size: 11px !important;
+  letter-spacing: .09em !important;
+}
+#tab-arrange .shape-director-heading strong { color: #f0fffc !important; }
+#tab-arrange .shape-inspector {
+  margin: 0 !important;
+  padding: 12px 14px !important;
+  border: 1px solid #415f6a !important;
+  border-radius: 14px !important;
+  background: #13232b !important;
+}
+#tab-arrange .shape-inspector header { align-items: center; gap: 10px; }
+#tab-arrange .shape-inspector header > strong {
+  font-size: 15px !important;
+  font-weight: 750 !important;
+  color: #ecfffc !important;
+}
+#tab-arrange .shape-inspector #shapeInspectorScope {
+  font-size: 12px !important; color: #a1d2d5 !important;
+}
+#tab-arrange .shape-inspector-insights { gap: 9px !important; }
+#tab-arrange .shape-inspector-card {
+  background: #172d34 !important;
+  border: 1px solid #466e75 !important;
+  padding: 12px !important; gap: 10px !important;
+}
+#tab-arrange .shape-inspector-card strong { font-size: 14px !important; line-height: 1.35 !important; }
+#tab-arrange .shape-inspector-card p,
+#tab-arrange #shapeInspectorStatus {
+  font-size: 13px !important; line-height: 1.5 !important;
+  color: #bcd4d8 !important;
+}
+#tab-arrange .shape-inspector-card button {
+  min-height: 48px !important;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  border: 1.5px solid #4ba9a3 !important;
+  background: #234e50 !important;
+  color: #f4fffe !important;
+}
+#tab-arrange .shape-directions-help {
+  margin: 0 !important; font-size: 14px !important;
+  line-height: 1.45 !important; color: #c4e0e1 !important;
+}
+#tab-arrange .shape-director-directions {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  margin: 0 !important; padding: 0 !important;
+  gap: 10px !important;
+}
+#tab-arrange .shape-director-directions > button[data-shape-direction] {
+  display: flex !important; flex-direction: column !important;
+  align-items: flex-start !important; justify-content: center !important;
+  gap: 6px !important;
+  min-height: 78px !important; padding: 13px 14px !important;
+  border: 1.5px solid #527980 !important;
+  border-radius: 14px !important;
+  background: linear-gradient(160deg, #1f3a42, #1a3039) !important;
+  text-align: left !important;
+  white-space: normal !important;
+  color: #effffb !important;
+  box-shadow: inset 0 1px rgba(255, 255, 255, .06) !important;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease !important;
+}
+#tab-arrange .shape-director-directions > button[data-shape-direction] strong {
+  display: block; font-size: 16px !important; font-weight: 800 !important;
+  line-height: 1.2 !important; color: #f5fffc !important;
+}
+#tab-arrange .shape-director-directions > button[data-shape-direction] small {
+  display: block; font-size: 12px !important; font-weight: 550 !important;
+  line-height: 1.4 !important; color: #b3d6d9 !important;
+}
+#tab-arrange .shape-director-directions > button[data-shape-rank] {
+  background: linear-gradient(155deg, #20534f, #183f47) !important;
+  border-color: #60b9ab !important;
+}
+#tab-arrange .shape-director-directions > button.is-selected {
+  border: 2px solid #7ee2cf !important;
+  background: #235551 !important;
+  box-shadow: 0 0 0 2px rgba(126, 226, 207, .18) !important;
+}
+#tab-arrange .shape-director-directions > button[data-shape-direction]:hover {
+  border-color: #a0f4df !important; transform: translateY(-1px);
+}
+#tab-arrange .shape-director-directions > button[hidden] { display: none !important; }
+#tab-arrange .shape-director-directions > .shape-more-directions {
+  grid-column: 1 / -1 !important;
+  min-height: 48px !important;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  border: 1px solid #476a72 !important;
+  border-radius: 12px !important;
+  background: #14252d !important; color: #d9f6f0 !important;
+}
+#tab-arrange .shape-director-candidate {
+  display: grid !important; grid-template-columns: minmax(0, 1fr) !important;
+  gap: 12px !important;
+  padding: 14px !important;
+  margin: 0 !important;
+  background: linear-gradient(140deg, #183c3b, #152830) !important;
+  border: 1.5px solid #6bb99f !important; border-radius: 15px !important;
+}
+#tab-arrange .shape-director-candidate[hidden] { display: none !important; }
+#tab-arrange .shape-director-candidate > span { min-width: 0; }
+#tab-arrange .shape-director-candidate em { color: #c1d8d6 !important; font-size: 12px !important; }
+#tab-arrange .shape-director-ab {
+  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#tab-arrange .shape-director-ab button,
+#tab-arrange .shape-director-commit button {
+  min-height: 48px !important;
+  font-size: 15px !important;
+  font-weight: 750 !important;
+  padding: 10px 12px !important;
+  border-radius: 11px !important;
+}
+#tab-arrange .shape-director-ab button.is-active {
+  background: #235d57 !important; border-color: #8ce6d4 !important;
+  color: #f5fffd !important;
+}
+#tab-arrange .shape-director-commit {
+  display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px !important; padding: 0 !important;
+}
+#tab-arrange .shape-director-commit .is-primary {
+  background: #1e7067 !important; border-color: #84ddcc !important;
+  color: #fff !important;
+}
+#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) {
+  border-radius: 13px !important;
+  border: 1px solid #425f68 !important;
+  background: #13232b !important; padding: 11px 13px !important;
+}
+#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) > summary {
+  min-height: 48px !important;
+  align-content: center !important;
+  font-size: 14px !important;
+  font-weight: 750 !important;
+  color: #e5faf7 !important;
+}
+#tab-arrange :is(.shape-change-options, .shape-new-idea, .shape-help) > summary small {
+  font-size: 12px !important; color: #b7d3d8 !important;
+}
+#tab-arrange .shape-director-scope { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+#tab-arrange .shape-director-scope select { min-height: 48px !important; }
+#tab-arrange .shape-director-locks label { min-height: 44px !important; font-size: 13px !important; }
+#tab-arrange .section-edit-primary { min-height: 52px !important; }
+#tab-arrange .section-quick-actions button,
+#tab-arrange .section-order-actions button,
+#tab-arrange .editor-tool-group button { min-height: 44px !important; }
+#tab-arrange :is(button, select, summary):focus-visible {
+  outline: 3px solid #a1f3e2 !important; outline-offset: 3px !important;
+}
+@media (max-width: 740px) {
+  #tab-arrange .shape-director-directions { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  #tab-arrange .shape-director-directions > button[data-shape-direction] { min-height: 84px !important; }
+  #tab-arrange .shape-inspector-insights { grid-template-columns: 1fr !important; }
+}
+@media (max-width: 380px) {
+  #tab-arrange .shape-director-directions { grid-template-columns: minmax(0, 1fr) !important; }
+  #tab-arrange .shape-director-scope { grid-template-columns: minmax(0, 1fr) !important; }
+  #tab-arrange .shape-director-commit { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-arrange .shape-director-directions > button { transition: none !important; transform: none !important; }
+}
+@media (forced-colors: active) {
+  #tab-arrange .shape-director-directions > button[data-shape-direction],
+  #tab-arrange .shape-director-candidate,
+  #tab-arrange .shape-inspector { border: 2px solid CanvasText !important; }
+  #tab-arrange .shape-director-directions > button.is-selected { border: 3px solid Highlight !important; }
+}

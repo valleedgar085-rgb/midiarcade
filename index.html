@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="MIDI Arcade — Turn any idea into a complete song. Generate, edit, mix, and jam with 18 genre-aware composition engines and a built-in piano roll." />
+    <meta name="description" content="MIDI Arcade — Generate, edit, mix, and play songs with 18 genre-aware engines and a piano roll." />
     <meta name="theme-color" content="#08080b" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -54,7 +54,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 7 5 5-5 5m4-5h-9a5 5 0 1 0 0 10h2"/></svg>
           </button>
           <button class="icon-button guide-button" id="helpButton" type="button" aria-label="Guide"><span>?</span><b>GUIDE</b></button>
-          <span class="version-chip">V1.2.3</span>
+          <span class="version-chip">V1.2.4</span>
         </div>
       </header>
 
@@ -544,8 +544,8 @@
             <div class="section-heading">
               <div>
                 <p class="eyebrow">SHAPE</p>
-                <h2 id="arrangementTitle">Shape your song</h2>
-                <p class="section-description">Tap a section and instrument below. Try a change, listen, then save it.</p>
+                <h2 id="arrangementTitle">Shape your sound</h2>
+                <p class="section-description">Choose a part, pick a change, and compare the sound before saving.</p>
               </div>
               <div class="arrangement-tools">
                 <button class="small-button" id="reorderButton" type="button">
@@ -562,10 +562,10 @@
             <div class="shape-stage">
               <div class="shape-map-column">
                 <div class="shape-map-toolbar">
-                  <span><i></i><strong>1. Choose a part</strong><small id="shapeMapSummary">Select a section to begin</small></span>
+                  <span><i></i><strong>1 · Choose a part</strong><small id="shapeMapSummary">Select a section to begin</small></span>
                   <span class="shape-map-legend"><i></i> Energy · activity</span>
                 </div>
-                <details class="shape-map-detail" open><summary>Show instrument clips</summary><p>Tap a colored clip — for example, Bass under Intro. Swipe sideways for later sections.</p></details>
+                <details class="shape-map-detail" open><summary>How to choose a part</summary><p>Tap an instrument clip in the song map. Swipe sideways to reach later sections.</p></details>
                 <div class="arrangement-insight-lanes" id="arrangementInsightLanes">
                   <div class="energy-arc-lane" id="energyArcLane" aria-label="Section energy arc"></div>
                   <div class="harmony-map-lane" id="harmonyMapLane" aria-label="Song harmony lane"></div>
@@ -592,10 +592,10 @@
                   </header>
                   <p id="sectionShaperMeta">Bars 1–8 · balanced energy</p>
                   <button class="section-edit-primary" type="button" data-section-action="edit">
-                    <span><small>PIANO ROLL</small><strong>Edit notes</strong></span>
+                    <span><small>PRECISE EDITING</small><strong>Open Piano Roll</strong></span>
                     <b aria-hidden="true">→</b>
                   </button>
-                  <details class="shape-extra-feel"><summary>More feel controls <small>These edits apply immediately. Undo restores the previous version.</small></summary>
+                  <details class="shape-extra-feel"><summary>Adjust section feel <small>These edits apply immediately. Undo restores the previous version.</small></summary>
                   <div class="shaper-group-heading">
                     <span><small>SECTION FEEL</small><strong>Shape this moment</strong></span>
                     <em>Auto keeps the original musical intent</em>
@@ -612,43 +612,43 @@
                   <section class="shape-director-panel" id="shapeDirectorPanel" aria-labelledby="shapeDirectorTitle">
 
                     <div class="shape-director-heading">
-                      <span><small>TRY A CHANGE</small><strong id="shapeDirectorTitle">2. Shape this part</strong></span>
+                      <span><small>QUICK CHANGES</small><strong id="shapeDirectorTitle">2 · Choose a change</strong></span>
                     </div>
                     <span class="shape-director-current"><small>YOU ARE WORKING ON</small><strong id="shapeDirectorTrackName"></strong><em id="shapeDirectorNoteCount"></em></span>
                     <section class="shape-inspector" id="shapeInspector" aria-label="Song Inspector">
-                      <header><strong>Song Inspector</strong><small id="shapeInspectorScope">Selected part</small></header>
+                      <header><strong>Suggested for this part</strong><small id="shapeInspectorScope">Selected part</small></header>
                       <div id="shapeInspectorInsights" role="list" class="shape-inspector-insights"></div>
-                      <p id="shapeInspectorStatus">Preview first. Save to keep it.</p>
+                      <p id="shapeInspectorStatus">Preview before saving. Your original is safe.</p>
                     </section>
-                    <p class="shape-directions-help">Tap a suggestion to preview it. Your original stays safe until you save.</p>
-                    <div class="shape-director-directions" id="shapeDirectorDirections" aria-label="Quick musical directions"></div>
+                    <p class="shape-directions-help">Tap a change below. Listen to the original and preview before deciding.</p>
+                    <div class="shape-director-directions" id="shapeDirectorDirections" role="group" aria-label="Choose a musical change"></div>
                     <div class="shape-director-candidate" id="shapeDirectorCandidate" hidden>
-                      <span><small>PREVIEW · NOT SAVED YET</small><strong id="shapeDirectorCandidateTitle">More Bounce · Touch Up</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
+                      <span><small>3 · LISTEN AND COMPARE</small><strong id="shapeDirectorCandidateTitle">Better Groove · Small</strong><em id="shapeDirectorCandidateMeta">Ready to compare</em></span>
                       <div class="shape-director-ab" id="shapeDirectorAudition" role="group" aria-label="Before and After audition"></div>
                       <div class="shape-director-commit">
-                        <button type="button" data-shape-discard>Keep original</button>
-                        <button class="is-primary" type="button" data-shape-accept>Save this change</button>
+                        <button type="button" data-shape-discard>Keep Original</button>
+                        <button class="is-primary" type="button" data-shape-accept>Use This Change</button>
                       </div>
                     </div>
-                    <details class="shape-change-options"><summary>Change options <small>Amount, scope, and things to keep</small></summary>
+                    <details class="shape-change-options"><summary>Change settings <small>Choose what and how much to change</small></summary>
                     <div class="shape-director-scope">
-                      <label><span>WHAT TO CHANGE</span><small>Only the selected part by default</small>
+                      <label><span>APPLY TO</span><small>Choose a section, instrument, or notes</small>
                         <select id="shapeDirectorTarget" aria-label="Shape target scope">
-                          <option value="section">Whole section · all instruments</option>
-                          <option value="track">Only this instrument</option>
-                          <option value="notes">Selected notes</option>
+                          <option value="section">Whole section (all instruments)</option>
+                          <option value="track">Selected instrument only</option>
+                          <option value="notes">Selected notes only</option>
                         </select>
                       </label>
-                      <label><span>HOW MUCH</span><small>Start small; preview before saving</small>
+                      <label><span>CHANGE STRENGTH</span><small>Start small; you can always preview</small>
                         <select id="shapeDirectorSize" aria-label="Shape change size">
-                          <option value="touchUp">Small · polish</option>
-                          <option value="reshape">Medium · reshape</option>
-                          <option value="transform">Big · transform</option>
+                          <option value="touchUp">Small · gentle edit</option>
+                          <option value="reshape">Medium · noticeable edit</option>
+                          <option value="transform">Large · strong edit</option>
                         </select>
                       </label>
                     </div>
                     <details class="shape-director-locks">
-                      <summary><span>Preserve what already works</span><small>OPTIONAL LOCKS</small></summary>
+                      <summary><span>Keep these unchanged</span><small>OPTIONAL</small></summary>
                       <div>
                         <label><input type="checkbox" data-shape-preserve="melody" /> Melody</label>
                         <label><input type="checkbox" data-shape-preserve="harmony" /> Harmony</label>
@@ -657,19 +657,19 @@
                       </div>
                     </details>
                     </details>
-                    <details class="shape-new-idea"><summary>Try a new musical idea <small>Replace this part with a fresh variation</small></summary>
+                    <details class="shape-new-idea"><summary>Generate a different part <small>Preview a fresh variation before using it</small></summary>
                     <a class="section-edit-primary shape-blueprint-compose" id="shapeDirectorCompose" href="#sectionShaper" role="button" data-shape-compose aria-disabled="false">
-                      <span><small>TRY A DIFFERENT MUSICAL IDEA</small><strong id="shapeDirectorComposeLabel">Try this direction</strong></span>
+                      <span><small>NEW IDEA</small><strong id="shapeDirectorComposeLabel">Generate another part</strong></span>
                       <b aria-hidden="true">↻</b>
                     </a>
                     </details>
 
-                    <details class="shape-help"><summary aria-label="How to shape a part">? How to use Shape</summary><p>Select an instrument clip (such as Intro · Bass). Choose a direction, compare Before / After, then Save or Keep original. Note tools affect selected notes; Select all targets the part. Shorter / Longer changes duration; Align to grid or Loosen timing changes placement. Choose Whole section to affect every instrument.</p></details>
+                    <details class="shape-help"><summary aria-label="How to use Shape">? Quick guide</summary><p>Select an instrument clip (such as Intro · Bass). Choose a direction, compare Before / After, then Save or Keep original. Note tools affect selected notes; Select all targets the part. Shorter / Longer changes duration; Align to grid or Loosen timing changes placement. Choose Whole section to affect every instrument.</p></details>
                     <p class="shape-director-status" id="shapeDirectorStatus" role="status" aria-live="polite"></p>
                   </section>
                   <details class="section-actions-menu"><summary><span><small>SECTION ACTIONS</small><strong>Whole-section tools</strong></span><b aria-hidden="true">•••</b></summary><div class="section-actions-menu-body">
-                    <div class="section-quick-actions" aria-label="Section actions"><button type="button" data-section-action="queue-jump">⚡ Queue Jump</button><button type="button" data-section-action="simplify">Create space</button><button type="button" data-section-action="build">Add a build</button><button type="button" data-section-action="variations">Try variations</button><button type="button" data-section-action="duplicate">Duplicate section</button></div>
-                    <div class="section-order-actions" aria-label="Move selected section"><button type="button" data-section-action="earlier">← Earlier</button><button type="button" data-section-action="later">Later →</button></div>
+                    <div class="section-quick-actions" aria-label="Section actions"><button type="button" data-section-action="queue-jump">Queue Next Part</button><button type="button" data-section-action="simplify">Make Space</button><button type="button" data-section-action="build">Build Energy</button><button type="button" data-section-action="variations">Try Alternatives</button><button type="button" data-section-action="duplicate">Duplicate section</button></div>
+                    <div class="section-order-actions" aria-label="Move selected section"><button type="button" data-section-action="earlier">← Move Earlier</button><button type="button" data-section-action="later">Move Later →</button></div>
                   </div></details>
                   <p class="section-shaper-status" id="sectionShaperStatus" role="status">Auto is following the composition engine.</p>
                 </div>
@@ -680,12 +680,12 @@
                 <div class="editor-focus-orbit" aria-hidden="true"><i></i><i></i><span>&#8705;</span></div>
                 <div>
                   <p class="eyebrow">EDITING ONLY THIS PART</p>
-                  <h3 id="sectionEditorTitle" aria-live="polite" aria-atomic="true">Edit notes precisely</h3>
+                  <h3 id="sectionEditorTitle" aria-live="polite" aria-atomic="true">Piano Roll · Edit Notes</h3>
                   <p id="sectionEditorSubtitle">Note edits affect the saved performance.</p>
                 </div>
                 <div class="editor-header-actions">
-                  <button class="editor-play-button" id="editorPlayButton" type="button">Listen from here</button>
-                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">Choose another part</button>
+                  <button class="editor-play-button" id="editorPlayButton" type="button">Play This Part</button>
+                  <button class="editor-close-button" id="editorCloseButton" type="button" aria-label="Back to Shape">Back to Song Map</button>
                 </div>
               </header>
               <label class="editor-section-switch">Section <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
@@ -712,13 +712,13 @@
                   </select>
                 </label>
                 <span class="editor-tool-group">
-                  <button type="button" data-editor-action="select-all">Select all</button>
-                  <button type="button" data-editor-action="quantize">Align to grid</button>
-                  <button type="button" data-editor-action="humanize">Loosen timing</button>
+                  <button type="button" data-editor-action="select-all">Select All Notes</button>
+                  <button type="button" data-editor-action="quantize">Fix Timing</button>
+                  <button type="button" data-editor-action="humanize">Natural Timing</button>
                 </span>
                 <span class="editor-tool-cluster editor-note-length"><small>NOTE LENGTH</small><span class="editor-tool-group">
-                    <button type="button" data-editor-action="shorter" aria-label="Shorten selected notes">Shorter</button>
-                    <button type="button" data-editor-action="longer" aria-label="Lengthen selected notes">Longer</button>
+                    <button type="button" data-editor-action="shorter" aria-label="Shorten selected notes">Shorten</button>
+                    <button type="button" data-editor-action="longer" aria-label="Lengthen selected notes">Lengthen</button>
                   </span></span>
                 <label class="editor-velocity">NOTE STRENGTH <output id="editorVelocityValue">100 · strong</output>
                   <input id="editorVelocityControl" type="range" min="1" max="127" value="100" aria-label="Selected note velocity from 1 to 127" />
