@@ -1,4 +1,5 @@
 import { evaluateChorusHookRecurrence } from "../../src/core/chorus-hook-recurrence.js";
+import { inspectHookNoteEvidence } from "./hook-note-evidence.mjs";
 
 const finite=(value,fallback=0)=>Number.isFinite(Number(value))?Number(value):fallback;
 const type=section=>String(section?.name??section?.type??"").toLowerCase().replace(/[^a-z0-9]/g,"");
@@ -41,6 +42,7 @@ export function inspectHookLineage(song){
       phraseRecallStrength:finite(phrase?.recallStrength,null),
       hookRole:phrase?.hookRole??null,
       noteCount:starts.length,hookScore:cmp?.available?Math.round(cmp.score*100):null,
+      noteEvidence:inspectHookNoteEvidence(song,originId,id,cmp),
       hookRhythm:cmp?.available?cmp.rhythm:null,
       hookContour:cmp?.available?cmp.contour:null,
       sourceOnsetCoverage:cmp?.sourceOnsetCoverage??null,

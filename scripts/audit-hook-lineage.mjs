@@ -18,9 +18,9 @@ for(const genre of genres){
     const config={genre,seed,bars,key:"E",scale:"minor",energy:0.68,
       complexity:0.62,variation:0.62,evolution:0.68,swing:0.14,humanize:0.12};
     const song=generateNew(config);
-    const before=JSON.stringify((song.tracks??[]).map(t=>[t.id,t.notes]));
+    const before=JSON.stringify(song);
     const report=inspectHookLineage(song);
-    if(JSON.stringify((song.tracks??[]).map(t=>[t.id,t.notes]))!==before)
+    if(JSON.stringify(song)!==before)
       throw Error("lineage audit mutated a song: "+seed);
     rows.push({genre,seed,...report});
     console.log("HOOK_LINEAGE_CASE",JSON.stringify({genre,seed,status:report.hookStatus,
@@ -30,17 +30,33 @@ for(const genre of genres){
 const returns=rows.flatMap(row=>row.returns.map(x=>({...x,genre:row.genre,seed:row.seed})));
 const issueCounts={};
 for(const row of returns)issueCounts[row.issue]=(issueCounts[row.issue]??0)+1;
+const weaknessCounts={};
+const provenanceTotals={matched:0,mismatched:0,absent:0};
+let unavailableNoteEvidence=0;
+for(const item of returns){
+  const evidence=item.noteEvidence;
+  if(evidence?.status!=="evaluated") {unavailableNoteEvidence+=1;continue;}
+  for(const key of Object.keys(provenanceTotals)) provenanceTotals[key]+=evidence.provenance[key];
+  if(item.hookScore!==null&&item.hookScore<66&&evidence.primaryWeakness){
+    weaknessCounts[evidence.primaryWeakness]=(weaknessCounts[evidence.primaryWeakness]??0)+1;
+  }
+}
+const rankedWeaknesses=Object.entries(weaknessCounts)
+  .map(([dimension,count])=>({dimension,count}))
+  .sort((a,b)=>b.count-a.count||a.dimension.localeCompare(b.dimension));
 const report={
   version:1,scope:"developer-only, no MIDI notes changed",
   summary:{
     songs:rows.length,genres:genres.length,totalReturningChoruses:returns.length,
     weakEvaluableReturns:returns.filter(r=>r.hookScore!==null&&r.hookScore<66).length,
-    issueCounts,
+    issueCounts,rankedWeaknesses,provenanceTotals,unavailableNoteEvidence,
   },
   rows,limits:[
     "Equal upstream motif family does not guarantee matching produced pitches.",
     "Downstream note-identity drift is a classification, not proof which specific stage changed notes.",
     "Source chorus may be missing, shortened or intentionally syncopated; unavailable comparisons are not failures.",
+    "Index-aligned note deltas do not establish one-to-one correspondence after pickups or note omission.",
+    "Final rendered note tags cannot identify the first mutation stage without intermediate event snapshots.",
     "This report does not measure listening quality or device-audio behavior.",
   ],
 };
