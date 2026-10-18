@@ -766,8 +766,16 @@ function decorateAutoRangeControls(root = document) {
 function syncAutoSelects() {
   for (const id of AUTO_SELECT_IDS) {
     const control = $(`#${id}`);
-    if (control && state.autoControls.has(id) && [...control.options].some((option) => option.value === "auto")) {
-      control.value = "auto";
+    if (control && state.autoControls.has(id)) {
+      const options = control.options;
+      if (options) {
+        for (let i = 0; i < options.length; i += 1) {
+          if (options[i].value === "auto") {
+            control.value = "auto";
+            break;
+          }
+        }
+      }
     }
   }
 }
