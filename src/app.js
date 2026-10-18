@@ -48,6 +48,7 @@ import {
 import {
   characteristicTrackForPreview,
   clickSafeStopTime,
+  pendingPreviewVoiceSources,
   previewNoteAttack,
   atmosphereEnvelopeTiming,
   pitchedVoiceEnvelopeTiming,
@@ -5647,13 +5648,16 @@ export class PreviewPlayer {
           } catch { /* ignore */ }
         }
       }
-      let remainingSources = voice.sources.size;
+      // Short transient/LFO layers may have ended before this note is stolen.
+      // They cannot fire onended again; only count still-pending sources.
+      const pendingSources = pendingPreviewVoiceSources(voice);
+      let remainingSources = pendingSources.length;
       if (!remainingSources) {
         finalize();
         return;
       }
       const stopAt = clickSafeStopTime(now, voice.startedAt);
-      for (const source of voice.sources) {
+      for (const source of pendingSources) {
         source.onended = () => {
           remainingSources -= 1;
           if (remainingSources <= 0) finalize();
