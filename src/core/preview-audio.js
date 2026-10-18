@@ -136,3 +136,17 @@ export function clickSafeStopTime(now,startedAt,transition=PREVIEW_TRANSITION){
  if(start>current+transition.stopSeconds)return current;
  return current+transition.stopSeconds+transition.sourceTailSeconds;
 }
+
+/**
+ * A multi-layer preview note may finish its transient oscillator before
+ * polyphony management stops the still-playing body/layer. Already-ended
+ * sources cannot produce another onended callback; counting them prevents
+ * cleanup and leaves connected Web Audio nodes behind.
+ *
+ * Return only sources that can still finish. Never mutate tracked sets:
+ * normal onended cleanup and stop-time accounting share this voice record.
+ */
+export function pendingPreviewVoiceSources(voice) {
+  if (!voice?.sources) return [];
+  return [...voice.sources].filter((source) => source && !voice.endedSources?.has(source));
+}
