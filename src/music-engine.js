@@ -7167,10 +7167,11 @@ function enforceProducerIntentContract(sourceTracks, structure, producerIntent) 
 }
 
 function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifLength, totalBeats) {
+  const sectionsById = new Map((structure ?? []).map((section) => [section?.id, section]));
   const melody = (rawTracks.melody ?? []).map((note) => ({ ...note }));
   for (const memory of songBlueprint?.memoryMap ?? []) {
-    const target = structure.find((section) => section.id === memory.sectionId);
-    const origin = structure.find((section) => section.id === memory.originSectionId);
+    const target = sectionsById.get(memory.sectionId);
+    const origin = sectionsById.get(memory.originSectionId);
     if (!target || !origin || target.id === origin.id) continue;
     const window = Math.min(
       Math.max(1, finite(motifLength, beatsPerBar({ timeSignature: [4, 4] }))),
@@ -7225,8 +7226,8 @@ function applyMusicalMemory(rawTracks, structure, harmony, songBlueprint, motifL
     const notes = (rawTracks[trackId] ?? []).map((note) => ({ ...note }));
     for (const memory of songBlueprint?.memoryMap ?? []) {
       if (!["recall", "return"].includes(memory.relationship)) continue;
-      const target = structure.find((section) => section.id === memory.sectionId);
-      const origin = structure.find((section) => section.id === memory.originSectionId);
+      const target = sectionsById.get(memory.sectionId);
+      const origin = sectionsById.get(memory.originSectionId);
       if (!target || !origin || target.id === origin.id) continue;
       const window = Math.min(
         Math.max(1, finite(motifLength, 4)),
