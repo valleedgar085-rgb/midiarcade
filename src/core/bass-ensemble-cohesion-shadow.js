@@ -50,7 +50,7 @@ function candidate(song, profile) {
     const bar = Math.floor(beat / beatsPerBar);
     if (usedBars.has(bar)) continue;
     const chord = activeChord(next, beat);
-    if (!chord || !Number.isFinite(Number(chord.rootPc))) continue;
+    if (!chord || chord.rootPc == null || !Number.isFinite(Number(chord.rootPc))) continue;
     const root = pc(chord.rootPc);
     const oldPitch = Math.round(finite(note.pitch));
     if (profile === "foundation" || profile === "groove") {
