@@ -79,6 +79,26 @@ export function mountInstrumentIntelligence(rootDocument = globalThis.document, 
   const panel = createPanel ?? rootDocument?.querySelector?.("#tab-create");
   const deck = panel?.querySelector?.(".create-performance-deck");
   if (!deck || panel.querySelector("#instrumentIntelligencePanel") || !rootDocument?.createElement) return false;
+  if (!rootDocument.getElementById?.("instrumentIntelligenceStyle")) {
+    const styleNode = rootDocument.createElement("style");
+    styleNode.id = "instrumentIntelligenceStyle";
+    styleNode.textContent = `
+      .instrument-intelligence-panel{margin:16px 0;padding:16px;border:2px solid var(--line,rgba(140,160,190,.35));border-radius:18px;background:rgba(18,27,40,.5);display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+      .instrument-intelligence-heading{grid-column:1/-1}
+      .instrument-intelligence-heading>div{display:flex;flex-direction:column;gap:5px}
+      .instrument-intelligence-heading strong{font-size:13px;letter-spacing:.1em}
+      .instrument-intelligence-heading small{opacity:.75;font-size:12px;line-height:1.45}
+      .instrument-intelligence-row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:7px 10px;min-width:0;padding:12px;border:1px solid rgba(160,180,200,.23);border-radius:12px}
+      .instrument-intelligence-row>label:first-child{font-size:12px;font-weight:700;grid-column:1/-1}
+      .instrument-intelligence-row>input[type=range]{width:100%;min-width:0;accent-color:var(--accent,#58c6c7);min-height:35px}
+      .instrument-intelligence-row output{font-variant-numeric:tabular-nums;font-size:12px}
+      .instrument-intelligence-row>label:last-child{grid-column:1/-1;display:flex;gap:8px;align-items:center;font-size:12px;min-height:32px}
+      .instrument-intelligence-row>label:last-child input{width:18px;height:18px;accent-color:var(--accent,#58c6c7)}
+      .instrument-intelligence-row.is-planned{opacity:.56}
+      @media(max-width:660px){.instrument-intelligence-panel{grid-template-columns:minmax(0,1fr);padding:12px}.instrument-intelligence-row{padding:10px}}
+    `;
+    (rootDocument.head ?? rootDocument.documentElement)?.append(styleNode);
+  }
   const section = rootDocument.createElement("section");
   section.id = "instrumentIntelligencePanel";
   section.className = "instrument-intelligence-panel";
