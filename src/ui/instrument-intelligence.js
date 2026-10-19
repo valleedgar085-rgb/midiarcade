@@ -4,8 +4,8 @@ export const INSTRUMENT_INTELLIGENCE_KEY = "midi-arcade/instrument-intelligence-
 export const INSTRUMENT_INTELLIGENCE = Object.freeze([
   { id: "drums", title: "Drums", label: "Groove Tightness", value: 65, active: true },
   { id: "bass", title: "Bass", label: "Cohesion", value: 80, active: true },
-  { id: "chords", title: "Chords", label: "Harmonic Richness", value: 55, active: false },
-  { id: "melody", title: "Melody", label: "Hook Strength", value: 80, active: false },
+  { id: "chords", title: "Chords", label: "Harmonic Richness", value: 55, active: true },
+  { id: "melody", title: "Melody", label: "Hook Strength", value: 80, active: true },
   { id: "counterpoint", title: "Counterline", label: "Interaction", value: 45, active: false },
   { id: "pad", title: "Atmosphere", label: "Presence", value: 35, active: false },
   { id: "arp", title: "Arpeggio", label: "Movement", value: 40, active: false },
@@ -53,11 +53,12 @@ export function setInstrumentIntelligence(id, change, storage = globalThis.local
   return preferences;
 }
 export function resolveInstrumentIntelligence(config, settings = instrumentIntelligenceSettings()) {
-  // Auto path is exactly neutral. Only the two verified existing knobs are
-  // mapped in Phase 1. Never add unknown generator options to config.
+  // Auto is neutral; manual values use only established generator inputs.
   const drums = settings?.drums;
   const bass = settings?.bass;
-  if (drums?.auto !== false && bass?.auto !== false) return config;
+  const chords = settings?.chords;
+  const melody = settings?.melody;
+  if ([drums,bass,chords,melody].every((entry) => entry?.auto !== false)) return config;
   const updated = { ...config };
   if (drums?.auto === false) {
     // Higher tightness means less syncopation; no note timing/export rewriting.
@@ -70,6 +71,21 @@ export function resolveInstrumentIntelligence(config, settings = instrumentIntel
     const existing = tracks.bass ?? {};
     tracks.bass = { ...existing, variation: Math.max(0.12, Math.min(0.9,
       (100 - bounded(bass.value, 80)) / 100 * 0.78 + 0.12)) };
+    updated.trackControls = tracks;
+    updated.tracks = tracks;
+  }
+  if (chords?.auto === false) {
+    // Existing harmonic richness authority; no direct note or MIDI edits.
+    updated.chordExtensions = Math.max(0.12, Math.min(0.86,
+      0.12 + bounded(chords.value, 55) / 100 * 0.74));
+  }
+  if (melody?.auto === false) {
+    // Hook strength works as a safe variation proxy. The melody composer
+    // still owns motif choice and release validation.
+    const tracks = { ...(updated.trackControls ?? config.trackControls) };
+    const existing = tracks.melody ?? {};
+    tracks.melody = { ...existing, variation: Math.max(0.15, Math.min(0.9,
+      0.9 - bounded(melody.value, 80) / 100 * 0.75)) };
     updated.trackControls = tracks;
     updated.tracks = tracks;
   }
@@ -105,7 +121,7 @@ export function mountInstrumentIntelligence(rootDocument = globalThis.document, 
   section.setAttribute("aria-label", "Instrument intelligence");
   const heading = rootDocument.createElement("div");
   heading.className = "instrument-intelligence-heading";
-  heading.innerHTML = '<div><strong>INSTRUMENT INTELLIGENCE</strong><small>Auto follows the genre. Manual drums and bass guide the next generation.</small></div>';
+  heading.innerHTML = '<div><strong>INSTRUMENT INTELLIGENCE</strong><small>Auto follows the genre. Manual drums, bass, chords and melody guide the next generation.</small></div>';
   section.append(heading);
   const initial = instrumentIntelligenceSettings();
   for (const item of INSTRUMENT_INTELLIGENCE) {
