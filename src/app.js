@@ -9,6 +9,8 @@ import {
   TRACK_DEFINITIONS,
 } from "./music-engine.js";
 import { clamp, escapeHtml } from "./utils.js";
+import { studioSoundHarmonics } from "./core/studio-sound.js";
+import { PITCHED_SAMPLE_MANIFEST, selectPitchedSample, preloadPitchedSamples, schedulePitchedSample } from "./core/pitched-samples.js";
 import { deriveSongTitle } from "./core/song-title.js";
 import { buildSectionMatrix, updateSectionBars, updateSectionEnergy, updateSectionInstrumentMask, calculateNextQueuedSection, getSongSections } from "./core/arranger-matrix.js";
 import { createMidiInputManager } from "./midi-input.js";
@@ -5160,6 +5162,9 @@ export class PreviewPlayer {
     this.trackBuses = new Map();
     this.noiseBuffers = new Map();
     this.drumSampleBuffers = new Map();
+    this.pitchedSampleBuffers = new Map();
+    this.sampleInstrumentsEnabled = false;
+    this.pitchedSamplePreload = null;
     this.periodicWaves = new Map();
     this.audioGraphNodes = new Set();
     this.timer = null;
@@ -5196,6 +5201,13 @@ export class PreviewPlayer {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (!AudioContextClass) throw new Error("Web Audio is unavailable.");
       this.context = new AudioContextClass({ latencyHint: previewAudioLatencyHint(this.previewRuntime) });
+      // Only load sample audio when A/B mode is enabled. Normal preview
+      // startup stays fast and does not need network or WAV decoding.
+      if (this.sampleInstrumentsEnabled) {
+        this.pitchedSamplePreload = preloadPitchedSamples(
+          this.context, PITCHED_SAMPLE_MANIFEST, this.pitchedSampleBuffers,
+        ).catch(() => this.pitchedSampleBuffers);
+      }
       const createdContext = this.context;
       createdContext.onstatechange = () => this.handleContextStateChange(createdContext);
       if (typeof window !== "undefined") {
@@ -5342,6 +5354,10 @@ export class PreviewPlayer {
     this.trackBuses.clear();
     this.noiseBuffers.clear();
     this.drumSampleBuffers.clear();
+    // Decoded buffers belong to the previous audio context. Replace the map
+    // so an in-flight preload cannot populate the replacement cache.
+    this.pitchedSampleBuffers = new Map();
+    this.pitchedSamplePreload = null;
     this.periodicWaves.clear();
   }
 
@@ -5868,6 +5884,30 @@ export class PreviewPlayer {
       return;
     }
     const context = this.context;
+    // Sample mode is independent from Studio harmonic mode. Empty/unavailable
+    // licensed sample packs fall through to the known-good oscillator path.
+    if (this.sampleInstrumentsEnabled === true) {
+      const entry = selectPitchedSample(event.id, event.pitch, PITCHED_SAMPLE_MANIFEST, event.velocity);
+      const buffer = entry && this.pitchedSampleBuffers.get(entry.path);
+      if (buffer) {
+        const nodes = new Set();
+        const output = context.createGain();
+        nodes.add(output);
+        const source = schedulePitchedSample(context, buffer, event, entry.rootPitch, when, output, nodes);
+        if (source) {
+          this.connectPreviewOutput(
+            output, event,
+            ({ bass: -0.08, chords: -0.18 }[event.id] || 0), 1, nodes,
+          );
+          // Keep sampled voices under the same pause/seek/polyphony limits
+          // and click-safe cleanup contract as oscillator voices.
+          this.registerScheduledVoice([source], nodes, event, when);
+          return;
+        }
+        // Failed sample scheduling must not leave an output chain attached.
+        try { output.disconnect(); } catch {}
+      }
+    }
     const gain = context.createGain();
     const filter = context.createBiquadFilter();
     const oscillator = context.createOscillator();
@@ -5881,7 +5921,17 @@ export class PreviewPlayer {
     const velocityScale = 0.76 + (clamp(Number(event.velocity ?? 90), 1, 127) / 127) * 0.44;
     const filterBase = clamp(voice.filter * cutoffScale * velocityScale, 120, 15000);
     const targetFrequency = midiPitchToFrequency(event.pitch);
-    const periodicWave = this.periodicWaveForVoice(voice, event);
+    // Phase 4.2 opt-in preview timbre; original voice remains the default.
+    const studioHarmonics = studioSoundHarmonics(event.id, {
+      enabled: this.studioSoundEnabled === true,
+      brightness: clamp(Number(event.cutoff ?? 8000) / 12000, 0, 1),
+      velocity: event.velocity,
+      pitch: event.pitch,
+    });
+    const studioWave = studioHarmonics && context.createPeriodicWave
+      ? context.createPeriodicWave(new Float32Array(studioHarmonics.length), studioHarmonics, { disableNormalization: false })
+      : null;
+    const periodicWave = studioWave ?? this.periodicWaveForVoice(voice, event);
     if (periodicWave) oscillator.setPeriodicWave(periodicWave);
     else oscillator.type = voice.type;
     const glideSemitones = clamp(Number(event.glideFromSemitones || 0), -2, 2);
@@ -6422,6 +6472,52 @@ export class PreviewPlayer {
 }
 
 const player = new PreviewPlayer();
+ 
+// Phase 4.2 A/B control: no persistence or effect on MIDI/arrangement.
+if (typeof document !== "undefined") {
+  const installStudioSoundToggle = () => {
+    const host = document.querySelector("#mixPlayButton")?.parentElement;
+    if (!host || document.querySelector("#studioSoundToggle")) return;
+    const toggle = document.createElement("button");
+    toggle.id = "studioSoundToggle";
+    toggle.type = "button";
+    toggle.className = "track-toggle";
+    toggle.textContent = "Studio Sound: Off";
+    toggle.setAttribute("aria-label", "Toggle studio sound for pitched instruments");
+    toggle.setAttribute("aria-pressed", "false");
+    toggle.addEventListener("click", () => {
+      player.studioSoundEnabled = player.studioSoundEnabled !== true;
+      toggle.textContent = player.studioSoundEnabled ? "Studio Sound: On" : "Studio Sound: Off";
+      toggle.setAttribute("aria-pressed", String(player.studioSoundEnabled));
+      // Studio Sound uses harmonic synthesis, not the optional WAV bank.
+    });
+    host.append(toggle);
+    const samples = document.createElement("button");
+    samples.id = "samplePianoToggle";
+    samples.type = "button";
+    samples.className = "track-toggle";
+    samples.textContent = "Sample Piano: Off";
+    samples.setAttribute("aria-label", "Toggle sampled piano chords; drums and bass remain unchanged");
+    samples.setAttribute("aria-pressed", "false");
+    samples.addEventListener("click", () => {
+      player.sampleInstrumentsEnabled = !player.sampleInstrumentsEnabled;
+      samples.textContent = player.sampleInstrumentsEnabled ? "Sample Piano: On" : "Sample Piano: Off";
+      samples.setAttribute("aria-pressed", String(player.sampleInstrumentsEnabled));
+      if (player.sampleInstrumentsEnabled && player.context && !player.pitchedSamplePreload) {
+        player.pitchedSamplePreload = preloadPitchedSamples(
+          player.context, PITCHED_SAMPLE_MANIFEST, player.pitchedSampleBuffers,
+        ).catch(() => player.pitchedSampleBuffers);
+      }
+    });
+    host.append(samples);
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installStudioSoundToggle, { once: true });
+  } else {
+    installStudioSoundToggle();
+  }
+}
+
 
 function setPlaybackPresentation(playing) {
   const hero = $("#heroPanel");
