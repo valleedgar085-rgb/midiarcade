@@ -1,3 +1,4 @@
+import { resolveInstrumentIntelligence } from "./ui/instrument-intelligence.js";
 import {
   createMidiExportReport,
   defaultChordPathForGenre,
@@ -940,7 +941,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
         ? "subtle"
         : "medium";
 
-  return {
+  return resolveInstrumentIntelligence({
     seed,
     genre: genreId,
     professionalUpgrade: true,
@@ -981,7 +982,7 @@ export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
     arrangementLayering: layeringMode,
     tasteProfile: deepClone(state.tasteProfile),
     thinkingDepth: "deep",
-  };
+  });
 }
 
 const GENERATION_SETTING_IDS = [

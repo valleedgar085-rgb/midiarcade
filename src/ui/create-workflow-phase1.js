@@ -1,3 +1,4 @@
+import { mountInstrumentIntelligence } from "./instrument-intelligence.js";
 import { applyCreateControlContract } from "./create-control-contract.js";
 import "./create-shape-bridge.js";
 
@@ -301,6 +302,7 @@ export function applyCreateWorkflowPhase1(rootDocument = globalThis.document) {
   moveGenerationEssentials(rootDocument, createPanel);
   organizePrimaryDirection(rootDocument, createPanel);
   consolidateCreateSurface(rootDocument, createPanel);
+  mountInstrumentIntelligence(rootDocument, createPanel);
   moveOptionalGuide(createPanel);
   applyCreateControlContract(rootDocument, createPanel);
   setupCreateScrollState(rootDocument, createPanel);
