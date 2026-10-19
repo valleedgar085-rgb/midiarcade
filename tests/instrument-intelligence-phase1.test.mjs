@@ -58,3 +58,25 @@ test("config wiring only changes generation configuration, never MIDI encoding",
   assert.match(presentation,/consolidateCreateSurface\(rootDocument, createPanel\);\s*mountInstrumentIntelligence\(rootDocument, createPanel\);/);
   assert.doesNotMatch(span,/encodeMidi|midi\.write/);
 });
+
+test("chords and melody manual knobs are bounded and independent",()=>{
+  const tracks={bass:{variation:.5},melody:{variation:.6,density:.35}};
+  const original={chordExtensions:.41,syncopation:.4,trackControls:tracks,tracks};
+  const snapshot=JSON.stringify(original);
+  const updated=resolveInstrumentIntelligence(original,{
+    drums:{auto:true,value:70},bass:{auto:true,value:80},
+    chords:{auto:false,value:90},melody:{auto:false,value:85},
+  });
+  assert.ok(updated.chordExtensions>.41);
+  assert.ok(updated.trackControls.melody.variation<.6);
+  assert.equal(updated.trackControls.melody.density,.35);
+  assert.equal(updated.trackControls.bass,tracks.bass);
+  assert.equal(updated.syncopation,.4);
+  assert.equal(updated.tracks,updated.trackControls);
+  assert.equal(JSON.stringify(original),snapshot);
+  const zero=resolveInstrumentIntelligence(original,{
+    chords:{auto:false,value:-20},melody:{auto:false,value:500},
+  });
+  assert.ok(zero.chordExtensions>=.12&&zero.chordExtensions<=.86);
+  assert.ok(zero.trackControls.melody.variation>=.15);
+});
