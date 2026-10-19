@@ -27,9 +27,9 @@
     "node": ">=22.0.0"
   },
   "devDependencies": {
-    "@capacitor/android": "^8.4.2",
-    "@capacitor/cli": "^8.4.2",
-    "@capacitor/core": "^8.4.2",
+    "@capacitor/android": "8.4.3",
+    "@capacitor/cli": "8.4.3",
+    "@capacitor/core": "8.4.3",
     "esbuild": "^0.28.1"
   },
   "dependencies": {
