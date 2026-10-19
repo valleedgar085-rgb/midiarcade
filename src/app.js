@@ -855,7 +855,6 @@ function selectedSecondaryGenreId() {
 export function buildConfig(seed = createSeed(), { isNew = false } = {}) {
   const profile = genreProfile();
   const genreId = selectedGenreId();
-  const secondaryGenre = selectedSecondaryGenreId();
   const rhythm = profileRhythmDefaults(profile);
   const selectedGroove = $("#grooveControl").value;
   const grooveChoices = ["straight", "laidback", "shuffled", "syncopated"];
