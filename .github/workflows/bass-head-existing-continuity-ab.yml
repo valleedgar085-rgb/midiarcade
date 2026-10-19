@@ -1,0 +1,51 @@
+name: Bass Head Existing Continuity Blind A-B
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/benchmark-bass-head-continuity-ab.mjs'
+      - 'tests/bass-head-real-continuity-ab.test.mjs'
+      - '.github/workflows/bass-head-existing-continuity-ab.yml'
+      - 'docs/bass-head-existing-continuity-ab.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  continuity-ab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Reproduce Funk bass gap and preserved note authority
+        run: node --test tests/bass-head-real-continuity-ab.test.mjs tests/bass-continuity-refinement.test.mjs
+      - name: Compare existing continuity repair in fixed bass-forward songs
+        run: node scripts/benchmark-bass-head-continuity-ab.mjs --seeds 2 --out "$RUNNER_TEMP/bass-continuity"
+      - name: Upload blind A-B MIDI files and critic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-existing-continuity-ab
+          path: |
+            ${{ runner.temp }}/bass-continuity/report.json
+            ${{ runner.temp }}/bass-continuity/READ_FIRST.txt
+            ${{ runner.temp }}/bass-continuity/*.mid
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Upload answer key separately
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: midi-arcade-bass-head-continuity-answer-key-OPEN-LAST
+          path: ${{ runner.temp }}/bass-continuity/answer-key.json
+          retention-days: 14
+          if-no-files-found: warn
