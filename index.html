@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="MIDI Arcade — Generate, edit, mix, and play songs with 18 genre-aware engines and a piano roll." />
+    <meta name="description" content="MIDI Arcade — Generate, edit, mix, and play songs with 18 genre engines and a piano roll." />
     <meta name="theme-color" content="#08080b" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -371,8 +371,8 @@
                       </select>
                     </label>
                     <div class="transpose-buttons">
-                      <button id="keyTransposeDown" type="button" aria-label="Transpose down">b -1</button>
-                      <button id="keyTransposeUp" type="button" aria-label="Transpose up"># +1</button>
+                      <button id="keyTransposeDown" type="button" aria-label="Transpose -1 semitone">b -1</button>
+                      <button id="keyTransposeUp" type="button" aria-label="Transpose +1 semitone"># +1</button>
                     </div>
                   </div>
                   <div class="mode-control-wrap">
@@ -988,7 +988,7 @@
     <dialog class="shortcut-dialog debugger-dialog" id="debuggerDialog" aria-labelledby="debuggerDialogTitle">
       <p class="eyebrow">GENERATION DEBUGGER</p>
       <h2 id="debuggerDialogTitle">See what the generator just did</h2>
-      <p class="debugger-intro">Read-only diagnostics from the built-in generation flight recorder. This panel never changes notes, scores, quality thresholds, or the selected song.</p>
+      <p class="debugger-intro">Read-only diagnostics from the built-in flight recorder. This panel never changes notes, scores, quality thresholds, or the selected song.</p>
       <div class="debugger-summary" aria-label="Latest generation summary">
         <article><small>RUN STATUS</small><strong id="debuggerRunStatus">NO RUN YET</strong><span id="debuggerRunMeta">Generate a song, then refresh this panel.</span></article>
         <article><small>SONG</small><strong id="debuggerSongSummary">No completed generation has been recorded.</strong><span id="debuggerScoreSummary">Score and seed will appear after generation.</span></article>
