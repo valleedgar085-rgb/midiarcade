@@ -132,3 +132,19 @@ test("comparing chorus hooks never changes MIDI event count or identity", () => 
   assert.deepEqual(song.tracks[0].notes.map((note) =>
     [note.pitch, note.start, note.duration, note.velocity]), before);
 });
+
+test("a simultaneous pair is not penalised when humanize jitter swaps its onset order", () => {
+  const dyadStarts = [0.5, 1.5, 2.5, 2.5, 3.5, 4.5, 5.5, 6.5];
+  const dyadPitches = [60, 62, 62, 66, 65, 67, 65, 69];
+  const source = phrase(0, dyadPitches, dyadStarts);
+  // The same dyad in the return, but with the lower note landing a hair later.
+  const jittered = phrase(16, dyadPitches, dyadStarts);
+  jittered[2].start += 0.0012;
+  const reordered = jittered.map((note) => ({ ...note }));
+  reordered[2].start = jittered[3].start + 0.0007;
+
+  const control = evaluateChorusHookRecurrence(fixture(phrase(16, dyadPitches, dyadStarts), { sourceNotes: source }));
+  const swapped = evaluateChorusHookRecurrence(fixture(reordered, { sourceNotes: source }));
+  assert.equal(swapped.score, control.score);
+  assert.equal(swapped.comparisons[0].contour, 1);
+});

@@ -15,6 +15,27 @@ const round = (value, places = 3) => {
 };
 const quantize = (value, step = 0.125) => Math.round(value / step) * step;
 const MAX_HOOK_NOTES = 12;
+/** Attacks closer than this (1/64 beat) are one simultaneous onset. */
+export const SIMULTANEOUS_ONSET_BEATS = 1 / 64;
+
+/**
+ * Order notes by onset then pitch, treating near-simultaneous attacks as one
+ * onset. Humanize jitter is far below this window, so a dyad otherwise swaps
+ * its pitch order between two choruses and flips interval/contour comparisons.
+ * Returns a new array and never mutates a note.
+ */
+export function orderByOnsetThenPitch(items, startOf, pitchOf) {
+  const byStart = [...items].sort((a, b) => startOf(a) - startOf(b) || pitchOf(a) - pitchOf(b));
+  let anchor = -Infinity;
+  return byStart
+    .map((item) => {
+      const start = startOf(item);
+      if (start - anchor > SIMULTANEOUS_ONSET_BEATS) anchor = start;
+      return { item, anchor };
+    })
+    .sort((a, b) => a.anchor - b.anchor || pitchOf(a.item) - pitchOf(b.item))
+    .map((entry) => entry.item);
+}
 
 function songSections(song) {
   return Array.isArray(song?.structure) ? song.structure : (song?.sections ?? []);
@@ -43,9 +64,12 @@ function sectionBounds(song, section) {
 }
 
 function melodyNotes(song) {
-  return ((song?.tracks ?? []).find((track) => track?.id === "melody")?.notes ?? [])
-    .filter((note) => Number.isFinite(Number(note?.start)) && Number.isFinite(Number(note?.pitch)))
-    .sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  return orderByOnsetThenPitch(
+    ((song?.tracks ?? []).find((track) => track?.id === "melody")?.notes ?? [])
+      .filter((note) => Number.isFinite(Number(note?.start)) && Number.isFinite(Number(note?.pitch))),
+    (note) => finite(note.start),
+    (note) => finite(note.pitch),
+  );
 }
 
 function openingHook(song, section, notes, windowBars = 2) {

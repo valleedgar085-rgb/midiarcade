@@ -3,6 +3,8 @@
  * Reuses the established recurrence critic's section pairing, windowBars and
  * 12-note comparison limit. This is not another hook critic or repair owner.
  */
+import { orderByOnsetThenPitch } from "../../src/core/chorus-hook-recurrence.js";
+
 const MAX_NOTES = 12;
 const numeric = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
@@ -19,11 +21,13 @@ function openingNotes(song, section, windowBars) {
   const cutoff = Math.min(end, start + beatsPerBar * windowBars);
   const melody = (song?.tracks ?? []).find(track => track?.id === "melody");
   if (!melody || !Array.isArray(melody.notes)) return [];
-  return melody.notes
-    .filter(note => Number.isFinite(Number(note?.start)) && Number.isFinite(Number(note?.pitch)))
-    .filter(note => numeric(note.start) >= start - 1e-6 && numeric(note.start) < cutoff - 1e-6)
-    .slice()
-    .sort((a, b) => numeric(a.start) - numeric(b.start) || numeric(a.pitch) - numeric(b.pitch))
+  return orderByOnsetThenPitch(
+    melody.notes
+      .filter(note => Number.isFinite(Number(note?.start)) && Number.isFinite(Number(note?.pitch)))
+      .filter(note => numeric(note.start) >= start - 1e-6 && numeric(note.start) < cutoff - 1e-6),
+    note => numeric(note.start),
+    note => numeric(note.pitch),
+  )
     .slice(0, MAX_NOTES)
     .map(note => ({
       onset: numeric(note.start) - start,

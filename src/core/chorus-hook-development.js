@@ -1,5 +1,5 @@
 import { cloneValue } from "./clone-value.js";
-import { evaluateChorusHookRecurrence } from "./chorus-hook-recurrence.js";
+import { evaluateChorusHookRecurrence, orderByOnsetThenPitch } from "./chorus-hook-recurrence.js";
 import { rolePreferredRegisterWindow } from "./role-register-policy.js";
 import { trackGroovePulses } from "./groove-contract.js";
 
@@ -31,12 +31,13 @@ function notesAtOpening(song, sectionId, windowBars) {
   if (!track || !section) return [];
   const start = sectionStart(song, section);
   const beatsPerBar = Math.max(1, finite(song?.meta?.beatsPerBar, 4));
-  return (track.notes ?? []).map((note, index) => ({ note, index }))
-    .filter(({ note }) => finite(note.start, -1) >= start - 1e-6
-      && finite(note.start, -1) < start + windowBars * beatsPerBar - 1e-6)
-    .sort((a, b) => finite(a.note.start) - finite(b.note.start) ||
-      finite(a.note.pitch) - finite(b.note.pitch))
-    .slice(0, 12);
+  return orderByOnsetThenPitch(
+    (track.notes ?? []).map((note, index) => ({ note, index }))
+      .filter(({ note }) => finite(note.start, -1) >= start - 1e-6
+        && finite(note.start, -1) < start + windowBars * beatsPerBar - 1e-6),
+    (entry) => finite(entry.note.start),
+    (entry) => finite(entry.note.pitch),
+  ).slice(0, 12);
 }
 
 function pitchChoices(song, original, desired) {

@@ -1,5 +1,5 @@
 import { cloneValue } from "./clone-value.js";
-import { evaluateChorusHookRecurrence } from "./chorus-hook-recurrence.js";
+import { evaluateChorusHookRecurrence, orderByOnsetThenPitch } from "./chorus-hook-recurrence.js";
 import { rolePreferredRegisterWindow } from "./role-register-policy.js";
 
 /**
@@ -38,10 +38,12 @@ function opening(song,id,bars) {
   const track=(song?.tracks??[]).find(t=>t?.id==="melody");
   if(!section||!track)return [];
   const start=sectionStart(song,section),end=start+bars*Math.max(1,finite(song?.meta?.beatsPerBar,4));
-  return (track.notes??[]).map((note,index)=>({note,index}))
-    .filter(({note})=>finite(note?.start,-1)>=start-1e-6&&finite(note?.start,-1)<end-1e-6)
-    .sort((a,b)=>finite(a.note.start,0)-finite(b.note.start,0)||finite(a.note.pitch,0)-finite(b.note.pitch,0))
-    .slice(0,12);
+  return orderByOnsetThenPitch(
+    (track.notes??[]).map((note,index)=>({note,index}))
+      .filter(({note})=>finite(note?.start,-1)>=start-1e-6&&finite(note?.start,-1)<end-1e-6),
+    entry=>finite(entry.note.start,0),
+    entry=>finite(entry.note.pitch,0),
+  ).slice(0,12);
 }
 function keyAuthority(song){
   const key=finite(song?.meta?.keyPc);
