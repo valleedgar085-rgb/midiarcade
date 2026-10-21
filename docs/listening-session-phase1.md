@@ -40,3 +40,15 @@ Notes on the counts:
 | bass-answer | with the earlier round, promote the neoSoul answer pattern (Phase 4) |
 
 Not covered by this session: the `orchestrationMatrix` and `finalizeNotes` findings from the stage trace. They have no shadow variant yet, because a fair A/B needs an engine-level option and must change only the hook window.
+
+## Result of the first session (one listener, 9 pairs)
+
+The listener chose side B on all nine pairs. The experiment happened to be on B in 5 of the 9 pairs, so the score is **experiment 5, original 4, no preference 0**:
+
+| Experiment | Experiment chosen | Original chosen |
+| --- | ---: | ---: |
+| section-contrast | 2 | 2 |
+| bass-answer | 2 | 1 |
+| hook-rescue | 1 | 1 |
+
+A uniform "B" answer cannot be told apart from a preference for the second clip. Nothing here supports changing default generation or activating any experiment. Next round: more pairs per experiment, with the experiment side balanced and the listener re-hearing each pair in both orders before answering.
