@@ -10232,6 +10232,30 @@ function applyPhraseCritic(sourceTracks, structure, harmony, config, grooveCondu
   };
 }
 
+let compositionStageTap = null;
+
+/**
+ * Developer-only observation hook for read-only audits. While a tap is set,
+ * compose() reports a copy of the melody notes after each stage. It never
+ * receives live note objects, and the default (no tap) path does nothing.
+ */
+export function setCompositionStageTap(tap) {
+  const previous = compositionStageTap;
+  compositionStageTap = typeof tap === "function" ? tap : null;
+  return previous;
+}
+
+function tapMelodyStage(stage, source, seed) {
+  if (!compositionStageTap) return;
+  const tracks = Array.isArray(source) && source.length && source[0]?.notes !== undefined;
+  const notes = Array.isArray(source) && !tracks ? source
+    : tracks ? source.find((track) => track?.id === "melody")?.notes
+      : source?.melody;
+  compositionStageTap(stage, (notes ?? []).map((note) => ({
+    start: note.start, pitch: note.pitch, duration: note.duration,
+  })), seed);
+}
+
 function compose(config, options = {}) {
   const rootRng = createSeededRandom(config.seed);
   const route = compositionRoute(
@@ -10393,6 +10417,7 @@ function compose(config, options = {}) {
     motifs,
     grooveConductor,
   );
+  tapMelodyStage("generateLead", raw, config.seed);
   const retainedCounterpoint = contextNotesForTarget(contextTracks, targetTrack, "counterpoint");
   if (targetTrack === "melody" && retainedCounterpoint?.length) {
     raw.melody = interlaceCounterpoint(raw.melody, retainedCounterpoint, config, structure, harmony);
@@ -10429,6 +10454,7 @@ function compose(config, options = {}) {
   );
   raw.melody = melodicDialogue.melody;
   raw.counterpoint = melodicDialogue.counterpoint;
+  tapMelodyStage("melodicDialogue", raw, config.seed);
   raw.pad = generatePad(
     config,
     structure,
@@ -10446,12 +10472,14 @@ function compose(config, options = {}) {
     harmony,
     rootRng.fork("arrangement-layers"),
   );
+  tapMelodyStage("arrangementLayers", arrangementLayering.tracks, config.seed);
   const rhythmTurnaround = applyRhythmSectionTurnaroundConversation(
     arrangementLayering.tracks,
     harmony,
     config,
     grooveConductor,
   );
+  tapMelodyStage("rhythmTurnaround", rhythmTurnaround.tracks, config.seed);
   const ensembleCoordination = runDirectorEnsembleCoordination(
     rhythmTurnaround.tracks,
     structure,
@@ -10462,8 +10490,10 @@ function compose(config, options = {}) {
     options.ensembleContext,
   );
 
+  tapMelodyStage("ensembleCoordination", ensembleCoordination.tracks, config.seed);
   const totalBeats = round(config.bars * beatsPerBar(config));
   const connected = applyGenerationInterlocks(ensembleCoordination.tracks, generationInterlock, structure, config);
+  tapMelodyStage("generationInterlocks", connected, config.seed);
   const orchestrated = applyOrchestrationMatrix(
     connected,
     structure,
@@ -10471,6 +10501,7 @@ function compose(config, options = {}) {
     config,
     rootRng.fork("phase-7-orchestration"),
   );
+  tapMelodyStage("orchestrationMatrix", orchestrated, config.seed);
   const remembered = applyMusicalMemory(
     orchestrated,
     structure,
@@ -10479,6 +10510,7 @@ function compose(config, options = {}) {
     motifs.melody?.lengthBeats,
     totalBeats,
   );
+  tapMelodyStage("musicalMemory", remembered, config.seed);
   const motifHandoff = applyFeaturedMotifHandoffs(
     remembered,
     structure,
@@ -10487,7 +10519,9 @@ function compose(config, options = {}) {
     totalBeats,
     config,
   );
+  tapMelodyStage("motifHandoff", motifHandoff.tracks, config.seed);
   const transitioned = applyCoordinatedTransitions(motifHandoff.tracks, structure, songBlueprint);
+  tapMelodyStage("coordinatedTransitions", transitioned, config.seed);
   const resolved = {
     ...transitioned,
     melody: applyPhraseResolutions(
@@ -10511,6 +10545,7 @@ function compose(config, options = {}) {
       generationInterlock,
     ),
   };
+  tapMelodyStage("phraseResolutions", resolved, config.seed);
   // Phrase-resolution notes are composed after the first ensemble pass. Route
   // the complete result through the contracts once more without reapplying
   // dynamics so every final note carries the same section and phrase identity.
@@ -10521,8 +10556,10 @@ function compose(config, options = {}) {
     config,
     { adjustVelocity: false },
   );
+  tapMelodyStage("reconnectedInterlocks", reconnected, config.seed);
   const renderedTracks = TRACK_IDS.map((id) => {
     const evolved = applyGradualEvolution(reconnected[id], id, config, structure, rootRng.fork(`${id}-evolution`));
+    if (id === "melody") tapMelodyStage("gradualEvolution", evolved, config.seed);
     const feltNotes = finalizeNotes(
       evolved,
       config,
@@ -10531,12 +10568,14 @@ function compose(config, options = {}) {
       id,
       performanceProfile,
     );
+    if (id === "melody") tapMelodyStage("finalizeNotes", feltNotes, config.seed);
     const notes = articulatePerformance(
       feltNotes,
       id,
       config,
       rootRng.fork(`${id}-articulation`),
     );
+    if (id === "melody") tapMelodyStage("articulation", notes, config.seed);
     const automation = createPerformanceAutomation(
       id,
       notes,
@@ -10555,11 +10594,14 @@ function compose(config, options = {}) {
     config,
     grooveConductor,
   );
+  tapMelodyStage("phraseCritic", phrasePolish.tracks, config.seed);
   const produced = runProducerPass(phrasePolish.tracks, structure, songBlueprint);
+  tapMelodyStage("producerPass", produced.tracks, config.seed);
   const perceptualMix = runPerceptualMixPass(produced.tracks, structure);
   produced.tracks = perceptualMix.tracks;
   produced.report.metrics.perceptualMaskingPairs = perceptualMix.report.maskingPairs;
   produced.report.metrics.perceptualDynamicRange = perceptualMix.report.dynamicRange;
+  tapMelodyStage("perceptualMix", produced.tracks, config.seed);
   const producedById = Object.fromEntries(
     produced.tracks.map((track) => [track.id, track.notes]),
   );
@@ -10574,14 +10616,17 @@ function compose(config, options = {}) {
     ...track,
     notes: producedConnected[track.id] ?? track.notes,
   }));
+  tapMelodyStage("producedInterlocks", produced.tracks, config.seed);
   const spectral = applySpectrumPlan(produced.tracks, structure, spectrumPlan, config);
   spectrumPlan.metrics = spectral.metrics;
   produced.report.metrics.spectralSpan = spectral.metrics.span;
+  tapMelodyStage("spectrumPlan", spectral.tracks, config.seed);
   const scaleSafety = enforceScaleSafety(spectral.tracks, config);
   produced.report.repairs.scaleCorrections = scaleSafety.corrections;
   produced.report.repairs.scaleCorrectionsByTrack = scaleSafety.correctionsByTrack;
   produced.report.metrics.scaleFit = scaleSafety.scaleFit;
   produced.report.checks.scaleSafety = scaleSafety.passed;
+  tapMelodyStage("scaleSafety", scaleSafety.tracks, config.seed);
   const creativePolish = runCreativePolishPasses(
     scaleSafety.tracks,
     structure,
@@ -10590,6 +10635,7 @@ function compose(config, options = {}) {
     config,
     grooveConductor,
   );
+  tapMelodyStage("creativePolish", creativePolish.tracks, config.seed);
   const counterCoverage = (!targetTrack || targetTrack === "counterpoint")
     ? ensureFinalCounterpointCoverage(
       creativePolish.tracks,
@@ -10599,8 +10645,11 @@ function compose(config, options = {}) {
       grooveConductor,
     )
     : { tracks: creativePolish.tracks, added: 0 };
+  tapMelodyStage("counterpointCoverage", counterCoverage.tracks, config.seed);
   const melodicFlow = shapeRenderedMelodicFlow(counterCoverage.tracks, structure);
+  tapMelodyStage("melodicFlow", melodicFlow.tracks, config.seed);
   const finalMaster = runFinalMasterPass(melodicFlow.tracks, structure, songBlueprint, config);
+  tapMelodyStage("finalMaster", finalMaster.tracks, config.seed);
   const withSectionLandings = ensureFinalMelodicSectionLandings(
     finalMaster.tracks,
     structure,
@@ -10608,13 +10657,17 @@ function compose(config, options = {}) {
     config,
     songBlueprint,
   );
+  tapMelodyStage("sectionLandings", withSectionLandings, config.seed);
   const finalScaleSafety = enforceScaleSafety(withSectionLandings, config);
+  tapMelodyStage("finalScaleSafety", finalScaleSafety.tracks, config.seed);
   const characteristicVoice = applyCharacteristicVoice(finalScaleSafety.tracks, structure, config);
+  tapMelodyStage("characteristicVoice", characteristicVoice.tracks, config.seed);
   const producerIntentEnforcement = enforceProducerIntentContract(
     characteristicVoice.tracks,
     structure,
     songBlueprint.producerIntent,
   );
+  tapMelodyStage("producerIntentEnforcement", producerIntentEnforcement.tracks, config.seed);
   // Candidate note repair ends before the candidate assembly repair. The single
   // committed Final Assembly runs later, after post-selection register/section work.
   const rockPowerChordRepair = repairFinalRockPowerChordAttacks(
@@ -10622,6 +10675,7 @@ function compose(config, options = {}) {
     harmony,
     config,
   );
+  tapMelodyStage("rockPowerChordRepair", rockPowerChordRepair.tracks, config.seed);
   const tonalIntegrityRepair = refineTonalIntegrity(
     rockPowerChordRepair.tracks,
     harmony,
@@ -10633,6 +10687,7 @@ function compose(config, options = {}) {
     },
     structure,
   );
+  tapMelodyStage("tonalIntegrityRepair", tonalIntegrityRepair.tracks, config.seed);
   const finalAssemblyRepair = runCandidateAssemblyRepair(
     tonalIntegrityRepair.tracks,
     characteristicVoice.tracks,
@@ -10641,6 +10696,7 @@ function compose(config, options = {}) {
     config,
   );
   const tracks = finalAssemblyRepair.tracks;
+  tapMelodyStage("candidateAssemblyRepair", finalAssemblyRepair.tracks, config.seed);
   const finalTonalIntegrity = analyzeTonalIntegrity(
     tracks,
     harmony,
