@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseRatings, planSession, ratingsTemplate, scoreSession } from "../scripts/lib/listening-session.mjs";
+import {
+  assignBalancedSides, parseRatings, planSession, ratingsTemplate, scoreSession, signTestP,
+} from "../scripts/lib/listening-session.mjs";
 
 const pairs = [
   { kind: "section-contrast", sourceId: "case-01", treatmentSide: "A", meta: { genre: "hipHop" } },
@@ -55,4 +57,55 @@ test("lowercase answers parse, and bad input throws instead of being skipped", (
   assert.throws(() => parseRatings("wrong,header\n"), /must start with/);
   assert.throws(() => planSession([{ kind: "x", sourceId: "1", treatmentSide: "C" }]), /treatmentSide/);
   assert.throws(() => planSession([pairs[0], pairs[0]]), /duplicate/);
+});
+
+const many = Array.from({ length: 12 }, (_, index) => ({
+  kind: "section-contrast", sourceId: `case-${String(index + 1).padStart(2, "0")}`, treatmentSide: "A", meta: { genre: "funk" },
+}));
+
+test("balanced assignment puts the experiment on A and B equally, ignoring the generators' choice", () => {
+  const sides = assignBalancedSides(many).map((pair) => pair.treatmentSide);
+  assert.equal(sides.filter((side) => side === "A").length, 6);
+  assert.equal(sides.filter((side) => side === "B").length, 6);
+  const odd = assignBalancedSides(many.slice(0, 5)).map((pair) => pair.treatmentSide);
+  assert.equal(odd.filter((side) => side === "A").length, 3);
+  assert.deepEqual(assignBalancedSides(many), assignBalancedSides([...many].reverse()).sort(
+    (a, b) => a.sourceId.localeCompare(b.sourceId)).map((pair) => pair));
+});
+
+test("two-listen answers count only when both listens agree; a flip is unstable", () => {
+  const plan = planSession(assignBalancedSides(many.slice(0, 4)));
+  const [p1, p2, p3, p4] = plan.pairs;
+  const other = (side) => (side === "A" ? "B" : "A");
+  const csv = [
+    "pair,first,second,notes",
+    `${p1.pair},${p1.treatmentSide},${p1.treatmentSide},`,
+    `${p2.pair},${other(p2.treatmentSide)},${other(p2.treatmentSide)},`,
+    `${p3.pair},A,B,flipped`,
+    `${p4.pair},A,,`,
+  ].join("\n");
+  const result = scoreSession(plan, parseRatings(csv));
+  assert.equal(result.answered, 3);
+  const row = result.byKind[0];
+  assert.deepEqual([row.experiment, row.original, row.none, row.unstable], [1, 1, 1, 1]);
+  assert.equal(result.rows.find((entry) => entry.pair === p3.pair).chose, "unstable (flipped with order)");
+  assert.equal(result.rows.find((entry) => entry.pair === p4.pair).chose, null);
+  assert.throws(() => scoreSession(plan, parseRatings(`pair,first,second,notes\n${p1.pair},C,A,`)), /must be A, B or none/);
+});
+
+test("answering B on every balanced pair scores as an even split, not a win", () => {
+  const plan = planSession(assignBalancedSides(many));
+  const csv = ["pair,first,second,notes", ...plan.pairs.map((entry) => `${entry.pair},B,B,`)].join("\n");
+  const result = scoreSession(plan, parseRatings(csv));
+  assert.equal(result.overall.experiment, 6);
+  assert.equal(result.overall.original, 6);
+  assert.equal(result.overall.signTestP, 1);
+});
+
+test("the sign test is exact", () => {
+  assert.equal(signTestP(0, 0), null);
+  assert.equal(signTestP(5, 4), 1);
+  assert.equal(signTestP(9, 0), 0.0039);
+  assert.equal(signTestP(10, 2), 0.0386);
+  assert.equal(signTestP(2, 10), 0.0386);
 });

@@ -52,3 +52,15 @@ The listener chose side B on all nine pairs. The experiment happened to be on B 
 | hook-rescue | 1 | 1 |
 
 A uniform "B" answer cannot be told apart from a preference for the second clip. Nothing here supports changing default generation or activating any experiment. Next round: more pairs per experiment, with the experiment side balanced and the listener re-hearing each pair in both orders before answering.
+
+## Round 2: section contrast only, with bias controls
+
+Built with `node scripts/build-listening-session.mjs --raw RAW --out OUT --balanced --max-per-kind 12` from `benchmark-section-contrast-ab.mjs --genres hipHop,pop,rap,popRadio,neoSoul,funk,synthwave,house --seeds 6 --bars 32` (48 cases, 21 eligible pairs, 12 used, spread across genres).
+
+| Control | How |
+| --- | --- |
+| Position bias | `--balanced` puts the experiment on A for exactly half the pairs, chosen by hash, regardless of the generators' own sides. Every re-seated file was verified byte-for-byte against the original |
+| Order effects | two listens per pair (A then B, then B then A). Differing answers score as unstable no-preference |
+| Small n | 12 pairs of one experiment; the scorer reports an exact two-sided sign test per experiment and overall |
+
+Reading it: with 12 decided pairs a 10-2 split gives p of about 0.04; 9-3 gives about 0.15. Unstable and no-preference pairs are not decided pairs, so they lower the effective n.
