@@ -5543,6 +5543,7 @@ export class PreviewPlayer {
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.add("playing");
+      mobileDockPlay.setAttribute("aria-pressed", "true");
       const mobileIcon = $("#mobilePlayIcon");
       if (mobileIcon) {
         const createSvgElement = (tag) => typeof document.createElementNS === "function"
@@ -6355,6 +6356,7 @@ export class PreviewPlayer {
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.remove("playing");
+      mobileDockPlay.setAttribute("aria-pressed", "false");
       const mobileIcon = $("#mobilePlayIcon");
       if (mobileIcon) {
         const createSvgElement = (tag) => typeof document.createElementNS === "function"
