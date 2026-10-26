@@ -51,3 +51,26 @@ test("phase 21 help resolver maps stable ids, delegated actions, and progressive
   );
   assert.equal(resolveControlHelp(null), null);
 });
+
+test("control help resolver maps newly cataloged interactive UI controls", () => {
+  const newControlIds = [
+    "artistModeButton",
+    "clearSoloButton",
+    "mixEnhanceToggle",
+    "saveCoverButton",
+    "varyCoverButton",
+    "exportProfileControl",
+    "exportTimingControl",
+    "tasteRating",
+    "closePianoRoll",
+    "closeDebugger",
+  ];
+
+  for (const id of newControlIds) {
+    const help = resolveControlHelp(control({ id }));
+    assert.ok(Array.isArray(help), `resolveControlHelp failed for ${id}`);
+    assert.equal(help.length, 2, `Help entry for ${id} should contain title and text`);
+    assert.ok(help[0].length > 0, `Help title for ${id} should not be empty`);
+    assert.ok(help[1].length > 0, `Help text for ${id} should not be empty`);
+  }
+});

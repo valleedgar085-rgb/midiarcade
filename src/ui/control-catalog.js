@@ -94,6 +94,16 @@ export const CONTROL_HELP = Object.freeze({
   variationControl: ["Variation", "Set how far More like this may move from the current musical identity."],
   evolutionControl: ["Phrase Evolution", "Set how strongly patterns and dynamics develop gradually across the song."],
   surpriseControl: ["Surprise", "Invite less-common genre-compatible choices without abandoning the selected style."],
+  artistModeButton: ["Advanced controls", "Show or hide fine-tuning controls for key, mode, chord path, and rhythm detail."],
+  clearSoloButton: ["Hear full band", "Clear instrument soloing and restore all active instruments in the mix."],
+  mixEnhanceToggle: ["Smart Performance Mix", "Toggle automated spectral balance and dynamic headroom optimization."],
+  saveCoverButton: ["Save cover artwork", "Download the deterministic generative cover artwork as an SVG file."],
+  varyCoverButton: ["Change cover finish", "Switch the cover artwork visual finish style while preserving composition DNA."],
+  exportProfileControl: ["Export track package", "Choose whether to export all 6 band tracks, rhythm only, harmony only, leads only, or a single instrument."],
+  exportTimingControl: ["Export timing", "Choose Performance to keep human groove and feel, or Tight to quantize all notes to a 1/16 grid."],
+  tasteRating: ["Teach the engine", "Rate this song idea so Auto settings learn your musical preferences over time."],
+  closePianoRoll: ["Close Note Editor", "Close the piano roll editor and return to the song map."],
+  closeDebugger: ["Close debugger", "Close the generation flight recorder diagnostic panel."],
 });
 
 export const ATTITUDE_HELP = Object.freeze({
