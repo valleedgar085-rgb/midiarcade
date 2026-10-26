@@ -33,9 +33,13 @@ test("manual drums and bass use bounded established engine controls without muta
 });
 test("disabled future mappings remain neutral and persisted values safely normalize", () => {
   const base={syncopation:.5,trackControls:{bass:{variation:.3}}};
+  // Chords and melody are now active; only the three planned lanes must be neutral.
+  // Even stale manually persisted values for disabled controls cannot alter a song.
   assert.equal(resolveInstrumentIntelligence(base,{
     drums:{auto:true,value:5},bass:{auto:true,value:5},
-    chords:{auto:false,value:100},melody:{auto:false,value:100},
+    chords:{auto:true,value:100},melody:{auto:true,value:100},
+    counterpoint:{auto:false,value:100},pad:{auto:false,value:100},
+    arp:{auto:false,value:100},
   }),base);
   const memory=new Map();
   const storage={
