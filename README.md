@@ -1,198 +1,42 @@
-# MIDI Arcade
+# AutoCircuit Atlas Lab v0.3.9 — Android Studio source
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/valleedgar085-rgb/midiarcade?utm_source=oss&utm_medium=github&utm_campaign=valleedgar085-rgb%2Fmidiarcade&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+**Status:** Source project with new native live ELM327 monitor; `javac` PID decoder tests and browser UI smoke tests passed. **Not yet compiled into an APK or verified against a physical Honda ECU.** The previously tested v0.3.8 Android source was not accessible; this is an independent follow-on from the saved v0.3.4 web prototype and manual-workbench update, not an in-place patch of v0.3.8.
 
-MIDI Arcade is an **Android-first, local-first producer workstation and deterministic multitrack MIDI song generator**. It combines producer-directed generation, Song DNA, Creative Genome, Fire / Electric / Drip creative personalities, non-destructive Shape editing, Android-safe preview playback, and DAW-ready MIDI export.
+## Main capabilities
 
-The product rule is simple: musical improvements only stay when they remain deterministic, measurable, export-safe, device-safe, and compatible with the existing release contracts.
+- Paired **Bluetooth Classic SPP** (RFCOMM UUID `00001101-0000-1000-8000-00805F9B34FB`) ELM327-compatible devices, Android 8+.
+- Runtime Nearby devices / `BLUETOOTH_CONNECT` permission on Android 12+; no discovery and no location permission.
+- Fixed read-only OBD requests: RPM `010C`, MAP `010B`, STFT `0106`, LTFT `0107`, ECU ignition advance `010E`, coolant `0105`, throttle `0111`, optional ECU voltage `0142`, ELM-reported adapter voltage `ATRV`.
+- Supported PID bitmap gating (`0100`, `0120`, `0140`), one-PID-at-a-time polling, time-stamped readings, missing/stale values shown as unavailable, capture up to 1,200 samples in active memory, save up to eight local sessions, CSV export through Android document picker.
+- Legacy read-only scan and recorded example preserved; neither is electrical wiring verification.
+- Honda F23A manual evidence checklist; no automated determination that the belt is correctly timed.
 
-> **Canonical roadmap:** [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md)
->
-> Merged pull requests remain the authoritative implementation history. The direction document defines what MIDI Arcade is becoming and what should happen next.
+## Open and build
 
-## Current production state
+1. Open this folder as a project in Android Studio with Android SDK Platform 35 installed and JDK 17.
+2. Project uses Android Gradle Plugin **8.6.1** and Gradle **8.7**. The ZIP doesn't bundle the Gradle wrapper executable/JAR because those distribution binaries were unavailable in this build environment. If Android Studio prompts for a Gradle installation, select or install Gradle 8.7, or generate the standard Gradle wrapper (`gradle wrapper --gradle-version 8.7`).
+3. Run `gradle :app:assembleDebug` or select **Build > Build APK(s)** once Gradle is configured. APK path: `app/build/outputs/apk/debug/app-debug.apk`.
+4. Alternative: push this entire folder to a GitHub repository, then choose **Actions > Build AutoCircuit Atlas Lab APK > Run workflow**. The included workflow installs Gradle and uploads a downloadable APK artifact.
+5. On your phone, pair a supported **Bluetooth Classic** ELM327 interface named e.g. `OBDII` in Android Settings before launching. BLE-only/Wi-Fi adapters aren't implemented.
+6. Open **Tests > Live OBD sensor monitor**, review the mechanical-safety checkbox, then **Choose paired adapter > Find paired adapters > Live monitor**. Wait for **LIVE FROM ECU** and genuine PID samples before assessing values. Tap **Fill manual assessment** then **Analyze** if you want guided interpretation.
 
-The current production line combines the **Core hardening** baseline with **Track A workflow convergence** across Create → Shape → Mix → Finish.
+The package application ID is `com.autocircuit.atlas.dev` and app title is **AutoCircuit Atlas Lab** to avoid overwriting another AutoCircuit Atlas version.
 
-The core-hardening baseline entering Track A recorded **569 / 569 tests passing**, Music Quality Lab **94 overall / 92 musical / 100 technical**, creative floor **77**, release **100%**, generated-output uniqueness **100%**, plus successful Android asset sync and install-safe Preview APK assembly. Track A adds cross-workspace authority coverage and product-convergence contracts on top of that baseline.
+## Safety/accuracy
 
-Important production work now includes:
+- This monitor sends information-only OBD requests. It does not clear DTCs, actuate devices, reflash modules, infer ECU wiring, or perform passive sniffing.
+- Never operate the phone while driving; scan with the vehicle stationary.
+- **Suspected loose pulley, broken key, improper tensioner setup, or uncertain cam timing must be inspected with the engine off before running it.** Live OBD readings cannot verify camshaft timing.
+- `010E` is ECU-reported ignition advance, **not crank-to-cam mechanical alignment**.
+- `ATRV` is adapter supply voltage; `0142` is an ECU-reported control-module voltage and only displayed if supported.
+- On some older Hondas the ISO 9141/K-line communications can be slow; requests are sequential. Unsupported PIDs remain unknown. Cheap ELM clones may not support the vehicle's actual protocol. Hardware communication and APK builds require testing.
 
-- **Phase 9E–9I** — Creative Range, broader Creative Genome consumption, Surprise Budget, Snare Bounce, and section-aware drum evolution;
-- **Track A1 authority work** — accepted Shape revisions remain canonical and section-variation audition stays outside committed song state;
-- **Solar Pop UI foundation** — the existing Create → Shape → Mix → Finish workflow now shares one visual system;
-- **role-safe instrument policy** and **profile-driven genre arrangement/layering**;
-- **Track Aura v1** and smarter deterministic song naming;
-- **core hardening** — shared generation finalization, canonical genre/note contracts, preference-only session persistence, worker recovery, deterministic helpers, quality-stage execution, diagnostics, telemetry isolation, and safer store/session boundaries.
+## Verified offline tests
 
-Phase 9I is now a historical engine milestone rather than the current production label.
-
-No critic/release thresholds, candidate ceilings, repair budgets, scale/MIDI safety contracts, fusion calibration, timeout ownership, deterministic behavior, or Android audio budgets should be weakened to extend the app.
-
-## Product direction
-
-The app is shifting from **engine expansion** to **product convergence**.
-
-The north-star workflow is:
-
-1. **Create** — decide what song to make and generate New, Similar, or an Element-guided version.
-2. **Shape** — target a section, track, or selected notes; stage a musical change; compare Before/After; Accept or Discard.
-3. **Mix** — judge and balance the composition with producer-readable level, velocity, gate, pan/space, mute/solo, and instrument controls.
-4. **Finish** — export/share predictable Type-1 multitrack MIDI for FL Studio or another DAW.
-
-**Track A: Workflow Convergence is implemented.** A1 now has executable Create → Shape → Mix → Finish → Create → Similar authority/history coverage; A2 presents Song → Feel → Structure → Generate; A3 adds contextual advisory Shape recommendations; A4 promotes Level / Impact / Note Length while disclosing deeper sound design; and A5 makes the exact MIDI handoff visible before export. The active next gate is **Track C physical Android validation**. Measured Track B engine expansion resumes only after that device discipline is repeatable.
-
-See [docs/PRODUCT_DIRECTION.md](docs/PRODUCT_DIRECTION.md) for the complete plan, acceptance philosophy, UI direction, and execution order.
-
-For the physical-device release gate, use [docs/ANDROID_RELEASE_CHECKLIST.md](docs/ANDROID_RELEASE_CHECKLIST.md) and run `npm run test:android-release` before installing the candidate APK.
-
-## Producer Brain and generation
-
-Generation is deterministic and multi-candidate. Producer Brain can diagnose weak musical dimensions, steer bounded search toward the weakness, and attempt targeted repairs without bypassing explicit user controls.
-
-Core invariants:
-
-- same seed + same configuration reproduces the same musical result;
-- generation does not use unseeded `Math.random()`;
-- explicit candidate counts remain authoritative;
-- explicit composition routes and hard-off switches are never silently overridden;
-- candidate search stays under the hard **12-candidate ceiling**;
-- targeted repair stays capped at **2 attempts**;
-- scale safety, MIDI bounds, release quality, novelty, interlock, fusion calibration, and song-family identity remain regression-tested;
-- repairs must improve the diagnosed problem without unacceptable collateral regression;
-- stale/timed-out generation work cannot regain authority over newer state.
-
-The Music Quality Lab remains the calibration layer for harmony, groove, phrasing, arrangement, production, release safety, fusion behavior, and generated-output uniqueness.
-
-## Song DNA, Creative Genome, and Elements
-
-Song DNA provides deterministic family and instance identity across harmonic, rhythmic, melodic, arrangement, and performance domains. **More like this** stays inside the same musical family while producing a distinct revision instead of cloning the previous song.
-
-Creative Genome provides deterministic higher-level creative strategy. Creative Range exposes calibrated Familiar / Fresh / Wild envelopes while the neutral default preserves ordinary generation behavior.
-
-Fire, Electric, and Drip are producer personalities layered on top of protected song identity:
-
-- **Fire** — groove, punch, density, rhythmic authority;
-- **Electric** — hooks, motion, voltage, forward energy;
-- **Drip** — harmony, space, flow, emotional color.
-
-They may change feel, density, motion, humanization, timbral priorities, and production emphasis, but they do not bypass key/mode safety, explicit user choices, MIDI bounds, release gates, or family lineage.
-
-## Shape Director
-
-Shape is an authorship workspace rather than an effects shortcut.
-
-Supported targeting:
-
-- section;
-- track inside the selected section;
-- selected notes only.
-
-Supported strengths:
-
-- Touch Up;
-- Reshape;
-- Transform.
-
-Shape preserves a candidate-first transaction model: the original song remains authoritative until **Accept**. Before/After snapshots are isolated, narrow scopes fail closed instead of widening silently, and pending Shape candidates are resolved before destructive or context-changing actions.
-
-## Mix and Android playback
-
-Desktop/browser preview keeps the richer synthesis/DSP path. Android uses a deliberately constrained profile with tighter scheduling and voice budgets to reduce gaps, cutouts, clicks, pops, and Web Audio node pressure on real devices.
-
-The runtime prioritizes important musical voices before lower-priority tails and includes click-safe start/stop behavior, lifecycle recovery, bounded scheduling, and stale-generation isolation.
-
-The product direction intentionally keeps Mix focused on **musical balance and reliable audition**, rather than turning MIDI Arcade into a miniature DAW.
-
-## MIDI input and export
-
-Android uses a Capacitor bridge over Android MIDI APIs for class-compliant USB/native MIDI input without requesting broad media-library or storage permissions. Browser builds can use Web MIDI after explicit user interaction.
-
-MIDI export produces a Type-1 multitrack file with tempo, time signature, key information, section markers, track names, program changes, volume/pan/expression data, and note events. Drums use General MIDI channel 10.
-
-Export preparation remains clone-only: cleanup for exported MIDI must not rewrite the authoritative preview song.
-
-For FL Studio, import the `.mid`, enable **Create one channel per track** and **Set mixer tracks for new channels**, then replace General MIDI placeholder sounds with production instruments.
-
-## Privacy
-
-MIDI Arcade is local-first. Production code does not require accounts, analytics, cloud generation, microphone access, or broad media-library access. Songs, MIDI input, and local state stay on the device unless the user explicitly exports or shares a file.
-
-See [docs/PRIVACY.md](docs/PRIVACY.md) and [privacy-policy.html](privacy-policy.html).
-
-## Development
-
-Requirements:
-
-- Node.js 22+
-- Python available on `PATH` for the local server
-- Android builds: JDK 21 and Android SDK 36
-
-```bash
-npm install
-npm test
-npm run build
-npm run dev
+```sh
+mkdir -p tests/out
+javac -d tests/out app/src/main/java/com/autocircuit/atlas/ObdPidDecoder.java tests/ObdPidDecoderTest.java
+java -cp tests/out ObdPidDecoderTest
 ```
 
-Full quality gates:
-
-```bash
-npm run quality
-npm run quality:music
-npm run benchmark:repairs
-```
-
-Android:
-
-```bash
-npm run android:sync
-npm run android:verify
-npm run android:bundle
-```
-
-`android:bundle` creates the release AAB under `android/app/build/outputs/bundle/release/`. Production signing credentials are intentionally not stored in this repository.
-
-## Branch and merge discipline
-
-`main` is the production baseline.
-
-Feature branches should be short-lived and deleted after merge and merged-main validation. New work should branch from current `main`, preserve the existing quality gates, and avoid reviving obsolete phase branches as alternate production lines.
-
-Do not make CI green by removing meaningful assertions, skipping quality checks, weakening build budgets, increasing search budgets without evidence, or bypassing deterministic/music-safety contracts.
-
-Physical Android validation remains mandatory for behavior that automated browser/Node tests cannot establish, including sustained playback and device lifecycle behavior.
-
-## Repository hygiene
-
-Generated output stays generated. Do not commit `www/`, Android build directories, APK/AAB files, temp diagnostics, local signing material, or transient benchmark output.
-
-Long-lived documentation should be limited to:
-
-1. the canonical product direction;
-2. durable subsystem contracts;
-3. privacy/release documentation.
-
-Temporary phase acceptance checklists should be removed after merge and validation because Git history already preserves them.
-
-## Project history
-
-Major completed milestones include:
-
-- phrase generation and Android preview baseline;
-- Music Quality Lab and APK quality gates;
-- groove intelligence and canonical drum memory;
-- deterministic Song DNA and Phrase Memory;
-- Android audio-pressure hardening;
-- adaptive groove/taste steering;
-- deterministic Producer Brain orchestration and weakness-aware repair;
-- architecture/session boundaries;
-- Create workflow redesign and Shape Director;
-- safer MIDI export and stronger Element separation;
-- critic-gated output-quality evolution and fusion calibration;
-- Create ↔ Shape authoritative lineage;
-- generation timeout ownership and stale-result isolation;
-- Creative Range and broader Creative Genome consumption;
-- critic-gated snare bounce and section-aware drum evolution through Phase 9I.
-
-For implementation detail, merged PRs are the authoritative record.
+Web preview is the bundled `app/src/main/assets/index.html`; without the native bridge it intentionally cannot connect by Bluetooth.
