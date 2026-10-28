@@ -5543,6 +5543,8 @@ export class PreviewPlayer {
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.add("playing");
+      mobileDockPlay.setAttribute("aria-label", "Pause song");
+      mobileDockPlay.setAttribute("aria-pressed", "true");
       const mobileIcon = $("#mobilePlayIcon");
       if (mobileIcon) {
         const createSvgElement = (tag) => typeof document.createElementNS === "function"
@@ -6355,6 +6357,8 @@ export class PreviewPlayer {
     const mobileDockPlay = $("#mobilePlayPause");
     if (mobileDockPlay) {
       mobileDockPlay.classList.remove("playing");
+      mobileDockPlay.setAttribute("aria-label", "Play song");
+      mobileDockPlay.setAttribute("aria-pressed", "false");
       const mobileIcon = $("#mobilePlayIcon");
       if (mobileIcon) {
         const createSvgElement = (tag) => typeof document.createElementNS === "function"
@@ -7002,23 +7006,45 @@ function toggleFullscreen() {
   }));
   bindControlHelp();
 
+  let guideTriggerElement = null;
   const dialog = $("#shortcutDialog");
-  $("#helpButton").addEventListener("click", () => dialog.showModal());
-  $("#closeDialog").addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.close();
+  const openGuide = (trigger) => {
+    guideTriggerElement = trigger ?? document.activeElement;
+    dialog.showModal();
+  };
+  const closeGuide = () => {
+    dialog.close();
+    if (guideTriggerElement && typeof guideTriggerElement.focus === "function") {
+      guideTriggerElement.focus();
+    }
+  };
+  $("#helpButton")?.addEventListener("click", (event) => openGuide(event.currentTarget));
+  $("#closeDialog")?.addEventListener("click", closeGuide);
+  dialog?.addEventListener("click", (event) => {
+    if (event.target === dialog) closeGuide();
   });
 
+  let debuggerTriggerElement = null;
   ensureGenerationDebuggerControls();
   const debuggerDialog = $("#debuggerDialog");
-  $("#debuggerButton")?.addEventListener("click", openGenerationDebugger);
-  $("#menuItemDebugger")?.addEventListener("click", openGenerationDebugger);
-  $("#closeDebugger")?.addEventListener("click", () => debuggerDialog?.close());
+  const openDebugger = (trigger) => {
+    debuggerTriggerElement = trigger ?? document.activeElement;
+    openGenerationDebugger();
+  };
+  const closeDebugger = () => {
+    debuggerDialog?.close();
+    if (debuggerTriggerElement && typeof debuggerTriggerElement.focus === "function") {
+      debuggerTriggerElement.focus();
+    }
+  };
+  $("#debuggerButton")?.addEventListener("click", (event) => openDebugger(event.currentTarget));
+  $("#menuItemDebugger")?.addEventListener("click", (event) => openDebugger(event.currentTarget));
+  $("#closeDebugger")?.addEventListener("click", closeDebugger);
   $("#refreshDebugger")?.addEventListener("click", renderGenerationDebugger);
   $("#clearDebuggerHistory")?.addEventListener("click", clearGenerationDebugger);
   $("#copyDebuggerReport")?.addEventListener("click", () => void copyGenerationDebuggerReport());
   debuggerDialog?.addEventListener("click", (event) => {
-    if (event.target === debuggerDialog) debuggerDialog.close();
+    if (event.target === debuggerDialog) closeDebugger();
   });
 
   document.addEventListener("keydown", (event) => {
