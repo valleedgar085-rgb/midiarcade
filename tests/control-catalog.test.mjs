@@ -51,3 +51,33 @@ test("phase 21 help resolver maps stable ids, delegated actions, and progressive
   );
   assert.equal(resolveControlHelp(null), null);
 });
+
+test("control catalog resolves help for newly described studio controls", () => {
+  const newControlIds = [
+    "menuButton",
+    "keyTransposeDown",
+    "keyTransposeUp",
+    "secondaryGenreControl",
+    "chordPathControl",
+    "trapIntroModeControl",
+    "tasteRating",
+    "spotlightTrackControl",
+    "spotlightIntensityControl",
+    "exportProfileControl",
+    "exportTimingControl",
+    "saveCoverButton",
+    "varyCoverButton",
+    "clearSoloButton",
+    "mixEnhanceToggle",
+    "navDockToggle",
+    "mobileDockToggle",
+  ];
+
+  for (const id of newControlIds) {
+    const help = resolveControlHelp(control({ id }));
+    assert.ok(Array.isArray(help), `Control help for ${id} should be an array`);
+    assert.equal(help.length, 2, `Control help for ${id} should contain title and description`);
+    assert.ok(help[0].length > 0, `Title for ${id} should be non-empty`);
+    assert.ok(help[1].length > 0, `Description for ${id} should be non-empty`);
+  }
+});
