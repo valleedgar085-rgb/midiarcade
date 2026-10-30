@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
+import { generateNew, GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
+import { auditPreviewMidiEvents } from "../scripts/lib/preview-midi-oracle.mjs";
 import { bundledDrumSamplePath, drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 import {
   characteristicTrackForPreview,
@@ -624,6 +625,16 @@ test("browser app initializes against the engine contract", async () => {
   elementFor("#generateNew").dispatch("click");
   const firstGeneratedSnapshot = await waitForGenerationCommit(app, firstGenerationCount);
   assert.ok(firstGeneratedSnapshot.song, "the first explicit Generate action must create the song");
+
+  // Exercise the real preview builder, not a second implementation of its math.
+  for (const genre of ["pop", "hipHop", "jazz", "ambient"]) {
+    const song = generateNew({ genre, seed: `preview-midi-oracle-${genre}`, bars: 8, candidateCount: 1 });
+    const before = structuredClone(song);
+    const events = app.buildPreviewEvents(song, { muted: [], solo: [], trackSettings: {} });
+    const report = auditPreviewMidiEvents(song, events);
+    assert.equal(report.passed, true, `${genre}: ${JSON.stringify(report)}`);
+    assert.deepEqual(song, before, "preview and its oracle must not mutate the song");
+  }
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");

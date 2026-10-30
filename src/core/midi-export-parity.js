@@ -1,10 +1,10 @@
 function textFromBytes(bytes) {
-  if (typeof TextDecoder === "function") return new TextDecoder().decode(bytes);
+  if (typeof TextDecoder === "function") return new TextDecoder().decode(Uint8Array.from(bytes));
   return Array.from(bytes, (value) => String.fromCharCode(value)).join("");
 }
 
-function requireBytes(bytes, offset, length, label) {
-  if (offset + length > bytes.length) {
+function requireBytes(bytes, offset, length, label, limit = bytes.length) {
+  if (offset + length > Math.min(bytes.length, limit)) {
     throw new RangeError(`Invalid MIDI: truncated ${label}`);
   }
 }
@@ -105,11 +105,15 @@ export function parseMidiNoteTracks(input) {
     const notes = [];
     const noteOns = [];
     const noteOffs = [];
+    const metaEvents = [];
+    const programChanges = [];
     const openNotes = new Map();
+    let endOfTrackFinal = false;
 
     while (state.offset < trackEnd) {
+      endOfTrackFinal = false;
       currentTick += readVarLength(bytes, state, trackEnd);
-      requireBytes(bytes, state.offset, 1, "event status");
+      requireBytes(bytes, state.offset, 1, "event status", trackEnd);
       let status = bytes[state.offset];
 
       if (status >= 0x80) {
@@ -122,10 +126,12 @@ export function parseMidiNoteTracks(input) {
       }
 
       if (status === 0xff) {
-        requireBytes(bytes, state.offset, 1, "meta type");
+        requireBytes(bytes, state.offset, 1, "meta type", trackEnd);
         const metaType = bytes[state.offset++];
+        endOfTrackFinal = metaType === 0x2f;
         const length = readVarLength(bytes, state, trackEnd);
-        requireBytes(bytes, state.offset, length, "meta payload");
+        requireBytes(bytes, state.offset, length, "meta payload", trackEnd);
+        metaEvents.push({ tick: currentTick, type: metaType, data: Array.from(bytes.slice(state.offset, state.offset + length)) });
         if (metaType === 0x03) {
           trackName = textFromBytes(bytes.slice(state.offset, state.offset + length));
         }
@@ -136,7 +142,7 @@ export function parseMidiNoteTracks(input) {
 
       if (status === 0xf0 || status === 0xf7) {
         const length = readVarLength(bytes, state, trackEnd);
-        requireBytes(bytes, state.offset, length, "sysex payload");
+        requireBytes(bytes, state.offset, length, "sysex payload", trackEnd);
         state.offset += length;
         runningStatus = null;
         continue;
@@ -145,12 +151,13 @@ export function parseMidiNoteTracks(input) {
       const message = status & 0xf0;
       const channel = status & 0x0f;
       if (message === 0xc0 || message === 0xd0) {
-        requireBytes(bytes, state.offset, 1, "channel event");
+        requireBytes(bytes, state.offset, 1, "channel event", trackEnd);
+        if (message === 0xc0) programChanges.push({ tick: currentTick, channel, program: bytes[state.offset] });
         state.offset += 1;
         continue;
       }
 
-      requireBytes(bytes, state.offset, 2, "channel event");
+      requireBytes(bytes, state.offset, 2, "channel event", trackEnd);
       const data1 = bytes[state.offset++];
       const data2 = bytes[state.offset++];
 
@@ -199,6 +206,9 @@ export function parseMidiNoteTracks(input) {
       notes,
       noteOns,
       noteOffs,
+      metaEvents,
+      programChanges,
+      endOfTrackFinal,
     });
     state.offset = trackEnd;
   }
@@ -255,6 +265,54 @@ function mismatch(type, track, expected, actual, detail) {
   };
 }
 
+function auditTrackMetadata(projection, parsed, mismatches) {
+  const compare = (type, expected, actual, trackIndex, detail) => {
+    if (JSON.stringify(expected) !== JSON.stringify(actual)) {
+      mismatches.push({ type, trackId: projection.tracks[trackIndex - 1]?.id ?? null,
+        trackName: parsed.tracks[trackIndex]?.name ?? null, expected, actual, detail });
+    }
+  };
+  // Projections created before these additive fields remain readable.
+  if (projection.conductor) {
+    const conductor = parsed.tracks[0];
+    for (const [field, type, code] of [
+      ["tempo", 0x51, "TEMPO_MISMATCH"],
+      ["timeSignature", 0x58, "TIME_SIGNATURE_MISMATCH"],
+      ["keySignature", 0x59, "KEY_SIGNATURE_MISMATCH"],
+    ]) {
+      const value = projection.conductor[field];
+      compare(code, [{ tick: 0, data: value }],
+        (conductor?.metaEvents ?? []).filter((event) => event.type === type).map(({ tick, data }) => ({ tick, data })),
+        0, `Conductor ${field} differs from the accepted export projection.`);
+      for (const track of parsed.tracks.slice(1)) {
+        if (track.metaEvents.some((event) => event.type === type)) {
+          mismatches.push({ type: code, trackId: null, trackName: track.name,
+            expected: null, actual: { trackIndex: track.trackIndex }, detail: `${field} must only be set by the conductor.` });
+        }
+      }
+    }
+    compare("SECTION_MARKER_MISMATCH", projection.conductor.markers,
+      (conductor?.metaEvents ?? []).filter((event) => event.type === 0x06).map(({ tick, data }) => ({ tick, text: textFromBytes(data) })),
+      0, "Section marker order, labels or timing changed.");
+  }
+  for (const track of parsed.tracks) {
+    if (projection.endTick != null) {
+      const endings = track.metaEvents.filter((event) => event.type === 0x2f);
+      compare("END_OF_TRACK_MISMATCH", [{ tick: projection.endTick, type: 0x2f, data: [] }],
+        endings, track.trackIndex, "MIDI track must end once, at the authorized song boundary.");
+      if (!track.endOfTrackFinal) {
+        mismatches.push({ type: "END_OF_TRACK_MISMATCH", trackId: null, trackName: track.name,
+          expected: "end-of-track", actual: "missing or misplaced", detail: "End-of-track must be the final event." });
+      }
+    }
+    const expected = projection.tracks[track.trackIndex - 1];
+    if (expected) {
+      compare("PROGRAM_MISMATCH", expected.program == null ? [] : [{ tick: 0, channel: expected.channel, program: expected.program }],
+        track.programChanges, track.trackIndex, "Instrument program or channel differs from the accepted export projection.");
+    }
+  }
+}
+
 export function auditMidiBytesAgainstProjection(projection, midiBytes) {
   if (!projection || !Array.isArray(projection.tracks)) {
     throw new TypeError("auditMidiBytesAgainstProjection requires a MIDI export projection");
@@ -263,6 +321,7 @@ export function auditMidiBytesAgainstProjection(projection, midiBytes) {
   const mismatches = [];
   const trackBreakdown = {};
   const expectedTrackCount = projection.tracks.length + 1;
+  auditTrackMetadata(projection, parsed, mismatches);
 
   if (parsed.format !== 1) {
     mismatches.push({

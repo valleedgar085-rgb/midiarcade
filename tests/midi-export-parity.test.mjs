@@ -223,6 +223,80 @@ test("parity audit rejects musical notes placed on conductor track 0", () => {
   );
 });
 
+for (const { label, sequence, offset, replacement, type } of [
+  { label: "tempo", sequence: [0xff, 0x51, 3, 7, 0xa1, 0x20], offset: 5, replacement: 0x21, type: "TEMPO_MISMATCH" },
+  { label: "meter", sequence: [0xff, 0x58, 4, 4, 2, 24, 8], offset: 3, replacement: 3, type: "TIME_SIGNATURE_MISMATCH" },
+  { label: "key", sequence: [0xff, 0x59, 2, 0, 0], offset: 3, replacement: 1, type: "KEY_SIGNATURE_MISMATCH" },
+  { label: "program", sequence: [0xc2, 80], offset: 1, replacement: 81, type: "PROGRAM_MISMATCH" },
+]) {
+  test(`parity audit detects serialized ${label} drift even when every note is intact`, () => {
+    const source = performedAuthoritySong();
+    const corrupted = new Uint8Array(encodeMidi(source));
+    const index = findSequence(corrupted, sequence);
+    assert.ok(index >= 0, `${label} fixture must be present`);
+    corrupted[index + offset] = replacement;
+    const audit = auditMidiExportParity(source, corrupted);
+    assert.equal(audit.passed, false, `${label} corruption must not pass note-only validation`);
+    assert.ok(audit.mismatches.some((entry) => entry.type === type), JSON.stringify(audit.mismatches));
+  });
+}
+
+test("parity audit detects a shortened conductor end without changing any note events", () => {
+  const source = performedAuthoritySong();
+  const corrupted = new Uint8Array(encodeMidi(source));
+  // The last conductor event is the key signature at tick 0. EOT is at 1920.
+  const index = findSequence(corrupted, [0x8f, 0x00, 0xff, 0x2f, 0]);
+  assert.ok(index >= 0);
+  corrupted[index] = 0x8e;
+  const audit = auditMidiExportParity(source, corrupted);
+  assert.equal(audit.passed, false);
+  assert.ok(audit.mismatches.some((entry) => entry.type === "END_OF_TRACK_MISMATCH"));
+});
+
+test("odd-meter conductor timing and every musical track survive a verified export", () => {
+  for (const meter of [[5, 8], [7, 8], [9, 8], [13, 16]]) {
+    const source = performedAuthoritySong();
+    source.meta.timeSignature = meter;
+    source.meta.beatsPerBar = meter[0] * 4 / meter[1];
+    source.meta.totalBeats = source.meta.beatsPerBar * 3;
+    const verified = encodeMidiVerified(source);
+    assert.deepEqual(verified.projection.conductor.timeSignature.slice(0, 2), [meter[0], Math.log2(meter[1])]);
+    assert.equal(verified.projection.endTick, Math.round(source.meta.totalBeats * 480));
+    assert.equal(verified.audit.passed, true);
+  }
+});
+
+test("odd-meter section labels derive quarter-note beats when legacy metadata omits beatsPerBar", () => {
+  const song = performedAuthoritySong();
+  song.meta.timeSignature = [7, 8];
+  song.meta.totalBeats = 10.5;
+  delete song.meta.beatsPerBar;
+  song.structure = [{ id: "return", name: "chorus", startBeat: 7, bars: 1 }];
+  const verified = encodeMidiVerified(song);
+  assert.deepEqual(verified.projection.conductor.markers, [{ tick: 3360, text: "01 CHORUS · bars 3-3" }]);
+});
+
+test("MIDI parser cannot borrow a truncated meta payload from the next track", () => {
+  const song = performedAuthoritySong();
+  const bytes = new Uint8Array(encodeMidi(song));
+  const view = new DataView(bytes.buffer);
+  const conductorLength = view.getUint32(18);
+  view.setUint32(18, conductorLength - 1);
+  assert.throws(() => auditMidiExportParity(song, bytes), /truncated/);
+});
+
+test("section marker corruption is rejected independently of note parity", () => {
+  const song = performedAuthoritySong();
+  song.structure = [{ id: "hook", name: "chorus", startBar: 0, startBeat: 0, bars: 1 }];
+  const bytes = new Uint8Array(encodeMidi(song));
+  const index = findSequence(bytes, new TextEncoder().encode("01 CHORUS"));
+  assert.ok(index >= 0);
+  bytes[index + 1] = "2".charCodeAt(0);
+  const audit = auditMidiExportParity(song, bytes);
+  assert.equal(audit.passed, false);
+  assert.ok(audit.mismatches.some((entry) => entry.type === "SECTION_MARKER_MISMATCH"));
+});
+
 test("app export path uses verified MIDI bytes before browser or Android handoff", () => {
   const source = fs.readFileSync(new URL("../src/app.js", import.meta.url), "utf8");
   assert.match(source, /const verifiedExport = encodeMidiVerified\(prepared\.song, prepared\.options\)/);

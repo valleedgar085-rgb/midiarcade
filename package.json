@@ -13,6 +13,8 @@
     "benchmark:repairs": "node scripts/benchmark-repair-effectiveness.mjs --seeds 2 --bars 8",
     "quality:music": "node scripts/benchmark-generation.mjs --seeds 3 --bars 16",
     "quality:music:deep": "node scripts/benchmark-generation.mjs --seeds 8 --bars 24",
+    "test:requests": "node --test tests/generation-request-matrix.test.mjs tests/preview-midi-oracle.test.mjs tests/midi-export-parity.test.mjs",
+    "audit:requests": "node scripts/audit-generation-requests.mjs",
     "quality": "npm test && npm run build && node scripts/check-build-quality.js",
     "android:sync": "npm run build && cap sync android",
     "android:verify": "npm run android:sync && cd android && .\\gradlew.bat :app:lintRelease :app:testReleaseUnitTest",
