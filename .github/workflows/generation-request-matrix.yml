@@ -1,0 +1,48 @@
+name: Generation request contracts
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package*.json'
+      - '.github/workflows/generation-request-matrix.yml'
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Contract coverage
+        type: choice
+        options: [smoke, pairwise]
+        default: pairwise
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:requests
+      - name: Run reproducible request matrix
+        env:
+          MATRIX_PROFILE: ${{ inputs.profile || 'smoke' }}
+        run: npm run audit:requests -- --profile "$MATRIX_PROFILE"
+      - name: Retain hashes and replayable failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generation-request-contracts
+          path: artifacts/request-matrix/
+          if-no-files-found: error
+          retention-days: 30

@@ -1164,7 +1164,7 @@ function normalizeTrapIntroMode(value) {
   return ["auto", "short", "extended"].includes(mode) ? mode : DEFAULT_CONFIG.trapIntroMode;
 }
 
-function normalizeTimeSignature(value) {
+function normalizeTimeSignature(value, maxNumerator = 12) {
   let numerator = 4;
   let denominator = 4;
   if (Array.isArray(value)) {
@@ -1175,7 +1175,7 @@ function normalizeTimeSignature(value) {
     numerator = value.numerator ?? value.beats ?? 4;
     denominator = value.denominator ?? value.beatUnit ?? 4;
   }
-  numerator = clamp(Math.round(finite(numerator, 4)), 2, 12);
+  numerator = clamp(Math.round(finite(numerator, 4)), 2, maxNumerator);
   denominator = [2, 4, 8, 16].includes(Number(denominator)) ? Number(denominator) : 4;
   return [numerator, denominator];
 }
@@ -15314,10 +15314,12 @@ function conductorTrack(song, ppq) {
   events.push({ tick: 0, order: 2, data: textMeta(0x02, "Created with MIDI Arcade") });
   const microseconds = clamp(Math.round(60000000 / clamp(finite(song.meta.tempo, 120), 30, 300)), 1, 0xffffff);
   events.push({ tick: 0, order: 3, data: meta(0x51, [(microseconds >> 16) & 0xff, (microseconds >> 8) & 0xff, microseconds & 0xff]) });
-  const [numerator, denominator] = normalizeTimeSignature(song.meta.timeSignature);
+  // A committed/imported score may contain an SMF-valid meter beyond the
+  // generator's supported 2–12 numerator range. Export it without rewriting it.
+  const [numerator, denominator] = normalizeTimeSignature(song.meta.timeSignature, 255);
   const denominatorPower = Math.round(Math.log2(denominator));
   const metronome = denominator === 8 && numerator % 3 === 0 ? 36 : 24;
-  const beatsPerBar = Math.max(0.01, finite(song.meta.beatsPerBar, numerator));
+  const beatsPerBar = Math.max(0.01, finite(song.meta.beatsPerBar, numerator * 4 / denominator));
   events.push({ tick: 0, order: 4, data: meta(0x58, [numerator, denominatorPower, metronome, 8]) });
   events.push({ tick: 0, order: 5, data: meta(0x59, keySignature(song)) });
   for (const [index, section] of (song.structure ?? []).entries()) {
@@ -15539,7 +15541,7 @@ export function createMidiExportReport(song, options = {}) {
     sectionMarkers: (song.structure ?? []).length,
     chordCues: (song.harmony ?? []).length,
     tempo: clamp(finite(song.meta.tempo, 120), 30, 300),
-    timeSignature: normalizeTimeSignature(song.meta.timeSignature),
+    timeSignature: normalizeTimeSignature(song.meta.timeSignature, 255),
     keySignature: keySignature(song),
     warnings,
     checks: {
@@ -15586,7 +15588,7 @@ export function createMidiExportProjection(song, options = {}) {
       name: String(track.name ?? track.id),
       trackName,
       channel,
-      program: clamp(Math.round(finite(track.program, 0)), 0, 127),
+      program: track.program == null ? null : clamp(Math.round(finite(track.program, 0)), 0, 127),
       audible,
       notes: Object.freeze(notes),
     });
@@ -15595,6 +15597,26 @@ export function createMidiExportProjection(song, options = {}) {
     version: 1,
     authority: "midi-export-projection-v1",
     ppq,
+    endTick: Math.round(song.meta.totalBeats * ppq),
+    conductor: Object.freeze({
+      tempo: Object.freeze((() => {
+        const value = clamp(Math.round(60000000 / clamp(finite(song.meta.tempo, 120), 30, 300)), 1, 0xffffff);
+        return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+      })()),
+      timeSignature: Object.freeze((() => {
+        const [numerator, denominator] = normalizeTimeSignature(song.meta.timeSignature, 255);
+        return [numerator, Math.round(Math.log2(denominator)), denominator === 8 && numerator % 3 === 0 ? 36 : 24, 8];
+      })()),
+      keySignature: Object.freeze(keySignature(song)),
+      markers: Object.freeze((song.structure ?? []).map((section, index) => {
+        const [numerator, denominator] = normalizeTimeSignature(song.meta.timeSignature, 255);
+        const beats = Math.max(0.01, finite(song.meta.beatsPerBar, numerator * 4 / denominator));
+        const start = Math.max(0, Math.round(finite(section.startBar, finite(section.startBeat, 0) / beats))) + 1;
+        const end = start + Math.max(1, Math.round(finite(section.bars, 1))) - 1;
+        return Object.freeze({ tick: Math.round(finite(section.startBeat, 0) * ppq),
+          text: `${String(index + 1).padStart(2, "0")} ${String(section.name ?? "Section").toUpperCase()} · bars ${start}-${end}` });
+      }).sort((a, b) => a.tick - b.tick)),
+    }),
     trackCount: projectedTracks.length,
     noteCount: projectedTracks.reduce((sum, track) => sum + track.notes.length, 0),
     tracks: Object.freeze(projectedTracks),
