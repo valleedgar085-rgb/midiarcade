@@ -31,6 +31,14 @@ test("phase 21 help resolver maps stable ids, delegated actions, and progressive
     "New song idea",
     "Replace the entire composition: every instrument, chord progression, phrase, sound and section.",
   ]);
+  assert.deepEqual(resolveControlHelp(control({ id: "prToolDraw" })), [
+    "Draw notes",
+    "Click or tap empty cells in the piano roll grid to add new MIDI notes.",
+  ]);
+  assert.deepEqual(resolveControlHelp(control({ id: "prToolErase" })), [
+    "Erase notes",
+    "Click or tap existing MIDI notes in the piano roll grid to remove them.",
+  ]);
   assert.equal(
     resolveControlHelp(control({ dataset: { attitude: "hush" } }))[0],
     "Hush",
