@@ -1,0 +1,30 @@
+name: Bass Head Kick-Aware Audition
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/lib/bass-head-kick-aware-auditions.mjs'
+      - 'tests/bass-head-kick-aware-auditions.test.mjs'
+      - 'docs/bass-head-kick-aware-phase-5.md'
+      - '.github/workflows/bass-head-kick-aware-audition.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kick-aware-audition:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify measured kick relationships and preserved bass invariants
+        run: node --test tests/bass-head-kick-aware-auditions.test.mjs tests/bass-head-timing-context.test.mjs tests/bass-head-bounce-shadow.test.mjs tests/bass-head-preference-selector.test.mjs
