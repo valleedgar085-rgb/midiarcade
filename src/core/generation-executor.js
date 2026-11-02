@@ -458,6 +458,29 @@ export function createGenerationExecutor({
         }));
       }
 
+      // Phase 4.1 is explicitly opt-in until musical A/B calibration is complete.
+      // Evaluate pitch-only proposals without altering normal generation behavior.
+      if (
+        ["new", "similar"].includes(kind)
+        && config?.melodyCommitment?.enabled === true
+        && selectedResult?.song
+        && supportsCommittedAuthorityRefresh(selectedResult.song)
+      ) {
+        const { proposeMelodyCommitment } = await import("./melody-commitment.js");
+        const candidates = proposeMelodyCommitment(selectedResult.song);
+        const originalSong = refreshCommittedGenerationDiagnostics(selectedResult.song, qualityConfig);
+        const originalRelease = evaluateSongReleaseGate(originalSong);
+        for (const candidate of candidates) {
+          const proposedSong = refreshCommittedGenerationDiagnostics(candidate.song, qualityConfig);
+          const regression = committedAuthorityRegression(originalSong, proposedSong);
+          const release = evaluateSongReleaseGate(proposedSong);
+          if (regression.passed && release.passed && originalRelease.passed) {
+            selectedResult = { ...selectedResult, song: proposedSong };
+            break;
+          }
+        }
+      }
+
       const committedCrossAuthorityCoherence = selectedResult?.song
         ? evaluateCrossAuthorityCoherence(selectedResult.song)
         : null;
