@@ -49,6 +49,7 @@ import {
   characteristicTrackForPreview,
   clickSafeStopTime,
   pendingPreviewVoiceSources,
+  bassSubVelocityGain,
   previewNoteAttack,
   atmosphereEnvelopeTiming,
   pitchedVoiceEnvelopeTiming,
@@ -6019,7 +6020,7 @@ export class PreviewPlayer {
       sub.type = "sine";
       sub.frequency.setValueAtTime(targetFrequency * voice.subRatio, when);
       subGain.gain.setValueAtTime(0.0001, when);
-      subGain.gain.exponentialRampToValueAtTime(voice.subLevel, when + PREVIEW_TRANSITION.startSeconds);
+      subGain.gain.exponentialRampToValueAtTime(voice.subLevel * (event.id === "bass" ? bassSubVelocityGain(event.velocity) : 1), when + PREVIEW_TRANSITION.startSeconds);
       sub.connect(subGain).connect(filter);
       sub.start(when);
       sub.stop(when + duration + release + 0.02);

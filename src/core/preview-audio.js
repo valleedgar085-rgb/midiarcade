@@ -150,3 +150,11 @@ export function pendingPreviewVoiceSources(voice) {
   if (!voice?.sources) return [];
   return [...voice.sources].filter((source) => source && !voice.endedSources?.has(source));
 }
+
+/** Keep quiet bass notes warm without letting the sub overwhelm the note body.
+ * Preview-only gain scaling; note velocity and exported MIDI stay unchanged. */
+export function bassSubVelocityGain(velocity) {
+  const number = Number(velocity);
+  const safe = Number.isFinite(number) ? Math.min(127, Math.max(1, number)) : 90;
+  return 0.7 + 0.3 * (safe / 127);
+}
