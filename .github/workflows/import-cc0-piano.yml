@@ -1,0 +1,62 @@
+name: Import CC0 Piano Samples
+on:
+  push:
+    branches: [feat/phase4-2-studio-sound-foundation]
+    paths:
+      - '.github/workflows/import-cc0-piano.yml'
+      - 'scripts/import-cc0-piano.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/phase4-2-studio-sound-foundation
+          persist-credentials: true
+      - name: Install audio converter
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Import CC0 piano samples
+        run: python3 scripts/import-cc0-piano.py
+      - name: Validate WAV files and size budget
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import wave
+          root = Path("assets/audio/instruments/piano")
+          expected = [48,53,60,65,72,77]
+          files = [root / f"piano-{n}{suffix}.wav" for n in expected for suffix in ("", "-strong")]
+          assert all(f.exists() for f in files), "missing piano recordings"
+          for f in files:
+              with wave.open(str(f)) as w:
+                  assert w.getnchannels() == 1
+                  assert w.getframerate() == 22050
+                  assert w.getnframes() > 11025
+          assert sum(f.stat().st_size for f in files) < 1500000
+          print("Validated", len(files), "mono piano samples")
+          PY
+      - name: Commit sample files to feature branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/audio/instruments/piano/*.wav
+          if ! git diff --cached --quiet; then
+            git commit -m "assets(audio): bundle CC0 piano velocity layers"
+            # Other CI or development commits may have advanced the branch while
+            # audio was downloading. Rebase safely rather than force-pushing.
+            for attempt in 1 2 3 4 5; do
+              git fetch origin feat/phase4-2-studio-sound-foundation
+              git rebase origin/feat/phase4-2-studio-sound-foundation
+              if git push origin HEAD:feat/phase4-2-studio-sound-foundation; then
+                exit 0
+              fi
+              echo "Remote branch advanced; retrying rebase ($attempt/5)"
+              sleep 3
+            done
+            echo "Could not safely publish WAV assets after five retries" >&2
+            exit 1
+          fi
