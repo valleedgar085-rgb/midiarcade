@@ -70,6 +70,8 @@ export const CONTROL_HELP = Object.freeze({
   guidedModeButton: ["Guided mode", "Show or hide the four-step workflow. Hiding it does not remove any music controls."],
   workflowAction: ["Recommended next action", "Perform the safest next step shown by the workflow coach."],
   closeDialog: ["Close guide", "Close the complete app guide and return to your song."],
+  closePianoRoll: ["Close Note Editor", "Close the piano roll editor and return to the song map."],
+  closeDebugger: ["Close debugger", "Close the generation flight recorder and return to your song."],
   editorPlayButton: ["Play from this section", "Move playback to the beginning of the focused section and audition your edits in context."],
   editorCloseButton: ["Close piano roll", "Return to the full song map. Your MIDI edits remain in the song."],
   editorGridControl: ["Snap grid", "Choose the timing step used by quantize, nudge, note length and newly drawn notes."],
