@@ -1,0 +1,3 @@
+## 2026-09-23 - Musical Transpose Control Tooltips & Proper Symbols
+**Learning:** Plain ASCII symbols (`b -1`, `# +1`) for transpose controls lack musical clarity and accessible aria descriptions. Replacing them with proper musical flat/sharp notation (`♭ -1`, `♯ +1`) along with explicit semitone `aria-label` and `title` tooltips improves usability for musician users. Additionally, HTML modifications must respect the app's strict 80 KB (`www/index.html`) build quality budget.
+**Action:** Always verify `pnpm run quality` after HTML micro-UX edits to ensure budget gates pass without collapsing code formatting.
