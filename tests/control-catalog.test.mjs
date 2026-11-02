@@ -31,6 +31,14 @@ test("phase 21 help resolver maps stable ids, delegated actions, and progressive
     "New song idea",
     "Replace the entire composition: every instrument, chord progression, phrase, sound and section.",
   ]);
+  assert.deepEqual(resolveControlHelp(control({ id: "keyTransposeDown" })), [
+    "Transpose key down",
+    "Moves the selected root key down one semitone without changing the mode.",
+  ]);
+  assert.deepEqual(resolveControlHelp(control({ id: "keyTransposeUp" })), [
+    "Transpose key up",
+    "Moves the selected root key up one semitone without changing the mode.",
+  ]);
   assert.equal(
     resolveControlHelp(control({ dataset: { attitude: "hush" } }))[0],
     "Hush",

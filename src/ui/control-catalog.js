@@ -81,6 +81,8 @@ export const CONTROL_HELP = Object.freeze({
   threadActionButton: ["Connected next action", "Jump to the most relevant place for the current song, section and instrument focus."],
   genreControl: ["Genre", "Sets tempo range, groove rules, harmony, arrangement behavior and the instrument palette."],
   keyControl: ["Root note", "Sets the tonal home of the generated song."],
+  keyTransposeDown: ["Transpose key down", "Moves the selected root key down one semitone without changing the mode."],
+  keyTransposeUp: ["Transpose key up", "Moves the selected root key up one semitone without changing the mode."],
   modeControl: ["Musical mood", "Choose the scale color: brighter, darker, soulful, dreamy, open or tense."],
   tempoControl: ["Tempo", "Set song speed in beats per minute. The genre's usual range is shown above."],
   barsControl: ["Song length", "Choose 16 bars for a sketch or 32–64 bars for a fuller arrangement."],
