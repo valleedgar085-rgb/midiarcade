@@ -42,3 +42,22 @@ test("explicit bass rest and unavailable harmony never trigger edits",()=>{
  song.harmony=[];
  assert.deepEqual(createBassEnsembleCohesionCandidates(song,{bassEnsembleCohesionShadow:true}),[]);
 });
+
+test("shadow rejects missing chord roots and invalid onsets without inventing kick relationships", () => {
+  const song = fixture();
+  const options = { bassEnsembleCohesionShadow: true };
+  song.harmony[0].rootPc = "  ";
+  assert.deepEqual(createBassEnsembleCohesionCandidates(song, options), [],
+    "blank root must not be interpreted as C");
+
+  song.harmony[0].rootPc = 4;
+  song.tracks[0].notes = [{ pitch: 36 }, { start: null, pitch: 36 }];
+  const noRealKicks = createBassEnsembleCohesionCandidates(song, options);
+  assert.ok(noRealKicks.every((item) => item.id !== "bass-cohesion-groove"),
+    "a missing kick onset must not be treated as a beat-zero kick");
+
+  song.tracks[1].notes[0].start = null;
+  song.tracks[1].notes[1].start = null;
+  assert.deepEqual(createBassEnsembleCohesionCandidates(song, options), [],
+    "bass notes without real onsets must not be edited");
+});
