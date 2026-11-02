@@ -35,8 +35,9 @@ function candidate(song, profile) {
   const bass = track(next, "bass")?.notes;
   if (!Array.isArray(bass) || !bass.length) return null;
   const kicks = (track(next, "drums")?.notes ?? [])
-    .filter((n) => [35, 36].includes(Math.round(finite(n.pitch, -1))))
-    .map((n) => finite(n.start));
+    .filter((n) => n?.start != null && Number.isFinite(Number(n.start))
+      && [35, 36].includes(Math.round(finite(n.pitch, -1))))
+    .map((n) => Number(n.start));
   const beatsPerBar = Math.max(1, finite(next?.meta?.beatsPerBar, 4));
   const maxChanges = Math.min(8, Math.max(1, Math.ceil(finite(next?.meta?.bars, 8) / 4)));
   const usedBars = new Set();
@@ -46,11 +47,13 @@ function candidate(song, profile) {
   for (const { note, index } of ordered) {
     if (changes >= maxChanges) break;
     const beat = finite(note.start, -1);
-    if (beat < 0 || !eligible(next, note, beat)) continue;
+    if (note.start == null || !Number.isFinite(Number(note.start)) || beat < 0
+      || !eligible(next, note, beat)) continue;
     const bar = Math.floor(beat / beatsPerBar);
     if (usedBars.has(bar)) continue;
     const chord = activeChord(next, beat);
-    if (!chord || chord.rootPc == null || !Number.isFinite(Number(chord.rootPc))) continue;
+    if (!chord || chord.rootPc == null || String(chord.rootPc).trim() === ""
+      || !Number.isFinite(Number(chord.rootPc))) continue;
     const root = pc(chord.rootPc);
     const oldPitch = Math.round(finite(note.pitch));
     if (profile === "foundation" || profile === "groove") {
