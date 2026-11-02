@@ -27,3 +27,40 @@ test("handles absent bass, kicks, harmony, and invalid notes", () => {
   assert.equal(empty.rootOnsetRatio, null);
   assert.equal(empty.largeLeapRatio, null);
 });
+
+test("unknown harmony roots and missing kick onsets do not invent bass cohesion evidence", () => {
+  const song = {
+    tracks: [
+      { id: "bass", notes: [
+        { start: null, pitch: 40 },
+        { start: 0, pitch: null },
+        { start: 0, pitch: 48 },
+      ] },
+      { id: "drums", notes: [
+        { pitch: 36 },
+        { start: null, pitch: 36 },
+        { start: 0, pitch: 38 },
+      ] },
+    ],
+    harmony: [{ start: 0, duration: 4, rootPc: null }],
+  };
+  const before = structuredClone(song);
+  const unknown = analyzeBassEnsembleCohesion(song);
+  assert.equal(unknown.bassNotes, 1, "invalid bass onsets and pitches must not become notes");
+  assert.equal(unknown.kickNotes, 0, "a kick without an onset must not become a beat-zero kick");
+  assert.equal(unknown.kickLockRatio, 0);
+  assert.equal(unknown.notes[0].nearestKickBeats, null);
+  assert.equal(unknown.rootEvidenceCount, 0, "null root is not a C root");
+  assert.equal(unknown.rootOnsetRatio, null);
+  assert.equal(unknown.notes[0].rootMatch, null);
+  assert.deepEqual(song, before, "audit must not mutate source notes or harmony");
+
+  for (const missingRoot of [undefined, "", "  "]) {
+    song.harmony[0].rootPc = missingRoot;
+    assert.equal(analyzeBassEnsembleCohesion(song).rootEvidenceCount, 0);
+  }
+  song.harmony[0].rootPc = 0;
+  const actualC = analyzeBassEnsembleCohesion(song);
+  assert.equal(actualC.rootEvidenceCount, 1, "explicit C root must still count");
+  assert.equal(actualC.rootOnsetRatio, 1);
+});
