@@ -94,6 +94,23 @@ export const CONTROL_HELP = Object.freeze({
   variationControl: ["Variation", "Set how far More like this may move from the current musical identity."],
   evolutionControl: ["Phrase Evolution", "Set how strongly patterns and dynamics develop gradually across the song."],
   surpriseControl: ["Surprise", "Invite less-common genre-compatible choices without abandoning the selected style."],
+  menuButton: ["Studio Menu", "Open studio menu options including export, fullscreen, reset session, and guide."],
+  keyTransposeDown: ["Transpose down", "Lower the root key by one semitone."],
+  keyTransposeUp: ["Transpose up", "Raise the root key by one semitone."],
+  secondaryGenreControl: ["Fusion partner", "Blend a secondary genre style into the primary genre rules."],
+  chordPathControl: ["Harmonic path", "Choose the chord progression style for the arrangement."],
+  trapIntroModeControl: ["Trap intro build", "Choose short, extended, or automatic intro build duration for Trap and Hip-Hop styles."],
+  tasteRating: ["Teach the engine", "Rate this song idea (Like, Not for me, Favorite) to guide future Auto choices."],
+  spotlightTrackControl: ["Featured instrument", "Select an instrument to spotlight in the mix."],
+  spotlightIntensityControl: ["Spotlight intensity", "Set how prominently the featured instrument stands out in the mix."],
+  exportProfileControl: ["Track package", "Choose which instrument tracks to include in the exported MIDI file."],
+  exportTimingControl: ["Export timing", "Choose performance timing with human groove or tight timing aligned strictly to the grid."],
+  saveCoverButton: ["Save cover artwork", "Save and download the generated song cover image."],
+  varyCoverButton: ["Change finish", "Cycle through artwork visual finishes without altering the song composition."],
+  clearSoloButton: ["Clear solo", "Unmute all instruments and return to full-band playback."],
+  mixEnhanceToggle: ["Performance mix enhancement", "Toggle smart mix processing for balanced instrument clarity."],
+  navDockToggle: ["Toggle navigation", "Show or hide the workspace navigation bar."],
+  mobileDockToggle: ["Toggle navigation", "Show or hide the mobile navigation bar."],
 });
 
 export const ATTITUDE_HELP = Object.freeze({

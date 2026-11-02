@@ -3694,6 +3694,27 @@ input[type=range]::-webkit-slider-thumb {
   .track-card { padding: 14px 12px; }
 }
 
+/* ── Skip-to-content accessibility link ──────────────────────────────────── */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 1rem;
+  z-index: 10000;
+  padding: 0.6rem 1rem;
+  background: var(--bg-2, #131320);
+  color: var(--text, #f4f4fc);
+  border: 1px solid var(--accent, #9d6fff);
+  border-radius: var(--radius-sm, 8px);
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: top 0.2s ease;
+}
+.skip-link:focus {
+  top: 1rem;
+  outline: 2px solid var(--accent, #9d6fff);
+}
+
 /* ── Focus-visible rings for accessibility ──────────────────────────────── */
 :focus-visible {
   outline: 2px solid var(--accent);
