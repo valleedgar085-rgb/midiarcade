@@ -5,6 +5,11 @@ on:
     paths:
       - "tasteforge-android/**"
       - ".github/workflows/tasteforge-android-apk.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tasteforge-android/**"
+      - ".github/workflows/tasteforge-android-apk.yml"
   workflow_dispatch:
 permissions:
   contents: read
