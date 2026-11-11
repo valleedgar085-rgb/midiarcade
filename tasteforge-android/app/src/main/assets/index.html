@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111719"><title>TasteForge · MIDI Intelligence</title>
+<style>
+:root{color-scheme:dark;--bg:#0e1416;--card:#1a2326;--panel:#222e31;--line:#354548;--text:#e8f2eb;--muted:#9fb0ab;--accent:#ceef8c;--accent2:#91c8a1;--bad:#eb9279}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Roboto,sans-serif}body{padding-bottom:env(safe-area-inset-bottom)}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5}.app{max-width:1150px;margin:auto;padding:17px 16px 80px}header{display:flex;justify-content:space-between;align-items:center;padding:5px 0 22px;border-bottom:1px solid var(--line);gap:10px}header .logo{display:flex;gap:9px;align-items:center;font-size:20px;font-weight:900;letter-spacing:-.7px}header .logo strong{background:var(--accent);color:#102019;padding:9px;border-radius:11px;font-size:18px}header .logo span{color:var(--accent)}.tag{color:var(--muted);font-size:10px;letter-spacing:1.3px;text-align:right}h1{font-size:clamp(30px,7vw,60px);letter-spacing:-1.9px;line-height:1.06;margin:25px 0 10px}h1 em{font-style:normal;color:var(--accent)}.intro{color:var(--muted);line-height:1.5;font-size:14px;max-width:670px}.grid{display:grid;grid-template-columns:310px minmax(0,1fr);gap:18px;margin-top:22px;align-items:start}.panel,.song{border:1px solid var(--line);border-radius:17px;background:var(--card)}.panel{padding:18px}.eyebrow{color:var(--accent2);font-size:11px;font-weight:800;letter-spacing:1.3px;margin-bottom:12px}.panel h2{margin:0 0 16px;font-size:21px}.field{margin:12px 0}label{display:block;color:var(--muted);font-size:11px;letter-spacing:.6px;font-weight:700;margin-bottom:6px}input,select{width:100%;border:1px solid var(--line);background:#111a1d;color:var(--text);border-radius:10px;padding:12px;min-width:0;outline:none}input:focus,select:focus{border-color:var(--accent)}input[type=range]{padding:4px 0;accent-color:var(--accent)}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:10px}.primary{width:100%;background:var(--accent);border:0;border-radius:12px;color:#112017;font-weight:900;padding:16px 12px;letter-spacing:.2px;margin-top:10px}.primary:active{transform:translateY(1px)}.row{display:flex;align-items:center;justify-content:space-between;gap:10px}.divider{height:1px;background:var(--line);margin:23px 0}.muted{color:var(--muted);font-size:13px}.small{font-size:12px}.outline{background:transparent;border:1px solid #597466;color:var(--accent);padding:9px 11px;border-radius:9px;font-size:12px;font-weight:700}.profile{font-size:17px;font-weight:800;margin:5px 0 15px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.stats div{background:#11191c;border-radius:10px;padding:12px 3px;text-align:center}.stats b{display:block;font-size:21px;color:var(--accent)}.stats small{font-size:9px;letter-spacing:.4px;color:var(--muted)}.insight{padding:9px 11px;background:#283b34;border-radius:9px;margin-top:8px;font-size:12px}.upload{display:block;background:#11191c;border:1px dashed #5d7566;border-radius:12px;padding:14px;margin-top:17px;text-align:center;color:var(--accent);font-size:12px;font-weight:800;cursor:pointer}.upload small{display:block;color:var(--muted);font-weight:400;margin-top:6px}.righthead{display:flex;justify-content:space-between;align-items:end;margin-bottom:14px}.righthead h2{margin:0;font-size:20px}.righthead small{color:var(--muted);font-size:10px;text-align:right}.song{padding:18px;margin-bottom:14px}.song.featured{border-color:#88ad7b}.songhead{display:flex;justify-content:space-between;align-items:start;gap:10px}.songhead h3{font-size:19px;margin:6px 0}.songhead small,.micro{color:var(--accent2);font-size:10px;letter-spacing:1px;font-weight:800}.score{color:var(--accent);background:#2b3f35;border-radius:9px;padding:8px;font-size:12px;font-weight:800;white-space:nowrap}.chords{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:14px 0}.chord{background:#26363b;border:1px solid #425953;border-radius:8px;color:#e4f0d8;padding:7px 9px;font-weight:700;font-size:13px}.arrow{color:#8b9f95}.roll{width:100%;height:132px;display:block;border-radius:8px;border:1px solid #3b4b50;background:#10191b}.songmeta{margin:12px 0;color:var(--muted);font-size:12px;line-height:1.5}.actions{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}.actions button{border-radius:8px;border:1px solid #50665e;background:#22312d;color:var(--text);padding:10px;font-size:11px;font-weight:800;min-height:39px}.actions button.export{background:var(--accent);color:#17231d;border-color:var(--accent)}.actions button.saved{border-color:var(--accent);color:var(--accent)}.rating{display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:12px}.rating span{font-size:11px;color:var(--muted);margin-right:5px}.rating button{height:31px;width:33px;border-radius:7px;border:1px solid #50625c;background:#182326;color:var(--text)}.rating button.picked{background:var(--accent);color:#14201a;font-weight:900}.quality{color:#a3b8aa;margin-top:13px;font-size:10px}.empty{padding:45px 18px;text-align:center;border:1px dashed #465a55;border-radius:16px;color:var(--muted)}.empty .star{display:block;color:var(--accent);font-size:50px;margin-bottom:12px}.empty b{display:block;color:var(--text);font-size:20px;margin-bottom:7px}footer{font-size:11px;color:#7e9989;border-top:1px solid var(--line);margin-top:35px;padding-top:20px;text-align:center}.notice{border-radius:8px;background:#314039;color:var(--text);padding:12px;font-size:12px;margin-top:14px}.toast{position:fixed;z-index:9;left:16px;right:16px;bottom:18px;margin:auto;max-width:550px;padding:13px 15px;color:#102016;background:var(--accent);border-radius:10px;font-weight:700;font-size:13px;box-shadow:0 12px 28px #0008;display:none}.toast.active{display:block}dialog{border:1px solid var(--line);background:#172225;color:var(--text);border-radius:15px;width:min(90vw,580px);max-height:70vh;overflow:auto}dialog::backdrop{background:#000a}.favrow{border-bottom:1px solid var(--line);padding:13px 0;display:flex;justify-content:space-between;gap:8px;align-items:center}.favrow small{display:block;color:var(--muted);margin-top:5px}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.app{padding:13px 12px 70px}.righthead{margin-top:7px}h1{margin-top:24px}.panel{padding:16px}header{padding-bottom:16px}}@media(max-width:360px){.tag{font-size:8px}.chord{font-size:11px}.actions button{flex:1}}
+</style>
+</head><body>
+<div class="app">
+<header><div class="logo"><strong>TF✦</strong><div>TASTE<span>FORGE</span><div class="tag" style="text-align:left">ADAPTIVE MIDI ENGINE</div></div></div><div class="tag">100% OFFLINE<br>ANDROID · v1.0</div></header>
+<h1>Find your next <em>melody.</em></h1><p class="intro">An adaptive composer that makes original melodies, chord progressions and basslines. Rate what you like and it learns your musical taste on this phone.</p>
+<div class="grid"><aside class="panel">
+<div class="eyebrow">01 / COMPOSITION SETTINGS</div><h2>Dial in the vibe</h2>
+<div class="field"><label for="genre">GENRE</label><select id="genre"></select></div>
+<div class="field"><label for="mood">MOOD</label><select id="mood"></select></div>
+<div class="twocol"><div class="field"><label for="key">ROOT KEY</label><select id="key"></select></div><div class="field"><label for="scale">SCALE</label><select id="scale"></select></div></div>
+<div class="twocol"><div class="field"><label for="bpm">BPM</label><input id="bpm" type="number" min="50" max="220" value="96"></div><div class="field"><label for="bars">LENGTH</label><select id="bars"><option>4</option><option selected>8</option><option>16</option><option>32</option></select></div></div>
+<div class="field"><div class="row"><label for="creativity">CREATIVITY</label><span id="creativeValue" class="micro">55%</span></div><input id="creativity" type="range" min="0" max="100" value="55"></div>
+<div class="field"><label for="seed">SEED (OPTIONAL, REPEATABLE)</label><input id="seed" type="text" inputmode="numeric" placeholder="New every generation"></div>
+<button class="primary" id="generate">✦ GENERATE 3 DIRECTIONS</button>
+<div class="divider"></div>
+<div class="eyebrow">02 / PERSONAL TASTE MEMORY</div>
+<div class="row"><div class="profile" id="profile">Producer</div><button id="switch" class="outline">SWITCH</button></div>
+<div class="stats"><div><b id="generated">0</b><small>CREATED</small></div><div><b id="rated">0</b><small>RATED</small></div><div><b id="examples">0</b><small>EXAMPLES</small></div></div>
+<div id="insights"><p class="muted small">Your ratings and imported MIDI patterns will shape your next generation.</p></div>
+<label class="upload" for="midiinput">＋ TEACH FROM MIDI FILE<small>Import a .mid to teach melody and rhythm preferences</small></label><input id="midiinput" type="file" accept=".mid,audio/midi" hidden>
+<button id="favorites" class="outline" style="margin-top:14px;width:100%">★ VIEW SAVED MIDI (<span id="savedcount">0</span>)</button>
+<p class="muted small">Taste profiles are stored on this device. Deleting the app's data clears the memory.</p>
+</aside><main>
+<div class="righthead"><div><div class="eyebrow">03 / MELODY LAB</div><h2>Three musical directions</h2></div><small id="status">READY TO COMPOSE</small></div>
+<div id="songs"><div class="empty"><span class="star">✦</span><b>Your next hook starts here.</b>Choose a genre, key and mood. Tap Generate to make original MIDI ideas for FL Studio Mobile.</div></div>
+<div class="notice">Export MIDI tracks, then open them with FL Studio Mobile using its MIDI import workflow. This app generates MIDI notes; it does not bundle instrument sounds.</div>
+</main></div><footer>YOUR SOUND · YOUR MEMORY · YOUR MIDI · NO ACCOUNT OR SERVER REQUIRED</footer>
+</div>
+<dialog id="favdialog"><div class="row"><h2>Saved compositions</h2><button class="outline" id="closefav">CLOSE</button></div><div id="favlist"></div></dialog>
+<div id="toast" class="toast" role="status"></div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const KEYS=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const SCALES={minor:[0,2,3,5,7,8,10],major:[0,2,4,5,7,9,11],dorian:[0,2,3,5,7,9,10],phrygian:[0,1,3,5,7,8,10],mixolydian:[0,2,4,5,7,9,10],pentatonic_minor:[0,3,5,7,10]};
+const STYLES={
+'Hip-Hop':{sync:.63,color:.66,repetition:.81,density:.57,velocity:87},
+'Trap':{sync:.74,color:.52,repetition:.78,density:.68,velocity:91},
+'Pop':{sync:.45,color:.54,repetition:.88,density:.68,velocity:96},
+'Neo-Soul':{sync:.56,color:.91,repetition:.71,density:.55,velocity:75},
+'House':{sync:.43,color:.57,repetition:.87,density:.7,velocity:90},
+'R&B':{sync:.55,color:.83,repetition:.77,density:.61,velocity:77},
+'Lo-Fi':{sync:.51,color:.75,repetition:.83,density:.47,velocity:73},
+'Drill':{sync:.75,color:.48,repetition:.82,density:.72,velocity:90},
+'Jazz':{sync:.56,color:.95,repetition:.51,density:.77,velocity:83},
+'Afrobeats':{sync:.68,color:.57,repetition:.82,density:.7,velocity:86},
+'Synthwave':{sync:.42,color:.54,repetition:.85,density:.61,velocity:88},
+'Rock':{sync:.49,color:.33,repetition:.78,density:.73,velocity:95}
+};
+const MOODS=['Warm','Dark','Dreamy','Energetic','Soulful','Melancholic','Uplifting','Aggressive','Cinematic','Playful'];
+const PROGRESSIONS=[[0,5,2,6],[0,6,5,6],[0,3,6,4],[0,4,5,3],[0,5,3,4],[0,2,5,4],[0,3,4,0],[0,6,3,4]];
+const SEED_MASK=4294967295;
+let songs=[],player=null,currentUser=localStorage.getItem('tf-user')||'Producer',nextId=0,lastSignature='';
+const clamp=(n,a,b)=>Math.min(b,Math.max(a,n));
+function hash(str){let x=2166136261>>>0;for(let i=0;i<str.length;i++){x^=str.charCodeAt(i);x=Math.imul(x,16777619);}return x>>>0}
+function rng(seed){let s=seed>>>0;return function(){s=(s+0x6D2B79F5)>>>0;let x=s;x=Math.imul(x^(x>>>15),x|1);x^=x+Math.imul(x^(x>>>7),x|61);return ((x^(x>>>14))>>>0)/4294967296}}
+function pick(xs,r){return xs[Math.floor(r()*xs.length)]}
+function shuffle(xs,r){let x=xs.slice();for(let i=x.length-1;i>0;i--){let j=Math.floor(r()*(i+1));[x[i],x[j]]=[x[j],x[i]]}return x}
+function profile(){let data;try{data=JSON.parse(localStorage.getItem('tf-profile-'+currentUser)||'{}')}catch(e){data={}}return {generated:0,examples:[],scores:[],songs:{},...data}}
+function putProfile(p){let keys=Object.keys(p.songs);if(keys.length>90){keys.sort((a,b)=>(p.songs[a].saved===true)-(p.songs[b].saved===true));keys.slice(0,keys.length-90).forEach(k=>delete p.songs[k]);}try{localStorage.setItem('tf-profile-'+currentUser,JSON.stringify(p))}catch(e){toast('Storage full: some older ideas cannot be saved')}}
+function toast(message){let t=$('toast');t.textContent=message;t.classList.add('active');setTimeout(()=>t.classList.remove('active'),3100)}
+function stats(){let p=profile(),records=Object.values(p.songs),rated=records.filter(s=>s.rating),saved=records.filter(s=>s.saved).length;
+$('profile').textContent=currentUser;$('generated').textContent=p.generated;$('rated').textContent=rated;$('examples').textContent=p.examples.length;$('savedcount').textContent=saved;
+let positive=records.filter(s=>s.rating>=4),insights=[];
+if(positive.length){let top={};positive.forEach(s=>{top[s.settings.genre]=(top[s.settings.genre]||0)+s.rating});let best=Object.keys(top).sort((a,b)=>top[b]-top[a])[0];insights.push('Favorite direction: '+best);
+let avg=f=>positive.reduce((a,s)=>a+(s.recipe[f]||0),0)/positive.length;
+insights.push('Preferred syncopation: '+Math.round(avg('sync')*100)+'%');
+insights.push('Chord color preference: '+Math.round(avg('color')*100)+'%');}
+if(p.examples.length)insights.push('Trained on '+p.examples.length+' imported MIDI example'+(p.examples.length===1?'':'s'));
+$('insights').innerHTML=insights.length?insights.map(x=>'<div class="insight">'+escapeHtml(x)+'</div>').join(''):'<p class="muted small">Rate songs or import MIDI to build your sound profile.</p>';
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function learnRecipe(style,genre,r){let p=profile(),records=Object.values(p.songs).filter(s=>s.rating),examples=p.examples;
+let recipe={...style};
+let weight=0,sum={sync:0,color:0,repetition:0,density:0};
+for(let item of records){let w=(item.rating-3)*1.2;if(item.settings.genre===genre)w*=1.7;weight+=Math.abs(w);for(let k in sum)sum[k]+=w*((item.recipe[k]||.5)-style[k]);}
+for(let e of examples){weight+=.8;for(let k in sum)sum[k]+=(e[k]-.5)*.5;}
+for(let k in sum){if(weight>0)recipe[k]=clamp(style[k]+sum[k]/Math.max(3,weight),.16,.94);}
+return recipe;
+}
+function settings(){return {genre:$('genre').value,mood:$('mood').value,key:$('key').value,scale:$('scale').value,bpm:clamp(Number($('bpm').value)||96,50,220),bars:clamp(Number($('bars').value)||8,4,32),creativity:Number($('creativity').value)/100}}
+function scaleNotes(root,mode){let ints=SCALES[mode]||SCALES.minor;return ints.map(x=>x+root)}
+function isScale(p,root,ints){return ints.some(i=>(i+root)%12===(p+1200)%12)}
+function nearestPitch(note,center){let n=note;while(n<center-6)n+=12;while(n>center+6)n-=12;return clamp(n,28,104)}
+function chordFor(degree,tones,root,recipe,r,prev){
+let ints=SCALES[tones],len=ints.length;
+const choose=(step)=>root+ints[(degree+step)%len]+12*Math.floor((degree+step)/len);
+let pitch=[choose(0),choose(2),choose(4)];if(recipe.color>.52 && r()<recipe.color)pitch.push(choose(6));if(recipe.color>.82&&r()<.36)pitch.push(choose(1)+12);
+const base=48+root;let voiced=pitch.map((n,i)=>nearestPitch(n,base+7*i));
+if(prev)voiced=voiced.map((n,i)=>{let target=prev[Math.min(i,prev.length-1)];return [n-12,n,n+12].sort((a,b)=>Math.abs(a-target)-Math.abs(b-target))[0]});
+voiced=voiced.map(n=>clamp(n,43,80)).sort((a,b)=>a-b);
+const quality=(ints[(degree+2)%len]+(degree+2>=len?12:0))-(ints[degree]||0);
+const major=quality===4,rootName=KEYS[(root+ints[degree])%12];
+let label=rootName+(major?'':'m')+(pitch.length>=4?(major?'maj7':'7'):'');
+return {pitches:voiced,label,root:root+ints[degree],degree};
+}
+function writeSong(opts,variant,r,recipe){
+let root=KEYS.indexOf(opts.key),ints=SCALES[opts.scale],bars=opts.bars,prog=pick(PROGRESSIONS,r).slice();
+if(variant===1)prog=shuffle(prog,r);if(variant===2)prog=pick(PROGRESSIONS,r).slice().reverse();
+let chordChanges=[],notes=[],bass=[];
+let last=null,phase=[0,1,2,3];
+const swing=recipe.sync>.58?.10:0;
+const motif=[];
+let steps=[0,.5,1,1.5,2,2.5,3,3.5];
+for(let s=0;s<8;s++){if(s===0||r()<.25+recipe.density*.55){motif.push({step:s,degree:Math.floor(r()*7),len:pick([.30,.42,.75,1.00],r)})}}
+if(motif.length<3)motif.push({step:2,degree:2,len:.45},{step:5,degree:4,len:.35});
+for(let bar=0;bar<bars;bar++){
+let degree=prog[bar%prog.length],ch=chordFor(degree,opts.scale,root,recipe,r,last);last=ch.pitches;
+chordChanges.push({start:bar*4,duration:3.88,pitches:ch.pitches,label:ch.label,root:ch.root,degree});
+let section=Math.floor(bar/4)%4,phraseChange=(bar%4===2||section===2),pattern=motif;
+for(let m of pattern){
+if(phraseChange&&r()<.13+opts.creativity*.32)continue;
+let baseStep=m.step;
+let at=bar*4+baseStep*.5+(baseStep%2?swing:0);
+let idx=(m.degree+degree+(phraseChange?Math.floor(r()*4):0))%7;
+let octave=(variant===2?72:variant===1?68:65);
+let pitch=nearestPitch(root+ints[idx]+60,octave);
+if(phraseChange&&r()<.33) pitch=nearestPitch(root+ints[(idx+2)%7]+60,octave);
+let velocity=clamp(Math.round(recipe.velocity+r()*20-10+(m.step===0?8:0)),48,123);
+notes.push({start:+at.toFixed(3),duration:Math.min(m.len,4-(at%4)),pitch,velocity});
+}
+let bassRoot=nearestPitch(ch.root+36,40);
+bass.push({start:bar*4,duration:1.38,pitch:bassRoot,velocity:91});
+if(recipe.sync>.42){bass.push({start:bar*4+2.5,duration:.72,pitch:bassRoot,velocity:80});}
+if(recipe.density>.65&&r()<.7){let approach=nearestPitch(root+ints[(degree+4)%7]+36,42);bass.push({start:bar*4+3.5,duration:.35,pitch:approach,velocity:73});}
+}
+let inKey=notes.filter(n=>isScale(n.pitch,root,ints)).length/(notes.length||1);
+let chordAligned=notes.filter(n=>{let c=chordChanges[Math.floor(n.start/4)];return c.pitches.some(p=>p%12===n.pitch%12)}).length/(notes.length||1);
+let recurrence=bars>=4?Math.round((1-clamp(opts.creativity*.18,.03,.17))*100):100;
+let score=clamp(Math.round(68+inKey*11+chordAligned*14+recurrence*.07+(notes.length/bars>=3?3:0)),50,98);
+let id='tf'+(++nextId)+'_'+Math.floor(r()*1000000);
+return {id,variation:['BEST MATCH','NEW DIRECTION','WILDCARD'][variant],settings:{...opts},recipe:{...recipe},chord_changes:chordChanges,notes,bass,chords:chordChanges.slice(0,4).map(c=>c.label),quality:{score,in_key:Math.round(inKey*100),chord_alignment:Math.round(chordAligned*100),motif_recurrence:recurrence},total_notes:notes.length};
+}
+function tasteFit(song,p){let rated=Object.values(p.songs).filter(s=>s.rating),c=0,total=0;
+for(let v of rated){let distance=['sync','color','repetition','density'].reduce((n,k)=>n+Math.abs(v.recipe[k]-song.recipe[k]),0)/4;
+let similarity=1-distance;let weight=v.settings.genre===song.settings.genre?1.5:1;total+=similarity*(v.rating-3)*weight;c+=weight;}
+return rated.length>=3?clamp(Math.round(65+25*(total/Math.max(c,1))),1,100):null;
+}
+function generate(){if(player)stopAudio();let opts=settings(),seed=$('seed').value.trim();
+if(seed&&!/^[0-9]{1,15}$/.test(seed)){toast('Seed must be a nonnegative whole number');return}
+let numseed=seed?Number(seed):Math.floor(Math.random()*4294967295),r=rng(hash(JSON.stringify(opts)+numseed));
+let p=profile(),base=learnRecipe(STYLES[opts.genre],opts.genre,r);
+let batch=[];for(let i=0;i<3;i++){let rec={...base};
+const offset=i===0?0:i===1?-.20:.28;for(let k of ['sync','color','repetition','density']) rec[k]=clamp(rec[k]+offset*(r()>.5?1:-1)+(.06+opts.creativity*.14)*(r()-.5),.15,.95);
+batch.push(writeSong(opts,i,r,rec));}
+songs=batch;for(let song of songs){p.songs[song.id]={id:song.id,settings:song.settings,recipe:song.recipe,composition:song,rating:0,saved:false}}
+p.generated+=3;putProfile(p);stats();render();$('status').textContent='03 COMPOSITIONS · MIDI READY';toast('3 compositions created. Rate them to improve the next batch.');}
+function render(){let p=profile();$('songs').innerHTML=songs.map((s,i)=>{let rec=p.songs[s.id]||{},fit=tasteFit(s,p);return '<article class="song '+(i===0?'featured':'')+'"><div class="songhead"><div><small>0'+(i+1)+' / '+s.variation+'</small><h3>'+escapeHtml(s.settings.genre)+' · '+escapeHtml(s.settings.mood)+'</h3></div><span class="score">QC '+s.quality.score+'/100</span></div><div class="chords">'+s.chords.map((c,i)=>(i?'<span class="arrow">→</span>':'')+'<span class="chord">'+escapeHtml(c)+'</span>').join('')+'</div><canvas class="roll" id="roll'+s.id+'"></canvas><div class="songmeta">'+s.total_notes+' melody notes · '+s.settings.bars+' bars · '+s.settings.bpm+' BPM · '+(fit===null?'LEARNING YOUR TASTE':'TASTE FIT '+fit+'%')+'</div><div class="actions"><button data-play="'+s.id+'">▶ PREVIEW</button><button class="'+(rec.saved?'saved':'')+'" data-save="'+s.id+'">'+(rec.saved?'★ SAVED':'☆ SAVE')+'</button><button class="export" data-export="'+s.id+':all'">↓ ALL MIDI</button><button data-export="'+s.id+':melody'">MELODY</button><button data-export="'+s.id+':chords'">CHORDS</button><button data-export="'+s.id+':bass'">BASS</button></div><div class="rating"><span>RATE THE VIBE</span>'+[1,2,3,4,5].map(n=>'<button class="'+(rec.rating===n?'picked':'')+'" data-rate="'+s.id+':'+n+'">'+n+'</button>').join('')+'</div><div class="quality">✓ '+s.quality.in_key+'% IN KEY · '+s.quality.chord_alignment+'% CHORD TONES · '+s.quality.motif_recurrence+'% MOTIF RECALL</div></article>'}).join('');for(let s of songs)drawRoll(s)}
+function drawRoll(s){let c=$('roll'+s.id);if(!c)return;let width=c.getBoundingClientRect().width,height=132,scale=window.devicePixelRatio||1;c.width=Math.round(width*scale);c.height=height*scale;let ctx=c.getContext('2d');ctx.scale(scale,scale);ctx.fillStyle='#11191c';ctx.fillRect(0,0,width,height);
+let total=Math.min(s.settings.bars,8)*4,lo=53,hi=88;for(let note=lo;note<hi;note++){let y=(hi-1-note)/(hi-lo)*height;ctx.fillStyle=[1,3,6,8,10].includes(note%12)?'#1b2427':'#222c2f';ctx.fillRect(0,y,width,height/(hi-lo)-.4);}
+for(let beat=0;beat<=total;beat++){ctx.strokeStyle=beat%4?'#293b3c':'#567269';ctx.beginPath();ctx.moveTo(beat/total*width,0);ctx.lineTo(beat/total*width,height);ctx.stroke()}
+for(let ch of s.chord_changes){if(ch.start>=total)break;for(let n of ch.pitches){if(n<lo||n>=hi)continue;ctx.fillStyle='#568670';ctx.fillRect(ch.start/total*width,(hi-1-n)/(hi-lo)*height,(ch.duration/total)*width-2,Math.max(2,height/(hi-lo)-1))}}
+for(let n of s.notes){if(n.start>=total||n.pitch<lo||n.pitch>=hi)continue;ctx.fillStyle=n.velocity>88?'#d0f28c':'#a7d3a0';ctx.fillRect(n.start/total*width,(hi-1-n.pitch)/(hi-lo)*height,Math.max(2,n.duration/total*width-1),Math.max(2,height/(hi-lo)-1));}}
+function save(id){let p=profile(),v=p.songs[id];if(!v){toast('Composition missing');return}v.saved=!v.saved;putProfile(p);stats();render();toast(v.saved?'Saved to your collection':'Removed from collection')}
+function rate(id,n){let p=profile(),v=p.songs[id];if(!v)return;v.rating=n;if(n===5)v.saved=true;putProfile(p);stats();render();toast('Rating saved. Your composer now uses this preference.')}
+let audio=null;
+function stopAudio(){if(audio){try{audio.close()}catch(e){}audio=null}document.querySelectorAll('[data-play]').forEach(b=>b.textContent='▶ PREVIEW')}
+function play(id){if(audio){stopAudio();return}let s=songs.find(x=>x.id===id);if(!s)return;
+let AC=window.AudioContext||window.webkitAudioContext;if(!AC){toast('Audio preview unavailable; export MIDI instead');return}
+let ctx=new AC();audio=ctx;ctx.resume();let time=ctx.currentTime+.1,sec=60/s.settings.bpm,max=16;
+let voices=[];s.chord_changes.forEach(c=>c.pitches.forEach(n=>voices.push({start:c.start,pitch:n,duration:c.duration,level:.015,wave:'sine'})));
+s.notes.forEach(n=>voices.push({...n,level:.065,wave:'triangle'}));s.bass.forEach(n=>voices.push({...n,level:.04,wave:'sine'}));
+for(let n of voices){if(n.start>=max)continue;let osc=ctx.createOscillator(),vol=ctx.createGain(),start=time+n.start*sec,end=start+Math.min(n.duration,max-n.start)*sec;osc.type=n.wave;osc.frequency.value=440*Math.pow(2,(n.pitch-69)/12);vol.gain.setValueAtTime(.0001,start);vol.gain.exponentialRampToValueAtTime(n.level,start+.015);vol.gain.setValueAtTime(n.level*.7,Math.max(start+.02,end-.08));vol.gain.exponentialRampToValueAtTime(.0001,end+.05);osc.connect(vol);vol.connect(ctx.destination);osc.start(start);osc.stop(end+.07)}
+let b=document.querySelector('[data-play="'+id+'"]');if(b)b.textContent='■ STOP';setTimeout(()=>{if(audio===ctx)stopAudio()},Math.ceil(max*sec*1000)+300)}
+function int32(n){return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]}
+function int16(n){return [(n>>>8)&255,n&255]}
+function varLen(n){let r=[n&127];while((n>>>=7))r.unshift((n&127)|128);return r}
+function textBytes(s){return Array.from(new TextEncoder().encode(s))}
+function chunk(tag,content){return [...textBytes(tag),...int32(content.length),...content]}
+function eventTrack(name,channel,program,notes,bpm){let events=[{tick:0,order:0,data:[0xff,0x03,...varLen(textBytes(name).length),...textBytes(name)]},{tick:0,order:1,data:[0xc0+channel,program]}];if(channel===0){let mpq=Math.round(60000000/bpm);events.push({tick:0,order:0,data:[0xff,0x51,3,(mpq>>>16)&255,(mpq>>>8)&255,mpq&255]})}
+for(let n of notes){let start=Math.round(n.start*480),end=Math.max(start+1,Math.round((n.start+n.duration)*480)),velocity=clamp(n.velocity||85,1,127),pitch=clamp(n.pitch,0,127);
+events.push({tick:start,order:3,data:[0x90+channel,pitch,velocity]},{tick:end,order:2,data:[0x80+channel,pitch,0]});}
+events.sort((a,b)=>a.tick-b.tick||a.order-b.order);let result=[],last=0;for(let e of events){result.push(...varLen(e.tick-last),...e.data);last=e.tick}result.push(0,0xff,0x2f,0);return chunk('MTrk',result)}
+function encodeMidi(s,part){let chords=s.chord_changes.flatMap(c=>c.pitches.map(p=>({start:c.start,duration:c.duration,pitch:p,velocity:73})));
+let parts=[];if(part==='all'||part==='melody')parts.push(eventTrack('TasteForge Melody',0,80,s.notes,s.settings.bpm));if(part==='all'||part==='chords')parts.push(eventTrack('TasteForge Chords',1,0,chords,s.settings.bpm));if(part==='all'||part==='bass')parts.push(eventTrack('TasteForge Bass',2,38,s.bass,s.settings.bpm));
+return new Uint8Array([...textBytes('MThd'),...int32(6),...int16(1),...int16(parts.length),...int16(480),...parts.flat()]);}
+function exportSong(id,part){let p=profile(),record=p.songs[id],s=songs.find(x=>x.id===id)||(record&&record.composition);
+if(!s){toast('Song is not available to export');return}
+let bytes=encodeMidi(s,part),name='TasteForge_'+s.settings.genre.replace(/[^A-Za-z]/g,'')+'_'+s.settings.key.replace('#','sharp')+'_'+s.settings.bpm+'BPM_'+part+'.mid';
+if(window.TasteForgeAndroid&&window.TasteForgeAndroid.saveMidi){let binary='',step=8192;for(let i=0;i<bytes.length;i+=step){binary+=String.fromCharCode(...bytes.subarray(i,i+step));}window.TasteForgeAndroid.saveMidi(btoa(binary),name);toast('Choose where to save your FL Studio MIDI file.');}
+else{let blob=new Blob([bytes],{type:'audio/midi'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),5000);}
+}
+function favorites(){let p=profile(),items=Object.values(p.songs).filter(s=>s.saved);$('favlist').innerHTML=items.length?items.map(s=>'<div class="favrow"><div><b>'+escapeHtml(s.settings.genre)+' / '+escapeHtml(s.settings.key)+' '+escapeHtml(s.settings.scale)+'</b><small>'+s.settings.bpm+' BPM · '+s.settings.bars+' bars</small></div><button class="outline" data-export="'+s.id+':all'">↓ MIDI</button></div>').join(''):'<p class="muted">Nothing saved yet.</p>';$('favdialog').showModal()}
+function readVL(bytes,pos){let v=0,i=0;while(i++<4&&pos<bytes.length){let b=bytes[pos++];v=(v<<7)|(b&127);if(!(b&128))return [v,pos]}throw Error('Invalid MIDI variable length')}
+function parseMidi(bytes){let end=bytes.length;if(end<22||String.fromCharCode(...bytes.slice(0,4))!=='MThd')throw Error('Not a standard MIDI file');let header=(bytes[4]*16777216+bytes[5]*65536+bytes[6]*256+bytes[7])>>>0,division=(bytes[12]<<8)|bytes[13];if(division&32768||!division)throw Error('SMPTE MIDI unsupported');let pos=8+header,notes=[],trackNumber=0;
+while(pos+8<=end&&trackNumber<128){if(String.fromCharCode(...bytes.slice(pos,pos+4))!=='MTrk')break;let len=(bytes[pos+4]*16777216+bytes[pos+5]*65536+bytes[pos+6]*256+bytes[pos+7])>>>0,limit=Math.min(end,pos+8+len);pos+=8;trackNumber++;let tick=0,run=0,active={};
+while(pos<limit){let vl=readVL(bytes,pos);tick+=vl[0];pos=vl[1];if(pos>=limit)break;let event=bytes[pos++];if(event<128){if(!run)throw Error('Bad MIDI running status');pos--;event=run}else if(event<240)run=event;
+if(event===255){if(pos>=limit)break;let type=bytes[pos++],x=readVL(bytes,pos);pos=x[1]+x[0];if(type===47)break;continue}
+if(event===240||event===247){let x=readVL(bytes,pos);pos=x[1]+x[0];run=0;continue}
+let status=event&240,n=event&15,a=bytes[pos++],b=(status===192||status===208)?0:bytes[pos++];if(a===undefined||pos>limit)break;
+if(status===144&&b>0){active[n+':'+a]=[tick,b]}
+else if(status===128||(status===144&&b===0)){let started=active[n+':'+a];if(started){notes.push({pitch:a,start:started[0]/division,duration:Math.max(.05,(tick-started[0])/division),velocity:started[1]});delete active[n+':'+a];}}
+}
+pos=limit}
+if(!notes.length)throw Error('No note events found in MIDI');return notes;}
+async function importMidi(file){if(!file)return;try{if(file.size>2000000)throw Error('MIDI must be under 2 MB');let bytes=new Uint8Array(await file.arrayBuffer()),notes=parseMidi(bytes);if(notes.length<3)throw Error('Need at least 3 MIDI notes');
+let positions=notes.map(n=>n.start%1),off=positions.filter(x=>Math.abs(x-.5)<.12||x>.12&&x<.36||x>.6&&x<.87).length/notes.length;
+let pitchSet=new Set(notes.map(n=>n.pitch)),density=clamp(notes.length/Math.max(1,Math.ceil(Math.max(...notes.map(n=>n.start))/4))/9,0,1);
+let x={sync:clamp(off,.1,.9),color:clamp(pitchSet.size/18,.1,.9),repetition:clamp(1-pitchSet.size/notes.length,.1,.95),density};
+let p=profile();p.examples.push(x);p.examples=p.examples.slice(-30);putProfile(p);stats();toast('Learned from '+notes.length+' MIDI notes. Future ideas will adapt.')}
+catch(e){toast(e.message||'Could not analyze MIDI')}finally{$('midiinput').value=''}}
+function init(){for(let [id,values] of [['genre',Object.keys(STYLES)],['mood',MOODS],['key',KEYS],['scale',Object.keys(SCALES)]]){$(id).innerHTML=values.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x.replace(/_/g,' '))+'</option>').join('')}
+$('genre').value='Hip-Hop';$('mood').value='Warm';$('key').value='A';$('scale').value='minor';
+$('creativeValue').textContent=$('creativity').value+'%';$('creativity').oninput=()=>{$('creativeValue').textContent=$('creativity').value+'%'};
+$('generate').onclick=generate;$('switch').onclick=()=>{let name=prompt('New or existing producer profile:',currentUser);if(name===null)return;if(!/^[A-Za-z0-9_-]{1,64}$/.test(name)){toast('Use 1–64 letters, numbers, underscores or hyphens');return}stopAudio();currentUser=name;localStorage.setItem('tf-user',name);songs=[];$('status').textContent='READY TO COMPOSE';$('songs').innerHTML='<div class="empty">Profile switched. Generate some new musical ideas.</div>';stats()};
+$('favorites').onclick=favorites;$('closefav').onclick=()=>$('favdialog').close();$('midiinput').onchange=e=>importMidi(e.target.files[0]);
+document.body.addEventListener('click',e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.play)play(b.dataset.play);else if(b.dataset.save)save(b.dataset.save);else if(b.dataset.rate){let x=b.dataset.rate.split(':');rate(x[0],Number(x[1]))}else if(b.dataset.export){let x=b.dataset.export.split(':');exportSong(x[0],x[1]);}});
+window.addEventListener('resize',()=>songs.forEach(drawRoll));stats()}
+init();
+</script></body></html>
