@@ -692,7 +692,7 @@
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
               <details class="shape-note-detail" id="shapeNoteDetail">
                 <summary><strong>Piano roll · Edit notes</strong><small>Tap notes · Undo restores edits</small></summary>
-                <p class="shape-note-help">Tap notes or use Select all. Edits apply immediately; Undo restores them.</p>
+                <p class="shape-note-help">Choose Select, Draw, or Erase. Tap notes to edit them. Undo restores changes.</p>
               <div class="piano-roll-shell" id="pianoRollShell">
                 <div class="piano-keyboard" id="pianoKeyboard" aria-hidden="true"></div>
                 <div class="piano-roll-viewport" id="pianoRollViewport" tabindex="0" aria-label="Editable piano roll">
@@ -704,7 +704,14 @@
                 <div class="velocity-bars" id="velocityBars"></div>
               </div>
               <div class="editor-toolbar" role="toolbar" aria-label="Essential note editing tools">
-                <span class="editor-toolbar-label"><small>ESSENTIAL TOOLS</small><strong>Edit selected notes</strong></span>
+                <span class="editor-toolbar-label"><small>ESSENTIAL TOOLS</small><strong>Tap to select, draw or erase</strong></span>
+                <label class="editor-mode-select">PIANO ROLL TOOL
+                  <select id="editorToolControl" aria-label="Piano roll tool">
+                    <option value="select" selected>Select Notes</option>
+                    <option value="draw">Draw Notes</option>
+                    <option value="erase">Erase Notes</option>
+                  </select>
+                </label>
                 <label class="editor-select">NOTE SPACING GRID
                   <select id="editorGridControl">
                     <option value="1">1/4</option><option value="0.5">1/8</option>
@@ -769,7 +776,7 @@
                 </div>
               </details>
               <div class="editor-zoom-row">
-                <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Tap to select · Double-click empty space to draw · Double-tap on mobile</small></span>
+                <span><b id="editorSelectionCount">0 NOTES SELECTED</b><small>Select to edit · Draw to add · Erase to remove · Undo to restore</small></span>
                 <label>ZOOM <input id="editorZoomControl" type="range" min="44" max="100" value="64" aria-label="Piano roll zoom level" /></label>
               </div>
               <p class="editor-status" id="editorStatus" role="status" aria-live="polite">Choose a section, then select notes to edit.</p>
@@ -933,38 +940,6 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <dialog class="shortcut-dialog piano-roll-dialog" id="pianoRollModal" aria-labelledby="pianoRollTitle">
-      <button class="dialog-close" id="closePianoRoll" type="button" aria-label="Close Note Editor">✕</button>
-      <div class="piano-roll-header">
-        <div>
-          <p class="eyebrow"><span></span> VISUAL NOTE &amp; STEP EDITOR</p>
-          <h2 id="pianoRollTitle">Piano Roll — Melody</h2>
-        </div>
-        <div class="piano-roll-tools" aria-label="Editor Tools">
-          <button class="icon-button tool-btn is-active" id="prToolDraw" type="button" aria-pressed="true" title="Draw or add notes">✎ Draw</button>
-          <button class="icon-button tool-btn" id="prToolErase" type="button" aria-pressed="false" title="Erase notes">⌫ Erase</button>
-          <select id="prQuantizeStep" aria-label="Quantize Step">
-            <option value="0.25">1/16 Note</option>
-            <option value="0.5" selected>1/8 Note</option>
-            <option value="1">1/4 Note</option>
-          </select>
-          <button class="icon-button" id="prBtnQuantize" type="button" title="Quantize notes to the grid">⚡ Quantize</button>
-          <button class="icon-button" id="prBtnOctaveUp" type="button" title="Transpose Octave Up">+12 st</button>
-          <button class="icon-button" id="prBtnOctaveDown" type="button" title="Transpose Octave Down">-12 st</button>
-          <button class="icon-button danger-btn" id="prBtnClear" type="button" title="Clear this part">🗑 Clear</button>
-        </div>
-      </div>
-      <div class="piano-roll-workspace">
-        <div class="piano-roll-keys" id="pianoRollKeys" aria-hidden="true"></div>
-        <div class="piano-roll-viewport" id="prModalViewport">
-          <div class="piano-roll-grid" id="prModalGrid" role="grid" aria-label="Note grid"></div>
-        </div>
-      </div>
-      <div class="piano-roll-footer">
-        <span class="pr-info" id="pianoRollInfo">Click or tap grid cells to add/remove notes. Audio changes sync live.</span>
-        <button class="export-button" id="prSaveClose" type="button"><span><strong>Done Editing</strong></span></button>
-      </div>
-    </dialog>
 
     <dialog class="shortcut-dialog guide-dialog" id="shortcutDialog" aria-labelledby="shortcutDialogTitle">
       <button class="dialog-close" id="closeDialog" type="button" aria-label="Close guide">✕</button>
