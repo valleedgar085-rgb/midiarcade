@@ -439,3 +439,42 @@
   #tab-arrange .shape-inspector { border: 2px solid CanvasText !important; }
   #tab-arrange .shape-director-directions > button.is-selected { border: 3px solid Highlight !important; }
 }
+
+
+/* Unified Shape piano roll: a deliberate, phone-friendly editing mode. */
+#tab-arrange .editor-mode-select {
+  display: grid;
+  gap: 6px;
+  min-width: min(100%, 168px);
+  color: #b7d3d8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+#tab-arrange .editor-mode-select select {
+  min-height: 48px;
+  padding: 10px 30px 10px 12px;
+  border: 2px solid #83bfac;
+  border-radius: 10px;
+  background: #132e33;
+  color: #effffb;
+  font-size: 14px;
+  font-weight: 750;
+  cursor: pointer;
+}
+#tab-arrange #pianoRollGrid[data-editor-tool="draw"] {
+  cursor: crosshair;
+}
+#tab-arrange #pianoRollGrid[data-editor-tool="erase"] .piano-note {
+  cursor: pointer;
+  border-style: dashed;
+}
+#tab-arrange #pianoRollGrid[data-editor-tool="erase"] .piano-note:hover,
+#tab-arrange #pianoRollGrid[data-editor-tool="erase"] .piano-note:focus-visible {
+  outline: 3px solid #ffb7a0 !important;
+  outline-offset: -2px;
+}
+@media (max-width: 600px) {
+  #tab-arrange .editor-mode-select { min-width: 100%; }
+  #tab-arrange .editor-mode-select select { width: 100%; }
+}
