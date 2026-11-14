@@ -62,6 +62,7 @@ import {
 } from "./core/preview-audio.js";
 import { formatGate, formatLevel, formatMidiVelocity, formatVelocityScale } from "./ui/value-formatters.js";
 import { createWorkspaceController } from "./ui/workspace-controller.js";
+import { hasPianoRollOnset, pianoRollPointToNote } from "./ui/piano-roll-logic.js";
 import { createDirectionStatus } from "./ui/create-direction-status.js";
 import {
   applyGenerationPreferences as applySessionGenerationPreferences,
@@ -315,6 +316,7 @@ export function restorePersistedSession() {
 
 const editorNoteIds = new WeakMap();
 let editorNoteIdCounter = 0;
+let editorTool = "select";
 
 for (const [index, id] of TRACK_ORDER.entries()) {
   const defaults = TRACK_DEFINITIONS[id] || {};
@@ -1314,28 +1316,56 @@ function setEditorVelocity(value) {
 }
 
 function addEditorNote(event) {
+  if (event.target.closest?.("[data-editor-note]") || !state.song) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
   const section = editorSection();
   const track = editorTrack();
   const gridElement = $("#pianoRollGrid");
-  if (!section || !track || !gridElement?.getBoundingClientRect) return;
+  if (!section || !Array.isArray(track?.notes) || !gridElement?.getBoundingClientRect) return false;
+
   const entries = editorEntries(track, section);
   const rows = editorPitchRows(entries);
   const rect = gridElement.getBoundingClientRect();
-  const beatWidth = state.editorZoom;
-  const rowHeight = 22;
   const range = editorBeatRange(section);
-  const localBeat = clamp((event.clientX - rect.left) / beatWidth, 0, range.end - range.start - state.editorGrid);
-  const start = range.start + Math.round(localBeat / state.editorGrid) * state.editorGrid;
-  const row = clamp(Math.floor((event.clientY - rect.top) / rowHeight), 0, rows.length - 1);
-  const rawPitch = rows[row];
+  const hit = pianoRollPointToNote({
+    clientX: event.clientX, clientY: event.clientY,
+    left: rect.left, top: rect.top, beatWidth: state.editorZoom,
+    rowHeight: 22, rows, startBeat: range.start, endBeat: range.end,
+    grid: state.editorGrid,
+  });
+  if (!hit) return false;
   const pitch = state.editorTrack === "drums"
-    ? rawPitch
-    : nearestScalePitch(rawPitch, getScaleChordGuide(state.song, start));
-  const note = { pitch, start, duration: state.editorGrid, velocity: Number($("#editorVelocityControl").value || 100) };
+    ? hit.pitch
+    : nearestScalePitch(hit.pitch, getScaleChordGuide(state.song, hit.start));
+
+  if (hasPianoRollOnset(track.notes, pitch, hit.start, state.editorGrid)) {
+    renderSectionEditor("A note is already here. Choose Erase to remove it.");
+    return false;
+  }
+  const note = {
+    pitch, start: hit.start, duration: state.editorGrid,
+    velocity: clamp(Number($("#editorVelocityControl")?.value || 100), 1, 127),
+  };
   pushHistory();
   track.notes.push(note);
   state.editorSelection = new Set([editorNoteId(note)]);
-  finishEditorMutation(`Drew ${pitchLabel(note.pitch, state.editorTrack === "drums")} at beat ${(start - range.start + 1).toFixed(2)}.`);
+  finishEditorMutation(`Drew ${pitchLabel(pitch, state.editorTrack === "drums")} at beat ${(hit.start - range.start + 1).toFixed(2)}. Undo available.`);
+  return true;
+}
+
+function eraseEditorNote(id) {
+  if (!state.song) return false;
+  resolvePendingShapeDirectorCandidate({ rerender: false });
+  const section = editorSection();
+  const track = editorTrack();
+  if (!section || !Array.isArray(track?.notes)) return false;
+  const selected = editorEntries(track, section).find((entry) => entry.id === id);
+  if (!selected) return false;
+  pushHistory();
+  track.notes = track.notes.filter((note) => note !== selected.note);
+  state.editorSelection.delete(id);
+  finishEditorMutation("Erased note. Undo available.");
+  return true;
 }
 
 let sectionEditorInteractionsBound = false;
@@ -1354,12 +1384,20 @@ function bindSectionEditorInteractions(container) {
       return;
     }
     const noteButton = event.target.closest?.("[data-editor-note]");
-    if (!noteButton) return;
-    const id = noteButton.dataset.editorNote;
-    if (!event.shiftKey && !event.ctrlKey && !event.metaKey) state.editorSelection.clear();
-    if (state.editorSelection.has(id) && (event.shiftKey || event.ctrlKey || event.metaKey)) state.editorSelection.delete(id);
-    else state.editorSelection.add(id);
-    renderUiRegions("editor");
+    if (noteButton) {
+      if (editorTool === "erase") {
+        eraseEditorNote(noteButton.dataset.editorNote);
+        return;
+      }
+      if (editorTool === "draw") return;
+      const id = noteButton.dataset.editorNote;
+      if (!event.shiftKey && !event.ctrlKey && !event.metaKey) state.editorSelection.clear();
+      if (state.editorSelection.has(id) && (event.shiftKey || event.ctrlKey || event.metaKey)) state.editorSelection.delete(id);
+      else state.editorSelection.add(id);
+      renderUiRegions("editor");
+      return;
+    }
+    if (editorTool === "draw" && event.target.closest?.("#pianoRollGrid")) addEditorNote(event);
   });
   // Roving tab focus preserves keyboard access without changing the existing
   // track-selection transaction or note-editing authority.
@@ -1417,6 +1455,7 @@ function renderSectionEditor(message = "") {
   $("#editorGuideChord").textContent = `${guide.chord.symbol || guide.chord.roman} · ${guide.key} ${guide.mode.replace(/([A-Z])/g, " $1").toLowerCase()}`;
   $("#editorGuideScale").textContent = `${guide.scaleNotes.join(" · ")} · edits stay in scale`;
   $("#editorOverlayControl").value = state.editorOverlay;
+  $("#editorToolControl").value = editorTool;
   const relationship = analyzeSectionRelationship(
     entries.map(({ note }) => note),
     partnerEntries.map(({ note }) => note),
@@ -1453,7 +1492,7 @@ function renderSectionEditor(message = "") {
     const selectedClass = state.editorSelection.has(id) ? " is-selected" : "";
     const label = pitchLabel(pitch, state.editorTrack === "drums");
     const role = state.editorTrack === "drums" ? "drum-hit" : classifyNoteRole(note, state.song).role;
-    return `<button class="piano-note ${role}${selectedClass}" type="button" data-editor-note="${id}" style="--note-left:${left}px;--note-width:${width}px;--note-top:${top}px" aria-pressed="${state.editorSelection.has(id)}" aria-label="${label}, ${role.replace("-", " ")}, velocity ${noteVelocity(note)}">${label}</button>`;
+    return `<button class="piano-note ${role}${selectedClass}" type="button" data-editor-note="${id}" style="--note-left:${left}px;--note-width:${width}px;--note-top:${top}px" aria-pressed="${state.editorSelection.has(id)}" aria-label="${editorTool === "erase" ? "Erase" : "Select"} ${label}, ${role.replace("-", " ")}, velocity ${noteVelocity(note)}">${label}</button>`;
   }).join("");
   const guideRows = state.editorTrack === "drums" || state.editorOverlay === "none"
     ? ""
@@ -1477,6 +1516,7 @@ function renderSectionEditor(message = "") {
   $("#pianoRollGrid").style.setProperty("--beat-width", `${state.editorZoom}px`);
   $("#pianoRollGrid").style.setProperty("--bar-width", `${state.editorZoom * range.beatsPerBar}px`);
   $("#pianoRollGrid").style.setProperty("--subdivision-width", `${Math.max(4, state.editorZoom * grid)}px`);
+  $("#pianoRollGrid").dataset.editorTool = editorTool;
   $("#pianoRollGrid").innerHTML = `<div class="piano-roll-editor-playhead" aria-hidden="true"><i></i></div>${guideRows}${partnerMarkup}${notesMarkup}`;
   // Match velocity stems to the same beat positions as the note grid.
   $("#velocityLane").setAttribute("aria-hidden", "false");
@@ -1491,9 +1531,10 @@ function renderSectionEditor(message = "") {
   $("#editorVelocityControl").value = selectedVelocity;
   $("#editorGridControl").value = String(state.editorGrid);
   $("#editorZoomControl").value = state.editorZoom;
-  $("#editorStatus").textContent = message || (entries.length
-    ? `${meta.name} · tap to select; double-tap to draw.`
-      : `Empty ${meta.name} · double-tap to draw.`);
+  const toolHint = editorTool === "draw" ? "Tap empty cells to draw notes."
+    : editorTool === "erase" ? "Tap a note to erase it. Undo restores it."
+      : "Tap notes to select. Double-click empty space to draw.";
+  $("#editorStatus").textContent = message || `${meta.name} · ${toolHint}`;
   renderSectionVariationLab(section);
   $$('[data-editor-action]', container).forEach((button) => {
     const tonalAction = ["octave-down", "pitch-down", "pitch-up", "octave-up"].includes(button.dataset.editorAction);
@@ -3280,200 +3321,19 @@ export async function applyTrackAttitude(attitude) {
   }
 }
 
-const DRUM_NOTE_MAP = {
-  36: "Kick",
-  38: "Snare",
-  42: "Closed Hat",
-  46: "Open Hat",
-  41: "Low Tom",
-  45: "Mid Tom",
-  48: "High Tom",
-  49: "Crash",
-  51: "Ride",
-};
-
-let pianoRollState = {
-  trackId: "melody",
-  tool: "draw",
-  quantize: 0.5,
-  bound: false,
-};
-
+// Mix and Shape always use the same authoritative, history-safe editor.
 export function openPianoRoll(id = "melody") {
-  if (!TRACK_ORDER.includes(id)) id = "melody";
-  pianoRollState.trackId = id;
-  const modal = $("#pianoRollModal");
-  if (!modal) return;
-  const meta = TRACK_META[id] || { name: id };
-  $("#pianoRollTitle").textContent = `Piano Roll — ${meta.name}`;
-  bindPianoRollInteractions();
-  renderPianoRollGrid();
-  try {
-    modal.showModal();
-  } catch {
-    modal.setAttribute("open", "true");
+  if (!state.song) {
+    showToast("Generate a song before opening the piano roll.");
+    return false;
   }
-}
-
-function renderPianoRollGrid() {
-  const grid = $("#prModalGrid");
-  const keysContainer = $("#pianoRollKeys");
-  if (!grid || !state.song) return;
-
-  const trackObj = songTracks().find((t, idx) => trackId(t, idx) === pianoRollState.trackId);
-  const notes = trackObj ? trackNotes(trackObj) : [];
-  const totalBeats = Number(state.song?.meta?.totalBeats) || songBars() * 4 || 32;
-  const stepSize = pianoRollState.quantize;
-  const totalSteps = Math.min(128, Math.max(16, Math.ceil(totalBeats / stepSize)));
-
-  const isDrums = pianoRollState.trackId === "drums";
-  const basePitch = isDrums ? 36 : (pianoRollState.trackId === "bass" ? 24 : 48);
-  const numPitches = isDrums ? 16 : 36;
-  const pitches = Array.from({ length: numPitches }, (_, i) => basePitch + numPitches - 1 - i);
-
-  keysContainer.innerHTML = pitches.map((pitch) => {
-    const isBlack = isBlackKey(pitch);
-    const rawLabel = isDrums ? (DRUM_NOTE_MAP[pitch] || `Hit ${pitch}`) : pitchLabel(pitch);
-    const label = escapeHtml(rawLabel);
-    const isRoot = !isBlack && (pitch % 12 === 0);
-    return `<div class="pr-key-label ${isBlack ? "is-black" : ""} ${isRoot ? "is-root" : ""}"><span>${label}</span></div>`;
-  }).join("");
-
-  grid.style.gridTemplateColumns = `repeat(${totalSteps}, 28px)`;
-  grid.style.gridTemplateRows = `repeat(${numPitches}, 1fr)`;
-
-  let cellsHtml = "";
-  for (let r = 0; r < numPitches; r++) {
-    const pitch = pitches[r];
-    const isBlackRow = isBlackKey(pitch);
-
-    for (let c = 0; c < totalSteps; c++) {
-      const stepStart = c * stepSize;
-      const stepEnd = stepStart + stepSize;
-      const hasNote = notes.some((n) => {
-        const nStart = noteStart(n);
-        const nPitch = notePitch(n);
-        return nPitch === pitch && nStart >= stepStart - 0.01 && nStart < stepEnd - 0.01;
-      });
-
-      const pitchTitle = escapeHtml(isDrums ? (DRUM_NOTE_MAP[pitch] || pitch) : pitchLabel(pitch));
-      cellsHtml += `<div class="pr-cell ${isBlackRow ? "is-black-row" : ""} ${hasNote ? "has-note" : ""}" data-pitch="${pitch}" data-step="${c}" data-start="${stepStart}" role="gridcell" title="${pitchTitle} at beat ${stepStart.toFixed(2)}"></div>`;
-    }
-  }
-  grid.innerHTML = cellsHtml;
-}
-
-function bindPianoRollInteractions() {
-  if (pianoRollState.bound) return;
-  pianoRollState.bound = true;
-  const modal = $("#pianoRollModal");
-  if (!modal) return;
-
-  $("#closePianoRoll")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
-  $("#prSaveClose")?.addEventListener("click", () => modal.close?.() || modal.removeAttribute("open"));
-  modal.addEventListener("click", (event) => {
-    if (event.target === modal) modal.close?.() || modal.removeAttribute("open");
-  });
-
-  $("#prToolDraw")?.addEventListener("click", () => {
-    pianoRollState.tool = "draw";
-    $("#prToolDraw")?.classList.add("is-active");
-    $("#prToolErase")?.classList.remove("is-active");
-  });
-  $("#prToolErase")?.addEventListener("click", () => {
-    pianoRollState.tool = "erase";
-    $("#prToolErase")?.classList.add("is-active");
-    $("#prToolDraw")?.classList.remove("is-active");
-  });
-
-  $("#prQuantizeStep")?.addEventListener("change", (e) => {
-    pianoRollState.quantize = parseFloat(e.target.value) || 0.5;
-    renderPianoRollGrid();
-  });
-
-  $("#prBtnQuantize")?.addEventListener("click", () => {
-    quantizeTrackNotes(pianoRollState.trackId, pianoRollState.quantize);
-    renderPianoRollGrid();
-    renderTimeline();
-    showToast(`Quantized ${TRACK_META[pianoRollState.trackId]?.name || "notes"} to grid.`);
-  });
-
-  $("#prBtnOctaveUp")?.addEventListener("click", () => {
-    transposeTrackNotes(pianoRollState.trackId, 12);
-    renderPianoRollGrid();
-    renderTimeline();
-  });
-  $("#prBtnOctaveDown")?.addEventListener("click", () => {
-    transposeTrackNotes(pianoRollState.trackId, -12);
-    renderPianoRollGrid();
-    renderTimeline();
-  });
-
-  $("#prBtnClear")?.addEventListener("click", () => {
-    clearTrackNotes(pianoRollState.trackId);
-    renderPianoRollGrid();
-    renderTimeline();
-    showToast(`Cleared ${TRACK_META[pianoRollState.trackId]?.name || "track"} notes.`);
-  });
-
-  const grid = $("#prModalGrid");
-  if (grid) {
-    grid.addEventListener("click", (e) => {
-      const cell = e.target.closest?.(".pr-cell");
-      if (!cell) return;
-      const pitch = parseInt(cell.dataset.pitch, 10);
-      const start = parseFloat(cell.dataset.start);
-      handlePianoRollCellClick(pitch, start);
-    });
-  }
-}
-
-function handlePianoRollCellClick(pitch, startBeat) {
-  const targetId = pianoRollState.trackId;
-  const trackObj = songTracks().find((t, idx) => trackId(t, idx) === targetId);
-  if (!trackObj || !Array.isArray(trackObj.notes)) return;
-
-  const duration = pianoRollState.quantize;
-  const existingIdx = trackObj.notes.findIndex((n) => {
-    const nStart = noteStart(n);
-    const nPitch = notePitch(n);
-    return nPitch === pitch && Math.abs(nStart - startBeat) < 0.05;
-  });
-
-  if (pianoRollState.tool === "erase" || existingIdx !== -1) {
-    if (existingIdx !== -1) trackObj.notes.splice(existingIdx, 1);
-  } else {
-    trackObj.notes.push({ pitch, start: startBeat, duration, velocity: 0.8 });
-    trackObj.notes.sort((a, b) => noteStart(a) - noteStart(b));
-    void player.liveNoteOn(pitch, 90).then(() => setTimeout(() => player.liveNoteOff(pitch, true), 120));
-  }
-
-  renderPianoRollGrid();
-  renderTimeline();
-}
-
-function quantizeTrackNotes(id, step) {
-  const trackObj = songTracks().find((t, idx) => trackId(t, idx) === id);
-  if (!trackObj || !Array.isArray(trackObj.notes)) return;
-  trackObj.notes.forEach((n) => {
-    const s = noteStart(n);
-    n.start = Math.round(s / step) * step;
-    n.duration = Math.max(step, Math.round((n.duration || step) / step) * step);
-  });
-}
-
-function transposeTrackNotes(id, semitones) {
-  const trackObj = songTracks().find((t, idx) => trackId(t, idx) === id);
-  if (!trackObj || !Array.isArray(trackObj.notes)) return;
-  trackObj.notes.forEach((n) => {
-    n.pitch = clamp(n.pitch + semitones, 12, 110);
-  });
-}
-
-function clearTrackNotes(id) {
-  const trackObj = songTracks().find((t, idx) => trackId(t, idx) === id);
-  if (!trackObj) return;
-  trackObj.notes = [];
+  const section = editorSection() || normalizeSections()[0];
+  if (!section) return false;
+  switchWorkspace("arrange");
+  return focusSongSection(
+    section.id, TRACK_ORDER.includes(id) ? id : "melody",
+    { openEditor: true, scroll: true },
+  );
 }
 
 let trackRackInteractionsBound = false;
@@ -6903,7 +6763,7 @@ function toggleFullscreen() {
     renderTimeline();
     renderSectionEditor();
     renderCreativeThread();
-    showToast("Back to Shape. Edits saved.");
+    showToast("Edits remain in this song. Export MIDI from Finish.");
   });
   $("#editorPlayButton").addEventListener("click", async () => {
     const section = editorSection();
@@ -6912,6 +6772,11 @@ function toggleFullscreen() {
     player.seek(range.start * 60 / songBpm());
     if (!player.playing) await player.play();
     showToast(`Playing from the start of ${section.name}.`);
+  });
+  $("#editorToolControl").addEventListener("change", (event) => {
+    editorTool = ["select", "draw", "erase"].includes(event.target.value) ? event.target.value : "select";
+    state.editorSelection.clear();
+    renderSectionEditor();
   });
   $("#editorGridControl").addEventListener("change", (event) => {
     state.editorGrid = clamp(Number(event.target.value) || 0.25, 1 / 12, 1);
@@ -6948,10 +6813,8 @@ function toggleFullscreen() {
     if (option) void auditionSectionVariation(Number(option.dataset.sectionVariation));
   });
   $$('[data-editor-action]', $("#sectionEditor")).forEach((button) => button.addEventListener("click", () => applyEditorAction(button.dataset.editorAction)));
-  $("#pianoRollGrid").addEventListener("dblclick", addEditorNote);
-  $("#pianoRollGrid").addEventListener("pointerup", (event) => {
-    if (event.pointerType === "mouse" || event.target !== event.currentTarget) return;
-    addEditorNote(event);
+  $("#pianoRollGrid").addEventListener("dblclick", (event) => {
+    if (editorTool === "select" && !event.target.closest?.("[data-editor-note]")) addEditorNote(event);
   });
   $("#pianoRollViewport").addEventListener("scroll", (event) => {
     $("#pianoKeyboard").scrollTop = event.currentTarget.scrollTop;
