@@ -3,6 +3,7 @@ import {
   phraseResolutionDesiredDuration,
 } from "./phrase-resolution-style.js";
 import { cloneValue } from "./clone-value.js";
+import { rolePreferredRegisterWindow } from "./role-register-policy.js";
 export const MAX_PHRASE_RESOLUTION_CANDIDATES = 3;
 export const MAX_PHRASE_RESOLUTION_EDITS = 3;
 
@@ -63,6 +64,7 @@ function landingScore(note, chord, tonic, beatsPerBar, genre, sectionEnd) {
 // Cadence candidates may be accepted by the production quality pipeline, so
 // prefer a diatonic, contour-safe landing over a closer but awkward jump.
 function scaleClasses(song) {
+  if (song?.meta?.keyPc == null || song.meta.keyPc === "") return null;
   const key = Number(song?.meta?.keyPc);
   const intervals = song?.meta?.scaleIntervals;
   if (!Number.isFinite(key) || !Array.isArray(intervals) || !intervals.length
@@ -98,7 +100,7 @@ function precedingSectionPitch(song, section, currentNote) {
 }
 
 function nearestChordPitch(sourcePitch, chord, tonic, preferTonic = false, {
-  scale = null, previousPitch = null,
+  scale = null, previousPitch = null, register = null,
 } = {}) {
   const original = Math.round(finite(sourcePitch, 60));
   const tones = [...chordToneSet(chord)]
@@ -111,6 +113,7 @@ function nearestChordPitch(sourcePitch, chord, tonic, preferTonic = false, {
   for (let candidate = Math.max(0, original - 12);
     candidate <= Math.min(127, original + 12); candidate += 1) {
     if (!classes.includes(mod(candidate, 12))) continue;
+    if (register && (candidate < register.min || candidate > register.max)) continue;
     // A resolution should not rewrite the recognizability of the phrase.
     // Keep local pitch edits within a perfect fourth in either direction.
     if (Math.abs(candidate - original) > 5) continue;
@@ -163,8 +166,13 @@ function sectionLandingEntries(song) {
   });
 }
 
-function selectedEntries(song, limit, hold, payoff) {
+function selectedEntries(song, limit, hold, payoff, sectionId = null, pitchOnly = false) {
   return sectionLandingEntries(song)
+    .filter((entry) => sectionId == null || String(entry.section?.id) === String(sectionId))
+    .filter((entry) => !pitchOnly || (entry.landing && (song?.harmony ?? []).some((chord) => {
+      const beat = finite(entry.landing.note.start);
+      return beat >= finite(chord.start) && beat < finite(chord.start) + finite(chord.duration);
+    })))
     .filter((entry) => {
       if (!entry.landing) return false;
       const tones = chordToneSet(entry.chord);
@@ -194,12 +202,12 @@ function selectedEntries(song, limit, hold, payoff) {
     .slice(0, limit);
 }
 
-function refineLandingCandidate(song, limit, { hold = false, payoff = false } = {}) {
+function refineLandingCandidate(song, limit, { hold = false, payoff = false, sectionId = null, pitchOnly = false } = {}) {
   const candidate = cloneValue(song);
   const melody = (candidate.tracks ?? []).find((track) => track?.id === "melody");
   if (!melody) return { song: candidate, edits: 0, pitchEdits: 0, durationEdits: 0 };
 
-  const selected = selectedEntries(candidate, limit, hold, payoff);
+  const selected = selectedEntries(candidate, limit, hold, payoff, sectionId, pitchOnly);
   let edits = 0;
   let pitchEdits = 0;
   let durationEdits = 0;
@@ -219,6 +227,7 @@ function refineLandingCandidate(song, limit, { hold = false, payoff = false } = 
       : nearestChordPitch(finite(note.pitch), entry.chord, entry.tonic, preferTonic, {
         scale: scaleClasses(candidate),
         previousPitch: precedingSectionPitch(candidate, entry.section, note),
+        register: pitchOnly ? rolePreferredRegisterWindow("melody") : null,
       });
     let changed = false;
     if (desiredPitch !== note.pitch) {
@@ -247,7 +256,7 @@ function refineLandingCandidate(song, limit, { hold = false, payoff = false } = 
     }
   }
 
-  melody.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
+  if (!pitchOnly) melody.notes.sort((left, right) => finite(left.start) - finite(right.start) || finite(left.pitch) - finite(right.pitch));
   return { song: candidate, edits, pitchEdits, durationEdits };
 }
 
@@ -264,7 +273,12 @@ function meanLandingScore(song) {
  */
 export function createPhraseResolutionCandidates(song, {
   maxCandidates = MAX_PHRASE_RESOLUTION_CANDIDATES,
+  sectionId = null,
+  pitchOnly = false,
 } = {}) {
+  // Opt-in Shape control: fail closed without tonal authority and never turn
+  // a pitch-only request into a hold, a payoff rewrite, or a different section.
+  if (pitchOnly && (!scaleClasses(song) || sectionId == null)) return [];
   const beforeScore = meanLandingScore(song);
   const recipes = [
     { id: "chord-cadence", limit: 1, hold: false, payoff: false },
@@ -274,9 +288,10 @@ export function createPhraseResolutionCandidates(song, {
   const seen = new Set();
 
   return recipes
+    .filter((recipe) => !pitchOnly || recipe.id === "chord-cadence")
     .slice(0, Math.max(0, Math.min(MAX_PHRASE_RESOLUTION_CANDIDATES, Math.floor(maxCandidates))))
     .map((recipe, candidateIndex) => {
-      const refined = refineLandingCandidate(song, recipe.limit, recipe);
+      const refined = refineLandingCandidate(song, recipe.limit, { ...recipe, sectionId, pitchOnly });
       const afterScore = meanLandingScore(refined.song);
       const signature = JSON.stringify((refined.song.tracks ?? []).find((track) => track.id === "melody")?.notes ?? []);
       if (seen.has(signature)) return null;

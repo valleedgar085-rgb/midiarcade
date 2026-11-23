@@ -40,6 +40,10 @@ export const SHAPE_QUICK_DIRECTIONS = Object.freeze({
   brighter: Object.freeze({ id: "brighter", label: "Brighter Sound", dimensions: ["register", "chordColor", "melodicLift"] }),
   buildUp: Object.freeze({ id: "buildUp", label: "Build Energy", dimensions: ["energy", "density", "transition"] }),
   calmDown: Object.freeze({ id: "calmDown", label: "Dial It Back", dimensions: ["energy", "density", "register"] }),
+  shiftHats: Object.freeze({ id: "shiftHats", label: "Shift Hats", dimensions: ["groove"], precision: true, trackId: "drums", hint: "Hats only · one sixteenth later" }),
+  hatAccents: Object.freeze({ id: "hatAccents", label: "Shape Hat Accents", dimensions: ["velocityContour"], precision: true, trackId: "drums", hint: "Same hits · different emphasis" }),
+  recallHook: Object.freeze({ id: "recallHook", label: "Recall the Hook", dimensions: ["motif"], precision: true, trackId: "melody", hint: "One returning hook pitch · no extra notes" }),
+  resolveEnding: Object.freeze({ id: "resolveEnding", label: "Resolve the Ending", dimensions: ["phraseResolution"], precision: true, trackId: "melody", hint: "One final pitch · keep rhythm and rests" }),
 });
 
 const SHAPE_OWNED_CONTROLS = new Set([

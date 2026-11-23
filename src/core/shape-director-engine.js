@@ -7,6 +7,8 @@ import { roleRegisterWindow } from "./role-register-policy.js";
 import { createChorusHookDevelopmentCandidates } from "./chorus-hook-development.js";
 import { createMelodyQuestionAnswerCandidate } from "./melody-question-answer.js";
 import { normalizeGenreId } from "./genre-contract.js";
+import { createPhraseResolutionCandidates } from "./phrase-resolution-refinement.js";
+import { shapeHatLane } from "./hat-lane-shape.js";
 
 function eventStart(note) {
   return finite(note?.start ?? note?.startBeat ?? note?.beat ?? note?.time ?? note?.tick, 0);
@@ -17,6 +19,7 @@ function setEventStart(note, value) {
     Object.prototype.hasOwnProperty.call(note, candidate)
   )) || "start";
   note[key] = value;
+  if (note.performed) note.performed.startBeat = value;
 }
 
 function eventDuration(note) {
@@ -28,11 +31,12 @@ function setEventDuration(note, value) {
     Object.prototype.hasOwnProperty.call(note, candidate)
   )) || "duration";
   note[key] = Math.max(0.03125, value);
+  if (note.performed) note.performed.durationBeats = note[key];
 }
 
 function eventVelocity(note) {
   const raw = finite(note?.velocity ?? note?.vel, 90);
-  return raw <= 1 ? Math.round(raw * 127) : raw;
+  return note?.velocity == null && raw <= 1 ? Math.round(raw * 127) : raw;
 }
 
 function setEventVelocity(note, value) {
@@ -42,6 +46,7 @@ function setEventVelocity(note, value) {
   } else {
     note.velocity = safe;
   }
+  if (note.performed) note.performed.velocity = safe;
 }
 
 function eventPitch(note) {
@@ -53,6 +58,8 @@ function setEventPitch(note, value) {
     Object.prototype.hasOwnProperty.call(note, candidate)
   )) || "pitch";
   note[key] = Math.round(clamp(value, 0, 127));
+  if (note.performed) note.performed.renderedMidiPitch = note[key];
+  if (Object.prototype.hasOwnProperty.call(note, "renderedMidiPitch")) note.renderedMidiPitch = note[key];
 }
 
 function noteIdentity(note, index) {
@@ -341,7 +348,7 @@ function validateCandidate(sourceSong, candidate, intent, beforeDigest) {
  */
 function hookReturnShapeProposal(song, intent) {
   const selection = intent.selection;
-  if (intent.direction?.id !== "catchier"
+  if (!["catchier", "recallHook"].includes(intent.direction?.id)
     || !(selection.target === "section"
       || (selection.target === "track" && selection.trackId === "melody"))
     || intent.preserve.includes("melody") || intent.preserve.includes("harmony")) return null;
@@ -395,6 +402,32 @@ function answerPhraseShapeProposal(song, intent) {
   };
 }
 
+function endingShapeProposal(song, intent) {
+  const selection = intent.selection;
+  if (intent.preserve.includes("melody") || intent.preserve.includes("harmony")
+    || (selection.target !== "section" && selection.trackId !== "melody")) return null;
+  const proposal = createPhraseResolutionCandidates(song, {
+    maxCandidates: 1, sectionId: selection.sectionId, pitchOnly: true,
+  })[0];
+  if (!proposal || proposal.pitchEdits !== 1 || proposal.durationEdits !== 0) return null;
+  const before = sourceTracks(song).find((track) => track.id === "melody")?.notes ?? [];
+  const after = sourceTracks(proposal.song).find((track) => track.id === "melody")?.notes ?? [];
+  const changed = before.flatMap((note, index) => eventPitch(note) !== eventPitch(after[index]) ? [{ note, index }] : []);
+  if (changed.length !== 1) return null;
+  const id = noteIdentity(changed[0].note, changed[0].index);
+  if (selection.target === "notes" && !selection.noteIds.includes(id)) return null;
+  return { song: proposal.song, mutation: { changedIds: [`melody:${id}`], inserted: 0, deleted: 0 } };
+}
+
+function sourceSignature(song) {
+  // Diagnostic identity, not a cryptographic signature. Freeze the musical
+  // source and its settings, not the user's evolving taste or UI preferences.
+  return hash32(JSON.stringify({ seed: song.seed, genre: song.genre, meta: {
+    genre: song.meta?.genre, tempo: song.meta?.tempo, keyPc: song.meta?.keyPc, scaleIntervals: song.meta?.scaleIntervals,
+    beatsPerBar: song.meta?.beatsPerBar, totalBeats: song.meta?.totalBeats,
+  }, structure: song.structure ?? song.sections, harmony: song.harmony, tracks: song.tracks })).toString(16);
+}
+
 /**
  * Generate one non-destructive local Shape candidate. The input song is never
  * mutated; the returned transaction owns both Before and After snapshots so UI
@@ -421,11 +454,32 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
   const beforeDigest = outsideScopeDigest(sourceSong, intent.selection);
   const beforeScope = scopeSnapshot(sourceSong, intent.selection);
-  const hookProposal = hookReturnShapeProposal(sourceSong, intent)
-    ?? answerPhraseShapeProposal(sourceSong, intent);
+  const precise = intent.direction.precision === true;
+  if (precise && intent.selection.target !== "section" && intent.selection.trackId !== intent.direction.trackId) {
+    return { status: "rejected", error: "wrong-instrument", intent };
+  }
+  const hookProposal = intent.direction.id === "resolveEnding"
+    ? endingShapeProposal(sourceSong, intent)
+    : hookReturnShapeProposal(sourceSong, intent) ?? answerPhraseShapeProposal(sourceSong, intent);
   const shaped = hookProposal?.song ?? candidate;
-  const mutation = hookProposal?.mutation
-    ?? applyDirection(candidate, intent, eligible, `${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}`);
+  let mutation = hookProposal?.mutation;
+  if (["shiftHats", "hatAccents"].includes(intent.direction.id)) {
+    mutation = shapeHatLane(eligible.entries, eligible.range, intent, {
+      start: eventStart, pitch: eventPitch, duration: eventDuration, velocity: eventVelocity,
+      setStart: setEventStart, setVelocity: setEventVelocity,
+    });
+  }
+  if (precise && !mutation) return { status: "rejected", error: "no-safe-target", intent };
+  mutation ??= applyDirection(candidate, intent, eligible, `${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}`);
+  // Existing melodic specialists edit a canonical pitch. Keep any finalized
+  // performed representation in sync so playback/export cannot ignore it.
+  if (hookProposal) {
+    const oldMelody = sourceTracks(sourceSong).find((track) => track.id === "melody")?.notes ?? [];
+    const newMelody = sourceTracks(shaped).find((track) => track.id === "melody")?.notes ?? [];
+    oldMelody.forEach((note, index) => {
+      if (newMelody[index] && eventPitch(newMelody[index]) !== eventPitch(note)) setEventPitch(newMelody[index], eventPitch(newMelody[index]));
+    });
+  }
   const afterScope = scopeSnapshot(shaped, intent.selection);
   const changed = JSON.stringify(beforeScope) !== JSON.stringify(afterScope);
   if (!changed) return { status: "rejected", error: "no-musical-change", intent };
@@ -434,11 +488,14 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
   if (!validation.valid) return { status: "rejected", error: validation.error, intent };
 
   shaped.shapeRevision = {
-    version: 1,
+    version: 2,
+    seed: String(seed),
+    sourceSignature: sourceSignature(sourceSong),
     parentSongId: sourceSong.id ?? null,
     sectionId: intent.selection.sectionId,
     target: intent.selection.target,
     trackId: intent.selection.trackId,
+    noteIds: [...intent.selection.noteIds],
     size: intent.size.id,
     direction: intent.direction.id,
     preserve: [...intent.preserve],
@@ -446,7 +503,7 @@ export function createShapeCandidate(sourceSong, shapeInput = {}, { seed = "shap
 
   return {
     status: "candidate",
-    id: `shape-${hash32(`${seed}:${sourceSong.id ?? sourceSong.seed ?? "song"}:${intent.selection.sectionId}:${intent.direction.id}:${intent.size.id}`).toString(16)}`,
+    id: `shape-${hash32(JSON.stringify(shaped.shapeRevision)).toString(16)}`,
     intent,
     before: cloneValue(sourceSong),
     after: shaped,

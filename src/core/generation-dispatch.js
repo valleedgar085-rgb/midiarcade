@@ -1,4 +1,11 @@
 const GENERATION_HANDLERS = Object.freeze({
+  shapeCandidate: Object.freeze({
+    engineMethod: "createShapeCandidate",
+    run(fn, payload) {
+      const transaction = fn(payload.sourceSong, payload.intent ?? {}, { seed: payload.seed ?? "shape" });
+      return { status: transaction.status, transaction };
+    },
+  }),
   new: Object.freeze({
     engineMethod: "generateNew",
     run(fn, payload) {

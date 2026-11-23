@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { generateNew, GENRE_PROFILES, ONE_SHOT_KITS } from "../src/music-engine.js";
 import { auditPreviewMidiEvents } from "../scripts/lib/preview-midi-oracle.mjs";
+import { createShapeCandidate } from "../src/core/shape-director-engine.js";
+import { encodeMidiVerified } from "../src/music-engine.js";
 import { bundledDrumSamplePath, drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, previewDrumEnvelope } from "../src/core/preview-drums.js";
 import {
   characteristicTrackForPreview,
@@ -635,6 +637,55 @@ test("browser app initializes against the engine contract", async () => {
     assert.equal(report.passed, true, `${genre}: ${JSON.stringify(report)}`);
     assert.deepEqual(song, before, "preview and its oracle must not mutate the song");
   }
+
+  // The research experiment: a real ten-seed Hip-Hop cohort, not a second
+  // implementation of preview/export math or a claim of better-sounding drums.
+  const precisionCounts = { shiftHats: 0, hatAccents: 0, recallHook: 0, resolveEnding: 0 };
+  for (let seed = 0; seed < 10; seed += 1) {
+    const song = generateNew({ genre: "hipHop", seed: `research-precision-${seed}`, bars: 32, candidateCount: 1 });
+    const pristine = structuredClone(song);
+    for (const direction of Object.keys(precisionCounts)) {
+      const section = direction === "recallHook"
+        ? song.structure.filter((part) => /chorus|hook/i.test(part.name)).at(-1)
+        : song.structure.find((part) => /verse/i.test(part.name));
+      assert.ok(section);
+      const input = { selection: { target: "section", sectionId: section.id }, direction };
+      const candidate = createShapeCandidate(song, input, { seed: "research-replay" });
+      assert.deepEqual(createShapeCandidate(structuredClone(song), input, { seed: "research-replay" }), candidate);
+      assert.deepEqual(song, pristine);
+      if (candidate.status !== "candidate") {
+        assert.equal(candidate.error, "no-safe-target", "precise edits must refuse a missing opportunity without adding filler");
+        continue;
+      }
+      precisionCounts[direction] += 1;
+      const after = candidate.after;
+      const events = app.buildPreviewEvents(after, { muted: [], solo: [], trackSettings: {} });
+      const report = auditPreviewMidiEvents(after, events);
+      assert.equal(report.passed, true, `${seed} ${direction}: ${JSON.stringify(report)}`);
+      assert.equal(encodeMidiVerified(after).audit.passed, true);
+      for (const original of song.tracks) {
+        const changedTrack = ["shiftHats", "hatAccents"].includes(direction) ? "drums" : "melody";
+        const actual = after.tracks.find((part) => part.id === original.id);
+        if (original.id !== changedTrack) assert.deepEqual(actual, original);
+        assert.equal(actual.notes.length, original.notes.length);
+      }
+      assert.deepEqual(after.structure, song.structure);
+      assert.deepEqual(after.harmony, song.harmony);
+    }
+  }
+  assert.equal(precisionCounts.shiftHats, 10);
+  assert.equal(precisionCounts.hatAccents, 10);
+  console.log("RESEARCH_PRECISION_COHORT", JSON.stringify({ seeds: 10, candidates: precisionCounts, parity: "all returned candidates passed real preview and MIDI verification" }));
+
+  // A previously recorded real weak-hook seed proves the melody path is not
+  // covered only by hand-made fixtures. Its diagnostic gain is not listening evidence.
+  const weakHook = generateNew({ seed: "phase4-hook-audit-rap-32-v2", genre: "rap", key: "E", scale: "minor", bars: 32,
+    energy: 0.64, complexity: 0.58, variation: 0.62, swing: 0.14, humanize: 0.10 });
+  const hookPreview = createShapeCandidate(weakHook, { selection: { target: "track", sectionId: "chorus-2", trackId: "melody" }, direction: "recallHook", preserve: ["rhythm"] });
+  assert.equal(hookPreview.status, "candidate");
+  assert.equal(hookPreview.summary.changedNoteCount, 1);
+  assert.equal(auditPreviewMidiEvents(hookPreview.after, app.buildPreviewEvents(hookPreview.after, { muted: [], solo: [], trackSettings: {} })).passed, true);
+  assert.equal(encodeMidiVerified(hookPreview.after).audit.passed, true);
 
   assert.match(htmlSource, /class="tab-nav-shell"[\s\S]*?id="navDockToggle"/, "desktop navigation needs a persistent bottom-dock handle");
   assert.match(htmlSource, /id="mobileCreate"[\s\S]*?id="mobileArrange"[\s\S]*?id="mobilePlayPause"[\s\S]*?id="mobileMix"[\s\S]*?id="mobileFinish"/, "mobile navigation must mirror the four real workspaces around Play");
