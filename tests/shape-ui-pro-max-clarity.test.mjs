@@ -9,7 +9,7 @@ const app = src("src/app.js");
 const css = src("src/ui/shape-workspace.css");
 const shapeMarkup = html.slice(html.indexOf('id="tab-arrange"'), html.indexOf('id="tab-mix"'));
 
-test("Shape's eleven directions have clear words without changing IDs or number of controls", () => {
+test("Shape preserves all eleven legacy directions and exposes exactly four opt-in precision directions", () => {
   assert.deepEqual(Object.entries(SHAPE_QUICK_DIRECTIONS).map(([id, item]) => [id, item.label]), [
     ["moreBounce", "Better Groove"], ["harder", "More Punch"],
     ["simpler", "Simplify"], ["busier", "Add Notes"],
@@ -17,7 +17,12 @@ test("Shape's eleven directions have clear words without changing IDs or number 
     ["catchier", "Catchier Hook"], ["darker", "Deeper Sound"],
     ["brighter", "Brighter Sound"], ["buildUp", "Build Energy"],
     ["calmDown", "Dial It Back"],
+    ["shiftHats", "Shift Hats"], ["hatAccents", "Shape Hat Accents"],
+    ["recallHook", "Recall the Hook"], ["resolveEnding", "Resolve the Ending"],
   ]);
+  assert.deepEqual(Object.values(SHAPE_QUICK_DIRECTIONS).filter((entry) => entry.precision).map((entry) => entry.id),
+    ["shiftHats", "hatAccents", "recallHook", "resolveEnding"]);
+  assert.equal((html.match(/<button\b/g) ?? []).length, 94, "new directions must not expand the initial button budget");
   assert.deepEqual(Object.values(SHAPE_CHANGE_SIZES).map((entry) => entry.label),
     ["Small", "Medium", "Large"]);
   assert.ok(SHAPE_CHANGE_SIZES.touchUp.rewriteBudget < SHAPE_CHANGE_SIZES.reshape.rewriteBudget);

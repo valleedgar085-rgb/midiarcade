@@ -7,12 +7,14 @@ import { dispatchGenerationRequest } from "./generation-dispatch.js";
 import { createSelfCorrectingCompositionCandidate } from "./composition-self-correction.js";
 import { generateProducerVariationSet } from "./producer-variation-set.js";
 import { finalizeGeneratedSong } from "./generation-finalizer.js";
+import { createShapeCandidate } from "./shape-director-engine.js";
 
 function generateSongVariations(sourceSong, config = {}) {
   return generateProducerVariationSet(sourceSong, config, { generateSimilar });
 }
 
 const ENGINE_API = Object.freeze({
+  createShapeCandidate,
   createSelfCorrectingCompositionCandidate,
   generateNew,
   generateSimilar,

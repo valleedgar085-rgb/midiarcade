@@ -17,7 +17,7 @@ export function createAppGenerationFallback({
   }
 
   return function generationFallback(kind, payload = {}) {
-    if (kind === "sectionVariations" || kind === "songVariations" || kind === "compositionCandidate") {
+    if (kind === "sectionVariations" || kind === "songVariations" || kind === "compositionCandidate" || kind === "shapeCandidate") {
       return Promise.resolve(runRequest(kind, payload));
     }
     return generationRunner.generate(kind, {

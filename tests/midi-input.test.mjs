@@ -85,6 +85,24 @@ function createMidiAccess(inputs = []) {
   };
 }
 
+test("passive capability diagnostics distinguish native input from Web MIDI without permission probes", async () => {
+  let permissionQueries = 0;
+  const plugin = createNativePlugin([{ deviceId: "keys", name: "Keys" }]);
+  const host = { Capacitor: { isNativePlatform: () => true, Plugins: { MidiInput: plugin } },
+    navigator: { permissions: { query() { permissionQueries += 1; throw new Error("Unsupported MIDI permission descriptor"); } } } };
+  const manager = new MidiInputManager({ getWindow: () => host });
+  const before = manager.getCapabilities();
+  assert.equal(before.nativeInputApi, true);
+  assert.equal(before.webMidiApi, false);
+  assert.equal(before.webAccessGranted, false);
+  assert.equal(before.connectedInputs, 0);
+  await manager.refreshDevices();
+  assert.equal(manager.devices.length, 1, "native discovery works even without Web MIDI");
+  assert.equal(permissionQueries, 0);
+  assert.equal(plugin.permissionCalls, 0);
+  await manager.destroy();
+});
+
 test("module import does not inspect browser globals", async () => {
   const original = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {

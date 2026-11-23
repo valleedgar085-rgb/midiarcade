@@ -226,6 +226,21 @@ export class MidiInputManager {
     return [...this._connections.keys()];
   }
 
+  /** Passive API/connection evidence only, not a claim of working hardware.
+   * Never query the optional Permissions MIDI descriptor in Android WebView.
+   */
+  getCapabilities() {
+    const plugin = this._nativePlugin();
+    return Object.freeze({
+      nativeInputApi: Boolean(plugin && (typeof plugin.listDevices === "function" || typeof plugin.getDevices === "function")),
+      webMidiApi: typeof this._window()?.navigator?.requestMIDIAccess === "function",
+      webAccessGranted: Boolean(this._midiAccess),
+      connectedInputs: this._connections.size,
+      nativeConnections: [...this._connections.values()].filter((connection) => connection.backend === "native").length,
+      webConnections: [...this._connections.values()].filter((connection) => connection.backend === "web").length,
+    });
+  }
+
   subscribe(listener) {
     if (typeof listener !== "function") throw new TypeError("listener must be a function");
     this._noteListeners.add(listener);

@@ -330,6 +330,22 @@ export function createGenerationExecutor({
         return variationResult;
       }
 
+      if (kind === "shapeCandidate") {
+        const transaction = originalResult?.transaction;
+        const passed = transaction?.status === "candidate";
+        mark("diagnose", {
+          valid: passed,
+          reason: transaction?.error ?? "scoped-shape-preview",
+          direction: transaction?.intent?.direction?.id,
+        });
+        mark("compare", { selected: passed ? "candidate" : "rejected", committed: false });
+        mark("finalize", { shapeCandidate: true, passed, revision: transaction?.after?.shapeRevision ?? null });
+        flightRecorder.complete(flightId, originalResult);
+        report("complete");
+        // No automatic repairs, output pipeline or database write for auditions.
+        return originalResult;
+      }
+
       if (kind === "compositionCandidate") {
         const transaction = originalResult?.transaction;
         const correction = transaction?.selfCorrection;

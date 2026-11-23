@@ -216,10 +216,12 @@ const sessionStorage = createSessionStorage({
 
 function handleMidiInputEvent(event) {
   if (!event) return;
-  if (event.type === "noteon") {
-    void player.liveNoteOn(event.pitch, event.velocity);
-  } else if (event.type === "noteoff") {
-    player.liveNoteOff(event.pitch);
+  if (event.type === "note-on") {
+    Promise.resolve(player.liveNoteOn(event.note, event.velocity)).catch((error) => {
+      console.warn("MIDI preview could not start", error);
+    });
+  } else if (event.type === "note-off") {
+    player.liveNoteOff(event.note);
   }
 }
 
@@ -2594,7 +2596,7 @@ function setShapeActionCopy(button, direction) {
   const heading = document.createElement("strong");
   heading.textContent = direction.label;
   const hint = document.createElement("small");
-  hint.textContent = SHAPE_ACTION_HINTS[direction.id] || "Preview this change";
+  hint.textContent = direction.hint || SHAPE_ACTION_HINTS[direction.id] || "Preview this change";
   hint.setAttribute("aria-hidden", "true");
   button.replaceChildren(heading, hint);
   button.setAttribute("aria-label", direction.label + ". " + hint.textContent);
@@ -2755,7 +2757,7 @@ function renderShapeDirector(section = editorSection()) {
       `phrase ${scores.phrase ?? "—"}`,
     ].join(" · ");
   } else {
-    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + director.transaction.intent.size.label;
+    $("#shapeDirectorCandidateTitle").textContent = director.transaction.intent.direction.label + " · " + (director.transaction.intent.direction.precision ? "Focused edit" : director.transaction.intent.size.label);
     $("#shapeDirectorCandidateMeta").textContent = summary.changedNoteCount + " shaped · " + summary.insertedNoteCount + " added · " + summary.deletedNoteCount + " removed · " + summary.scopeNoteCount + " notes in scope";
   }
   $$('[data-shape-audition]', panel).forEach((button) => {
@@ -2766,9 +2768,9 @@ function renderShapeDirector(section = editorSection()) {
     : "Playing the original. Tap Preview to compare the change.";
 }
 
-function prepareShapeDirectorCandidate(direction) {
+async function prepareShapeDirectorCandidate(direction) {
   const section = editorSection();
-  if (!section || !state.song) return false;
+  if (!section || !state.song || state.isGenerating) return false;
   if (state.sectionVariations) {
     showToast("Finish or cancel the current A/B section variation before starting a Shape Director pass.");
     return false;
@@ -2788,12 +2790,40 @@ function prepareShapeDirectorCandidate(direction) {
     direction,
     preserve: director.preserve,
   });
-  const transaction = createShapeCandidate(state.song, intent, {
-    seed: "shape:" + state.generationCount + ":" + section.id + ":" + state.editorTrack + ":" + direction + ":" + director.size,
-  });
+  const seed = "shape:" + state.generationCount + ":" + section.id + ":" + state.editorTrack + ":" + direction + ":" + director.size;
+  let transaction;
+  if (intent.direction.precision) {
+    const source = state.song;
+    appStore.transaction("generation:shape-preview-start", (draft) => { draft.isGenerating = true; });
+    const operation = armGenerationSafetyTimer();
+    showGenerationActivity("PREPARING A FOCUSED PREVIEW", { kind: "similar", threadCopy: "Keep the song · change one detail" });
+    try {
+      const result = await generationExecutor.run("shapeCandidate", { sourceSong: deepClone(source), intent, seed });
+      if (!generationOwnership.isCurrent(operation) || state.song !== source) return false;
+      if (JSON.stringify(shapeDirectorSelection()) !== JSON.stringify(selection)
+        || director.size !== intent.size.id
+        || JSON.stringify(director.preserve) !== JSON.stringify(intent.preserve)) return false;
+      transaction = result?.transaction;
+      if (!transaction) throw new Error("Shape preview returned no transaction.");
+    } catch (error) {
+      if (generationOwnership.isCurrent(operation)) {
+        console.error(error);
+        showToast("Could not prepare this preview. The original is unchanged.");
+      }
+      return false;
+    } finally {
+      if (finishGenerationActivity(operation, "generation:shape-preview-finish")) hideGenerationActivity();
+    }
+  } else {
+    transaction = createShapeCandidate(state.song, intent, { seed });
+  }
   if (transaction.status !== "candidate") {
     renderShapeDirector(section);
-    showToast(transaction.error === "no-musical-change"
+    showToast(transaction.error === "no-safe-target"
+      ? "No safe edit for this part. Check the instrument, preserve locks, or try another section. The original is unchanged."
+      : transaction.error === "wrong-instrument"
+        ? "Choose Drums for hat edits, or Melody for hook and ending edits."
+        : transaction.error === "no-musical-change"
       ? "That part already matches the requested direction. Try a stronger size or another direction."
       : "Shape Director could not make that local change safely with the current locks.");
     return false;
@@ -4123,6 +4153,7 @@ function renderGenerationDebugger() {
 
   const raw = $("#debuggerRaw");
   if (raw) raw.textContent = JSON.stringify({
+    runtime: audioMidiRuntimeSnapshot(),
     capturedRuns: runs.length,
     activeRequests: generationExecutor.activeRequests,
     usingWorker: generationExecutor.usingWorker,
@@ -4160,6 +4191,7 @@ async function copyGenerationDebuggerReport() {
   return copy({
     runs: generationExecutor.diagnosticsSnapshot(),
     workerActive: generationExecutor.usingWorker,
+    runtime: audioMidiRuntimeSnapshot(),
     toast: showToast,
   });
 }
@@ -4701,9 +4733,30 @@ export function buildExportSongSnapshot(song = state.song, { includeLiveTake = t
   return clone;
 }
 
+let lastMidiExportStatus = { status: "not-attempted" };
+
+function audioMidiRuntimeSnapshot() {
+  const nativeApp = Boolean(typeof window !== "undefined" && window.Capacitor?.isNativePlatform?.());
+  return {
+    version: 1,
+    host: nativeApp ? "native-webview" : "browser",
+    midi: midiInput.getCapabilities(),
+    preview: { contextState: player.context?.state ?? "not-started" },
+    export: { route: nativeApp ? "native-cache-share" : "browser-download", ...lastMidiExportStatus },
+    pendingPreview: Boolean(state.shapeDirector?.transaction || state.sectionVariations),
+    shapeRevision: state.song?.shapeRevision ?? null,
+    evidence: "API exposure and software state only; hardware playback and DAW import need device testing.",
+  };
+}
+
 async function exportSong() {
   if (!state.song) return;
-  resolvePendingShapeDirectorCandidate({ rerender: true });
+  if (state.shapeDirector?.transaction || state.sectionVariations) {
+    lastMidiExportStatus = { status: "blocked-preview" };
+    showToast("Finish the preview first: use this change or keep original, then export.");
+    return;
+  }
+  lastMidiExportStatus = { status: "preparing" };
   let isNative = false;
   try {
     const clone = buildExportSongSnapshot();
@@ -4714,6 +4767,7 @@ async function exportSong() {
     }
     const exportReport = createMidiExportReport(prepared.song, prepared.options);
     const verifiedExport = encodeMidiVerified(prepared.song, prepared.options);
+    lastMidiExportStatus = { status: "verified", parityPassed: verifiedExport.audit.passed, songId: clone.id ?? null };
     const payload = verifiedExport.bytes instanceof Uint8Array
       ? verifiedExport.bytes
       : new Uint8Array(verifiedExport.bytes);
@@ -4733,6 +4787,7 @@ async function exportSong() {
     } else {
       triggerBrowserDownload(payload, filename);
     }
+    lastMidiExportStatus = { ...lastMidiExportStatus, status: isNative ? "share-completed" : "download-triggered" };
 
     $("#creativeThread")?.classList.add("is-exported");
     if ($("#threadLiveSection")) {
@@ -4749,6 +4804,7 @@ async function exportSong() {
       : `Exported DAW-ready MIDI: ${exportReport.trackCount} tracks, ${exportReport.noteCount} notes, ${exportReport.chordCues} chord cues.`);
   } catch (error) {
     console.error(error);
+    lastMidiExportStatus = { ...lastMidiExportStatus, status: /cancel/i.test(String(error?.message || "")) ? "canceled" : "failed" };
     if (isNative) {
       const canceled = /cancel/i.test(String(error?.message || ""));
       showToast(canceled
