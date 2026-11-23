@@ -20,6 +20,7 @@ export function createInitialAppState() {
     loop: false,
     isGenerating: false,
     selectedTrack: "drums",
+    previewQuality: "auto",
     mixAssistant: {
       enabled: true,
       spotlightTrack: "auto",

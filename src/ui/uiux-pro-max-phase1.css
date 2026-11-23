@@ -484,7 +484,7 @@
   }
   #tab-create .create-unified-surface .create-live-controls,
   #tab-create .create-unified-surface .create-fine-tuning-inline {
-    grid-template-columns: minmax(0,1fr) !important;
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
   }
   #tab-create .create-unified-surface .create-live-control,
   #tab-create .create-unified-surface .create-live-select {
@@ -505,4 +505,138 @@
   #tab-create .create-unified-surface .create-fine-tuning-inline .mini-range {
     min-height: 64px !important;
   }
+}
+
+/* Studio refinement: consistent hierarchy, real MIDI graphics, phone controls.
+   Reuses the current palette and all existing control/event authorities. */
+:root {
+  --studio-ink: hsl(180 24% 95%);
+  --studio-secondary: hsl(195 18% 75%);
+  --studio-line: hsl(194 23% 32%);
+  --studio-lift: hsl(173 48% 59%);
+  --studio-panel: hsl(204 30% 11%);
+}
+#tab-create .create-unified-surface .create-performance-heading,
+#tab-mix .tracks-panel > .section-heading,
+#tab-finish .finish-copy {
+  color: var(--studio-ink);
+}
+#tab-create .create-unified-surface .create-performance-heading h2,
+#tab-mix #tracksTitle,
+#tab-finish #finishTitle {
+  font-size: clamp(1.65rem, 5vw, 2.2rem) !important;
+  line-height: 1.12 !important;
+  letter-spacing: -.035em !important;
+  text-wrap: balance;
+}
+#tab-create .create-unified-surface .create-live-control > span,
+#tab-create .create-unified-surface .create-live-select > span {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+#tab-create .create-unified-surface :is(select,input[type=range]),
+#tab-mix :is(.preview-quality-field select,.track-control input),
+#tab-arrange .editor-section-switch select {
+  min-height: 48px !important;
+  font-size: 1rem !important;
+  touch-action: pan-y;
+}
+#tab-create .create-unified-surface .generation-new {
+  min-height: 68px !important;
+  border: 1px solid hsl(10 100% 75%) !important;
+  background: linear-gradient(125deg,hsl(352 80% 42%),hsl(10 80% 42%)) !important;
+  box-shadow: 0 8px 24px hsl(352 88% 40% / .2),inset 0 1px hsl(0 0% 100% / .24) !important;
+}
+#tab-create .create-unified-surface .generation-new .action-copy strong {
+  color: white !important;
+  font-size: 1.15rem !important;
+}
+#tab-mix .tracks-panel .track-card {
+  border: 1px solid var(--studio-line) !important;
+  border-left: 3px solid var(--track-color,var(--studio-lift)) !important;
+  border-radius: 16px !important;
+  background: linear-gradient(145deg,hsl(204 28% 14%),var(--studio-panel)) !important;
+  box-shadow: inset 0 1px hsl(180 40% 90% / .04) !important;
+}
+#tab-mix .track-card .track-name { font-size: 1.05rem !important; letter-spacing: -.01em; }
+#tab-mix .track-card .track-role,
+#tab-mix .track-card .track-voice { color: var(--studio-secondary) !important; line-height: 1.5; }
+#tab-mix .track-card .track-toggle[aria-pressed=true] {
+  border-color: var(--studio-lift) !important;
+  box-shadow: inset 0 -2px var(--studio-lift) !important;
+}
+#tab-mix .preview-sound-panel {
+  margin: 14px 0 18px;
+  padding: 16px;
+  border: 1px solid var(--studio-line);
+  border-radius: 16px;
+  background: var(--studio-panel);
+}
+.preview-quality-field { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.preview-quality-field > span { display: grid; gap: 3px; }
+.preview-quality-field small,
+.drum-lane-overview header small {
+  color: var(--studio-lift); font: 650 .67rem var(--font-data); letter-spacing: .09em;
+}
+.preview-quality-field strong { color: var(--studio-ink); font-size: 1rem; }
+.preview-quality-field select {
+  min-width: 0; max-width: 55%; padding: 8px 30px 8px 12px;
+  color: var(--studio-ink); background-color: hsl(204 26% 16%);
+  border: 1px solid hsl(184 28% 42%); border-radius: 10px;
+}
+.preview-sound-panel p,
+.drum-lane-overview p { margin: 10px 0 0; color: var(--studio-secondary); font-size: .81rem; line-height: 1.55; }
+#tab-arrange .drum-lane-overview {
+  min-width: 0; margin: 0 0 18px; padding: 16px;
+  border: 1px solid var(--studio-line); border-radius: 16px;
+  background: linear-gradient(155deg,hsl(203 27% 14%),hsl(205 33% 9%));
+}
+#tab-arrange .drum-lane-overview[hidden] { display: none !important; }
+.drum-lane-overview header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 16px; }
+.drum-lane-overview header > span { display: grid; gap: 5px; }
+.drum-lane-overview header strong { color: var(--studio-ink); font: 700 1.15rem var(--font-display); }
+.drum-lane-overview header > b { color: var(--studio-secondary); font-size: .72rem; font-weight: 500; text-align: right; }
+.rhythm-lane-scroll { overflow-x: auto; scrollbar-width: thin; }
+.rhythm-lane { display: grid; grid-template-columns: 56px minmax(208px,1fr); align-items: center; gap: 10px; padding: 5px 0; }
+.rhythm-lane-name { color: var(--lane-color); font-size: .81rem; font-weight: 700; }
+.rhythm-lane-name small { display: block; color: var(--studio-secondary); font-size: .65rem; font-weight: 400; }
+.rhythm-steps { display: grid; grid-template-columns: repeat(var(--lane-steps),minmax(0,1fr)); gap: 3px; }
+.rhythm-step { height: 22px; border: 1px solid hsl(205 23% 25%); border-radius: 3px; background: hsl(205 27% 14%); }
+.rhythm-step:nth-child(4n+1) { border-left-color: hsl(195 23% 45%); }
+.rhythm-step.has-hit {
+  border-color: var(--lane-color);
+  background: color-mix(in srgb,var(--lane-color) calc(var(--hit-strength) * 100%),hsl(205 27% 14%));
+}
+#tab-arrange .piano-note::after {
+  content: ""; position: absolute; left: 0; bottom: 0; height: 3px;
+  width: calc(var(--note-velocity,1) * 100%); background: hsl(0 0% 100% / .8); pointer-events: none;
+}
+#tab-arrange .piano-note.is-selected { outline: 2px solid white !important; outline-offset: 1px; }
+#tab-arrange .section-editor .editor-play-button {
+  border: 1px solid var(--studio-lift) !important;
+  background: hsl(173 42% 21%) !important; color: hsl(170 35% 96%) !important;
+}
+#tab-finish .finish-panel { border: 1px solid var(--studio-line) !important; border-radius: 20px !important; }
+#tab-finish .finish-cover { overflow: hidden; border-radius: 16px; box-shadow: 0 14px 34px hsl(210 35% 2% / .35); }
+#tab-finish .finish-cover img { aspect-ratio: 1; object-fit: cover; }
+#tab-finish .export-setup { border-color: var(--studio-line) !important; }
+#tab-finish .export-setup select { min-height: 48px; font-size: 1rem; }
+.preview-sound-panel :is(select,button):focus-visible,
+#tab-arrange .section-editor :is(select,button,summary):focus-visible,
+#tab-finish :is(select,button):focus-visible { outline: 3px solid var(--studio-focus-ring) !important; outline-offset: 3px; }
+@media (max-width: 360px) {
+  #tab-create .create-unified-surface .create-live-controls,
+  #tab-create .create-unified-surface .create-fine-tuning-inline { grid-template-columns: minmax(0,1fr) !important; }
+  .preview-quality-field { align-items: stretch; flex-direction: column; }
+  .preview-quality-field select { max-width: 100%; }
+  #tab-arrange .drum-lane-overview { padding: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-create .create-unified-surface *,
+  #tab-arrange .section-editor *,
+  #tab-finish .finish-cover { transition-duration: .01ms !important; animation-duration: .01ms !important; }
+}
+@media (forced-colors: active) {
+  .rhythm-step.has-hit { background: Highlight; border: 2px solid CanvasText; opacity: 1; forced-color-adjust: none; }
+  .rhythm-lane-name { color: CanvasText; }
 }

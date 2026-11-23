@@ -32,7 +32,10 @@ import { drumSampleForPitch, preloadDrumSampleKit, previewDrumCharacter, preview
 import { renderPhrasePerformance } from "./core/phrase-memory.js";
 import { performanceTransformForNote, resolvePerformedNote } from "./core/performed-note-contract.js";
 import { canonicalMidiPitch, midiPitchToFrequency } from "./core/pitch-contract.js";
-import { previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { normalizePreviewQuality, previewAudioLatencyHint, previewGraphBudget, previewRuntimeProfile, previewVoiceFeatures, previewVoicePriority, selectPreviewVoiceVictim } from "./core/preview-performance.js";
+import { synchronizePreviewQuality } from "./core/preview-quality-transition.js";
+import { renderPreviewQualityControls } from "./ui/preview-quality-controls.js";
+import { drumLaneOverview, renderDrumLaneOverview } from "./ui/drum-lanes.js";
 import {
   hasAudiblePreviewEvents,
   playbackSourceNeedsCanonicalReset,
@@ -1413,6 +1416,14 @@ function renderSectionEditor(message = "") {
   const partnerId = EDITOR_PARTNERS[state.editorTrack];
   const partnerTrack = songTracks().find((candidate, index) => trackId(candidate, index) === partnerId);
   const partnerEntries = editorEntries(partnerTrack, section);
+  const drumLanes = $("#drumLaneOverview");
+  if (drumLanes) {
+    drumLanes.hidden = state.editorTrack !== "drums";
+    drumLanes.innerHTML = state.editorTrack === "drums" ? renderDrumLaneOverview(drumLaneOverview(
+      entries.map(({ note }) => ({ pitch: notePitch(note), start: noteStart(note), velocity: noteVelocity(note) })),
+      { start: range.start, beatsPerBar: range.beatsPerBar },
+    ), { bar: section.start + 1 }) : "";
+  }
   container.style.setProperty("--editor-color", meta.color);
   $("#sectionEditorTitle").textContent = `${section.name} · ${shapeDirectorState().target === "section" ? "All instruments" : meta.name}`;
   $("#sectionEditorSubtitle").textContent = `Bars ${section.start + 1}–${section.start + section.bars} · Changes affect ${shapeDirectorState().target === "section" ? "all instruments in this section" : shapeDirectorState().target === "notes" ? "selected notes only" : "only this instrument here"}`;
@@ -1455,7 +1466,7 @@ function renderSectionEditor(message = "") {
     const selectedClass = state.editorSelection.has(id) ? " is-selected" : "";
     const label = pitchLabel(pitch, state.editorTrack === "drums");
     const role = state.editorTrack === "drums" ? "drum-hit" : classifyNoteRole(note, state.song).role;
-    return `<button class="piano-note ${role}${selectedClass}" type="button" data-editor-note="${id}" style="--note-left:${left}px;--note-width:${width}px;--note-top:${top}px" aria-pressed="${state.editorSelection.has(id)}" aria-label="${label}, ${role.replace("-", " ")}, velocity ${noteVelocity(note)}">${label}</button>`;
+    return `<button class="piano-note ${role}${selectedClass}" type="button" data-editor-note="${id}" style="--note-left:${left}px;--note-width:${width}px;--note-top:${top}px;--note-velocity:${clamp(noteVelocity(note) / 127, 0, 1)}" aria-pressed="${state.editorSelection.has(id)}" aria-label="${label}, ${role.replace("-", " ")}, velocity ${noteVelocity(note)}">${label}</button>`;
   }).join("");
   const guideRows = state.editorTrack === "drums" || state.editorOverlay === "none"
     ? ""
@@ -1830,6 +1841,7 @@ export function getAppStateSnapshot() {
     solo: [...state.solo],
     locked: [...state.locked],
     selectedTrack: state.selectedTrack,
+    previewQuality: state.previewQuality,
     focusedSection: state.focusedSection,
     editorTrack: state.editorTrack,
     generationCount: state.generationCount,
@@ -3227,6 +3239,9 @@ function renderMixOverview() {
     ? `Mix — Solo active on ${soloNames.join(", ")}`
     : "Mix");
   renderSmartMixConsole();
+  renderPreviewQualityControls($("#previewSoundPanel"), {
+    preference: state.previewQuality, active: player.previewRuntime.quality, playing: player.playing,
+  });
 }
 
 function renderSmartMixConsole(message = "") {
@@ -5243,10 +5258,15 @@ export class PreviewPlayer {
     this.performanceAudition = null;
     this.recoveryPromise = null;
     this.liveVoices = new Map();
+    this.qualityTransition = null;
   }
 
   async ensureContext() {
     this.cancelIdleSuspend();
+    await synchronizePreviewQuality(this, () => state.previewQuality);
+    renderPreviewQualityControls($("#previewSoundPanel"), {
+      preference: state.previewQuality, active: this.previewRuntime.quality, playing: this.playing,
+    });
     if (this.context?.state === "closed") this.resetContextReferences(this.context);
     if (!this.context) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -6480,6 +6500,9 @@ export class PreviewPlayer {
 const player = new PreviewPlayer();
 
 function setPlaybackPresentation(playing) {
+  renderPreviewQualityControls($("#previewSoundPanel"), {
+    preference: state.previewQuality, active: player.previewRuntime.quality, playing,
+  });
   const hero = $("#heroPanel");
   const showcaseButton = $("#showcasePlayButton");
   document.body?.classList.toggle("is-playing", playing);
@@ -6758,6 +6781,14 @@ function toggleFullscreen() {
     scheduleSessionSave();
     if (player.playing) player.seek(player.currentSongTime());
     showToast(state.mixAssistant.enabled ? "Enhanced performance mix active." : "Original preview active for comparison.");
+  });
+  $("#previewSoundPanel")?.addEventListener("change", (event) => {
+    if (!event.target.matches?.("[data-preview-quality]")) return;
+    state.previewQuality = normalizePreviewQuality(event.target.value);
+    renderPreviewQualityControls($("#previewSoundPanel"), {
+      preference: state.previewQuality, active: player.previewRuntime.quality, playing: player.playing,
+    });
+    scheduleSessionSave();
   });
   $("#spotlightTrackControl")?.addEventListener("change", (event) => {
     state.mixAssistant.spotlightTrack = event.target.value;

@@ -44,6 +44,14 @@ android {
             applicationIdSuffix ".preview"
             versionNameSuffix "-preview"
         }
+        // Side-by-side audio/UI audition; never replaces a signed release or
+        // a prior .preview installation with a different debug signing key.
+        studioPreview {
+            initWith debug
+            applicationIdSuffix ".studio.preview"
+            versionNameSuffix "-studio-preview"
+            matchingFallbacks = ['debug']
+        }
         release {
             signingConfig signingConfigs.release
             minifyEnabled false

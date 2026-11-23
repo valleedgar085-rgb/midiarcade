@@ -4,6 +4,7 @@ import {
 } from "./session-contract.js";
 import { createDefaultAutoControls, sanitizeAutoControls } from "./auto-control-policy.js";
 import { cloneValue } from "./clone-value.js";
+import { normalizePreviewQuality } from "./preview-performance.js";
 
 export const GENERATION_PREFERENCE_IDS = Object.freeze([
   "genreControl",
@@ -92,6 +93,7 @@ function restoredPreferenceState({
     autoControls,
     selectedTrack: trackOrder.includes(parsed.selectedTrack) ? parsed.selectedTrack : (trackOrder[0] ?? "drums"),
     guidedMode: parsed.guidedMode !== false,
+    previewQuality: normalizePreviewQuality(parsed.previewQuality),
     recipeIndex: boundedIndex(parsed.recipeIndex, recipeCount),
     mixAssistant: { ...normalizeMixAssistant(parsed.mixAssistant) },
     tasteProfile: sanitizeTasteProfile(parsed.tasteProfile, { genreIds }),
@@ -118,6 +120,7 @@ export function createPersistedSessionSnapshot(state = {}, {
     autoControls: [...(state.autoControls ?? [])],
     selectedTrack: state.selectedTrack,
     guidedMode: state.guidedMode,
+    previewQuality: normalizePreviewQuality(state.previewQuality),
     recipeIndex: state.recipeIndex,
     mixAssistant: normalizeMixAssistant(state.mixAssistant),
     tasteProfile: state.tasteProfile,

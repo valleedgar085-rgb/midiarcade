@@ -727,6 +727,17 @@ test("browser app initializes against the engine contract", async () => {
   const fxCalls = [];
   const audioParam = () => ({ setTargetAtTime(value, time, constant) { fxCalls.push([value, time, constant]); } });
   const fxPlayer = new app.PreviewPlayer();
+  const beforeSoundChoice = app.getAppStateSnapshot();
+  const soundChoice = { value: "studio", matches: selector => selector === "[data-preview-quality]" };
+  for (const listener of elementFor("#previewSoundPanel").listeners.get("change") || []) listener({ target: soundChoice });
+  assert.equal(app.getAppStateSnapshot().previewQuality, "studio", "the real Mix control must store the Studio choice");
+  assert.deepEqual(app.getAppStateSnapshot().song, beforeSoundChoice.song, "sound quality must not rewrite the MIDI song");
+  assert.deepEqual(app.getAppStateSnapshot().trackSettings, beforeSoundChoice.trackSettings, "sound quality must not alter the export mix");
+  app.saveSessionNow();
+  assert.equal(JSON.parse(storedValues.get("midi-arcade/session-v2")).previewQuality, "studio");
+  soundChoice.value = "auto";
+  for (const listener of elementFor("#previewSoundPanel").listeners.get("change") || []) listener({ target: soundChoice });
+  assert.equal(app.getAppStateSnapshot().previewQuality, "auto");
   fxPlayer.context = { currentTime: 3 };
   fxPlayer.delayBus = { delayTime: audioParam() };
   fxPlayer.reverbReturn = { gain: audioParam() };
