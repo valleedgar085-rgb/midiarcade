@@ -13,6 +13,7 @@
 2. **Safe switching:** selecting a mode changes a persisted device preference only. It cannot rebuild an active song or live MIDI note. On the next stopped playback start, the output fades over its defined envelope and source tail before the old context closes. Concurrent starts share the transition; the latest selection wins. Close errors remain visible and preserve the old context's recovery handler.
 3. **Drum pocket graphic:** the selected Drums section shows its actual first-bar kick, snare/rim, clap, hats, and other percussion in five lanes. It is explicitly a read-only sixteenth-grid snapshot, not a live sequencer, quantizer, or full-song claim. Hit counts include rolls sharing a cell. Quiet MIDI velocity 1 stays quiet. Notes at the next bar boundary are not included.
 4. **UI polish:** clearer Mix channel borders and active controls, consistent headings, larger select/range targets, two-column phone controls with a narrow-screen fallback, stronger selected-note outlines, velocity stripes on notes, and a clearer Finish card. Keyboard focus, forced colors, reduced motion, existing navigation, and safe-area spacing are retained.
+5. **Separate install:** the `studioPreview` Android build type uses `com.midiarcade.app.studio.preview` and the label MIDI Arcade Studio Preview. It inherits debug behavior and falls back to debug library variants. This avoids replacing the prior `.preview` APK when a rebuilt workspace has a different debug signing key. The normal debug identity and signed release are unchanged; no runtime permission is added.
 
 ## HoRNet reference
 
@@ -42,4 +43,4 @@ Cloud browser preview access was blocked. No rendered screenshots or visual/a11y
 
 ## Release boundary
 
-Run `npm run quality`, focused audio tests, `npm run test:android-release`, real MIDI parity tests, and Android debug build/lint/unit tests. Keep the work unmerged until required CI and device/visual review are satisfied. An APK existing is not evidence of musical or audible quality.
+Run `npm run quality`, focused audio tests, `npm run test:android-release`, real MIDI parity tests, and `:app:assembleStudioPreview :app:testStudioPreviewUnitTest :app:lintStudioPreview`. Keep the work unmerged until required CI and device/visual review are satisfied. An APK existing is not evidence of musical or audible quality.
