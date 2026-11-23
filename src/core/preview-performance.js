@@ -51,19 +51,30 @@ function finitePositive(value, fallback) {
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
 }
 
+export function normalizePreviewQuality(value) {
+  return value === "studio" ? "studio" : "auto";
+}
+
 export function previewRuntimeProfile({
   userAgent = "",
   hardwareConcurrency = 8,
   deviceMemory = 8,
+  quality = "auto",
 } = {}) {
   const cores = finitePositive(hardwareConcurrency, 8);
   const memory = finitePositive(deviceMemory, 8);
   const isAndroid = /android/i.test(String(userAgent));
   const constrained = isAndroid || cores <= 4 || memory <= 4;
-  return constrained ? { ...CONSTRAINED_PROFILE } : { ...FULL_PROFILE };
+  return { ...(constrained ? CONSTRAINED_PROFILE : FULL_PROFILE), quality: normalizePreviewQuality(quality) };
 }
 
 export function previewGraphBudget(profile = FULL_PROFILE) {
+  if (profile?.quality === "studio") {
+    // Opt in to the existing desktop sound, not a retuned master or new patch.
+    // Retain Android's slower fade and bounded scheduler/voice ceiling.
+    return { ...FULL_GRAPH_BUDGET, masterFadeSeconds: profile.mode === "constrained"
+      ? CONSTRAINED_GRAPH_BUDGET.masterFadeSeconds : FULL_GRAPH_BUDGET.masterFadeSeconds };
+  }
   return profile?.mode === "constrained"
     ? { ...CONSTRAINED_GRAPH_BUDGET }
     : { ...FULL_GRAPH_BUDGET };
@@ -76,7 +87,7 @@ export function previewAudioLatencyHint(profile = FULL_PROFILE) {
 }
 
 export function previewVoiceFeatures(trackId, profile = FULL_PROFILE) {
-  const constrained = profile?.mode === "constrained";
+  const constrained = profile?.mode === "constrained" && profile?.quality !== "studio";
   if (!constrained) {
     return { layer: true, transient: true, sub: true };
   }

@@ -690,6 +690,7 @@
               </header>
               <label class="editor-section-switch">Section <select id="editorSectionSwitch" aria-label="Section to edit"></select></label>
               <div class="editor-track-tabs" id="editorTrackTabs" role="tablist" aria-label="Choose instrument to shape"></div>
+              <section class="drum-lane-overview" id="drumLaneOverview" aria-label="Drum pocket overview" hidden></section>
               <details class="shape-note-detail" id="shapeNoteDetail">
                 <summary><strong>Piano roll · Edit notes</strong><small>Tap notes · Undo restores edits</small></summary>
                 <p class="shape-note-help">Tap notes or use Select all. Edits apply immediately; Undo restores them.</p>
@@ -799,6 +800,7 @@
               <button class="mix-listen-button" id="mixPlayButton" type="button"><span aria-hidden="true"></span><b>Listen</b></button>
             </div>
             <aside class="mix-solo-alert" id="mixSoloAlert" hidden><b>SOLO ACTIVE</b><span id="mixSoloAlertText">Only one instrument is audible.</span><button id="clearSoloButton" type="button">Hear full band</button></aside>
+            <section class="preview-sound-panel" id="previewSoundPanel" aria-label="Preview sound"></section>
             <div class="track-rack" id="trackRack"></div>
             <details class="mix-studio-tools">
               <summary><strong>Advanced mix</strong><small>Smart Mix · Character Shaper</small></summary>
@@ -845,7 +847,7 @@
             <div class="finish-copy">
               <p class="eyebrow">RELEASE DESK</p>
               <h2 id="finishTitle">Package the idea</h2>
-              <p>Review the musical identity, save its deterministic cover, and export the exact sound-ready performance data used by the preview.</p>
+              <p>Save your cover and export the MIDI performance you previewed.</p>
               <div class="finish-facts" id="finishFacts" aria-label="Export summary"></div>
               <section class="export-setup" aria-labelledby="exportSetupTitle">
                 <div class="export-setup-heading"><small>DAW EXPORT SETUP</small><strong id="exportSetupTitle">Choose what lands in your project</strong></div>
@@ -988,7 +990,7 @@
     <dialog class="shortcut-dialog debugger-dialog" id="debuggerDialog" aria-labelledby="debuggerDialogTitle">
       <p class="eyebrow">GENERATION DEBUGGER</p>
       <h2 id="debuggerDialogTitle">See what the generator just did</h2>
-      <p class="debugger-intro">Read-only diagnostics from the built-in generation flight recorder. This panel never changes notes, scores, quality thresholds, or the selected song.</p>
+      <p class="debugger-intro">Read-only generation diagnostics. No notes or scores are changed.</p>
       <div class="debugger-summary" aria-label="Latest generation summary">
         <article><small>RUN STATUS</small><strong id="debuggerRunStatus">NO RUN YET</strong><span id="debuggerRunMeta">Generate a song, then refresh this panel.</span></article>
         <article><small>SONG</small><strong id="debuggerSongSummary">No completed generation has been recorded.</strong><span id="debuggerScoreSummary">Score and seed will appear after generation.</span></article>
@@ -998,7 +1000,7 @@
         <div class="debugger-section-heading">
           <span><small>FLIGHT PATH</small><strong id="debuggerFlightTitle">Plan → compose → diagnose → repair → finalize</strong></span>
         </div>
-        <p class="debugger-empty" id="debuggerEmpty">No generation run yet. Close this window, generate a new song, then open DEBUG again.</p>
+        <p class="debugger-empty" id="debuggerEmpty">Generate a song, then reopen DEBUG to see its steps.</p>
         <ol class="debugger-stage-list" id="debuggerStageList"></ol>
       </section>
       <details class="debugger-raw">
